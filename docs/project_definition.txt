@@ -1,0 +1,2089 @@
+================================================================================
+  HobbyCAD - PROJECT DEFINITION
+================================================================================
+
+  Project          : HobbyCAD
+  Document Version : 0.0.1.1
+  Date             : 2026-02-06
+  Format           : Plain Text (all project documentation is plain text)
+  AI Attribution   : This document was primarily generated with the assistance
+                     of Claude AI (Anthropic). Human review and editorial
+                     direction provided by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+  1. Project Summary
+  2. Project Scope
+  3. Project Components
+  4. Design Principles
+  5. Native File Format
+  6. Technology Stack Overview
+  7. File Format Strategy
+  8. STL Format Details
+  9. SVG Support Strategy
+  10. Image Reference Support
+  11. Timeline and Motion Studies
+  12. Community Code Contributions
+  13. Development Phases
+  14. Reference Materials and Resources
+  15. Documentation Standards
+  16. Related Documents
+
+================================================================================
+  1. PROJECT SUMMARY
+================================================================================
+
+  Project Name:    HobbyCAD
+  Companion Tool:  HobbyMesh
+  Type:            Open-source parametric 3D CAD application
+  Platform:        Linux-native (primary), cross-platform via Qt 6
+  License:         GPL 3.0 only (see Section 12 for full licensing framework)
+  Language:        C++ (core), Python (scripting/plugins)
+  Build System:    CMake
+
+  HobbyCAD is a Linux-native, open-source, parametric 3D CAD
+  application designed for mechanical engineering, product design,
+  and hobbyist fabrication. It is accompanied by HobbyMesh, a
+  companion mesh editing and 3D printing preparation tool built from
+  the same codebase.
+
+  The project aims to provide a professional-quality design experience
+  without requiring proprietary software, cloud connectivity, or
+  subscription fees. It targets hobbyists, makers, electronics
+  engineers, Linux-native professionals, and educators.
+
+  This is a mostly AI-generated project. The project documentation,
+  architecture decisions, library selections, and initial code
+  generation are produced with the assistance of Claude AI (Anthropic),
+  with human oversight, editorial direction, and final decision-making
+  provided by the project author. All AI-generated content is reviewed
+  and approved by the project author before being committed to the
+  project.
+
+================================================================================
+  2. PROJECT SCOPE
+================================================================================
+
+  2.1  IN SCOPE
+  --------------
+
+    HobbyCAD Core Application:
+      - Parametric 3D solid modeling using B-Rep geometry (OCCT)
+      - 2D parametric sketch editor with constraint solver
+      - Feature-based modeling (extrude, revolve, fillet, chamfer,
+        pattern, Boolean operations, sweep, loft)
+      - Feature history tree with parametric modification
+      - Multi-body part design
+      - Assembly design with mates and constraints
+      - BREP as native file format (lossless OCCT serialization)
+      - File interchange via STEP, STL, OBJ
+      - Modern Qt 6 user interface
+      - Python scripting and plugin system
+      - Macro recording and playback
+
+    HobbyMesh Companion Tool:
+      - Mesh editing, repair, and analysis
+      - 3D printing preparation (Make Solid, hollowing, supports,
+        orientation optimization, wall thickness analysis)
+      - Mesh sculpting and remeshing
+      - Mesh Boolean operations
+      - Mesh-to-B-Rep conversion (phased implementation)
+      - Inspired by Autodesk Meshmixer (v2.9 binaries available as
+        feature reference)
+      - Can operate as standalone application or HobbyCAD plugin
+
+  2.2  OUT OF SCOPE (Initial Release)
+  ------------------------------------
+
+    - 2D technical drawing generation (future release)
+    - CAM toolpath generation
+    - FEA / simulation (may be added via plugin)
+    - BIM / architectural modeling
+    - Full animation or photorealistic rendering
+    - Cloud storage or collaboration features
+    - Mobile platform support
+    - 3D printer slicing support (may be added in a future release)
+
+  2.3  STRETCH GOALS
+  -------------------
+
+    - Mesh-to-B-Rep conversion (phased implementation; eventually
+      Mesh-to-STEP export via HobbyMesh)
+    - OpenSCAD .scad file import (native parser)
+    - KiCad STEP/DXF integration for enclosure design workflows
+    - Import 3D reference models from KiCad for enclosure design
+    - 2D drawing/dimensioning workbench
+    - FEA plugin via Gmsh + external solver
+    - TinkerCAD-style primitive shape library (basic/extended shapes
+      that can be added, combined, and subtracted; may be implemented
+      as a plugin if too complex for initial release; project author
+      has TinkerCAD extended shape .JS files available as reference)
+    - Image-to-scale reference (import a photograph, set a known
+      dimension, and use it as a background reference for modeling)
+    - Basic timeline/animation for assembly motion studies and
+      exploded view sequences (similar to Fusion 360's timeline
+      feature for design history and motion studies)
+
+================================================================================
+  3. PROJECT COMPONENTS
+================================================================================
+
+  The project consists of the following deliverables:
+
+  3.1  HobbyCAD Application
+  --------------------------
+  The primary parametric 3D CAD application. This is the main
+  deliverable and the largest development effort.
+
+  Executable:  hobbycad
+  Install:     /usr/bin/hobbycad (or /usr/local/bin/)
+  Config:      ~/.config/hobbycad/
+  Plugins:     ~/.config/hobbycad/plugins/
+               /usr/share/hobbycad/plugins/
+
+  3.2  HobbyMesh Application / Plugin
+  -------------------------------------
+  The companion mesh editing and 3D print preparation tool. Built as
+  a shared library that can be loaded as a HobbyCAD plugin or wrapped
+  in a standalone lightweight application shell.
+
+  Executable:  hobbymesh (standalone mode)
+  Library:     libhobbymesh.so (shared library / HobbyCAD plugin)
+  Config:      ~/.config/hobbymesh/
+
+  3.3  libhobbycad (Shared Library)
+  ----------------------------------
+  The core geometry, file I/O, and constraint solver functionality
+  packaged as a shared library. This enables both HobbyCAD and
+  HobbyMesh to share the same codebase, and allows third-party
+  applications or scripts to use HobbyCAD's functionality.
+
+  Library:     libhobbycad.so
+
+  3.4  Python Bindings
+  ---------------------
+  Python bindings for libhobbycad and libhobbymesh, enabling
+  scripting, automation, and plugin development.
+
+  Package:     python3-hobbycad
+               python3-hobbymesh
+
+  3.5  Documentation
+  -------------------
+  All project documentation in plain text format. See Section 15
+  for documentation standards.
+
+================================================================================
+  4. DESIGN PRINCIPLES
+================================================================================
+
+  4.1  Linux-First, Cross-Platform Ready
+  ----------------------------------------
+  HobbyCAD is designed for Linux as the primary development and
+  deployment platform. Linux desktop integration, theming, and
+  performance optimization take priority. However, reasonable
+  portability to non-Linux/Unix platforms is maintained throughout
+  the codebase.
+
+  Cross-platform support is achieved through Qt 6's portability.
+  Platform-specific code is isolated behind abstraction layers with
+  support stubs for other platforms:
+
+    Linux/Unix:   Primary platform, fully supported
+    Windows:      Support stub maintained (build target, basic
+                  functionality verified periodically)
+    macOS:        Support stub maintained (build target, basic
+                  functionality verified periodically)
+
+  The stubs ensure that platform-specific code paths exist and
+  compile on Windows and macOS even if they are not fully tested
+  or optimized. This prevents the codebase from becoming impossible
+  to port later. Community contributors are welcome to flesh out
+  Windows and macOS support beyond the stubs.
+
+  4.2  Offline-First
+  -------------------
+  All core functionality works without an internet connection. There
+  is no cloud dependency, no account requirement, and no telemetry.
+  User data stays on the user's machine.
+
+  4.3  Open Standards
+  --------------------
+  The native file format (BREP) is an open, documented format. All
+  interchange formats are open standards (STEP, STL, OBJ). Users are
+  never locked into a proprietary ecosystem.
+
+  4.4  Depth Over Breadth
+  ------------------------
+  HobbyCAD focuses on doing core mechanical CAD exceptionally well
+  rather than attempting to cover every possible CAD workflow. A
+  smaller, polished feature set is preferable to a large, half-
+  finished one. This is a key lesson from FreeCAD's fragmented
+  workbench ecosystem.
+
+  4.5  Clean Architecture
+  ------------------------
+  Built from scratch on modern C++ (C++17 minimum, C++20 preferred)
+  with a clean separation of concerns: geometry kernel, constraint
+  solver, document model, UI, and file I/O are distinct layers with
+  well-defined interfaces. This enables testing, scripting, and
+  future extensibility.
+
+  The application follows the command pattern for all model
+  modifications, enabling undo/redo, macro recording, and Python
+  scripting of every operation. This architectural decision is
+  fundamental and must be maintained from day one.
+
+  4.6  AI-Assisted Development
+  -----------------------------
+  This project embraces AI-assisted development as a core part of
+  its workflow. Claude AI is used for:
+    - Project documentation and architecture design
+    - Code generation and prototyping
+    - Library evaluation and comparison
+    - Code review and refactoring suggestions
+    - Test generation
+
+  All AI-generated content is reviewed and approved by the project
+  author. The AI attribution is documented openly in all project
+  files as a matter of transparency.
+
+  4.7  End-User System Requirements
+  -----------------------------------
+
+  HobbyCAD targets hobby-level hardware — the kind of desktop or
+  laptop a typical maker, hobbyist, or student already owns. It
+  does not require a workstation-class GPU or large amounts of RAM
+  for typical use. Complex assemblies and FEM analysis (future
+  phases) will benefit from more capable hardware.
+
+  MINIMUM REQUIREMENTS (simple models, basic sketching):
+
+    CPU:        64-bit dual-core processor, 2 GHz or faster
+                (Intel Core 2 Duo, AMD Athlon 64 X2, or equivalent)
+    RAM:        4 GB
+    GPU:        OpenGL 3.3 capable (see GPU details below)
+    Disk:       500 MB free for application + libraries
+    Display:    1280x720 minimum resolution
+    OS:         Ubuntu 22.04 LTS or later
+                (Other Linux distros via AppImage)
+
+  RECOMMENDED REQUIREMENTS (moderate models, assemblies, 3D mesh):
+
+    CPU:        64-bit quad-core processor, 3 GHz or faster
+                (Intel Core i5 4th gen+, AMD Ryzen 3+, or equivalent)
+    RAM:        8 GB (16 GB for large assemblies or FEM)
+    GPU:        OpenGL 4.0+ capable with 1 GB+ VRAM
+    Disk:       2 GB free; SSD recommended
+    Display:    1920x1080 (Full HD)
+    OS:         Ubuntu 24.04 LTS or later
+
+  GPU COMPATIBILITY:
+
+  OCCT requires OpenGL 3.3 for its 3D viewer. This is supported by
+  essentially all GPUs manufactured since 2010. Ray tracing within
+  OCCT (not used by HobbyCAD in initial releases) requires OpenGL
+  4.0+.
+
+    NVIDIA:
+      - GeForce 8000 series (2006) and newer support OpenGL 3.3
+      - GeForce GTX 400 series (2010) and newer support OpenGL 4.x
+      - Any GeForce GT/GTX/RTX card from the last 15 years works
+      - On Linux: proprietary driver recommended for best OpenGL
+        performance; nouveau (open-source) works but may have
+        reduced performance or missing features
+      - On Windows: standard GeForce/Game Ready driver
+
+    AMD:
+      - Radeon HD 2000 series (2007) and newer support OpenGL 3.3
+      - Radeon HD 5000 series (2009) and newer support OpenGL 4.x
+      - Any Radeon R5/R7/R9/RX series works
+      - On Linux: Mesa radeonsi driver (open-source, included in
+        the kernel) provides excellent OpenGL support; no
+        proprietary driver needed for OpenGL
+      - On Windows: Adrenalin driver
+
+    Intel Integrated Graphics:
+      - HD Graphics 2500 / 4000 (Ivy Bridge, 3rd gen Core, 2012)
+        and newer support OpenGL 3.3 on Linux via Mesa
+      - HD Graphics 4200+ (Haswell, 4th gen Core, 2013) and newer
+        support OpenGL 4.0
+      - UHD 600/620/630 and newer support OpenGL 4.5+
+      - Iris Xe (11th gen+) and Arc GPUs support OpenGL 4.6
+      - On Linux: Mesa i915/iris driver (open-source, included in
+        the kernel); no proprietary driver needed
+      - On Windows: Intel Graphics driver from Intel
+
+      NOTE: Intel HD Graphics 2000 (Sandy Bridge, 2nd gen, 2011)
+      supports only OpenGL 3.1 and is NOT sufficient. First-
+      generation Intel HD Graphics (2010) supports only OpenGL 2.1
+      and WILL NOT work.
+
+      Intel integrated graphics is the most common case for hobby
+      users on laptops. An Ivy Bridge (3rd gen Core) or newer laptop
+      with Intel HD 4000 is the practical minimum for HobbyCAD.
+
+    Apple Silicon (macOS only):
+      - M1/M2/M3/M4 chips support OpenGL 4.1 (Apple's maximum)
+      - Fully capable of running HobbyCAD
+      - Apple has deprecated OpenGL in favor of Metal; see the
+        dev_environment_setup.txt macOS section for details
+
+    Virtual Machines:
+
+      VirtualBox (7.0.10+, including 7.1.x and 7.2.x):
+        VirtualBox 7.0.10 (July 2023) added initial support for
+        OpenGL 4.1, which is above HobbyCAD's 3.3 requirement.
+        This support carries forward through 7.1.x and 7.2.x
+        (latest as of this writing: 7.2.6).
+
+        To use 3D acceleration in a Linux guest:
+          - Use the VMSVGA graphics controller (recommended for
+            Linux guests)
+          - Enable 3D Acceleration in VM display settings
+          - Install VirtualBox Guest Additions in the guest
+          - Allocate at least 128 MB video memory
+          - Verify with: glxinfo | grep "OpenGL version"
+            Expected: "OpenGL version string: 4.1 ..." or similar
+            via the SVGA3D Mesa driver
+
+        Caveats: VirtualBox 3D acceleration is still marked
+        "experimental" by Oracle. Real-world results vary by
+        host GPU, host OS, VirtualBox version, and guest Mesa
+        version. Some configurations may still report only OpenGL
+        2.1 or fail to enable 3D acceleration. If OpenGL 3.3 is
+        not achieved, HobbyCAD launches in Reduced Mode where the
+        2D sketch editor, file conversion, geometry operations,
+        feature tree, and Python scripting all work normally.
+
+        Tip: setting LIBGL_ALWAYS_SOFTWARE=1 forces Mesa llvmpipe,
+        which reports OpenGL 3.3+ and can confirm HobbyCAD works,
+        but at very low frame rates (not for interactive use).
+
+        Windows guests: OpenGL support remains limited to 2.1 at
+        best. HobbyCAD in a Windows VirtualBox guest will likely
+        run in Reduced Mode.
+
+        VirtualBox is documented as a best-effort configuration.
+
+      VMware Workstation/Fusion:
+        Supports OpenGL 4.1 (Workstation 17/Fusion 13: up to
+        OpenGL 4.3 with Mesa 22.0+ and hardware version 20+).
+        HobbyCAD should run in Full Mode. Performance will be
+        reduced compared to bare metal but generally usable.
+
+      KVM/QEMU with virgl:
+        Supports OpenGL 4.3 via virglrenderer. HobbyCAD should
+        run in Full Mode. This is the best VM option for Linux
+        hosts.
+
+      General VM note: HobbyCAD in a VM is a best-effort
+      configuration. For full performance, run on bare metal.
+
+  SOFTWARE RENDERING FALLBACK:
+
+  On Linux, Mesa's software rasterizer (llvmpipe) provides OpenGL
+  3.3+ without any GPU hardware. Performance is poor (single-digit
+  FPS for complex models) but sufficient for automated testing and
+  CI/CD pipelines. Invoke with:
+
+    LIBGL_ALWAYS_SOFTWARE=1 ./hobbycad
+
+  GRACEFUL DEGRADATION:
+
+  If no OpenGL 3.3 GPU is available and software rendering is not
+  used, HobbyCAD launches in Reduced Mode with the 3D viewport
+  disabled. File conversion, geometry operations, and scripting
+  remain fully functional. A command-line mode is also available
+  for headless/batch use with no GPU or display server required.
+  See Section 13.1 (Phase 0: Foundation) for details on the
+  tiered startup modes.
+
+================================================================================
+  5. NATIVE FILE FORMAT
+================================================================================
+
+  5.1  BREP AS NATIVE FORMAT
+  ---------------------------
+
+  HobbyCAD uses OCCT's BREP format as its native file format for
+  geometry storage. This is the most natural choice because:
+
+    - Zero conversion overhead: BREP is OCCT's native serialization
+      format. Reading and writing is trivial and lossless.
+    - Full fidelity: All geometric and topological data (curves,
+      surfaces, edges, faces, shells, solids, locations, tolerances)
+      is preserved exactly as represented in memory.
+    - No external dependencies: BREP read/write is built into OCCT
+      core (BRepTools::Read, BRepTools::Write).
+    - Fast: No translation step means the fastest possible save/load
+      times.
+    - Debuggable: BREP files are human-readable ASCII text, making
+      them useful for debugging geometry issues.
+
+  5.2  HOBBYCAD PROJECT LAYOUT (.hcad)
+  --------------------------------------
+
+  A HobbyCAD project is a plain directory on disk. The directory
+  name is the project name (no extension). Inside the directory
+  root, a project_name.hcad file serves as the project manifest —
+  a JSON file that identifies the directory as a HobbyCAD project,
+  lists all dependent files, and stores project-level properties.
+
+  This directory-first design is the default and primary format.
+  It is chosen because:
+    - All files are directly accessible on the filesystem
+    - Text-based files (JSON, BREP, PPM, Python) are fully
+      diff-able, blame-able, and merge-able in git and other
+      version control systems
+    - No archive overhead for saves (just write individual files)
+    - Users can inspect and hand-edit files with any text editor
+    - GitHub/GitLab repositories can be browsed directly in the
+      web UI without unpacking anything
+
+  Project directory structure:
+
+    my_widget/
+      my_widget.hcad              Project manifest (JSON)
+      geometry/
+        body_001.brep             Solid body geometry (OCCT BREP)
+        body_002.brep             Additional bodies
+        ...
+      sketches/
+        sketch_001.json           2D sketch geometry and constraints
+        ...
+      features/
+        feature_tree.json         Parametric feature history
+        parameters.json           User-defined parameters and values
+      scripts/
+        *.py                      Project-local Python scripts/macros
+      metadata/
+        thumbnail.png             Preview image (PNG format)
+        thumbnail.ppm             Preview image (Netpbm PPM format)
+      assemblies/
+        assembly.json             Assembly structure and mates
+      .git/                       (optional) Git repository data
+      .gitignore                  (optional) Git ignore rules
+      README.md                   (optional) Project description
+      LICENSE                     (optional) License file
+
+  The .git/ directory and associated files (.gitignore, README.md,
+  LICENSE, etc.) are optional. They are present only when the
+  project is under version control. HobbyCAD treats these as
+  part of the project directory but ignores them for project
+  loading — the manifest lists exactly which files belong to the
+  CAD project, so any additional files (git metadata, READMEs,
+  CI configs, etc.) coexist without conflict.
+
+  HobbyCAD will never modify or delete files it does not own.
+  Files not listed in the manifest (neither as CAD data nor in
+  the "foreign_files" array) are left untouched. Users can
+  freely add their own files to the project directory (build
+  scripts, documentation, BOM spreadsheets, photos, etc.)
+  alongside the CAD data. To have HobbyCAD track these extra
+  files for ZIP packing and version control visibility, add
+  them to the manifest's "foreign_files" array (see below).
+  See Section 5.5 for details on how git initialization
+  updates the manifest and creates these files.
+
+  The .hcad manifest file (e.g., my_widget/my_widget.hcad):
+
+    {
+      "hobbycad_version": "0.1.0",
+      "format_version": 1,
+      "project_name": "my_widget",
+      "author": "Jane Maker",
+      "description": "Mounting bracket for stepper motor",
+      "created": "2026-02-07T12:00:00Z",
+      "modified": "2026-02-07T14:30:00Z",
+      "units": "mm",
+      "geometry": [
+        "geometry/body_001.brep",
+        "geometry/body_002.brep"
+      ],
+      "sketches": [
+        "sketches/sketch_001.json"
+      ],
+      "features": "features/feature_tree.json",
+      "parameters": "features/parameters.json",
+      "assembly": "assemblies/assembly.json",
+      "scripts": [
+        "scripts/export_all.py"
+      ],
+      "thumbnail": "metadata/thumbnail.png",
+      "autorun": "scripts/setup_project.py",
+      "properties": {
+        "material": "PLA",
+        "color": "#4488CC",
+        "notes": "Rev B: added mounting holes"
+      },
+      "repository": {
+        "remote_url": "https://github.com/janemaker/my_widget.git",
+        "remote_url_ssh": "git@github.com:janemaker/my_widget.git",
+        "branch": "main",
+        "provider": "github"
+      },
+      "foreign_files": [
+        {
+          "path": ".git/",
+          "category": "version_control"
+        },
+        {
+          "path": ".gitignore",
+          "category": "version_control"
+        },
+        {
+          "path": "README.md",
+          "description": "Project overview for GitHub",
+          "category": "documentation"
+        },
+        "LICENSE",
+        {
+          "path": "docs/",
+          "description": "Design notes and reference photos",
+          "category": "documentation"
+        }
+      ],
+      "category_definitions": {
+        "hardware": {
+          "priority": 6,
+          "label": "Hardware",
+          "description": "PCB files and schematics"
+        }
+      }
+    }
+
+  The "repository" object is optional. It is added automatically
+  when a project is first pushed to a remote (via the version
+  control panel or File → Export to GitHub). Fields:
+    - "remote_url": The primary git remote URL. This is the URL
+      actively used for push/pull. Can be HTTPS or SSH — the
+      protocol is encoded in the URL itself:
+        HTTPS:  https://github.com/user/repo.git
+        SSH:    git@github.com:user/repo.git
+    - "remote_url_ssh": Optional. The SSH URL for the same
+      remote, stored as an alternative when the primary URL is
+      HTTPS (or vice versa). This lets users switch protocols
+      without re-entering the URL. If only one protocol is
+      configured, this field may be absent.
+    - "branch": The default branch name (e.g., "main", "master").
+    - "provider": Hint for UI integration. One of "github",
+      "gitlab", "bitbucket", "gitea", or "other". Used to enable
+      provider-specific features (e.g., create-repo via API,
+      link to web UI, "Open on GitHub" button). Set to "other"
+      for self-hosted or unrecognized remotes. HobbyCAD infers
+      the provider from the remote URL when possible.
+  HobbyCAD reads the remote URLs from git config on project
+  open and updates the manifest if they have changed (e.g.,
+  user changed the remote via CLI). If version control is
+  removed or the user deletes the .git/ directory, this object
+  can be removed from the manifest.
+
+  The "autorun" field is optional. It specifies a Python script
+  to execute automatically when the project is opened. This
+  field is purely informational — it declares the project
+  author's intent, but execution is always gated by the user's
+  script execution security preferences. By default, script
+  execution is set to "manual only" and autorun scripts are
+  NOT executed. See security_risks.txt Section 4.1 for the
+  full script execution security model, including the five
+  preference levels and the user notification flow.
+
+  The "foreign_files" array is optional. It lists files and
+  directories in the project directory that are not CAD data
+  but should be recognized as part of the project. This allows
+  the manifest to serve as a complete inventory of everything
+  in the project directory.
+
+  Path conventions:
+    - "filename"    A single file (e.g., ".gitignore", "LICENSE")
+    - "dirname/"    A directory and its entire contents, recursive
+                    (e.g., ".git/", "docs/")
+    - "dirname/*"   Immediate contents of a directory only, not
+                    recursive (e.g., "notes/*" includes files in
+                    notes/ but not files in notes/subdir/)
+
+  A trailing slash means "this directory and everything inside it,
+  recursively." A trailing /* means "only the immediate children
+  of this directory." A path without a trailing slash or /* means
+  a single file. This keeps the format simple — no full glob
+  engine required, just three cases to handle.
+
+  HobbyCAD manages certain foreign_files entries automatically:
+    - When git is initialized, ".git/" and ".gitignore" are
+      added with "category": "version_control"
+    - When a README.md or LICENSE is created via the UI, it is
+      added
+  Users can also add entries via the project files browser
+  (see Phase 1) using the right-click context menu or toolbar,
+  or manually in a text editor. Example entries:
+    - "docs/"           Project documentation
+    - "photos/"         Reference photos
+    - "bom.csv"         Bill of materials
+    - "Makefile"        Build automation
+
+  Foreign file entries may include optional attributes in the
+  manifest. When stored as a simple string, the entry has no
+  attributes. When attributes are needed, the entry is an
+  object instead:
+
+    "foreign_files": [
+      {
+        "path": ".git/",
+        "category": "version_control"
+      },
+      {
+        "path": ".gitignore",
+        "category": "version_control"
+      },
+      {
+        "path": "README.md",
+        "description": "Project overview for GitHub"
+      },
+      {
+        "path": "docs/",
+        "description": "Design notes and reference photos",
+        "category": "documentation"
+      },
+      {
+        "path": "bom.csv",
+        "description": "Bill of materials for Rev B"
+      },
+      "LICENSE"
+    ]
+
+  Both forms (string and object) can coexist in the same array.
+  The "path" field is required in object form; all other fields
+  are optional. HobbyCAD preserves unrecognized attributes so
+  that users and plugins can store custom metadata on foreign
+  file entries.
+
+  Reserved "category" values:
+    - "project_files"    CAD data managed by HobbyCAD (geometry,
+                         sketches, features, scripts, metadata,
+                         assemblies). This category is applied
+                         implicitly to all files listed in the
+                         manifest's CAD data arrays. It can also
+                         be set explicitly on foreign_files
+                         entries if the user wants a non-CAD file
+                         to sort alongside project files (e.g., a
+                         closely related config or data file).
+                         Highest display priority in the tree view.
+    - "version_control"  Files managed by or related to the
+                         version control system (.git/,
+                         .gitignore, .gitattributes, etc.).
+    - "documentation"    READMEs, guides, reference material
+    - "build"            Build scripts, Makefiles, CI configs
+    - "reference"        Reference photos, datasheets, specs
+
+  Users and plugins may define additional category values
+  freely. Unrecognized categories are preserved and displayed
+  but have no special sorting behavior.
+
+  A foreign file entry may have a single category (string) or
+  multiple categories (array), similar to Gmail labels:
+
+    { "path": "README.md", "category": "documentation" }
+    { "path": "ci.yml", "category": ["version_control", "build"] }
+
+  When "category" is an array, the entry is grouped by its
+  highest-priority category for sort order purposes. Priority
+  is determined by the category_definitions (lowest priority
+  number = highest in tree view; see below). The file appears
+  once in the tree view, under its highest-priority group, but
+  all its categories are shown as labels/tags in the file's
+  properties and can be used for filtering.
+
+  Category definitions and sort priority:
+
+  The manifest can include a "category_definitions" object that
+  defines the sort priority, display properties, and behavior
+  of each category. HobbyCAD provides built-in defaults which
+  the user can override or extend:
+
+    "category_definitions": {
+      "project_files": {
+        "priority": 1,
+        "label": "Project Files",
+        "description": "CAD data managed by HobbyCAD"
+      },
+      "version_control": {
+        "priority": 2,
+        "label": "Version Control",
+        "description": "Git and VCS related files"
+      },
+      "documentation": {
+        "priority": 3,
+        "label": "Documentation",
+        "description": "READMEs, guides, reference material"
+      },
+      "build": {
+        "priority": 4,
+        "label": "Build",
+        "description": "Build scripts, Makefiles, CI configs"
+      },
+      "reference": {
+        "priority": 5,
+        "label": "Reference",
+        "description": "Photos, datasheets, specs"
+      }
+    }
+
+  The "project_files" category is implicit — it applies to all
+  CAD files listed in the manifest (geometry, sketches, features,
+  scripts, metadata, assemblies) and does not need to be set on
+  individual entries. It always exists even if category_definitions
+  is absent from the manifest. It can also be set explicitly on
+  foreign_files entries if the user wants a non-CAD file to sort
+  alongside project files in the tree view.
+
+  Lower priority numbers sort higher in the tree view (priority
+  1 appears at the top). Foreign files without a category, or
+  with an unrecognized category not listed in category_definitions,
+  are sorted after all defined categories. Untracked files
+  (present in the directory but not in the manifest or
+  foreign_files) are always last, in a muted style.
+
+  The "category_definitions" object is optional. If absent,
+  HobbyCAD uses the built-in defaults shown above. If present,
+  it is merged with the defaults — user entries override built-in
+  entries with the same key, and new entries are added. This means
+  users can:
+    - Reorder built-in categories (change priority numbers)
+    - Add new custom categories with desired priority
+    - Override labels and descriptions
+
+  Future expansion: category definitions could support additional
+  properties like "color", "icon", and "visible" (to hide/show
+  categories in the tree view), similar to how Gmail labels
+  provide organization and visual identification. The manifest
+  format accommodates this without breaking changes.
+
+  Project files browser sort order:
+
+    The tree view in the project files browser (Phase 1) groups
+    and sorts entries by their category priority:
+      1. Project files (category: "project_files", priority 1)
+         — sorted alphabetically by directory then filename
+      2. Version control (category: "version_control", priority 2)
+         — sorted alphabetically
+      3. Documentation (category: "documentation", priority 3)
+         — sorted alphabetically
+      4. Build (category: "build", priority 4)
+         — sorted alphabetically
+      5. Reference (category: "reference", priority 5)
+         — sorted alphabetically
+      ...additional user-defined categories by priority...
+      N. Uncategorized foreign files — sorted alphabetically
+      N+1. Untracked files — muted style, sorted alphabetically
+
+    Within each group, entries are sorted alphabetically by
+    directory then filename. Multi-category entries appear under
+    their highest-priority (lowest number) category.
+
+  Foreign files behavior:
+    - Not loaded by the CAD engine (they are not geometry,
+      sketches, or features)
+    - Included in ZIP packing (see Section 5.4), except ".git/"
+      which is always excluded from ZIP archives since git
+      repository data is not meaningful outside a working tree
+    - Shown in the project files browser and version control
+      panel's file status list
+    - Left untouched by HobbyCAD — never modified or deleted
+      unless the user explicitly removes them
+
+  The manifest serves multiple purposes:
+    - Identifies the directory as a HobbyCAD project (the
+      presence of a .hcad file in a directory is the detection
+      mechanism)
+    - Lists all dependent files with relative paths so the
+      project loader knows exactly what to read
+    - Stores project-level properties (name, author, units,
+      material, notes, etc.)
+    - Provides a single file the user can double-click or pass
+      to the command line to open the project:
+        hobbycad my_widget/my_widget.hcad
+    - Is itself a small, diff-friendly JSON file
+
+  Opening behavior:
+
+    HobbyCAD accepts either path form:
+      hobbycad my_widget/               (directory)
+      hobbycad my_widget/my_widget.hcad (manifest file)
+      hobbycad my_widget.zip            (ZIP archive, see 5.4)
+
+    When given a directory, HobbyCAD looks for .hcad files in
+    the root of that directory. If exactly one is found, it is
+    used as the manifest. If none is found, an error is reported.
+    If more than one .hcad file is found, the user is prompted
+    to select which manifest to open (e.g., a dialog listing the
+    found manifests with their project names and descriptions
+    read from each file). This supports directories that contain
+    multiple related projects or revisions side by side.
+
+  Version control notes:
+
+    See the directory structure above for the optional .git/,
+    .gitignore, and related files. All HobbyCAD project files
+    are text-based and version-control friendly:
+      - JSON files are fully diff-able and merge-able
+      - BREP files are OCCT's text serialization — diffs show
+        when geometry has changed (though not always human-
+        readable for complex changes)
+      - PPM thumbnails are text-based
+      - Python scripts are plain text
+    See Section 5.5 for full git and GitHub integration details.
+
+  5.3  HOBBYMESH PROJECT LAYOUT (.hmesh)
+  ----------------------------------------
+
+  HobbyMesh follows the same directory-first convention:
+
+    my_sculpt/
+      my_sculpt.hmesh              Project manifest (JSON)
+      mesh/
+        mesh_001.stl               Mesh data (STL or OBJ)
+        mesh_002.obj
+        ...
+      metadata/
+        thumbnail.png              Preview image (PNG format)
+        thumbnail.ppm              Preview image (Netpbm PPM format)
+      timeline/
+        history.json               Undo/redo history and state
+
+  The .hmesh manifest follows the same pattern as .hcad: it lists
+  dependent files and stores project-level properties.
+
+  Note: STL files within the mesh/ directory can be either ASCII
+  (text, diff-friendly) or binary (smaller, faster). HobbyMesh
+  defaults to binary STL for internal project storage (see
+  Section 8.2 for rationale). When version control is added to
+  a project (git init), HobbyMesh automatically converts any
+  binary STL files in the project to ASCII format, writing the
+  ASCII version with a .stla extension to avoid clobbering the
+  original binary file (e.g., mesh_001.stl → mesh_001.stla).
+  The original binary .stl file is then added to .gitignore
+  and the manifest is updated to reference the new .stla file.
+  The user is notified of this conversion and can override it
+  per-file via the project files browser.
+
+  While there is no official standard for separate extensions,
+  the informal convention of .stla (ASCII) and .stlb (binary)
+  is used in some academic and research tools. HobbyMesh
+  recognizes .stl, .stla, and .stlb extensions on import.
+  The ASCII/binary distinction is stored as a per-file
+  attribute in the .hmesh manifest.
+
+  5.4  ZIP ARCHIVE FORMAT (DISTRIBUTION)
+  ----------------------------------------
+
+  For distribution, sharing, and download, HobbyCAD projects can
+  be packed into a standard ZIP archive. This is a secondary
+  format — not the default working format.
+
+  A packed project places the manifest in the root of the ZIP,
+  with all project files alongside it (not nested in a
+  subdirectory):
+
+    my_widget.zip contains:
+      my_widget.hcad              Project manifest (JSON)
+      geometry/
+        body_001.brep
+        body_002.brep
+      sketches/
+        sketch_001.json
+      features/
+        feature_tree.json
+        parameters.json
+      scripts/
+        export_all.py
+      metadata/
+        thumbnail.png
+        thumbnail.ppm
+      assemblies/
+        assembly.json
+      .gitignore                  (optional)
+      README.md                   (optional)
+      LICENSE                     (optional)
+
+  The manifest is always in the root of the archive so that
+  HobbyCAD can identify and open the project by scanning for
+  .hcad or .hmesh files at the top level of the ZIP. The ZIP
+  is treated like a directory for manifest detection purposes:
+  if exactly one manifest is found, it is used; if more than
+  one is found, the user is prompted to select which project
+  to open (same behavior as opening a directory). This means
+  the ZIP format mirrors the directory layout exactly — it is
+  just a compressed snapshot of the project directory contents.
+
+  ZIP packing includes:
+    - All CAD files listed in the manifest (geometry, sketches,
+      features, scripts, metadata, assemblies)
+    - All entries from the manifest's "foreign_files" array,
+      EXCEPT ".git/" which is always excluded (git repository
+      data is not meaningful outside a working tree)
+  This means user-added files like README.md, LICENSE, docs/,
+  and .gitignore are preserved in the ZIP when they are listed
+  in foreign_files. When unpacking a ZIP, the user can
+  initialize a fresh git repository if desired.
+
+  The "repository" object from the manifest is preserved in the
+  packed ZIP, so the remote URL and branch info survive a
+  pack/unpack round-trip. After unpacking, since the .git/
+  directory is excluded from ZIP archives, the project will
+  have a "repository" object but no .git/ directory. The
+  "Synchronize with version control" feature (see Section 5.5,
+  Version control panel) handles this case — offering to clone
+  from the stored remote, initialize a fresh repo, or remove
+  the repository object.
+
+  HobbyCAD can open ZIP archives directly. On first save, the
+  user is prompted to unpack to a directory (the normal working
+  format).
+
+  CLI commands for conversion:
+    hobbycad --pack my_widget/
+      → creates my_widget.zip (manifest + contents at root)
+    hobbycad --unpack my_widget.zip
+      → extracts to my_widget/ directory
+
+  Menu items:
+    File → Export as ZIP Archive
+    File → Import from ZIP Archive
+
+  This maps well to GitHub workflow: a repository contains the
+  project directory directly (all files tracked in git), and
+  GitHub's "Download ZIP" button provides the packed format
+  automatically.
+
+  5.5  GIT AND GITHUB INTEGRATION
+  ---------------------------------
+
+  The directory-first project format is designed with version
+  control as a first-class workflow. HobbyCAD provides built-in
+  git and GitHub integration so that users can manage project
+  history, collaborate, and share designs without leaving the
+  application.
+
+  Import from GitHub:
+
+    File → Import from GitHub (or CLI: hobbycad --clone <url>)
+
+    Given a GitHub repository URL, HobbyCAD:
+      1. Clones the repository to a local directory
+      2. Detects the .hcad or .hmesh manifest
+      3. Opens the project
+
+    This also works with any git remote (GitLab, Bitbucket,
+    self-hosted Gitea, bare SSH repos, etc.) — GitHub is just
+    the most common case.
+
+  Export to GitHub:
+
+    File → Export to GitHub
+
+    For a project that is not yet under version control:
+      1. Initializes a git repository in the project directory
+      2. Creates an initial commit with all project files
+      3. Prompts for a GitHub remote URL (or offers to create a
+         new repository via the GitHub API if authenticated)
+      4. Pushes the initial commit
+
+    For a project already under git control:
+      1. Opens a commit dialog showing changed files (staged
+         diff summary)
+      2. User enters a commit message
+      3. Commits and pushes to the configured remote
+
+  Version control panel (dockable, Phase 3+):
+
+    A dockable panel in the GUI provides basic git operations
+    without requiring the user to use a terminal:
+      - Status: list of modified, added, and deleted files
+        with visual indicators in the feature tree
+      - Commit: stage changes, enter a message, commit
+      - Push / Pull: sync with remote
+      - History: scrollable log of past commits with dates,
+        messages, and author info
+      - Diff: show text diff for selected JSON, BREP, or
+        Python files (future: visual geometry diff)
+      - Branch: create, switch, and merge branches
+      - Synchronize with version control: relinks the
+        manifest's "repository" object with the actual git
+        remote configuration. Use cases:
+          * Remote URL changed outside HobbyCAD (e.g., repo
+            moved to a new org or switched from HTTPS to SSH)
+          * Project cloned fresh but manifest has stale remote
+          * Manifest "repository" object missing or corrupted
+          * Manifest has a "repository" object but no .git/
+            directory exists (e.g., project was unpacked from
+            a ZIP, or .git/ was accidentally deleted)
+        The synchronize action checks for a .git/ directory:
+          If .git/ exists: reads the current git remote(s) and
+            branch from .git/config and updates the manifest's
+            "repository" object to match. If no git remote is
+            configured, the user is prompted to add one.
+          If .git/ does not exist but manifest has "repository":
+            offers the user a choice:
+              a) Clone from the stored remote URL (initializes
+                 .git/, fetches history, links to remote)
+              b) Initialize a fresh git repository and set the
+                 stored remote URL as the new remote (no history)
+              c) Remove the "repository" object from the manifest
+                 (project is no longer under version control)
+
+    This is intentionally minimal — not a full git GUI. Power
+    users can use their preferred git tools (CLI, GitKraken,
+    VS Code, etc.) alongside HobbyCAD since the project is
+    just a normal directory with a normal git repository.
+
+  Implementation notes:
+
+    Git operations are performed via libgit2 (C library, BSD
+    license) or by invoking the system git binary. libgit2 is
+    preferred for portability and to avoid requiring git to be
+    installed, but system git is used as a fallback and for
+    operations libgit2 does not support (e.g., LFS).
+
+    GitHub API integration (creating repos, authentication)
+    uses GitHub's REST API v3 or the gh CLI tool if available.
+    OAuth device flow or personal access tokens are used for
+    authentication — HobbyCAD never stores GitHub passwords.
+
+    The .gitignore file is auto-generated on first git init.
+    By default, binary files are added to .gitignore:
+      metadata/thumbnail.png
+      (any other detected binary files in the project)
+    Flagging and unflagging files for .gitignore is handled
+    through the project files browser (see Phase 1) using the
+    same right-click menu and toolbar interface used for
+    foreign_files management. This provides a unified workflow
+    for managing both file tracking and version control
+    exclusions.
+
+    All other project files are text-based and tracked by
+    default.
+
+    When git is initialized for a project, the manifest is
+    updated automatically:
+      - "repository" object is added/updated with the remote
+        URL, branch, and provider
+      - "foreign_files" array is created (if absent) and
+        populated with ".git/" and ".gitignore", both with
+        "category": "version_control"
+      - If a README.md or LICENSE is generated, those are
+        added to "foreign_files" as well
+    These manifest changes are included in the initial commit.
+
+  Design philosophy:
+
+    The goal is not to replicate a full git client. It is to
+    make the most common version control operations (save a
+    snapshot, share my project, get someone else's project)
+    accessible to hobby users who may not be fluent in git.
+    Advanced git workflows (rebasing, cherry-picking, submodules)
+    are left to external tools.
+
+  5.6  JSON vs XML FOR METADATA
+  -------------------------------
+
+  HobbyCAD uses JSON for all structured data files within
+  projects, including the .hcad and .hmesh manifest files. This was chosen over XML after
+  considering the following tradeoffs:
+
+  JSON Advantages:
+    - Simpler syntax, easier to read and write by hand
+    - Smaller file sizes (no closing tags, no attributes)
+    - Native Python support (json module in standard library)
+    - Native JavaScript support (relevant for any future web tools)
+    - Faster parsing in most languages
+    - Directly maps to common data structures (dicts, lists, strings,
+      numbers, booleans, null)
+    - Widely used in modern software and APIs
+
+  XML Advantages:
+    - Built-in schema validation (XSD, DTD, RelaxNG)
+    - Namespaces for mixing vocabularies
+    - Comments supported natively
+    - Better for document-oriented data (mixed content, text with
+      markup)
+    - XSLT for transformations
+    - More mature tooling for formal validation
+    - Attributes + elements give more structural flexibility
+
+  Why JSON was chosen:
+    - HobbyCAD's metadata is data-oriented (parameters, feature
+      trees, project settings), not document-oriented
+    - Schema validation is less critical for internal project files
+      than for interchange formats
+    - JSON's simplicity reduces parser bugs and maintenance burden
+    - Python's json module requires zero additional dependencies
+    - JSON files are easier to diff in version control
+    - FreeCAD's newer formats also use JSON, establishing precedent
+      in the open-source CAD ecosystem
+
+  Note: If formal schema validation becomes needed in the future,
+  JSON Schema (jsonschema Python package) can be added without
+  changing the file format. XML remains appropriate for interchange
+  formats like SVG and potential future DXF export.
+
+================================================================================
+  6. TECHNOLOGY STACK OVERVIEW
+================================================================================
+
+  See the Library Recommendations document for detailed library
+  descriptions, alternatives considered, and licensing analysis.
+
+  HobbyCAD Core Stack:
+  +-------------------------+----------------------------+----------------+
+  | Layer                   | Library                    | License        |
+  +-------------------------+----------------------------+----------------+
+  | Modeling Kernel         | OpenCascade (OCCT)         | LGPL 2.1       |
+  | GUI Framework           | Qt 6                       | LGPL 3.0       |
+  | 3D Viewport             | OCCT AIS + OpenGL 3.3+     | LGPL 2.1       |
+  | Constraint Solver       | SolveSpace Solver          | GPL 3.0        |
+  | Native File Format      | BREP (OCCT built-in)       | LGPL 2.1       |
+  | STEP I/O                | OCCT (built-in)            | LGPL 2.1       |
+  | STL I/O                 | OCCT (built-in)            | LGPL 2.1       |
+  | OBJ I/O                 | OCCT / Assimp              | LGPL 2.1 / BSD |
+  | Python Scripting        | CPython + pybind11         | PSF / BSD      |
+  +-------------------------+----------------------------+----------------+
+
+  HobbyMesh Additional Stack:
+  +---------------------------+-----------------------------+-----------+
+  | Function                  | Library                     | License   |
+  +---------------------------+-----------------------------+-----------+
+  | Mesh Data Structure       | OpenMesh                    | BSD       |
+  | Mesh Processing / Repair  | CGAL (Polygon Mesh Proc.)   | GPL 3.0+  |
+  | Voxelization / Make Solid | OpenVDB                     | MPL 2.0   |
+  | Extended Mesh I/O         | Assimp                      | BSD       |
+  | 3MF Support               | lib3mf                      | BSD       |
+  +---------------------------+-----------------------------+-----------+
+
+  Build Infrastructure:
+    Build System:    CMake 3.20+
+    Compiler:        GCC 12+ or Clang 15+
+    C++ Standard:    C++17 minimum (C++20 preferred)
+    Python:          3.10+
+    Dev Platform:    Ubuntu 24.04 LTS (primary development)
+    Target OS:       Ubuntu 22.04 LTS+ (minimum supported), other
+                     Linux distros via AppImage
+    Packaging:       .deb (Ubuntu/Debian), .AppImage (generic Linux)
+    Platform Stubs:  Windows (MSYS2/MinGW-w64 or MSVC),
+                     macOS (Apple Clang + Homebrew)
+
+================================================================================
+  7. FILE FORMAT STRATEGY
+================================================================================
+
+  The file format implementation follows a phased approach, ordered
+  by implementation difficulty and user demand.
+
+  Phase 0 - Native (Day One):
+    BREP       Read/Write    OCCT native, zero effort, used for all
+                             internal geometry storage
+
+  Phase 1 - Core Interchange (Initial Release):
+    STEP       Import/Export  Primary interchange with other CAD tools
+    STL        Import/Export  3D printing output
+    OBJ        Import/Export  Visualization interchange
+
+  Phase 2 - Extended Open Formats:
+    IGES       Import/Export  Legacy CAD interchange (OCCT built-in)
+    DXF        Import/Export  2D drawing exchange
+    3MF        Import/Export  Modern 3D printing format
+    SVG        Export         2D vector drawings
+
+  Phase 3 - Community Formats:
+    OpenSCAD   Import         .scad file import (CLI tool, then native
+                              parser)
+    glTF       Export         Web/visualization
+    PLY        Import/Export  Point cloud / mesh
+
+  Phase 4 - Extended (As Demand Warrants):
+    DWG        Import         AutoCAD (requires ODA or reverse-eng.)
+    Additional formats evaluated based on user feedback
+
+================================================================================
+  8. STL FORMAT DETAILS
+================================================================================
+
+  HobbyCAD and HobbyMesh will support both ASCII and binary STL files.
+
+  8.1  ASCII vs BINARY STL
+  --------------------------
+
+  ASCII STL:
+    - Human-readable text format
+    - Larger file sizes (typically 5-10x larger than binary)
+    - Slower to parse
+    - Useful for debugging and manual inspection
+    - Can be edited with a text editor
+    - No color or attribute support
+
+  Binary STL:
+    - Compact binary format
+    - Significantly smaller file sizes
+    - Faster to read and write
+    - Not human-readable
+    - Supports a non-standard color/attribute extension (per-facet
+      16-bit attribute field, used by some tools for color)
+
+  Limitations of STL (both formats):
+    - No units information (assumed to be mm by convention, but not
+      specified in the format)
+    - No color, material, or texture support (standard)
+    - No topology (just a soup of triangles, no edge/face adjacency)
+    - No object grouping or hierarchy
+    - No metadata (author, creation date, etc.)
+    - Duplicate vertices at shared edges (no vertex sharing)
+    - Cannot represent curves — all geometry is triangulated
+    - 3MF is the modern replacement addressing all these limitations
+
+  8.2  HOBBYMESH DEFAULT STL FORMAT
+  ----------------------------------
+
+  HobbyMesh will use binary STL as the default for both internal
+  storage (.hmesh project files) and export. Binary STL is preferred
+  because:
+    - File sizes are dramatically smaller for complex meshes
+    - Read/write performance is significantly better
+    - It is the format expected by virtually all 3D printer slicers
+
+  When version control is initialized for a project (see Section
+  5.5), HobbyMesh automatically converts binary STL files within
+  the project to ASCII format with a .stla extension, preserving
+  the original binary .stl file (which is added to .gitignore).
+  ASCII STL is text-based and fully diff-able in git, making it
+  the appropriate choice for version-controlled projects despite
+  the larger file size. The manifest is updated to reference the
+  .stla files. The user is notified of this conversion and can
+  override it per-file via the project files browser.
+
+  ASCII STL export is also available as a manual option for users
+  who need human-readable output or compatibility with specific
+  tools.
+
+  On import, HobbyMesh auto-detects whether an STL file is ASCII
+  or binary and handles both transparently. Files with the
+  informal .stla or .stlb extensions are also recognized.
+
+================================================================================
+  9. SVG SUPPORT STRATEGY
+================================================================================
+
+  SVG (Scalable Vector Graphics) export is needed for 2D drawing
+  output and sketch export. There are several approaches:
+
+  14.1  NATIVE SVG GENERATION
+  ----------------------------
+
+  OCCT includes basic SVG export capabilities. For simple use cases
+  (exporting 2D sketches, generating basic orthographic projections),
+  direct SVG generation from OCCT geometry is feasible. The SVG
+  format is XML-based and can be generated programmatically without
+  external libraries.
+
+  Libraries:
+    - OCCT (HLRBRep for hidden line removal, project to 2D)
+    - Direct XML generation (SVG is plain XML text)
+    - Qt's QSvgGenerator can render Qt paint operations to SVG
+
+  14.2  INKSCAPE INTEGRATION (OPTIONAL)
+  --------------------------------------
+
+  For advanced SVG editing and manipulation, an Inkscape plugin or
+  export pathway may be beneficial. However, native SVG generation
+  is preferred over depending on Inkscape as a runtime dependency.
+
+  Inkscape integration could be provided as:
+    - A "Send to Inkscape" export option that opens the generated
+      SVG directly in Inkscape for further editing
+    - An Inkscape extension that imports HobbyCAD sketch data
+    - These are optional conveniences, not core requirements
+
+  Recommended approach: Native SVG generation for core functionality,
+  with optional Inkscape integration as a plugin/convenience feature.
+
+================================================================================
+  10. IMAGE REFERENCE SUPPORT
+================================================================================
+
+  HobbyCAD will support importing images as background references
+  for modeling. This is useful for:
+    - Tracing outlines from photographs for sketch creation
+    - Verifying dimensions against real-world objects
+    - Using technical drawings or blueprints as modeling references
+
+  15.1  IMAGE-TO-SCALE WORKFLOW
+  ------------------------------
+
+    1. User imports a photograph or image (PNG, JPEG, PPM/PNM)
+    2. User places the image on a sketch plane
+    3. User identifies two points of known distance in the image
+    4. User enters the real-world distance between those points
+    5. The image is scaled to match the real-world dimensions
+    6. User can trace over the image to create sketch geometry
+
+  15.2  SUPPORTED IMAGE FORMATS
+  -------------------------------
+
+    PNG:      Primary raster format (via Qt's QImage or libpng)
+    JPEG:     Common photograph format (via Qt's QImage or libjpeg)
+    PPM/PNM:  Netpbm portable pixmap format — text-based image format
+              that is easily convertible to/from PNG using standard
+              tools (pnmtopng / pngtopam). PPM is human-readable in
+              its ASCII variant, making it useful for programmatic
+              image generation and debugging. Supported via Qt's
+              QImage (which reads PNM natively) or trivial custom
+              parser.
+    BMP:      Windows bitmap (via Qt's QImage)
+
+  Note: PPM/PNM (Netpbm) is the text-based image format family that
+  converts trivially to and from PNG. The format dates to 1988 and is
+  universally supported on Unix/Linux systems.
+
+================================================================================
+  11. TIMELINE AND MOTION STUDIES
+================================================================================
+
+  HobbyCAD will include a timeline feature similar to Fusion 360's
+  design timeline. This serves two purposes:
+
+  11.1  DESIGN HISTORY TIMELINE
+  ------------------------------
+
+  The timeline visualizes the feature history tree as a horizontal
+  bar at the bottom of the viewport (similar to Fusion 360). Users
+  can:
+    - See all features in chronological creation order
+    - Click on any point in the timeline to roll back the model to
+      that state
+    - Drag features to reorder them (with dependency checking)
+    - Edit any feature by double-clicking it in the timeline
+
+  This is tightly coupled to the parametric feature tree and the
+  command pattern architecture. Every model modification is a command
+  that can be replayed or rolled back.
+
+  11.2  ASSEMBLY MOTION STUDIES (STRETCH GOAL)
+  ----------------------------------------------
+
+  For assemblies, the timeline can be extended to support basic
+  motion studies:
+    - Animate assembly mates (e.g., rotate a hinge joint through
+      its range of motion)
+    - Create exploded view sequences (animate parts moving to
+      exploded positions)
+    - Export motion study as a series of screenshots or video
+
+  This is a stretch goal and would be implemented after the core
+  assembly features are complete.
+
+  Implementation: The timeline is a custom Qt widget. Motion studies
+  would use keyframe interpolation on assembly mate parameters.
+
+================================================================================
+  12. LICENSING AND COMMUNITY CONTRIBUTIONS
+================================================================================
+
+  12.1  LICENSE: GPL 3.0 (ONLY)
+  ------------------------------
+
+  HobbyCAD and HobbyMesh are licensed under the GNU General Public
+  License version 3.0 only — not "or any later version." This is a
+  deliberate choice to lock the project to a known, well-understood
+  license and avoid delegating future licensing decisions to the FSF.
+
+  GPL 3.0 provides:
+
+    Permissions:
+      - Commercial use, distribution, modification, patent grant,
+        private use — all permitted
+
+    Conditions (copyleft):
+      - Source code must be disclosed when distributing
+      - Modifications must be released under the same license
+      - License and copyright notice must be included
+      - Changes must be documented
+
+    Limitations:
+      - No liability, no warranty
+
+  KEY LICENSING DECISIONS:
+
+    Plugins must be GPL 3.0:
+      All plugins that link against HobbyCAD or HobbyMesh libraries
+      must be licensed under GPL 3.0. There is no linking exception.
+      This ensures the entire plugin ecosystem remains open source.
+
+    Python scripts are NOT derivative works:
+      User-written Python scripts that interact with HobbyCAD through
+      the pybind11 scripting API are considered user content, not
+      derivative works. Users may write, distribute, and sell Python
+      scripts under any license they choose. The scripting API
+      constitutes an application boundary analogous to the Linux
+      kernel's syscall interface. This exception applies to:
+        - Python scripts executed via the built-in console
+        - Python scripts invoked via autorun or the Run menu
+        - Python scripts distributed as part of project files
+      This exception does NOT apply to:
+        - C/C++ code that links against HobbyCAD libraries
+        - Plugins (Python or C++) that extend HobbyCAD's core
+          functionality by linking against internal APIs
+        - Modified versions of HobbyCAD's own Python modules
+
+  12.2  AGPL CONSIDERATION (UNDER REVIEW)
+  -----------------------------------------
+
+  AGPL 3.0 is under consideration as an alternative to GPL 3.0. The
+  key difference: AGPL treats network interaction as distribution,
+  closing the "SaaS gap" where someone could host a modified HobbyCAD
+  as a cloud service without sharing source code.
+
+  Factors in favor of AGPL 3.0:
+    - Closes the network/SaaS loophole
+    - GPL 3.0 code can be incorporated into AGPL projects (one-way
+      compatible), so dependencies like SolveSpace (GPL 3.0) and
+      CGAL (GPL 3.0+) would still be usable
+    - The slicer library integration (Section 9.7 of
+      cad_use_case_document.txt) is AGPL 3.0 from OrcaSlicer/
+      PrusaSlicer — if HobbyCAD were AGPL, the slicer plugin could
+      be directly linked rather than kept as a separate process
+    - Stronger copyleft protection aligns with project goals
+
+  Factors against AGPL 3.0:
+    - Some organizations have blanket policies against AGPL code,
+      which could reduce adoption
+    - The network clause is largely theoretical for a desktop CAD
+      application today
+    - AGPL is sometimes perceived as more "hostile" to potential
+      contributors
+
+  This decision is not time-bound. The project will launch under
+  GPL 3.0, and a switch to AGPL 3.0 may happen at any point —
+  before or after public release. The copyright assignment policy
+  (Section 12.5) preserves the ability to make this change
+  unilaterally.
+
+  12.3  COMMERCIAL LICENSING (FUTURE)
+  ------------------------------------
+
+  A separate commercial license may be offered in the future for
+  entities that wish to redistribute HobbyCAD or derivative works
+  commercially (i.e., charging end users a fee for access to the
+  software). The commercial license would:
+
+    - Require royalty payments to the project author
+    - Still require disclosure of source code modifications (unlike
+      traditional dual-license models where the commercial license
+      removes the copyleft obligation)
+    - Permit commercial redistribution and bundling
+
+  The commercial license's value proposition is legal clarity for
+  commercial redistributors, not code secrecy. Companies would
+  choose it to avoid GPL compliance complexity while still
+  contributing modifications back.
+
+  The specific terms (royalty structure, fee tiers, exemptions for
+  small businesses or educational institutions) will be defined
+  when commercial interest warrants it. The copyright assignment
+  policy (Section 12.4) ensures the project author retains the
+  sole authority to offer commercial licenses.
+
+  Note: Using HobbyCAD commercially (e.g., a business using it
+  internally for design work) does NOT require a commercial license.
+  The commercial license applies only to redistribution — charging
+  others for access to HobbyCAD or a derivative.
+
+  12.4  TRADEMARK POLICY
+  -----------------------
+
+  The names "HobbyCAD" and "HobbyMesh" are project trademarks
+  controlled by the project author, separate from the GPL 3.0 code
+  license. The GPL grants the right to fork and modify the code, but
+  does not grant the right to use the project trademarks.
+
+  Permitted without approval:
+    - Referring to HobbyCAD/HobbyMesh by name in documentation,
+      reviews, articles, and discussions
+    - Stating compatibility with HobbyCAD (e.g., "compatible with
+      HobbyCAD project files")
+    - Using the names in source code comments and attribution notices
+      as required by the GPL
+
+  Requires approval:
+    - Distributing a modified version under the HobbyCAD or
+      HobbyMesh name
+    - Using the names in a product name, service name, or domain name
+    - Using project logos or branding
+
+  Forks must choose a different name. This follows the precedent set
+  by Mozilla (Firefox), Red Hat (RHEL), and Canonical (Ubuntu).
+
+  12.5  COPYRIGHT ASSIGNMENT
+  ---------------------------
+
+  Any code submitted to and accepted into the main HobbyCAD or
+  HobbyMesh codebase constitutes acceptance of copyright transfer
+  from the submitter to the project author. This applies to all
+  code, documentation, and other creative works that are merged
+  into the main repository and shipped as part of the official
+  distribution — whether submitted via pull requests, patches,
+  or other contribution mechanisms.
+
+  If a contributor explicitly states that they do not wish to
+  transfer copyright and are submitting code solely to comply
+  with the project's open-source license terms (e.g., publishing
+  modifications as required by GPL 3.0), no copyright transfer
+  occurs. However, such code will not be merged into the main
+  codebase. It may be distributed separately under the terms of
+  the applicable license.
+
+  In summary:
+    - Code shipped in the main codebase = copyright transferred
+      to the project author
+    - Code published independently under license terms = no
+      copyright transfer, not merged into main codebase
+
+  This policy exists to simplify licensing decisions. A single
+  copyright holder can:
+    - Relicense the project (e.g., GPL 3.0 to AGPL 3.0)
+    - Offer commercial licenses (Section 12.3)
+    - Make licensing decisions without needing consent from every
+      contributor
+
+  Contributors will be acknowledged in the project's AUTHORS file
+  and in relevant commit history.
+
+  12.6  COMMUNITY FILE FORMAT CONTRIBUTIONS
+  -------------------------------------------
+
+  Additional file formats (commercial or otherwise) may be added via
+  community code submissions. Format support plugins are an excellent
+  area for community contributions because they are relatively self-
+  contained and can be developed independently of the core codebase.
+
+  The copyright assignment policy (Section 12.5) applies to all
+  community contributions merged into the main codebase, including
+  file format plugins.
+
+  12.7  CONTRIBUTION AGREEMENT
+  -----------------------------
+
+  All contributors must acknowledge the copyright assignment before
+  their first contribution is accepted. The specific mechanism (CLA
+  form, commit sign-off, etc.) will be defined before the project
+  accepts external contributions.
+
+  12.8  DEPENDENCY LICENSE COMPATIBILITY
+  ---------------------------------------
+
+  All dependencies must be compatible with GPL 3.0 (or AGPL 3.0 if
+  that license is selected). The current dependency license landscape:
+
+    +---------------------------+----------------+---------------+
+    | Dependency                | License        | Compatible?   |
+    +---------------------------+----------------+---------------+
+    | OpenCascade (OCCT)        | LGPL 2.1       | Yes           |
+    | Qt 6                      | LGPL 3.0       | Yes           |
+    | SolveSpace Solver         | GPL 3.0        | Yes           |
+    | Assimp                    | BSD 3-Clause   | Yes           |
+    | libgit2                   | GPL 2.0 + LE   | Yes           |
+    | pybind11                  | BSD            | Yes           |
+    | CGAL (HobbyMesh)          | GPL 3.0+       | Yes           |
+    | MeshFix (HobbyMesh)       | GPL 2.0        | Yes (GPL 2+)  |
+    | OpenVDB (HobbyMesh)       | MPL 2.0        | Yes           |
+    | Slicer plugin (future)    | AGPL 3.0       | See 12.2      |
+    +---------------------------+----------------+---------------+
+
+  LGPL, BSD, MIT, MPL 2.0, and Apache 2.0 dependencies are all
+  compatible with GPL 3.0. GPL 2.0 dependencies are compatible
+  only if licensed as "GPL 2.0 or later" (which permits use under
+  GPL 3.0 terms). The AGPL slicer plugin is compatible if HobbyCAD
+  uses AGPL; if HobbyCAD remains GPL 3.0, the slicer must run as
+  a separate process (CLI subprocess) rather than a linked library.
+
+================================================================================
+  13. DEVELOPMENT PHASES
+================================================================================
+
+  13.1  PHASE 0: FOUNDATION
+  -------------------------
+  Goal: Minimal buildable application with basic geometry display.
+
+    - Set up CMake build system with OCCT and Qt 6 dependencies
+    - Create main application window with Qt 6
+    - Embed OCCT AIS viewer in a QOpenGLWidget
+    - Tiered startup based on OpenGL capability (see below)
+    - Implement BREP file read/write (native format)
+    - Display a test solid (e.g., a box) in the viewport
+    - Basic camera controls (rotate, pan, zoom)
+    - Application skeleton: menu bar, status bar, empty side panels
+
+  Tiered Startup Modes:
+
+  OCCT's geometry kernel (modeling, file I/O, data exchange) has no
+  dependency on OpenGL. Only the visualization module (TKOpenGl,
+  TKV3d) requires a GPU. HobbyCAD takes advantage of this
+  separation by supporting three startup modes:
+
+    Full Mode (OpenGL 3.3+ detected):
+      All features enabled. 3D viewport, file operations, feature
+      tree, scripting. This is the normal operating mode.
+
+    Reduced Mode (OpenGL below 3.3, or no GPU detected):
+      GUI launches but the 3D viewport is disabled (replaced with
+      an informational message explaining the GPU limitation). All
+      non-visual features remain fully functional:
+        - BREP / STEP / IGES / STL / OBJ file import and export
+        - Format conversion (e.g., STEP to STL, IGES to BREP)
+        - Feature tree operations (extrude, boolean, fillet — all
+          CPU-side geometry kernel operations)
+        - 2D sketch editing via QPainter/QGraphicsScene (Phase 1+;
+          the sketch editor is GPU-independent by design)
+        - Python scripting against the geometry kernel
+        - Project file management (.hcad / .hmesh read/write)
+      A yellow warning triangle icon (⚠) is shown in the status
+      bar to indicate reduced mode. Alongside it, a status bar
+      message explains that OpenGL 3.3+ is needed for the 3D
+      viewport, with a clickable link to Section 4.7 of the
+      documentation (End-User System Requirements) for GPU
+      recommendations specific to the user's detected hardware
+      vendor (NVIDIA, AMD, or Intel).
+
+      On entering Reduced Mode, a dialog is shown containing:
+        - A brief explanation that OpenGL 3.3+ is required for
+          the 3D viewport and was not detected
+        - A read-only text area showing detected graphics info:
+            OpenGL Version:    (detected string, or "N/A")
+            GLSL Version:      (detected string, or "N/A")
+            Renderer:          (detected string, or "N/A")
+            Vendor:            (detected string, or "N/A")
+            Context Creation:  (success / failed + error if any)
+        - A "Copy to Clipboard" button so the user can easily
+          paste the info into a bug report or forum post
+        - GPU upgrade guidance tailored to the detected vendor:
+            If Vendor contains "NVIDIA": recommend GeForce 8000+
+            If Vendor contains "AMD" or "ATI": recommend Radeon
+              HD 2000+ or newer
+            If Vendor contains "Intel": recommend HD Graphics
+              4000+ (Ivy Bridge or newer)
+            If Vendor is unknown or "N/A": show general guidance
+          with a link to the full hardware requirements in the
+          documentation
+        - A note suggesting the user check GPU drivers
+        - A "Continue in Reduced Mode" button to dismiss
+        - An "Exit" button to quit the application
+
+    Command-Line Mode (stretch goal — no GUI):
+      HobbyCAD runs as a command-line tool with no window at all.
+      Useful for headless servers, CI/CD pipelines, and batch
+      processing. Can be invoked in two ways:
+
+      Single-command mode (process and exit):
+        hobbycad --convert input.step output.stl
+        hobbycad --script batch_export.py
+
+      Interactive mode (REPL-style session):
+        hobbycad --no-gui
+        Launches an interactive command prompt where the user
+        can enter commands, run scripts, and perform operations.
+        The session remains open until the user issues an
+        explicit "exit" or "quit" command. This is the mode
+        entered when falling back from a failed GUI launch.
+
+      No OpenGL or display server required. Qt is either not
+      initialized or initialized without a GUI event loop.
+
+  The startup sequence is:
+    1. Check for --no-gui, --convert, or --script flags. If
+       present: skip to step 7 (Command-Line Mode).
+    2. Attempt to detect a display server (X11 via DISPLAY
+       environment variable, Wayland via WAYLAND_DISPLAY, or
+       platform equivalent on other OSes).
+    3. If no display server is found:
+         - Print a message to stderr:
+             "No display server detected (neither X11 nor
+             Wayland). Cannot start graphical interface.
+             Falling back to command-line mode."
+             "Type 'help' for available commands, or 'exit'
+             to quit."
+         - Launch in Command-Line Mode interactive session
+           (step 7).
+    4. Initialize Qt application (with GUI event loop).
+    5. Attempt to create an OpenGL context (offscreen surface).
+    6. Query GL_VERSION, GL_RENDERER, GL_VENDOR, and
+       GL_SHADING_LANGUAGE_VERSION via glGetString().
+       a. If context creation succeeded and version >= 3.3:
+          launch in Full Mode.
+       b. If version < 3.3 or context creation failed: collect
+          all available diagnostic strings, launch in Reduced
+          Mode, and present the diagnostic dialog.
+       c. If Qt initialization itself fails (e.g., plugin
+          errors, missing libraries): print diagnostic to
+          stderr and fall back to Command-Line Mode (step 7).
+    7. Command-Line Mode: no GUI, no OpenGL. If invoked with
+       --convert or --script, process the command and exit.
+       Otherwise, enter interactive session (command prompt)
+       and wait for user commands until "exit" or "quit" is
+       entered.
+
+  Deliverable: An application that opens, displays, and saves BREP
+  files with camera navigation, and degrades gracefully on hardware
+  without OpenGL 3.3 support.
+
+  13.2  PHASE 1: BASIC MODELING
+  -----------------------------
+  Goal: Create simple solid parts from parametric sketches.
+
+    - 2D sketch editor on a selected plane (default sketch mode)
+    - Sketch rendering via QPainter/QGraphicsScene (2D widget),
+      not dependent on OpenGL — works in both Full and Reduced
+      Mode. In Full Mode, the sketch plane is also shown in the
+      3D viewport for context (orientation, reference geometry),
+      but all interactive sketch editing happens in the 2D view.
+    - Basic sketch entities: line, arc, circle, rectangle,
+      construction line (dashed display, used as reference
+      geometry for constraints and dimensions but not included
+      in extrudable profiles)
+    - Basic sketch constraints: horizontal, vertical, coincident,
+      dimensional (distance, angle)
+    - Extrude sketch to create solid
+    - Revolve sketch around axis
+    - Boolean operations (union, subtract, intersect)
+    - Feature tree panel (list of operations)
+    - Project files browser (dockable panel):
+        * Tree view of all files in the project directory
+        * CAD files (listed in manifest) shown with standard
+          icons; foreign files shown with distinct styling
+        * Right-click context menu:
+            - Add to foreign_files (for untracked files/folders)
+            - Remove from foreign_files
+            - Add to .gitignore / Remove from .gitignore
+            - Open in external editor
+            - Rename / Delete (with confirmation)
+            - Properties (size, modified date, manifest status)
+        * Toolbar above tree view:
+            - Add file/folder
+            - Remove selected
+            - Toggle foreign_files flag
+            - Toggle .gitignore flag
+            - Refresh
+        * Double-click opens CAD files in the editor, opens
+          other files in the system default application
+        * Drag-and-drop to add external files into the project
+        * Files not in the manifest and not in foreign_files are
+          shown in a muted style as "untracked"
+    - Undo/redo via command pattern
+    - STEP import/export
+    - STL export
+
+  Sketch Design Notes:
+
+    2D sketches on a plane are the default and primary workflow.
+    This matches how the vast majority of parametric modeling is
+    done: sketch a 2D profile, then extrude, revolve, or sweep
+    it into a 3D solid.
+
+    3D sketches (curves not constrained to a single plane, such
+    as 3D splines or space curves) are a secondary feature to be
+    added in a later phase. They require the OpenGL 3D viewport
+    for interactive editing and are not available in Reduced Mode.
+
+    The QPainter-based 2D sketch editor provides Reduced Mode
+    users with meaningful modeling capability: they can create
+    and edit constrained sketches, apply extrude/revolve/boolean
+    operations via the feature tree, and export results — all
+    without a 3D-capable GPU. The 3D result is computed by the
+    OCCT geometry kernel on the CPU; it simply cannot be
+    visualized interactively until the file is opened on a
+    system with OpenGL 3.3+.
+
+  Deliverable: Users can sketch a 2D profile and extrude it into a
+  3D solid, save as BREP, and export as STEP or STL. The project
+  files browser provides full visibility into project contents with
+  foreign_files and .gitignore management. Sketch editing works in
+  Reduced Mode without OpenGL.
+
+  13.3  PHASE 2: PARAMETRIC FEATURES
+  -----------------------------------
+  Goal: Full parametric modeling workflow.
+
+    - Fillet and chamfer on edges
+    - Linear and circular pattern
+    - Shell (hollow a solid with specified wall thickness)
+    - Draft angle
+    - Feature modification (edit any feature, model updates)
+    - Parameter-driven design (named variables, expressions)
+    - Multi-body support
+    - Construction bodies: any body can be flagged as
+      "construction", analogous to construction lines in
+      sketches. Construction bodies:
+        * Are displayed with a distinct visual style (e.g.,
+          translucent, dashed edges, or muted color) so they
+          are clearly distinguishable from design bodies
+        * Do NOT contribute to mass properties
+        * Are excluded from STL/OBJ export by default
+        * Are excluded from STEP export by default (with an
+          option to include them)
+        * Can be used as tool bodies for boolean operations,
+          split operations, and reference geometry
+        * Can be toggled between construction and design via
+          right-click in the feature tree
+        * Are stored in the .hcad project file like any other
+          body (they are not discarded on save)
+      Use cases: modeling jigs, mating parts for clearance
+      checks, mold cavities, negative shapes for boolean cuts,
+      or any helper geometry that informs the design but is not
+      part of the manufactured result.
+    - OBJ import/export
+    - Additional sketch constraints (tangent, perpendicular, equal,
+      symmetric, midpoint)
+    - Sketch splines
+
+  Deliverable: Users can create fully parametric parts comparable to
+  basic Fusion 360 or SolidWorks workflows.
+
+  13.4  PHASE 3: PYTHON, PLUGINS, AND VERSION CONTROL
+  ----------------------------------------------------
+  Goal: Extensibility via Python scripting, and built-in version
+  control integration.
+
+    - Embed CPython interpreter
+    - Python bindings for geometry, features, documents (pybind11)
+    - Interactive Python console (dockable panel)
+    - Plugin system with discovery and lifecycle management
+    - Macro recorder (capture GUI actions as Python)
+    - Plugin API documentation
+    - Script execution security model: disabled-by-default
+      autorun, tiered permission levels, user notification on
+      projects containing scripts (see security_risks.txt
+      Section 4 for full details)
+    - Git integration: dockable version control panel with
+      status, commit, push/pull, history, diff, and branch
+      operations (see Section 5.5)
+    - GitHub import/export: clone from URL, push to remote,
+      create repositories via GitHub API
+
+  Deliverable: Users can automate tasks via Python scripts, install
+  third-party plugins, and manage project history with built-in git
+  support.
+
+  13.5  PHASE 4: ASSEMBLIES
+  --------------------------
+  Goal: Multi-part assembly design.
+
+    - Import multiple parts into an assembly document
+    - Assembly mates/constraints (coincident, concentric, distance,
+      angle, fixed)
+    - Interference detection
+    - Bill of materials generation
+    - Assembly exploded views
+
+  Deliverable: Users can assemble multiple parts with constraints and
+  detect interferences.
+
+  13.6  PHASE 5: HOBBYMESH
+  -------------------------
+  Goal: Companion mesh editing and 3D print prep tool.
+
+    - Mesh import (STL, OBJ, PLY, 3MF)
+    - Mesh inspection and auto-repair
+    - Hole filling and normal repair
+    - Mesh sculpting (smooth, inflate, flatten brushes)
+    - Mesh Boolean operations
+    - Make Solid (voxelization-based)
+    - Hollowing with drain holes
+    - Mesh simplification / decimation
+    - Plane cut / mesh splitting
+    - Support structure generation
+    - Wall thickness analysis
+    - Standalone application + HobbyCAD plugin
+
+  Reference: Autodesk Meshmixer v2.9 binaries are available for
+  feature comparison and workflow validation testing.
+
+  Deliverable: A functional mesh editor that covers the most-used
+  Meshmixer workflows.
+
+  13.7  PHASE 6: ADVANCED FEATURES
+  ---------------------------------
+  Goal: Differentiation features and polish.
+
+    - Mesh-to-B-Rep conversion (interactive/assisted, then semi-auto;
+      eventually enabling Mesh-to-STEP export)
+    - OpenSCAD .scad file import
+    - IGES, DXF, 3MF format support
+    - 2D drawing generation from 3D models
+    - KiCad integration (PCB outline import for enclosure design)
+    - Application theming and UI polish
+    - Performance optimization for large models/assemblies
+    - Installer packages (DEB, RPM, AppImage, Flatpak)
+
+  Deliverable: A polished, differentiated CAD application ready for
+  broader community adoption.
+
+================================================================================
+  14. REFERENCE MATERIALS AND RESOURCES
+================================================================================
+
+  14.1  SOFTWARE REFERENCES
+  -------------------------
+
+    Autodesk Meshmixer v2.9
+      Status:    Binaries available (project author has copies)
+      Purpose:   Feature reference and workflow validation for
+                 HobbyMesh development. Used to compare behavior,
+                 test edge cases, and validate that HobbyMesh
+                 achieves comparable results for core operations.
+      Note:      Meshmixer is proprietary freeware (Autodesk). It
+                 is used only as a behavioral reference, not as a
+                 source of code. HobbyMesh behavior may deviate from
+                 the reference software as the project author deems
+                 appropriate.
+
+    FreeCAD (latest stable)
+      Purpose:   Reference for OCCT + Qt integration patterns,
+                 Python scripting architecture, and parametric
+                 modeling workflows. Largest open-source CAD
+                 codebase using the same technology stack.
+
+    KiCad (latest stable)
+      Purpose:   Reference for wxWidgets-to-Qt migration patterns
+                 (historical), Python plugin system design, and
+                 EDA-to-MCAD interchange workflows.
+
+    SolveSpace (latest)
+      Purpose:   Reference for constraint solver behavior and
+                 integration. Solver library may be used directly.
+
+  14.2  KEY DOCUMENTATION
+  -----------------------
+
+    OpenCascade Technology:
+      - Official docs: https://dev.opencascade.org/doc/overview/html/
+      - Tutorial: https://dev.opencascade.org/doc/overview/html/
+                  occt__tutorial.html
+      - GitHub: https://github.com/Open-Cascade-SAS/OCCT
+
+    Qt 6:
+      - Official docs: https://doc.qt.io/qt-6/
+      - QOpenGLWidget: https://doc.qt.io/qt-6/qopenglwidget.html
+
+    pybind11:
+      - Official docs: https://pybind11.readthedocs.io/
+
+    PythonOCC:
+      - GitHub: https://github.com/tpaviot/pythonocc-core
+
+    CGAL:
+      - Polygon Mesh Processing:
+        https://doc.cgal.org/latest/Polygon_mesh_processing/
+
+    OpenVDB:
+      - Official docs: https://www.openvdb.org/documentation/
+
+================================================================================
+  15. DOCUMENTATION STANDARDS
+================================================================================
+
+  All project documentation is maintained in plain text format.
+
+  15.1  FORMAT RULES
+  -------------------
+
+    - File format: Plain text (.txt), UTF-8 encoding
+    - Line width: 72 characters preferred, 80 characters maximum
+    - Section separators: Lines of '=' characters (80 wide)
+    - Subsection separators: Lines of '-' characters
+    - Indentation: 2 spaces
+    - No word processor formats (no .docx, .odt, .rtf)
+    - No markup languages for primary docs (no Markdown, no HTML)
+    - PDFs may be generated from plain text for distribution but
+      plain text is the primary source
+
+  15.2  DOCUMENT NAMING
+  ----------------------
+
+    Project documents use lowercase with underscores:
+      project_definition.txt
+      cad_library_recommendations.txt
+      cad_use_case_document.txt
+
+  15.3  VERSION NUMBERING
+  ------------------------
+
+    Documents follow the project version numbering scheme.
+    Version 1.0.0.0 is reserved for the first quality release.
+    Early development versions start at 0.0.1.x where x increments
+    with each revision.
+
+    Format: Major.Minor.Patch.Revision
+      Major:    Significant project milestones (1.0 = first release)
+      Minor:    Feature additions or significant changes
+      Patch:    Bug fixes or corrections
+      Revision: Document revisions within a patch
+
+  15.4  AI ATTRIBUTION
+  ---------------------
+
+    All documents generated with AI assistance include an AI
+    Attribution field in the document header:
+
+      AI Attribution   : This document was primarily generated with
+                         the assistance of Claude AI (Anthropic).
+                         Human review and editorial direction provided
+                         by the project author.
+
+    Code files generated with AI assistance include a comment in the
+    file header indicating AI involvement.
+
+================================================================================
+  16. RELATED DOCUMENTS
+================================================================================
+
+  The following documents comprise the HobbyCAD project documentation
+  set. All documents are plain text format.
+
+    cad_library_recommendations.txt
+      Detailed analysis of recommended libraries for each architecture
+      layer, including alternatives considered, licensing analysis, and
+      the HobbyMesh additional library stack.
+
+    cad_use_case_document.txt
+      Use cases, target audience definition, competitive landscape
+      analysis with advantages/disadvantages of nine competing
+      products, differentiation strategy, risk assessment, and the
+      HobbyMesh companion tool specification.
+
+    project_definition.txt (this document)
+      Project summary, scope, components, design principles, native
+      file format specification, technology stack overview, file
+      format strategy, development phases, reference materials, and
+      documentation standards.
+
+    dev_environment_setup.txt
+      Step-by-step development environment setup for Phase 0,
+      including apt-get package lists for Ubuntu 22.04 and 24.04,
+      package version differences between releases, source-build
+      instructions for packages not in repos, Launchpad PPA strategy,
+      verification steps, project directory structure, and build
+      instructions.
+
+    security_risks.txt
+      Security threat model, risk analysis, and mitigations for
+      file format parsing, Python scripting and plugin execution,
+      git/network integration, supply chain, UI/UX trust issues,
+      credential storage, and security configuration defaults.
+
+    AUTHORS
+      Project author and contributor listing with dates and areas
+      of contribution. References the copyright assignment policy
+      (Section 12.5) and contribution agreement (Section 12.7).
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

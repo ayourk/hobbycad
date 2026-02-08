@@ -1,0 +1,647 @@
+================================================================================
+  HOBBYCAD / HOBBYMESH — SECURITY RISKS AND MITIGATIONS
+================================================================================
+
+  Project:         HobbyCAD / HobbyMesh
+  Document:        Security Risks and Mitigations
+  Author:          Aaron (project author)
+  Created:         2026-02-07
+  Status:          Living document — updated as features are added
+
+  Table of Contents:
+  1. Overview
+  2. Threat Model
+  3. File Format Parsing
+  4. Python Scripting and Plugins
+  5. Git and Network Integration
+  6. Supply Chain
+  7. UI/UX Trust Issues
+  8. Credential and Secret Storage
+  9. Out of Scope
+  10. Security Configuration Defaults
+  11. Related Documents
+
+================================================================================
+  1. OVERVIEW
+================================================================================
+
+  HobbyCAD is a desktop application with no server component, no
+  listening ports, and no multi-user access model. The primary
+  security concerns are:
+
+    - Processing untrusted files (BREP, STEP, STL, OBJ, ZIP, JSON)
+    - Executing user-provided or project-bundled scripts (Python)
+    - Network operations via git integration and GitHub API
+    - Supply chain integrity of dependencies
+
+  This document catalogs known risk areas, their severity, and
+  planned or recommended mitigations. It should be reviewed
+  whenever new features are added that introduce new trust
+  boundaries.
+
+================================================================================
+  2. THREAT MODEL
+================================================================================
+
+  2.1  TRUST BOUNDARIES
+  ----------------------
+
+  The following trust boundaries exist in HobbyCAD:
+
+    User → Application:
+      The local user is trusted. HobbyCAD runs with the user's
+      full permissions and has access to anything the user's
+      OS account can access. This is standard for desktop
+      applications.
+
+    External Files → Application:
+      Files opened by the user (BREP, STEP, STL, OBJ, ZIP
+      archives, .hcad/.hmesh manifests, JSON, Python scripts)
+      may originate from untrusted sources. Downloaded projects,
+      email attachments, files from GitHub, and community-shared
+      designs all cross this boundary.
+
+    Network → Application:
+      Git remotes, GitHub API endpoints, and any URLs stored in
+      the manifest's "repository" object are external inputs.
+      Responses from these services are untrusted.
+
+    Plugins → Application:
+      Third-party plugins execute arbitrary code in the
+      application's process space with full user permissions.
+
+  2.2  ATTACKER PROFILES
+  -----------------------
+
+    Opportunistic:
+      A malicious actor uploads a crafted project file to a
+      sharing site (Thingiverse, Printables, GitHub) hoping
+      users will open it. The file exploits a parser bug or
+      contains a malicious autorun script.
+
+    Targeted:
+      An attacker sends a crafted file directly to a specific
+      user (e.g., via email, forum, or pull request) designed
+      to exploit a known vulnerability or exfiltrate data.
+
+    Supply chain:
+      A compromised dependency (OCCT, Qt, libgit2, Python
+      package) introduces malicious code that executes when
+      HobbyCAD is built or run.
+
+================================================================================
+  3. FILE FORMAT PARSING
+================================================================================
+
+  Risk Level: HIGH
+
+  File parsing is historically the most exploited attack surface
+  in engineering and CAD software. HobbyCAD processes complex
+  file formats from potentially untrusted sources.
+
+  3.1  OCCT-PARSED FORMATS (BREP, STEP, IGES)
+  ----------------------------------------------
+
+  OCCT's parsers handle the most complex formats. Vulnerabilities
+  in these parsers (buffer overflows, integer overflows, infinite
+  loops on malformed input) would directly affect HobbyCAD.
+
+  Mitigations:
+    - Keep OCCT updated to the latest stable release
+    - Monitor OCCT's issue tracker and mailing list for
+      security-relevant bug fixes
+    - Consider fuzzing OCCT's parsers with project-specific
+      test cases (AFL, libFuzzer)
+    - Wrap OCCT file I/O in exception handlers to catch and
+      report malformed files gracefully rather than crashing
+    - Set reasonable limits on file size and complexity before
+      passing to OCCT (e.g., reject STEP files > 2 GB)
+
+  3.2  STL AND OBJ FILES
+  ------------------------
+
+  STL and OBJ are simpler formats but still subject to:
+    - Extremely large triangle counts (memory exhaustion)
+    - Malformed ASCII STL with invalid numeric values
+    - OBJ files with excessively long lines or deeply nested
+      group hierarchies
+    - Binary STL files with header claiming to be ASCII
+      (begins with "solid" text)
+
+  Mitigations:
+    - Set configurable limits on triangle/vertex count
+    - Validate numeric values during parsing
+    - Auto-detect ASCII vs binary STL by content inspection,
+      not just by header or extension
+    - Allocate memory incrementally, not all-at-once based
+      on header-declared counts
+
+  3.3  JSON MANIFEST PARSING
+  ----------------------------
+
+  The .hcad and .hmesh manifest files are JSON. While JSON is
+  simpler than binary formats, risks include:
+    - Extremely deeply nested objects (stack overflow)
+    - Extremely large string values (memory exhaustion)
+    - Path traversal in file references (e.g., a manifest
+      listing "../../etc/passwd" as a geometry file)
+    - Unexpected types (e.g., number where string expected)
+
+  Mitigations:
+    - Use a JSON parser with configurable depth and size
+      limits (Qt's QJsonDocument has reasonable defaults)
+    - Validate all file paths in the manifest are relative
+      and do not escape the project directory (reject paths
+      containing "..", absolute paths, and symlinks pointing
+      outside the project)
+    - Validate expected types for all manifest fields
+    - Reject manifests with unrecognized top-level fields
+      only if a strict mode is enabled (default: warn but
+      continue, for forward compatibility)
+
+  3.4  ZIP ARCHIVE HANDLING
+  ---------------------------
+
+  ZIP archives are a secondary distribution format. Known
+  attack vectors:
+
+    Path traversal (Zip Slip):
+      ZIP entries with names like "../../malicious.sh" that
+      extract outside the intended directory. This is a
+      well-documented class of vulnerability.
+
+    Zip bombs:
+      Archives with extreme compression ratios (e.g., 42 KB
+      compressed → 4.5 PB decompressed) or deeply nested
+      ZIP-within-ZIP structures.
+
+    Inconsistent headers:
+      ZIP files with mismatched local and central directory
+      headers, used to confuse parsers.
+
+  Mitigations:
+    - Validate all entry paths before extraction — reject
+      entries containing "..", absolute paths, or symlinks
+    - Set a maximum decompressed size limit (configurable,
+      default: 4 GB)
+    - Set a maximum number of entries (configurable, default:
+      100,000)
+    - Set a maximum compression ratio (e.g., reject if
+      decompressed/compressed > 1000:1)
+    - Extract to a temporary directory first, validate
+      contents, then move to final location
+    - Use libzip's built-in path validation where available
+
+  3.5  PPM THUMBNAIL PARSING
+  ----------------------------
+
+  PPM (Netpbm) thumbnails are text-based image files. Risks:
+    - Header claiming extremely large dimensions (memory
+      exhaustion on allocation)
+    - Pixel data not matching declared dimensions
+
+  Mitigations:
+    - Reject PPM files with dimensions exceeding reasonable
+      thumbnail sizes (e.g., max 1024x1024)
+    - Validate pixel data length matches header dimensions
+
+================================================================================
+  4. PYTHON SCRIPTING AND PLUGINS
+================================================================================
+
+  Risk Level: HIGH
+
+  HobbyCAD embeds a CPython interpreter and supports project-
+  bundled scripts and third-party plugins. Python scripts run
+  with the full permissions of the user's OS account. A malicious
+  script can read/write/delete any file the user can, install
+  software, exfiltrate data over the network, or modify the
+  system.
+
+  This is the same trust model as FreeCAD, Blender, GIMP, and
+  other scriptable desktop applications. However, it creates a
+  significant risk when opening projects from untrusted sources.
+
+  4.1  PROJECT-BUNDLED SCRIPTS
+  ------------------------------
+
+  A project's scripts/ directory may contain Python files. If
+  any script is named or configured to run automatically on
+  project open (e.g., scripts/autorun.py, or referenced in the
+  manifest as an autorun entry), it represents a direct code
+  execution vector.
+
+  Mitigations:
+
+    Script execution is DISABLED by default.
+
+    When a project is opened that contains Python scripts in
+    the scripts/ directory, HobbyCAD does NOT execute any of
+    them automatically. Instead:
+
+      1. A non-modal notification (info bar at the top of the
+         window, not a blocking dialog) informs the user:
+           "This project contains Python scripts. Script
+           execution is currently disabled."
+           [Review Scripts]  [Enable for this project]
+           [Enable and run autorun.py]
+
+      2. "Review Scripts" opens the scripts/ directory in the
+         project files browser so the user can inspect the
+         files before deciding.
+
+      3. "Enable for this project" allows manual script
+         execution (via the Python console or Run menu) for
+         this project only. Scripts still do not autorun.
+
+      4. "Enable and run autorun.py" enables script execution
+         AND immediately runs scripts/autorun.py. This is the
+         most permissive option and should only be used for
+         trusted projects.
+
+    Global script execution settings (in application
+    preferences):
+
+      - "Never run scripts" — scripts cannot be executed at
+        all, even manually. The Python console is disabled.
+        Suitable for users who only want to view/edit geometry.
+
+      - "Allow manual execution only" (DEFAULT) — scripts can
+        be run by the user via the Python console or Run menu,
+        but never automatically on project open.
+
+      - "Prompt on project open" — if a project contains an
+        autorun.py or manifest-declared autorun script, prompt
+        the user with the notification described above.
+
+      - "Allow autorun for trusted projects" — projects in a
+        user-maintained trusted list (by directory path or git
+        remote URL) can autorun scripts without prompting.
+        All other projects prompt.
+
+      - "Always allow autorun" — scripts/autorun.py runs
+        automatically for all projects without prompting.
+        A warning is shown in preferences explaining the risk:
+        "This setting allows any project you open to execute
+        arbitrary code on your system. Only enable this if you
+        exclusively open projects you have created yourself."
+
+    The manifest can declare an autorun script:
+
+      "autorun": "scripts/autorun.py"
+
+    This field is ignored unless the user's script execution
+    setting permits it. The autorun field is informational —
+    it tells HobbyCAD which script the project author intends
+    to run on open, but execution is always gated by the
+    user's security preferences.
+
+  4.2  THIRD-PARTY PLUGINS
+  --------------------------
+
+  Plugins are Python packages or shared libraries that extend
+  HobbyCAD's functionality. They run with full user permissions.
+
+  Mitigations:
+    - Plugins must be explicitly installed by the user (no
+      automatic installation from project files)
+    - Plugin installation shows a clear warning:
+      "Plugins can execute arbitrary code on your system.
+      Only install plugins from sources you trust."
+    - A plugin manager UI shows installed plugins with source
+      information, version, and an uninstall option
+    - Plugins are loaded from a dedicated directory, not from
+      project directories (a project cannot bundle a plugin
+      that auto-installs)
+    - Future: plugin signing and a curated plugin registry
+      could provide additional trust signals
+
+  4.3  PYTHON CONSOLE
+  ---------------------
+
+  The interactive Python console (dockable panel, Phase 3+)
+  allows users to type and execute arbitrary Python code.
+
+  Mitigations:
+    - The console is gated by the script execution preference
+      (disabled in "Never run scripts" mode)
+    - The console is clearly labeled as having full system
+      access — it is a developer/power-user feature, not a
+      sandboxed environment
+    - No additional sandboxing is planned, consistent with
+      FreeCAD, Blender, and other applications with embedded
+      Python
+
+  4.4  SANDBOX CONSIDERATIONS
+  -----------------------------
+
+  Full Python sandboxing is not planned and is generally
+  considered infeasible in CPython. Previous attempts
+  (RestrictedPython, pysandbox) have been abandoned or
+  bypassed. The security model is therefore based on:
+    - User consent (explicit opt-in to script execution)
+    - Visibility (clear UI indicators when scripts are present)
+    - Defaults (scripts disabled by default)
+    - Trust delegation (user decides which projects to trust)
+
+  This matches industry practice for desktop CAD and creative
+  applications.
+
+================================================================================
+  5. GIT AND NETWORK INTEGRATION
+================================================================================
+
+  Risk Level: MEDIUM
+
+  HobbyCAD performs network operations via libgit2 (git clone,
+  push, pull, fetch) and the GitHub REST API.
+
+  5.1  MALICIOUS REMOTES
+  ------------------------
+
+  The manifest's "repository" object contains remote URLs. A
+  crafted project could contain a remote_url pointing to a
+  malicious git server designed to exploit vulnerabilities in
+  libgit2's protocol handling.
+
+  Mitigations:
+    - Keep libgit2 updated to latest stable release
+    - Validate remote URLs before use — reject obviously
+      malicious patterns (e.g., file:// URLs pointing to
+      local sensitive paths, URLs with embedded credentials)
+    - The "Synchronize with version control" feature reads
+      from .git/config — sanitize values read from this file
+    - Display the remote URL to the user before cloning and
+      ask for confirmation when the URL was provided by an
+      external source (e.g., opening a ZIP that contains a
+      manifest with a repository object)
+
+  5.2  TLS/SSL CERTIFICATE VALIDATION
+  --------------------------------------
+
+  All HTTPS connections (git operations, GitHub API) must
+  validate TLS certificates.
+
+  Mitigations:
+    - Use libgit2's default certificate validation (which
+      uses the system CA store)
+    - Do not provide a UI option to disable certificate
+      validation
+    - If certificate validation fails, show a clear error
+      message — do not silently fall back to unencrypted
+      connections
+
+  5.3  SSH KEY HANDLING
+  ----------------------
+
+  SSH-based git operations use the user's SSH keys.
+
+  Mitigations:
+    - Use libgit2's built-in SSH support (libssh2) or
+      delegate to system SSH agent
+    - HobbyCAD does not manage SSH keys — it uses whatever
+      the user has configured on their system
+    - Verify host keys on first connection (TOFU — Trust On
+      First Use) and warn on host key changes, consistent
+      with standard SSH behavior
+    - Never store SSH passphrases
+
+  5.4  GITHUB API AUTHENTICATION
+  --------------------------------
+
+  GitHub API operations (creating repos, pushing) require
+  authentication via OAuth device flow or personal access
+  tokens (PATs).
+
+  Mitigations:
+    - See Section 8 (Credential and Secret Storage) for
+      token storage approach
+    - Request minimum necessary OAuth scopes (repo access
+      only, not account management)
+    - Tokens are never written to the manifest or any
+      project file — they are stored in the system keyring
+    - Display the token's scope and expiration in the UI
+
+================================================================================
+  6. SUPPLY CHAIN
+================================================================================
+
+  Risk Level: MEDIUM
+
+  HobbyCAD depends on numerous external libraries. A compromise
+  of any dependency could introduce malicious code.
+
+  6.1  DEPENDENCY INVENTORY
+  ---------------------------
+
+  Critical dependencies (compromise = direct code execution):
+    - OpenCASCADE (OCCT) — geometry kernel
+    - Qt 6 — GUI framework
+    - CPython — scripting engine
+    - libgit2 — version control
+    - pybind11 — Python/C++ bridge
+
+  Important dependencies (compromise = data processing risk):
+    - libzip / libminizip — ZIP handling
+    - libpng / libjpeg — image processing
+    - SolveSpace solver — constraint solving
+    - Assimp — mesh I/O (HobbyMesh)
+    - CGAL — computational geometry (HobbyMesh)
+
+  6.2  MITIGATIONS
+  ------------------
+
+    - Pin dependency versions in the build system (CMakeLists.txt)
+    - Monitor CVE databases for all dependencies
+    - Prefer system-packaged versions (Ubuntu repos, Homebrew)
+      over self-built versions where possible — system packages
+      receive security updates via the OS update mechanism
+    - Verify checksums/signatures when downloading source tarballs
+    - For PPA distribution: build in a clean environment, sign
+      packages with a GPG key
+    - Document the full dependency tree so users can audit it
+
+  6.3  COMMUNITY CONTRIBUTIONS
+  ------------------------------
+
+  Code submitted by community contributors must be reviewed
+  before merging. The copyright assignment policy (see
+  project_definition.txt Section 12.5) addresses legal concerns
+  but does not replace security review.
+
+  Mitigations:
+    - All pull requests require code review by the project
+      author or a trusted maintainer
+    - CI/CD pipeline should include static analysis (clang-tidy,
+      cppcheck) and address sanitizers (ASan, UBSan)
+    - Fuzzing targets for file parsers should be maintained as
+      part of the test suite
+
+================================================================================
+  7. UI/UX TRUST ISSUES
+================================================================================
+
+  Risk Level: LOW
+
+  7.1  PROJECT FILES BROWSER
+  ----------------------------
+
+  The project files browser displays all files in the project
+  directory, including foreign files. Risks:
+    - A project could contain files with misleading names
+      (e.g., "README.md" that is actually a symlink to
+      ~/.ssh/id_rsa)
+    - "Open in external editor" delegates to the OS file
+      association — a file named "notes.pdf" could actually
+      be a crafted file exploiting a PDF reader vulnerability
+    - Double-click on non-CAD files launches the system
+      default handler
+
+  Mitigations:
+    - Resolve and display symlink targets in the files browser
+      — show where a symlink actually points
+    - Warn before opening files outside the project directory
+      (symlinks pointing elsewhere)
+    - Consider not following symlinks at all for foreign files
+      (display them as symlinks, don't resolve)
+    - Display file sizes and types to help users spot
+      suspicious files
+
+  7.2  MANIFEST MANIPULATION
+  ----------------------------
+
+  A malicious manifest could contain unexpected values:
+    - "autorun" pointing to a script outside the project
+      directory (path traversal)
+    - "geometry" entries pointing to files outside the project
+    - "foreign_files" entries with ".." components
+    - Extremely long string values in "description", "notes",
+      or other fields (UI rendering issues)
+
+  Mitigations:
+    - All paths in the manifest are validated to be relative
+      and contained within the project directory
+    - String fields are truncated for display at reasonable
+      lengths
+    - The manifest is treated as untrusted input even though
+      it is inside the project directory
+
+================================================================================
+  8. CREDENTIAL AND SECRET STORAGE
+================================================================================
+
+  Risk Level: MEDIUM
+
+  HobbyCAD handles GitHub authentication tokens (OAuth tokens
+  or personal access tokens). These must be stored securely.
+
+  8.1  STORAGE APPROACH
+  ----------------------
+
+  Credentials are stored in the operating system's native
+  keyring/credential manager:
+    - Linux: libsecret (GNOME Keyring / KDE Wallet)
+    - macOS: Keychain
+    - Windows: Windows Credential Manager
+
+  Credentials are NEVER stored in:
+    - The project manifest (.hcad / .hmesh files)
+    - Any file in the project directory
+    - Plain text configuration files
+    - Environment variables (except for CI/CD use where
+      the user explicitly sets them)
+
+  8.2  TOKEN HANDLING
+  ---------------------
+
+    - Tokens are read from the keyring only when needed
+      and not cached in memory longer than necessary
+    - Token values are not written to log files or crash
+      reports
+    - Token values are not displayed in the UI (masked
+      with asterisks, with a "reveal" toggle)
+    - When a token is revoked or expired, the user is
+      prompted to re-authenticate — the old token is
+      deleted from the keyring
+
+  8.3  FALLBACK WHEN NO KEYRING IS AVAILABLE
+  --------------------------------------------
+
+  On headless Linux systems or minimal installations without
+  a keyring service, HobbyCAD:
+    - Warns the user that secure credential storage is not
+      available
+    - Offers to store the token in a file with restricted
+      permissions (chmod 600) in ~/.config/hobbycad/
+    - Clearly states this is less secure than keyring storage
+    - In Command-Line Mode, accepts tokens via environment
+      variable (HOBBYCAD_GITHUB_TOKEN) for CI/CD workflows
+
+================================================================================
+  9. OUT OF SCOPE
+================================================================================
+
+  The following are NOT security concerns for HobbyCAD:
+
+    - Multi-user access control — single-user desktop app,
+      the operating system handles user isolation
+    - SQL injection — no database
+    - Cross-site scripting (XSS) — no web UI
+    - Cross-site request forgery (CSRF) — no web UI
+    - Authentication to HobbyCAD itself — no user accounts
+    - Server-side vulnerabilities — no server component
+    - DDoS protection — no listening ports
+    - Data encryption at rest — the user's OS provides
+      full-disk encryption if desired; HobbyCAD project
+      files are not individually encrypted
+    - GDPR/privacy compliance — HobbyCAD collects no user
+      data and has no telemetry (if telemetry is ever added,
+      this section must be revisited)
+
+================================================================================
+  10. SECURITY CONFIGURATION DEFAULTS
+================================================================================
+
+  HobbyCAD ships with security-conservative defaults. Users
+  can relax these settings explicitly, but must opt in.
+
+  +----------------------------------+---------------------------+
+  | Setting                          | Default                   |
+  +----------------------------------+---------------------------+
+  | Script execution                 | Manual only (no autorun)  |
+  | Plugin installation              | Requires user action      |
+  | Python console                   | Enabled (manual only)     |
+  | Git clone from manifest URL      | Prompt user               |
+  | TLS certificate validation       | Enforced (no bypass)      |
+  | ZIP extraction size limit        | 4 GB                      |
+  | ZIP entry count limit            | 100,000                   |
+  | ZIP compression ratio limit      | 1000:1                    |
+  | Manifest path traversal check    | Enforced (no bypass)      |
+  | Symlink following                | Disabled for foreign files|
+  | Credential storage               | System keyring            |
+  | Telemetry / crash reporting      | None (not implemented)    |
+  +----------------------------------+---------------------------+
+
+================================================================================
+  11. RELATED DOCUMENTS
+================================================================================
+
+  - project_definition.txt
+      Section 5.2:  Project layout (manifest, foreign_files)
+      Section 5.4:  ZIP archive format
+      Section 5.5:  Git and GitHub integration
+      Section 12:   Licensing and community contributions
+      Section 13.1: Tiered startup modes
+      Phase 1:      Project files browser
+      Phase 3:      Python scripting, plugins, version control
+
+  - cad_library_recommendations.txt
+      Section 8:    Python scripting and plugin system
+      Section 10.5: Version control integration (libgit2)
+
+  - dev_environment_setup.txt
+      Section 4.9:  libgit2 dependency
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

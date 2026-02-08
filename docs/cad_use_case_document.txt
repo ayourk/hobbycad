@@ -1,0 +1,1053 @@
+================================================================================
+  HobbyCAD - USE CASE AND COMPETITIVE ANALYSIS
+================================================================================
+
+  Project          : HobbyCAD
+  Document Version : 0.0.1.1
+  Date             : 2026-02-06
+  Format           : Plain Text (all project documentation is plain text)
+  Purpose          : Define use cases, target audience, and competitive
+                     landscape for HobbyCAD, a new Linux-native parametric
+                     3D CAD application.
+  AI Attribution   : This document was primarily generated with the assistance
+                     of Claude AI (Anthropic). Human review and editorial
+                     direction provided by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+  1. Project Vision
+  2. Target Users
+  3. Core Use Cases
+  4. Supported File Formats
+  5. Competitive Landscape
+     5.1  Autodesk Fusion 360
+     5.2  FreeCAD
+     5.3  SolveSpace
+     5.4  OpenSCAD
+     5.5  BRL-CAD
+     5.6  Onshape
+     5.7  SolidWorks (Dassault Systemes)
+     5.8  BricsCAD
+     5.9  Blender (CAD-adjacent)
+  6. Competitive Summary Matrix
+  7. Differentiation Strategy
+  8. Risks and Challenges
+  9. HobbyMesh: Companion Mesh Editing Tool
+
+================================================================================
+  1. PROJECT VISION
+================================================================================
+
+A Linux-native, open-source, parametric 3D CAD application for
+hobbyists, by hobbyists. HobbyCAD is built for mechanical
+engineering, product design, and maker fabrication — delivering
+professional-quality tools without requiring proprietary software,
+subscription fees, or cloud lock-in.
+
+Key principles:
+
+  - Linux-first development (no Windows/macOS port-back compromises)
+  - For hobbyists, by hobbyists — professional-quality results
+    without the professional price tag
+  - Offline-first: version control integration is HobbyCAD's cloud
+    connectivity. All collaboration and sharing flows through git
+    and GitHub/GitLab, not a proprietary cloud backend
+  - Open-source with an open file format strategy
+  - Modern, responsive UI built with Qt 6
+  - Powered by OpenCascade Technology (OCCT) for industrial-grade
+    solid modeling
+  - Parametric design with a full 2D constraint solver
+  - Support for STEP, STL, and OBJ file formats at launch
+
+================================================================================
+  2. TARGET USERS
+================================================================================
+
+  Primary Audience:
+
+    Hobbyists and Makers
+    - 3D printing enthusiasts who need parametric solid modeling
+    - Electronics hobbyists designing enclosures and mechanical parts
+    - Home workshop users with CNC routers or laser cutters
+    - Users who want a capable CAD tool without subscription costs
+
+    Linux-Native Engineers and Designers
+    - Professional and semi-professional engineers who prefer Linux
+      as their primary operating system
+    - Users frustrated by running Windows CAD tools through VMs or Wine
+    - Teams working in Linux-heavy environments (robotics, embedded
+      systems, scientific computing)
+
+  Secondary Audience:
+
+    Open-Source Advocates
+    - Users who prefer open-source tools on principle
+    - Organizations with policies requiring auditable, open-source
+      software
+
+    Educators and Students
+    - Instructors teaching CAD/CAM in Linux lab environments
+    - Students who cannot afford commercial CAD licenses
+
+================================================================================
+  3. CORE USE CASES
+================================================================================
+
+  UC-01: Parametric Part Design
+  -----------------------------
+  The user creates a 3D solid part using parametric sketches and
+  features (extrude, revolve, fillet, chamfer, pattern, etc.). Design
+  parameters can be modified at any point, and the model updates
+  accordingly through the feature history tree.
+
+  UC-02: Assembly Design
+  ----------------------
+  The user combines multiple parts into an assembly with mates and
+  constraints (coincident, concentric, distance, angle). Interference
+  detection highlights collisions between parts.
+
+  UC-03: Export for 3D Printing
+  -----------------------------
+  The user exports a solid model as STL or OBJ for slicing and 3D
+  printing. Mesh density and tolerance settings are adjustable.
+
+  UC-04: STEP File Interchange
+  ----------------------------
+  The user imports STEP files from other CAD systems for modification
+  or reference. The user exports designs as STEP for sharing with
+  collaborators using different CAD software.
+
+  UC-05: 2D Drawing Generation
+  ----------------------------
+  The user generates 2D orthographic projections (front, top, side,
+  isometric) from a 3D model with dimensions and annotations for
+  manufacturing documentation. (Future release)
+
+  UC-06: Enclosure Design for Electronics
+  ----------------------------------------
+  The user imports a PCB outline (from KiCad DXF export or STEP) and
+  designs a custom enclosure around it, with cutouts for connectors,
+  mounting bosses, and snap-fit features.
+
+  UC-07: Reverse Engineering / Modification
+  ------------------------------------------
+  The user imports an STL or OBJ mesh from a 3D scan, uses it as a
+  reference, and creates new parametric geometry around or based on
+  the imported shape.
+
+  UC-08: Multi-Body Part Design
+  -----------------------------
+  The user creates multiple solid bodies within a single part file,
+  using Boolean operations (union, subtract, intersect) to combine
+  them into a final shape. Any body can be flagged as a
+  "construction body" — used as reference geometry for booleans,
+  splits, and clearance checks but excluded from mass properties
+  and export by default. See project_definition.txt Phase 2 for
+  construction body details.
+
+  UC-09: Mesh to B-Rep Conversion (STL/OBJ to STEP)
+  ---------------------------------------------------
+  The user imports an STL or OBJ mesh file and converts it (fully or
+  partially) into B-Rep solid geometry suitable for export as STEP.
+  This is a notoriously difficult problem — no existing CAD software
+  performs this reliably for arbitrary geometry. HobbyCAD would offer
+  this as a phased capability:
+
+    Phase 1: Interactive/assisted conversion where the user manually
+    selects mesh regions and specifies surface types (plane, cylinder,
+    sphere, NURBS) to guide the conversion.
+
+    Phase 2: Semi-automatic detection using curvature-based mesh
+    segmentation to suggest regions and surface types, with user
+    review and correction.
+
+    Phase 3: Fully automatic conversion for simple prismatic parts
+    (boxes, cylinders, plates with holes) as a long-term research
+    goal.
+
+  Even a Phase 1 implementation would be a significant differentiator,
+  as no open-source CAD tool currently offers an integrated mesh-to-
+  B-Rep workflow.
+
+================================================================================
+  4. SUPPORTED FILE FORMATS
+================================================================================
+
+  NATIVE FORMAT:
+
+    Format    Direction      Description
+    ------    ---------      -----------
+    BREP      Internal       OCCT native B-Rep format. Lossless storage
+                             of all geometric and topological data.
+                             Used within HobbyCAD's directory-first
+                             project format (.hcad manifest + BREP
+                             geometry files) with zero conversion
+                             overhead. See project_definition.txt
+                             Section 5.2 for project layout details.
+
+  LAUNCH INTERCHANGE FORMATS:
+
+    Format    Direction    Description
+    ------    ---------    -----------
+    STEP      Import/Export  ISO 10303 B-Rep interchange (primary)
+    STL       Import/Export  Triangulated mesh for 3D printing
+    OBJ       Import/Export  Wavefront polygon mesh with materials
+
+  PLANNED FUTURE FORMATS (by integration difficulty):
+
+    Trivial:
+      IGES    Import/Export  Legacy CAD interchange (built into OCCT)
+
+    Low to Medium:
+      DXF     Import/Export  2D drawing exchange (via libdxfrw)
+      3MF     Import/Export  Modern 3D printing format (via lib3mf)
+      SVG     Export         2D vector graphics for drawings/sketches
+
+    Medium:
+      glTF    Export         Web/visualization interchange (via Assimp
+                             or tinygltf)
+      PLY     Import/Export  Point cloud / mesh format (via Assimp)
+      FBX     Import         Autodesk interchange (via Assimp, limited)
+      OpenSCAD (.scad)       Import only. Large community library of
+               Import        parametric designs on Thingiverse,
+                             Printables, and GitHub. Initial support
+                             via OpenSCAD CLI subprocess rendering to
+                             STL, with potential for a native parser
+                             to enable direct CSG-to-B-Rep conversion
+                             and parametric variable editing.
+
+    High (Proprietary / Licensing Barriers):
+      DWG     Import         AutoCAD native (requires ODA libraries or
+                             reverse-engineered readers)
+      Parasolid (X_T)       Requires Siemens commercial license
+      CATIA (CATPart)       Proprietary, no viable open-source reader
+
+================================================================================
+  5. COMPETITIVE LANDSCAPE
+================================================================================
+
+  The following analysis covers the primary competitors in the Linux
+  CAD space, including both open-source and commercial offerings.
+  This analysis informs HobbyCAD's positioning and feature priorities.
+
+
+  ---------------------------------------------------------------------------
+  5.1  AUTODESK FUSION 360
+  ---------------------------------------------------------------------------
+
+  Type:           Commercial, cloud-based
+  Platform:       Windows, macOS (NO native Linux support)
+  License:        Subscription ($545/year commercial, free personal use
+                  with limitations)
+  Modeling:       Parametric B-Rep, direct modeling, mesh, surface,
+                  sheet metal, sculpting
+  File Formats:   Extensive (STEP, IGES, SAT, DWG, DXF, STL, OBJ, 3MF,
+                  F3D native, and many more)
+
+  Advantages:
+    - Extremely comprehensive feature set (CAD + CAM + CAE + PCB in
+      one package)
+    - Polished, modern UI with excellent UX design
+    - Integrated simulation (FEA, thermal, modal)
+    - Integrated CAM (2.5-axis through 5-axis toolpaths)
+    - Built-in version control and collaboration
+    - Large community, extensive tutorials and learning resources
+    - Direct integration with manufacturing services
+    - Generative design capabilities
+
+  Disadvantages:
+    - No native Linux support (must use VM or Wine, both unreliable)
+    - Requires internet connection for many operations
+    - Subscription model with recurring costs
+    - Free personal license has significant limitations and Autodesk
+      has historically changed the terms
+    - Proprietary file format (F3D) creates vendor lock-in
+    - Cloud dependency means Autodesk controls access to your designs
+    - Performance can be poor on complex assemblies
+    - Privacy concerns with cloud-stored design data
+
+
+  ---------------------------------------------------------------------------
+  5.2  FREECAD
+  ---------------------------------------------------------------------------
+
+  Type:           Open-source
+  Platform:       Linux, Windows, macOS
+  License:        LGPL 2.1+
+  Modeling:       Parametric B-Rep (via OCCT), CSG, mesh, BIM, FEM
+  File Formats:   STEP, IGES, STL, OBJ, DXF, SVG, BREP, and more
+
+  Advantages:
+    - Free and open-source with a large community
+    - Full parametric modeling with feature history
+    - Modular architecture with extensive workbench system
+    - Python scripting for automation and customization
+    - Active development (version 1.0 recently released)
+    - Wide file format support
+    - FEM workbench for simulation
+    - BIM/architecture workbench
+
+  Disadvantages:
+    - Topological naming problem has historically caused sketches to
+      break when features are reordered (being addressed in v1.0+)
+    - Steep learning curve with an inconsistent UI across workbenches
+    - UI feels dated and cluttered compared to commercial alternatives
+    - Assembly workbench has been fragmented (multiple competing
+      implementations)
+    - Performance issues with very complex models
+    - sketcher constraint solver can be slow with many constraints
+    - Documentation quality varies significantly by workbench
+    - Some workbenches are abandoned or poorly maintained
+
+
+  ---------------------------------------------------------------------------
+  5.3  SOLVESPACE
+  ---------------------------------------------------------------------------
+
+  Type:           Open-source
+  Platform:       Linux, Windows, macOS
+  License:        GPL 3.0
+  Modeling:       Parametric B-Rep (custom kernel), constraint-based
+  File Formats:   STEP, STL, DXF, PDF, SVG, EPS
+
+  Advantages:
+    - Extremely lightweight (single executable, minimal dependencies)
+    - Clean, focused UI
+    - Excellent 2D constraint solver
+    - Fast startup and responsive performance
+    - Good for quick prototyping and simple parts
+    - Motion analysis via constraint tracing
+    - Small codebase makes it approachable for contributors
+
+  Disadvantages:
+    - Limited feature set compared to FreeCAD or Fusion 360
+    - No fillet/chamfer on 3D solids (only on 2D sketches)
+    - Custom geometric kernel has limitations compared to OCCT
+    - Small development team (primarily one developer)
+    - No FEA or simulation capabilities
+    - Limited file format support
+    - Not suitable for complex assemblies or large models
+    - No scripting or automation interface
+
+
+  ---------------------------------------------------------------------------
+  5.4  OPENSCAD
+  ---------------------------------------------------------------------------
+
+  Type:           Open-source
+  Platform:       Linux, Windows, macOS
+  License:        GPL 2.0+
+  Modeling:       CSG (Constructive Solid Geometry), script-based
+  File Formats:   STL, OFF, AMF, 3MF, DXF, SVG, CSG
+
+  Advantages:
+    - Fully parametric through code (every dimension is a variable)
+    - Designs are plain text files (excellent for version control)
+    - Reproducible and shareable designs
+    - Great for programmatic/algorithmic geometry
+    - Active community with a large library of shared designs
+      (Thingiverse, Printables)
+    - Very lightweight
+
+  Disadvantages:
+    - No interactive/visual modeling (code-only workflow)
+    - CSG kernel, not B-Rep (no STEP export with proper topology)
+    - Not suitable for organic shapes or complex surfaces
+    - Rendering can be very slow for complex models
+    - No assembly tools
+    - No constraint solver (dimensions are explicit in code)
+    - Steep learning curve for non-programmers
+    - Limited to mesh output (STL/3MF), not solid B-Rep interchange
+
+
+  ---------------------------------------------------------------------------
+  5.5  BRL-CAD
+  ---------------------------------------------------------------------------
+
+  Type:           Open-source
+  Platform:       Linux, Windows, macOS, BSD
+  License:        LGPL 2.1 / BSD
+  Modeling:       CSG (primarily), some B-Rep support
+  File Formats:   Native .g format, STL, STEP (limited), OBJ, DXF
+
+  Advantages:
+    - One of the oldest open-source CAD systems (since 1979)
+    - Extremely powerful ray-tracing and geometric analysis
+    - Strong in ballistic and thermal penetration analysis
+    - Massive codebase with deep geometric capabilities
+    - Used by the U.S. military for decades
+
+  Disadvantages:
+    - Very poor user interface (widely criticized)
+    - Extremely steep learning curve
+    - CSG-focused workflow feels archaic for modern CAD use cases
+    - Documentation is sparse and often outdated
+    - Small active user community
+    - Not practical for typical mechanical design workflows
+    - No parametric feature history
+    - Development pace is slow
+
+
+  ---------------------------------------------------------------------------
+  5.6  ONSHAPE (PTC)
+  ---------------------------------------------------------------------------
+
+  Type:           Commercial, cloud-only
+  Platform:       Web browser (platform-independent)
+  License:        Subscription ($1,500/year standard), free tier available
+  Modeling:       Parametric B-Rep (Parasolid kernel)
+  File Formats:   STEP, IGES, STL, Parasolid, SOLIDWORKS, and more
+
+  Advantages:
+    - Runs in any web browser (works on Linux via browser)
+    - Professional-grade parametric modeling (Parasolid kernel)
+    - Excellent real-time collaboration (Google Docs for CAD)
+    - Built-in version control with branching and merging
+    - No local installation or updates required
+    - Modern, well-designed UI
+
+  Disadvantages:
+    - Requires constant internet connection
+    - Free tier makes all designs public
+    - Subscription pricing is expensive
+    - Cloud-only means PTC controls access to your work
+    - Performance depends entirely on internet connection quality
+    - Limited offline capabilities
+    - Privacy and IP concerns for proprietary designs
+    - Browser-based rendering has performance limits for large
+      assemblies
+
+
+  ---------------------------------------------------------------------------
+  5.7  SOLIDWORKS (Dassault Systemes)
+  ---------------------------------------------------------------------------
+
+  Type:           Commercial
+  Platform:       Windows only (NO Linux or macOS support)
+  License:        Subscription/perpetual ($3,995+ standard license)
+  Modeling:       Parametric B-Rep (Parasolid kernel)
+  File Formats:   Extensive (SLDPRT/SLDASM native, STEP, IGES, STL,
+                  Parasolid, DWG, DXF, and many more)
+
+  Advantages:
+    - Industry standard for mechanical engineering
+    - Extremely mature and feature-rich
+    - Massive ecosystem of add-ons and integrations
+    - Excellent documentation and training resources
+    - Huge user community and job market demand
+    - Robust simulation, rendering, and CAM add-ons
+
+  Disadvantages:
+    - Windows only (absolutely no Linux support)
+    - Very expensive licensing
+    - Heavy system requirements
+    - Proprietary file formats
+    - Annual subscription/maintenance costs
+    - No cloud collaboration in the base product
+    - Vendor lock-in with Dassault ecosystem
+
+
+  ---------------------------------------------------------------------------
+  5.8  BRICSCAD (Bricsys/Hexagon)
+  ---------------------------------------------------------------------------
+
+  Type:           Commercial
+  Platform:       Linux, Windows, macOS
+  License:        Perpetual or subscription ($780+ for Classic)
+  Modeling:       2D drafting (DWG-compatible), 3D direct modeling,
+                  BIM, sheet metal
+  File Formats:   DWG (native), DXF, STEP, STL, SKP, IFC, and more
+
+  Advantages:
+    - One of the few commercial CAD packages with native Linux support
+    - Full DWG compatibility (AutoCAD alternative)
+    - Perpetual license option available
+    - 3D direct modeling capabilities
+    - BIM module for architecture
+    - LISP and BRX API for customization
+
+  Disadvantages:
+    - Less capable 3D parametric modeling compared to Fusion/SW
+    - Primarily a DWG/2D drafting tool with 3D bolted on
+    - Smaller community than AutoCAD or SolidWorks
+    - Linux version occasionally lags behind Windows releases
+    - Limited simulation capabilities
+    - Cost is still significant for hobbyists
+
+
+  ---------------------------------------------------------------------------
+  5.9  BLENDER (CAD-Adjacent)
+  ---------------------------------------------------------------------------
+
+  Type:           Open-source
+  Platform:       Linux, Windows, macOS
+  License:        GPL 2.0+
+  Modeling:       Polygon/mesh modeling, sculpting, NURBS (limited),
+                  animation, rendering
+  File Formats:   Extensive mesh formats (FBX, OBJ, STL, glTF, USD,
+                  Alembic, and many more)
+
+  Advantages:
+    - Extremely powerful 3D modeling and visualization
+    - Massive active community and development team
+    - Industry-standard rendering (Cycles, EEVEE)
+    - Excellent for visualization and presentation renders
+    - Completely free with no limitations
+    - Add-ons can extend CAD-like functionality (CAD Sketcher,
+      BlenderBIM)
+    - Great for organic shapes and artistic design
+
+  Disadvantages:
+    - Not a CAD tool (mesh-based, not B-Rep solid modeling)
+    - No native STEP support (mesh only)
+    - No parametric feature history
+    - No true constraint solver for engineering dimensions
+    - Precision modeling is awkward compared to dedicated CAD tools
+    - Dimensional accuracy is not guaranteed for manufacturing
+    - Models are not watertight solids by default (problematic for
+      3D printing and manufacturing)
+
+
+================================================================================
+  6. COMPETITIVE SUMMARY MATRIX
+================================================================================
+
+  +----------------+--------+-------+------+--------+-------+------+--------+
+  |                | Fusion | Free  |Solve | Open   | BRL   | On   | Solid  |
+  | Feature        | 360    | CAD   |Space | SCAD   | CAD   | shape| Works  |
+  +----------------+--------+-------+------+--------+-------+------+--------+
+  | Linux Native   |  No    | Yes   | Yes  |  Yes   | Yes   | Web  |  No    |
+  | Open Source    |  No    | Yes   | Yes  |  Yes   | Yes   | No   |  No    |
+  | Offline Use    |  Partial| Yes  | Yes  |  Yes   | Yes   | No   |  Yes   |
+  | Parametric     |  Yes   | Yes   | Yes  |  Code  | No    | Yes  |  Yes   |
+  | B-Rep Kernel   |  Yes   | OCCT  | Custom| CSG   | CSG   | Para | Para   |
+  | STEP Support   |  Yes   | Yes   | Yes  |  No    | Ltd   | Yes  |  Yes   |
+  | STL Support    |  Yes   | Yes   | Yes  |  Yes   | Yes   | Yes  |  Yes   |
+  | OBJ Support    |  Yes   | Yes   | No   |  No    | Yes   | Ltd  |  Yes   |
+  | Assembly       |  Yes   | Yes*  | Yes  |  No    | Yes   | Yes  |  Yes   |
+  | FEA/Simulation |  Yes   | Yes   | No   |  No    | Yes** | No   |  Yes   |
+  | 2D Drawings    |  Yes   | Yes   | No   |  No    | No    | Yes  |  Yes   |
+  | Free           |  Ltd   | Yes   | Yes  |  Yes   | Yes   | Ltd  |  No    |
+  | Modern UI      |  Yes   | No    | Yes  |  N/A   | No    | Yes  |  Yes   |
+  +----------------+--------+-------+------+--------+-------+------+--------+
+
+  * FreeCAD assembly support has historically been fragmented
+  ** BRL-CAD simulation is specialized (ballistic/thermal analysis)
+  Ltd = Limited free tier available
+  Para = Parasolid kernel
+
+================================================================================
+  7. DIFFERENTIATION STRATEGY
+================================================================================
+
+  To compete effectively in this landscape, HobbyCAD should focus on
+  the following differentiators:
+
+  7.1  Linux-First Design Philosophy
+  -----------------------------------
+  Unlike FreeCAD (which is cross-platform first) or Fusion 360 (which
+  ignores Linux entirely), HobbyCAD would be designed and optimized
+  for Linux from the ground up. This means native integration with
+  Linux desktop environments, proper use of system theming, and
+  leveraging Linux-specific advantages in performance and stability.
+
+  7.2  Modern, Consistent UI
+  ---------------------------
+  FreeCAD's greatest weakness is its inconsistent, dated UI across
+  workbenches. A clean, modern Qt 6 interface with consistent behavior
+  throughout the application would be a significant differentiator.
+  The UI should be intuitive for users coming from Fusion 360 or
+  SolidWorks.
+
+  7.3  Offline-First, Version Control as Cloud
+  ----------------------------------------------
+  Unlike Fusion 360 and Onshape, which require proprietary cloud
+  backends for collaboration and version history, HobbyCAD works
+  entirely offline with local file storage. Version control is
+  HobbyCAD's cloud connectivity — all collaboration, sharing, and
+  project history flows through git and GitHub/GitLab, using
+  infrastructure the open-source community already uses and trusts.
+
+  All supported file formats are open standards (STEP, STL, OBJ),
+  ensuring users are never locked into a proprietary ecosystem.
+
+  The native project format is a plain directory of text-based files
+  (JSON manifest, BREP geometry, JSON sketches/features, Python
+  scripts) — fully inspectable, hand-editable, and version-control
+  friendly. Built-in git integration allows users to manage project
+  history, collaborate, and share via GitHub/GitLab directly from
+  the application. See project_definition.txt Section 5.2-5.5 for
+  project format and version control details.
+
+  7.4  Focused Feature Set
+  -------------------------
+  Rather than trying to match FreeCAD's breadth of workbenches (many
+  of which are half-finished), HobbyCAD would focus on doing core
+  mechanical CAD exceptionally well: parametric part design, assemblies,
+  and manufacturing-ready output. Depth over breadth.
+
+  7.5  Clean Architecture
+  ------------------------
+  Built from scratch on OCCT + Qt 6 with a clean, modern C++ codebase.
+  No legacy technical debt. Designed for extensibility from day one
+  with a well-documented plugin API and Python scripting interface.
+
+  7.6  Hardware Design Integration
+  ---------------------------------
+  Special attention to workflows common among electronics hobbyists
+  and engineers: importing PCB outlines from KiCad, designing
+  enclosures with precise connector cutouts, and exporting for 3D
+  printing or CNC machining. This bridges the gap between EDA and
+  MCAD tools.
+
+  7.7  Mesh-to-B-Rep Conversion (eventually Mesh-to-STEP)
+  -----------------------------
+  No existing CAD software — open-source or commercial — reliably
+  converts triangulated mesh data (STL/OBJ) into proper B-Rep solid
+  geometry (STEP). This is a fundamental unsolved problem in CAD,
+  and even a partially capable implementation would be a unique
+  selling point. HobbyCAD would approach this incrementally, starting
+  with interactive/assisted tools for simple prismatic geometry and
+  progressing toward semi-automatic and eventually automatic detection
+  for common analytical shapes. This feature directly serves the 3D
+  printing and 3D scanning communities, who frequently need to modify
+  mesh-only models but have no path to proper solid geometry today.
+
+================================================================================
+  8. RISKS AND CHALLENGES
+================================================================================
+
+  8.1  Development Complexity
+  ----------------------------
+  Building a CAD application is one of the most complex software
+  engineering tasks. The geometric kernel, constraint solver, and
+  parametric engine each represent years of development effort.
+  Leveraging OCCT and existing solver libraries mitigates this
+  significantly but does not eliminate it.
+
+  8.2  Competing with FreeCAD
+  ----------------------------
+  FreeCAD has a 20+ year head start and a large community. HobbyCAD
+  must clearly articulate why it exists alongside FreeCAD rather than
+  contributing to it. The answer lies in the clean-slate architecture
+  and focused scope.
+
+  8.3  OCCT Learning Curve
+  -------------------------
+  OpenCascade Technology has a notoriously steep learning curve and
+  inconsistent documentation. Developer onboarding will be slower
+  than with more modern libraries. The FreeCAD codebase can serve as
+  a practical reference for OCCT integration patterns.
+
+  8.4  Sustainability
+  --------------------
+  Open-source CAD projects require sustained developer commitment.
+  Without a funding model (donations, dual licensing, commercial
+  support tier), the project risks stalling. A clear sustainability
+  plan should be established early.
+
+  8.5  File Format Compatibility
+  -------------------------------
+  Real-world CAD workflows depend on reliable file interchange. STEP
+  is the primary open standard, but many users also need DWG, DXF,
+  and proprietary format support. The phased file format strategy
+  outlined in Section 4 addresses this incrementally.
+
+  8.6  GPU Driver Variability on Linux
+  -------------------------------------
+  OpenGL/Vulkan performance varies significantly across Linux GPU
+  drivers (NVIDIA proprietary, NVIDIA open kernel, Mesa/AMD, Mesa/
+  Intel). Thorough testing across driver stacks is essential.
+
+  HobbyCAD mitigates GPU variability with tiered startup modes:
+  Full Mode (OpenGL 3.3+), Reduced Mode (below 3.3, GUI without 3D
+  viewport, 2D sketch editing via QPainter), and Command-Line Mode
+  (no display). See project_definition.txt Section 13.1 for details
+  on startup sequence, diagnostic dialog, and GPU vendor-specific
+  recommendations.
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
+
+
+================================================================================
+  9. HOBBYMESH: COMPANION MESH EDITING TOOL
+================================================================================
+
+  9.1  BACKGROUND AND MOTIVATION
+  -------------------------------
+
+  Autodesk Meshmixer was a lightweight, powerful mesh editing and 3D
+  printing preparation tool that occupied a unique niche between heavy
+  CAD suites and artist-oriented sculpting applications. Created in
+  2009 by Ryan Schmidt as a PhD research project at the University of
+  Toronto, it was acquired by Autodesk on October 31, 2011 and placed
+  in their 123D product family. It became the go-to "Swiss Army Knife"
+  for anyone working with triangle meshes — hobbyists, engineers,
+  jewelers, dental labs, and 3D printing service bureaus all relied on
+  it daily.
+
+  Autodesk has ceased active development of Meshmixer. While it remains
+  available for download, it receives no updates, no bug fixes, and no
+  new features. Autodesk has stated that Meshmixer's capabilities are
+  being gradually absorbed into Fusion 360, but the integration has
+  been slow, incomplete, and locked behind Fusion's subscription model
+  and cloud dependency.
+
+  Critically, Meshmixer was never properly available on Linux.
+  Experimental Linux builds (versions 2.7 and 2.9) were briefly
+  offered via .deb packages around 2015, but these were pre-Meshmixer
+  3.0 and lacked many of the features that made Meshmixer essential.
+  The experimental Linux builds were discontinued before Meshmixer 3.0
+  shipped. No native Linux build was ever released for version 3.x;
+  the only option on Linux has been running the Windows version under
+  Wine, which is fragile and unsupported.
+
+  No open-source tool has adequately filled this gap. MeshLab is the
+  closest equivalent but focuses on mesh processing and analysis rather
+  than interactive editing and 3D print preparation. Blender can
+  perform many of these tasks but is vastly more complex than necessary
+  for mesh prep workflows.
+
+  HobbyMesh would be a standalone companion application (or plugin)
+  built from the HobbyCAD codebase, specifically targeting the mesh
+  editing and 3D printing preparation workflows that Meshmixer served.
+
+  9.2  RELATIONSHIP TO HOBBYCAD
+  ------------------------------
+
+  HobbyMesh would share the HobbyCAD codebase and libraries but serve
+  a distinct purpose:
+
+    HobbyCAD: Parametric B-Rep solid modeling (design from scratch)
+    HobbyMesh: Triangle mesh editing and preparation (fix/modify
+               existing models)
+
+  Implementation options:
+
+    Option A - Standalone Application:
+      A separate executable built from the shared codebase. Uses the
+      same Qt 6 UI framework and OCCT mesh handling, but with a
+      streamlined interface focused entirely on mesh operations. Users
+      install it independently of HobbyCAD.
+
+    Option B - HobbyCAD Plugin/Workbench:
+      A mesh editing mode within HobbyCAD itself, activated when the
+      user imports a mesh file. This keeps everything in one
+      application but risks bloating the HobbyCAD UI.
+
+    Option C - Both:
+      Build the mesh editing functionality as a shared library that
+      can be loaded either as a HobbyCAD plugin or wrapped in a
+      standalone lightweight UI. This maximizes code reuse and gives
+      users the choice.
+
+  Recommended: Option C (shared library with both interfaces).
+
+  9.3  CORE FEATURES (Meshmixer Equivalent)
+  -------------------------------------------
+
+  The following features replicate the core Meshmixer workflows that
+  users depend on. They are grouped by priority.
+
+  Priority 1 - Mesh Repair and Analysis:
+
+    Inspector / Auto-Repair
+      Scan the mesh for common defects: holes, non-manifold edges,
+      flipped normals, degenerate triangles, self-intersections, and
+      disconnected shells. Highlight problems visually and offer
+      one-click repair.
+      Libraries: OCCT (ShapeFix), CGAL (Polygon Mesh Processing),
+      or custom implementation using OpenMesh/libigl.
+
+    Hole Filling
+      Fill holes in the mesh with options for minimal fill (flat cap),
+      smooth fill (curvature-blended), or custom fill. Critical for
+      making meshes watertight for 3D printing.
+
+    Normal Repair
+      Detect and fix inconsistent face normals. Ensure all normals
+      point outward for a consistent solid.
+
+    Manifold Repair
+      Detect and resolve non-manifold edges and vertices that prevent
+      proper slicing.
+
+  Priority 2 - Mesh Editing:
+
+    Selection Tools
+      Select vertices, edges, or faces by click, brush, lasso, or
+      connected region. Support for grow/shrink selection, select by
+      angle, and select by face group.
+
+    Mesh Sculpting
+      Interactive brushes for sculpt, smooth, inflate, pinch, flatten,
+      and crease. Adaptive remeshing adds or removes triangles as
+      needed during sculpting.
+
+    Extrude / Offset
+      Extrude selected faces along their normals. Offset surfaces
+      inward or outward to add wall thickness.
+
+    Boolean Operations
+      Union, difference, and intersection on mesh objects. Essential
+      for cutting holes, embossing text, or combining parts.
+
+    Plane Cut
+      Slice a mesh with an infinite plane, keeping one or both halves.
+      Useful for splitting large models for printing or creating
+      flat bases.
+
+    Mesh Simplification / Decimation
+      Reduce triangle count while preserving shape and detail. Critical
+      for reducing file size of high-poly scans.
+
+    Remeshing
+      Regenerate the mesh with uniform or adaptive triangle
+      distribution. Produces cleaner geometry for downstream
+      operations.
+
+  Priority 3 - 3D Printing Preparation:
+
+    Make Solid
+      Convert any mesh (even non-manifold or with internal geometry)
+      into a guaranteed watertight solid. This was Meshmixer's most
+      loved feature. Implementation involves voxelization followed by
+      marching cubes or dual contouring surface extraction.
+      Libraries: CGAL (voxelization), OpenVDB, or custom
+      implementation.
+
+    Hollowing
+      Carve a uniform internal cavity to reduce material usage for
+      resin/powder printing. Add user-placed vent/drain holes.
+
+    Wall Thickness Analysis
+      Color-map the mesh by wall thickness to identify areas that are
+      too thin to print successfully.
+
+    Support Generation
+      Generate tree-style support structures that use less material
+      and snap off cleanly. Editable support points with adjustable
+      contact size. This was another standout Meshmixer feature.
+
+      Note: Tree supports are now a standard feature in PrusaSlicer,
+      OrcaSlicer, and their derivatives. HobbyMesh's support
+      generation should focus on use cases where slicer-generated
+      supports are insufficient (e.g., resin printing, manual
+      placement for delicate geometry, custom contact sizes).
+
+      SLICER INTEGRATION OPPORTUNITY: The Slic3r/PrusaSlicer/
+      OrcaSlicer family shares a common C++ slicing core called
+      libslic3r, which can theoretically be built as a standalone
+      library. libslic3r handles slicing, infill generation, support
+      structure creation, and G-code path planning. All three slicers
+      are licensed under AGPL 3.0, which is compatible with
+      HobbyMesh's GPL 3.0 license.
+
+      However, libslic3r was not designed as a clean embeddable
+      library — it has extensive dependencies (Boost, TBB, Clipper,
+      wxWidgets build system entanglement) and no published stable
+      API for external consumers. Multiple developers have attempted
+      to build it standalone with limited success. Integration would
+      require significant effort to extract the relevant algorithms
+      (support generation, overhang detection, orientation
+      optimization) from the full slicer codebase.
+
+      More practical integration approaches:
+        - CLI subprocess: invoke PrusaSlicer/OrcaSlicer's command-
+          line interface for slicing operations. All three slicers
+          support headless batch slicing via CLI.
+        - 3MF round-trip: export from HobbyMesh as 3MF with print
+          settings, open in the user's preferred slicer.
+        - Algorithm reference: study libslic3r's tree support and
+          overhang detection algorithms and reimplement the relevant
+          portions in HobbyMesh's own codebase (permitted under
+          AGPL 3.0 with proper attribution).
+
+      The CLI subprocess approach is recommended for initial
+      integration — it requires no library dependency and works
+      with whatever slicer the user has installed.
+
+    Orientation Optimizer
+      Test rotations to find the optimal print orientation that
+      minimizes support area, print height, or overhangs.
+
+    Mesh Slicing / Splitting
+      Split a model into pieces that fit within a printer's build
+      volume. Add alignment pins/keys at cut boundaries for assembly.
+
+  Priority 4 - Mesh Combining and Transformation:
+
+    Mesh Mix (Drag-and-Drop Combine)
+      Attach one mesh to another with automatic blending at the
+      boundary. The signature Meshmixer feature for creative model
+      mashing.
+
+    Mesh Alignment
+      Align two meshes using point-pair registration or ICP
+      (Iterative Closest Point) algorithm. Useful for assembling
+      multi-part scans.
+
+    Stamping / Embossing
+      Apply text or patterns onto mesh surfaces. Useful for labeling
+      parts or adding texture.
+
+    Mirror / Symmetry
+      Mirror a mesh across a plane. Create symmetric models from
+      half-models.
+
+  9.4  FILE FORMAT SUPPORT
+  -------------------------
+
+    Format    Direction      Notes
+    ------    ---------      -----
+    STL       Import/Export  Primary format (binary default; auto-
+                             converted to ASCII .stla when project
+                             is placed under version control for
+                             diff-friendliness). Recognizes .stl,
+                             .stla, and .stlb extensions on import.
+    OBJ       Import/Export  With material/texture support
+    PLY       Import/Export  Point cloud and mesh with attributes
+    3MF       Import/Export  Modern 3D printing format
+    AMF       Import/Export  Additive manufacturing format
+    OFF       Import/Export  Simple mesh format
+    STEP      Export         Via mesh-to-B-Rep conversion pipeline
+                             (links to HobbyCAD's conversion feature)
+
+  9.5  LIBRARIES AND DEPENDENCIES
+  --------------------------------
+
+  HobbyMesh shares the HobbyCAD core libraries and adds:
+
+    +---------------------------+-----------------------------+-----------+
+    | Function                  | Library                     | License   |
+    +---------------------------+-----------------------------+-----------+
+    | UI Framework              | Qt 6 (shared with HobbyCAD) | LGPL 3.0  |
+    | Mesh I/O                  | Assimp                      | BSD       |
+    | Mesh Processing           | CGAL (Polygon Mesh Proc.)   | GPL 3.0+  |
+    | Mesh Data Structure       | OpenMesh or libigl          | BSD       |
+    | Voxelization              | OpenVDB                     | MPL 2.0   |
+    | Mesh Repair               | MeshFix or custom           | GPL 2.0   |
+    | 3D Viewport               | OpenGL 3.3+ via Qt          | -         |
+    | Sculpting / Remeshing     | Custom (based on libigl)    | BSD       |
+    +---------------------------+-----------------------------+-----------+
+
+  Note: The GPL licensing of CGAL and MeshFix would affect the license
+  of HobbyMesh. If built as a standalone tool, this is straightforward
+  (license HobbyMesh under GPL). If integrated as a HobbyCAD plugin,
+  the GPL implications for the host application must be considered.
+
+  9.6  COMPETITIVE POSITIONING
+  -----------------------------
+
+  HobbyMesh vs. Meshmixer:
+    - Open-source (Meshmixer is proprietary freeware, abandoned)
+    - Linux-native (Meshmixer was Windows/macOS only; experimental
+      Linux builds were limited to v2.7/2.9 and discontinued before
+      the 3.x series)
+    - Actively developed (Meshmixer receives no updates)
+    - Integrated with a parametric CAD tool (Meshmixer was standalone)
+    - Mesh-to-STEP pipeline (Meshmixer had no B-Rep conversion)
+
+  HobbyMesh vs. MeshLab:
+    - Focused on interactive editing and 3D print prep (MeshLab is
+      more academic/processing-oriented)
+    - Simpler, more intuitive UI for common tasks
+    - Integrated sculpting tools (MeshLab has no sculpting)
+    - 3D printing specific features (support generation, hollowing,
+      orientation optimization)
+
+  HobbyMesh vs. Blender:
+    - Dramatically simpler for mesh prep tasks (Blender's complexity
+      is overkill for mesh editing/repair)
+    - Purpose-built for 3D printing workflows
+    - Lower learning curve for the target audience
+    - Lightweight and fast-launching
+
+  The combination of HobbyCAD (parametric design) + HobbyMesh (mesh
+  editing and print prep) would provide a comprehensive open-source
+  Linux-native workflow from design through manufacturing preparation,
+  with no equivalent in the current open-source ecosystem.
+
+  9.7  LONG-TERM GOAL: SLICER LIBRARY INTEGRATION
+  --------------------------------------------------
+
+  HobbyMesh aims to eventually integrate slicing capabilities as a
+  plugin, eliminating the need for users to switch to a separate
+  slicer application for basic 3D printing workflows.
+
+  The target is the libslic3r slicing core shared by the Slic3r →
+  PrusaSlicer → Bambu Studio → OrcaSlicer lineage. This library
+  contains battle-tested algorithms for slicing, infill generation,
+  tree support generation, overhang detection, G-code path planning,
+  and orientation optimization. All are licensed under AGPL 3.0.
+
+  PHASED APPROACH:
+
+    Phase A — CLI subprocess (initial, low effort):
+      Invoke the user's installed slicer (PrusaSlicer, OrcaSlicer,
+      or any Slic3r derivative) via its command-line interface for
+      headless batch slicing. HobbyMesh exports a 3MF file with
+      print settings, calls the slicer CLI, and optionally displays
+      a G-code preview. Requires no library dependency — works with
+      whatever slicer is already installed.
+
+    Phase B — 3MF round-trip (medium effort):
+      Deep 3MF integration with embedded slicer profiles, print
+      settings, and modifier meshes. The user configures print
+      parameters inside HobbyMesh, exports a fully-configured 3MF,
+      and the slicer CLI produces G-code in one step. Adds a slicer
+      profile manager to HobbyMesh for storing and editing print
+      presets.
+
+    Phase C — Embedded slicer library plugin (long-term, high effort):
+      Fork and strip the OrcaSlicer (or PrusaSlicer) codebase to
+      extract a clean, embeddable slicing library with a stable C/C++
+      API. Ship as an optional HobbyMesh plugin.
+
+      This involves:
+        - Removing the GUI layer (wxWidgets) and printer management
+        - Isolating the slicing core from Boost/TBB/Clipper
+          dependencies (or accepting them as plugin dependencies)
+        - Defining a stable API surface: mesh in → sliced layers
+          out, with configurable parameters for infill, supports,
+          speed, temperature, etc.
+        - G-code generation for common printer firmware (Marlin,
+          Klipper, RepRapFirmware)
+        - Ongoing maintenance to merge upstream algorithm
+          improvements from PrusaSlicer/OrcaSlicer
+
+      Estimated effort: 3-6 months for initial extraction, plus
+      ongoing upstream tracking.
+
+      Alternative: contribute the library extraction upstream to
+      PrusaSlicer or OrcaSlicer. If accepted, the maintenance
+      burden is shared with the upstream community. This has been
+      discussed in both projects but never executed.
+
+  LICENSING:
+
+    The slicer plugin would be licensed under AGPL 3.0 (inherited
+    from the OrcaSlicer/PrusaSlicer codebase). AGPL 3.0 is
+    compatible with GPL 3.0 for linking purposes, so the plugin
+    can be loaded by HobbyMesh (GPL 3.0) without license conflict.
+    The AGPL's network clause (requiring source distribution for
+    network services) has no practical impact on a desktop
+    application. The plugin's AGPL license should be documented
+    separately from HobbyMesh's GPL 3.0 license.
+
+  PLUGIN ARCHITECTURE:
+
+    The slicer integration should be an optional plugin, not a core
+    dependency. Users who prefer their own slicer workflow (or who
+    use resin printers with proprietary slicers) should not be
+    affected. HobbyMesh's core functionality — mesh editing, repair,
+    sculpting, Boolean operations — must work without the slicer
+    plugin installed.
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
