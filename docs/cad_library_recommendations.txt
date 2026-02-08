@@ -1,0 +1,1163 @@
+================================================================================
+  HobbyCAD - RECOMMENDED LIBRARY STACK
+================================================================================
+
+  Project          : HobbyCAD
+  Document Version : 0.0.1.1
+  Date             : 2026-02-06
+  Format           : Plain Text (all project documentation is plain text)
+  Purpose          : Define the recommended open-source libraries for building
+                     a Fusion 360-class parametric 3D CAD application on Linux.
+  AI Attribution   : This document was primarily generated with the assistance
+                     of Claude AI (Anthropic). Human review and editorial
+                     direction provided by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+  1. Overview
+  2. Architecture Layers
+  3. Geometric Modeling Kernel
+  4. GUI Framework
+  5. 3D Viewport / Rendering
+  6. 2D Constraint Solver
+  7. File Format Support
+  8. Python Scripting and Plugin System
+  9. Meshing Libraries
+  10. Computational Geometry
+  10.5. Version Control Integration
+  11. Recommended Stack Summary
+  12. Build System and Dependencies
+  13. Licensing Summary
+  14. HobbyMesh: Companion Tool Additional Libraries
+
+================================================================================
+  1. OVERVIEW
+================================================================================
+
+This document outlines the recommended libraries for developing HobbyCAD,
+a modern, open-source, parametric 3D CAD application targeting Linux as the
+primary platform. The goal is to achieve functionality comparable to Autodesk
+Fusion 360, including solid modeling, parametric sketching, assembly design,
+and standard file format interchange.
+
+The library selections prioritize:
+
+  - Open-source licensing (LGPL, BSD, MIT preferred)
+  - Active development and community support
+  - Proven use in existing CAD/CAE applications
+  - Cross-platform potential (Linux-first, but portable)
+  - C/C++ as the primary implementation language
+
+================================================================================
+  2. ARCHITECTURE LAYERS
+================================================================================
+
+A CAD application of this scope requires several distinct functional layers:
+
+  Layer 1 - Geometric Modeling Kernel
+    The mathematical engine for creating and manipulating 3D solid geometry
+    using boundary representation (B-Rep). Handles Boolean operations,
+    filleting, chamfering, NURBS surfaces, and topology.
+
+  Layer 2 - GUI Framework
+    The widget toolkit providing windows, panels, menus, property editors,
+    tree views, dockable panels, and the overall application shell.
+
+  Layer 3 - 3D Viewport / Rendering
+    The graphics subsystem responsible for rendering the 3D model in the
+    viewport, handling camera controls, selection, highlighting, and
+    visual feedback.
+
+  Layer 4 - Constraint Solver
+    The parametric sketch engine that solves geometric constraints in 2D
+    (coincident, parallel, tangent, dimensional, etc.) to enable
+    parametric design workflows.
+
+  Layer 5 - File I/O
+    Import and export of standard CAD interchange formats.
+
+  Layer 6 - Meshing (Optional)
+    Generation of triangular/tetrahedral meshes from solid geometry for
+    FEA simulation or 3D printing export.
+
+  Layer 7 - Computational Geometry (Optional)
+    Advanced geometric algorithms for specialized operations.
+
+================================================================================
+  3. GEOMETRIC MODELING KERNEL
+================================================================================
+
+  Recommended: Open CASCADE Technology (OCCT)
+  Website:     https://dev.opencascade.org
+  License:     LGPL 2.1 with additional exception
+  Language:    C++
+
+  OCCT is a full-scale B-Rep modeling toolkit and is the de facto standard
+  open-source geometric kernel. It provides:
+
+    - B-Rep solid modeling (the same approach used by CATIA, SolidWorks,
+      and Fusion 360)
+    - NURBS curves and surfaces
+    - Boolean operations (union, intersection, subtraction)
+    - Filleting and chamfering
+    - Sweep, loft, revolve, and extrusion operations
+    - Geometric and topological data structures
+    - Built-in visualization framework (AIS - Application Interactive
+      Services)
+    - Native STEP and IGES readers/writers
+
+  OCCT is used by FreeCAD, Gmsh, and numerous commercial CAD products.
+  Version 8.0.0 is planned for Q1 2026, featuring up to 75% improvement
+  in STEP reading performance over version 7.7.
+
+  Alternatives Considered:
+    - CGAL: Strong in computational geometry but lacks a full B-Rep
+      modeling kernel suitable for CAD.
+    - libfive: F-Rep (function representation) based; not suitable for
+      traditional B-Rep CAD workflows.
+
+================================================================================
+  4. GUI FRAMEWORK
+================================================================================
+
+  Recommended: Qt 6
+  Website:     https://www.qt.io
+  License:     LGPL 3.0 / GPL 2.0 (open-source), or commercial
+  Language:    C++
+
+  Qt is the standard choice for professional CAD applications on Linux.
+  It provides:
+
+    - Comprehensive widget toolkit (buttons, trees, tables, property
+      editors, dockable panels, MDI windows)
+    - QOpenGLWidget for embedding OpenGL viewports
+    - Qt3D module for scene graph management
+    - Signal/slot mechanism for clean event handling
+    - Excellent documentation and community
+    - Native look and feel on Linux, Windows, and macOS
+    - Built-in internationalization support
+    - QML for potential modern UI elements
+
+  Used by: FreeCAD, QCAD, BricsCAD, VariCAD, and many commercial
+  CAD packages.
+
+  Cross-Platform Portability:
+    Qt 6 is fully cross-platform (Linux, Windows, macOS, and embedded
+    targets), so selecting Qt does not limit portability in any way.
+    Qt applications compile and run natively on all major desktop
+    platforms with minimal platform-specific code.
+
+  Alternatives Considered:
+
+    wxWidgets (formerly wxWindows)
+    ------------------------------
+    Website:   https://www.wxwidgets.org
+    License:   wxWindows Library License (LGPL with static linking
+               exception — more permissive than Qt's LGPL 3.0)
+    Language:  C++
+
+    wxWidgets is a mature cross-platform toolkit that renders using
+    native platform widgets (GTK on Linux, Win32 on Windows, Cocoa
+    on macOS), giving applications an authentic native look on each
+    platform. KiCad is the most prominent CAD application built with
+    wxWidgets.
+
+    wxWidgets was considered but not recommended for this project for
+    the following reasons:
+
+      1. OCCT Integration: OCCT's visualization framework (AIS) has
+         well-established integration patterns with Qt's QOpenGLWidget.
+         The OCCT + wxWidgets integration path is far less documented
+         and tested, requiring significant pioneering effort.
+
+      2. UI Complexity: Qt's dockable panel system (QDockWidget),
+         model/view framework, and property editor infrastructure are
+         significantly more mature than wxWidgets equivalents. CAD
+         applications require complex, configurable UI layouts that
+         Qt handles much better out of the box.
+
+      3. Scene Graph: Qt3D provides a scene graph layer for 3D
+         content management. wxWidgets has no equivalent; you would
+         need to build this from scratch or use a third-party library.
+
+      4. Reference Implementations: FreeCAD, BricsCAD, VariCAD, and
+         QCAD all demonstrate proven OCCT+Qt or CAD+Qt architectures.
+         KiCad is essentially the only major CAD tool using wxWidgets,
+         and it is a 2D EDA tool with very different rendering
+         requirements than a 3D solid modeler.
+
+      5. Community and Ecosystem: Qt has a larger developer community,
+         more extensive documentation, and more third-party libraries
+         and tooling relevant to CAD development.
+
+    Where wxWidgets could be appropriate: For a lighter-weight
+    application such as a 2D CAD tool, a utility, or a viewer,
+    wxWidgets' simpler API and native widget rendering would be a
+    reasonable choice. Its licensing (wxWindows Library License) is
+    also more straightforward than Qt's LGPL 3.0, particularly
+    regarding static linking.
+
+    GTK 4
+    ------
+    Capable but less commonly used in CAD applications. Weaker support
+    for complex dockable panel layouts and property editors compared
+    to Qt. The GNOME ecosystem's frequent API changes can create
+    maintenance burden.
+
+    Dear ImGui
+    -----------
+    Better suited for tool/debug UIs. Lacks the application-level
+    widgets (menus, dockable panels, tree views, property editors)
+    needed for a full CAD environment. Excellent as a supplementary
+    UI for debug overlays within a Qt application.
+
+    FLTK
+    -----
+    Too lightweight for an application of this complexity. Limited
+    widget set and no scene graph support.
+
+================================================================================
+  5. 3D VIEWPORT / RENDERING
+================================================================================
+
+  Recommended: OCCT AIS Viewer (primary) + OpenGL 3.3+ (underlying)
+  Alternatives: Vulkan (future consideration)
+
+  OCCT includes its own visualization component called AIS (Application
+  Interactive Services) which provides:
+
+    - 3D scene management and rendering
+    - Interactive object selection and highlighting
+    - Shading modes (wireframe, shaded, shaded with edges)
+    - Transparency, clipping planes, and section views
+    - Integration with Qt via QOpenGLWidget
+
+  For the initial implementation, using OCCT's built-in AIS viewer is
+  recommended as it provides tight integration with the modeling kernel.
+  A custom Vulkan-based renderer could be developed later for improved
+  performance if needed.
+
+  OCCT's visualization module (TKOpenGl, TKV3d) requires OpenGL 3.3.
+  HobbyCAD supports tiered startup modes based on GPU capability:
+    - Full Mode (OpenGL 3.3+): All features including 3D viewport.
+    - Reduced Mode (below 3.3): GUI launches but 3D viewport is
+      disabled. 2D sketch editing uses QPainter/QGraphicsScene
+      (GPU-independent). All geometry kernel operations, file I/O,
+      and Python scripting remain functional.
+    - Command-Line Mode (no display): Headless batch processing.
+  See project_definition.txt Section 13.1 for full details.
+
+  Supporting library:
+    - GLFW or SDL2: Only needed if building a custom renderer outside
+      of the Qt/OCCT framework.
+
+================================================================================
+  6. 2D CONSTRAINT SOLVER
+================================================================================
+
+  Recommended: SolveSpace Solver Library
+  Website:     https://solvespace.com
+  License:     GPL 3.0 (standalone) / Solver library usable separately
+  Language:    C++
+
+  The SolveSpace constraint solver handles parametric 2D sketch
+  constraints including:
+
+    - Point-on-point, point-on-line, point-on-circle
+    - Horizontal, vertical, parallel, perpendicular
+    - Tangent, equal length, symmetric
+    - Dimensional constraints (distance, angle, radius)
+    - Fully constrained, under-constrained, and over-constrained
+      detection
+
+  Alternative:
+    - PlaneGC (FreeCAD's sketcher solver): Purpose-built for FreeCAD
+      but tightly coupled to its codebase.
+    - Custom solver using numerical methods (Newton-Raphson): Maximum
+      flexibility but significant development effort.
+
+  Note: The licensing of SolveSpace's solver should be carefully reviewed
+  for compatibility with the project's chosen license. The solver portion
+  may be extractable under more permissive terms depending on how it is
+  integrated.
+
+================================================================================
+  7. FILE FORMAT SUPPORT
+================================================================================
+
+  NATIVE FORMAT:
+
+    BREP (OCCT Native B-Rep)
+    -------------------------
+    Library:  OCCT (BRepTools::Read / BRepTools::Write)
+    Status:   Native format, trivially implemented
+    Notes:    BREP is the native serialization format for OCCT's
+              B-Rep data structures. It provides lossless round-trip
+              storage of all geometric and topological data with zero
+              conversion overhead. This is the recommended native file
+              format for HobbyCAD project files before layering on
+              additional metadata (feature tree, constraints, etc.)
+              in a project wrapper format.
+
+              BREP is not widely supported by other CAD tools, so
+              STEP export is essential for interchange. However, for
+              internal storage, BREP avoids all translation losses
+              and is the fastest format to read and write.
+
+  SUPPORTED INTERCHANGE FORMATS (Initial Release):
+
+    STEP (ISO 10303)
+    ----------------
+    Library:  OCCT (built-in STEPCAFControl reader/writer)
+    Status:   Native support, no additional libraries needed
+    Notes:    The primary interchange format for B-Rep CAD data.
+              OCCT 8.0.0 offers up to 75% faster STEP reading.
+
+    STL (Stereolithography)
+    -----------------------
+    Library:  OCCT (built-in StlAPI reader/writer)
+    Status:   Native support, no additional libraries needed
+    Notes:    Triangulated mesh format commonly used for 3D printing.
+              Export from solid models via OCCT tessellation.
+
+    OBJ (Wavefront)
+    ----------------
+    Library:  OCCT (RWObj reader/writer, added in OCCT 7.4+)
+              or Assimp as a fallback
+    Status:   Supported
+    Notes:    Polygon mesh format with material support. Useful for
+              visualization interchange.
+
+  POTENTIAL FUTURE FORMATS (Difficulty Assessment):
+
+    IGES (Initial Graphics Exchange Specification)
+    -----------------------------------------------
+    Difficulty:  Low - OCCT provides native IGES support
+    Library:     OCCT (IGESCAFControl)
+    Notes:       Legacy format, still widely used. Trivial to add.
+
+    DXF (Drawing Exchange Format)
+    -----------------------------
+    Difficulty:  Low to Medium
+    Library:     libdxfrw or dxflib
+    Notes:       2D drawing format. Useful for sketch import/export
+                 and 2D drawing generation.
+
+    3MF (3D Manufacturing Format)
+    -----------------------------
+    Difficulty:  Low to Medium
+    Library:     lib3mf (open-source, BSD license)
+    Notes:       Modern replacement for STL in 3D printing workflows.
+                 Supports color, materials, and metadata.
+
+    OpenSCAD (.scad)
+    -----------------
+    Difficulty:  Medium
+    Library:     Custom parser (no existing library) or OpenSCAD CLI
+                 as an external tool
+    Notes:       OpenSCAD files are plain-text scripts that define
+                 geometry using CSG operations and parametric variables.
+                 There is a large library of community-created .scad
+                 designs on Thingiverse, Printables, and GitHub.
+
+                 Import could be implemented via two approaches:
+
+                 Approach A - External Tool Integration:
+                   Invoke the OpenSCAD CLI as a subprocess to render
+                   .scad files to STL/CSG, then import the resulting
+                   mesh. This is the simplest approach and leverages
+                   OpenSCAD's own parser and CSG engine.
+                   Pros: Minimal development effort, full compatibility
+                   Cons: Requires OpenSCAD to be installed on the
+                         system, produces mesh output only (no B-Rep),
+                         no ability to edit parametric variables within
+                         the application
+
+                 Approach B - Native Parser:
+                   Write a parser for the OpenSCAD scripting language
+                   and map CSG operations to OCCT Boolean operations.
+                   This would allow importing .scad files as editable
+                   parametric geometry.
+                   Pros: No external dependency, potential for B-Rep
+                         output, could expose parametric variables for
+                         editing in the UI
+                   Cons: Significant development effort, OpenSCAD
+                         language has many features and built-in
+                         functions, maintaining compatibility with
+                         OpenSCAD's evolving language specification
+
+                 Recommended initial approach: Approach A (external
+                 tool) for the first implementation, with Approach B
+                 as a long-term goal if demand warrants it.
+
+                 Export is not applicable — .scad is a scripting
+                 language, not a geometry interchange format.
+
+    Parasolid (X_T/X_B)
+    --------------------
+    Difficulty:  High - Requires commercial license from Siemens
+    Library:     Parasolid kernel (proprietary)
+    Notes:       Widely used in commercial CAD. Not feasible for
+                 an open-source project without licensing.
+
+    CATIA V5 (CATPart/CATProduct)
+    -----------------------------
+    Difficulty:  Very High - Proprietary format, no open-source
+                 readers available with full fidelity
+    Notes:       Would require reverse engineering or commercial
+                 translator libraries.
+
+  ADVANCED: MESH-TO-STEP CONVERSION (STL/OBJ to B-Rep)
+  ------------------------------------------------------
+
+  Difficulty:  Very High (unsolved problem in the general case)
+  Status:      Stretch goal / research feature
+
+  One of the most requested and most difficult features in CAD is the
+  ability to convert triangulated mesh data (STL, OBJ) into proper
+  B-Rep solid geometry (STEP). No existing CAD software performs this
+  conversion reliably for arbitrary geometry. If HobbyCAD could offer
+  even a partially capable mesh-to-STEP pipeline, it would be a
+  significant differentiator in the market.
+
+  Why This Is Hard:
+    Mesh data (STL/OBJ) consists of discrete triangles with no concept
+    of curves, surfaces, features, or design intent. A STEP file
+    contains analytical surfaces (planes, cylinders, spheres, cones,
+    tori, NURBS), trimmed and stitched into a topologically consistent
+    B-Rep solid. Converting between these representations requires
+    "reverse engineering" the original geometry from a cloud of flat
+    triangles — fundamentally an information-recovery problem where the
+    original information has been discarded.
+
+  The Pipeline (Conceptual):
+    1. Mesh Cleanup
+       - Remove degenerate/duplicate triangles, fill holes, ensure
+         manifold (watertight) mesh
+       - Libraries: CGAL, MeshFix, OpenMesh, or OCCT mesh healing
+
+    2. Region Segmentation
+       - Partition the mesh into regions that approximate a single
+         analytical surface (planar, cylindrical, spherical, etc.)
+       - This is the hardest step. Approaches include:
+         - Curvature-based segmentation (compute discrete curvature
+           at each vertex, cluster regions of similar curvature)
+         - Region growing from seed triangles
+         - Machine learning / neural network approaches (emerging
+           research area)
+       - Libraries: CGAL (surface segmentation), PCL (Point Cloud
+         Library), or custom implementation
+
+    3. Surface Fitting
+       - Fit analytical surfaces to each segmented region:
+         - Flat regions -> planes
+         - Uniform curvature regions -> cylinders, spheres, cones
+         - Complex regions -> NURBS surface approximation
+       - Libraries: OCCT (GeomAPI_PointsToBSplineSurface,
+         BRepBuilderAPI_MakeFace), Eigen (least-squares fitting)
+
+    4. Topology Reconstruction
+       - Trim fitted surfaces to their boundaries
+       - Compute intersection curves between adjacent surfaces
+       - Stitch surfaces into a closed B-Rep shell
+       - Validate topological consistency
+       - Libraries: OCCT (BRepBuilderAPI, ShapeFix)
+
+    5. Solid Validation
+       - Verify the result is a valid solid (closed shell, consistent
+         face normals, no self-intersections)
+       - Libraries: OCCT (BRepCheck_Analyzer, ShapeFix_Shape)
+
+  Realistic Expectations:
+    - Simple prismatic parts (boxes, cylinders, plates with holes):
+      Feasible with reasonable effort. These parts consist primarily
+      of planes and cylinders which are straightforward to detect
+      and fit.
+    - Parts with fillets, chamfers, and blends: Difficult. These
+      transitions create complex surface regions that are hard to
+      segment and fit accurately.
+    - Organic / freeform shapes: Extremely difficult. Requires NURBS
+      surface fitting which may not reproduce the original design
+      intent. The result would be an approximation, not an exact
+      reconstruction.
+    - Assemblies or multi-body parts: Not feasible from a single
+      mesh without manual intervention to separate bodies.
+
+  Recommended Implementation Approach:
+    Phase 1 - Assisted conversion (interactive):
+      Present the imported mesh to the user and provide tools to
+      manually select regions and specify what surface type to fit
+      (plane, cylinder, sphere, NURBS). The user guides the
+      conversion with their knowledge of the design intent. This
+      is practical to implement and immediately useful.
+
+    Phase 2 - Semi-automatic detection:
+      Implement curvature-based segmentation to automatically suggest
+      regions and surface types. The user reviews and corrects the
+      suggestions before committing. This balances automation with
+      reliability.
+
+    Phase 3 - Automatic conversion (research):
+      Fully automatic pipeline for simple/prismatic parts. Machine
+      learning approaches could be explored for surface type
+      classification and segmentation. This is a long-term research
+      goal and should not be promised as a near-term deliverable.
+
+  Relevant Libraries:
+    - OCCT: Surface fitting, B-Rep construction, shape validation
+    - CGAL: Mesh segmentation, surface reconstruction, mesh repair
+    - PCL (Point Cloud Library): Segmentation, normal estimation,
+      surface fitting (primarily for point clouds but applicable
+      to mesh vertices)
+    - Eigen: Linear algebra for least-squares surface fitting
+    - libigl: Mesh processing, discrete differential geometry
+
+  Note: This feature alone could constitute a research project of
+  considerable scope. It is documented here as a long-term vision
+  feature for HobbyCAD. Even a partially working implementation
+  limited to prismatic/analytical shapes would be valuable, as no
+  existing open-source tool offers this capability in an integrated
+  CAD workflow.
+
+================================================================================
+  8. PYTHON SCRIPTING AND PLUGIN SYSTEM
+================================================================================
+
+  HobbyCAD will embed Python as a scripting language, following the model
+  established by KiCad and FreeCAD. This enables user automation, plugin
+  development, and macro recording.
+
+  8.1  INTERPRETER EMBEDDING
+  ---------------------------
+
+  Recommended: CPython 3.x (embedded)
+  Library:     libpython3 (system Python development headers)
+  Binding Gen: pybind11
+  Website:     https://github.com/pybind/pybind11
+  License:     BSD 3-Clause
+  Language:    C++ (header-only)
+
+  The CPython interpreter is linked directly into the HobbyCAD executable.
+  pybind11 is used to generate Python bindings from C++ classes with
+  minimal boilerplate. It is the modern replacement for older approaches
+  like SWIG and Boost.Python.
+
+  Alternatives Considered:
+    - SWIG: Used by KiCad. Generates bindings from interface definition
+      files. More verbose than pybind11 but supports multiple target
+      languages (Lua, Ruby, etc.) if ever needed. Battle-tested but
+      adds build complexity.
+    - SIP: Used by FreeCAD and PyQt. Purpose-built for wrapping C++
+      libraries for Python and tightly coupled to the Qt ecosystem.
+      Less flexible than pybind11 for non-Qt classes.
+    - Boost.Python: Predecessor to pybind11. Heavier dependency
+      (requires Boost libraries). pybind11 is preferred for new
+      projects.
+
+  8.2  APIs TO EXPOSE
+  --------------------
+
+  The following internal APIs must be wrapped for Python access:
+
+    Core Geometry (Priority: High)
+      - OCCT shape classes (TopoDS_Shape, TopoDS_Edge, TopoDS_Face,
+        TopoDS_Solid)
+      - Geometric transforms (gp_Trsf, gp_Pnt, gp_Vec, gp_Dir)
+      - Boolean operations (BRepAlgoAPI_Fuse, Cut, Common)
+      - Shape creation (BRepPrimAPI, BRepBuilderAPI)
+
+      Note: PythonOCC (pythonocc-core) already provides comprehensive
+      SWIG-generated bindings for OCCT. HobbyCAD can either leverage
+      PythonOCC directly or use it as a reference for pybind11-based
+      bindings. Using PythonOCC would significantly reduce the initial
+      binding development effort.
+
+    Parametric Feature Tree (Priority: High)
+      - Create, modify, delete, and reorder features
+      - Access and modify feature parameters
+      - Query feature dependencies and parent/child relationships
+
+    Sketch Entities and Constraints (Priority: High)
+      - Create and modify sketch geometry (lines, arcs, circles,
+        splines)
+      - Add, remove, and query constraints
+      - Solve and query constraint status
+
+    Document Management (Priority: High)
+      - Open, save, close, import, export
+      - Undo/redo programmatic access
+      - Document properties and metadata
+
+    Selection and Viewport (Priority: Medium)
+      - Query current selection
+      - Programmatic selection of entities
+      - Camera control (position, zoom, fit-all)
+      - Screenshot/export of viewport
+
+    UI Extension Points (Priority: Medium)
+      - Register custom menu items and toolbar buttons
+      - Create custom dialog panels
+      - Add entries to context menus
+      - Register custom workbenches/tool groups
+
+    Application Settings (Priority: Low)
+      - Read and write application preferences
+      - Access unit system and precision settings
+
+  8.3  SCRIPTING CONSOLE
+  -----------------------
+
+  An interactive Python console will be embedded in the application as
+  a dockable Qt widget. This provides:
+
+    - Direct command entry with auto-completion
+    - Output display with syntax highlighting
+    - Command history (persistent across sessions)
+    - Access to all exposed APIs in the running application context
+
+  Implementation can leverage existing Qt-based Python console widgets
+  or be built on QPlainTextEdit with a custom input handler.
+
+  8.4  PLUGIN SYSTEM
+  -------------------
+
+  Directory Structure:
+    System plugins:  /usr/share/hobbycad/plugins/
+    User plugins:    ~/.config/hobbycad/plugins/
+
+  Each plugin is a directory containing:
+    plugin_name/
+      __init__.py        Plugin entry point
+      plugin.json        Metadata (name, version, author, description)
+      ...                Additional Python modules and resources
+
+  Plugin Lifecycle:
+    - Discovery: Scan plugin directories at startup
+    - Loading: Import plugin module, call on_register()
+    - Activation: Call on_activate(), register commands/UI elements
+    - Deactivation: Call on_deactivate(), clean up UI elements
+    - Unloading: Call on_unregister() at application shutdown
+
+  8.5  MACRO RECORDING
+  ---------------------
+
+  Every user action performed through the GUI should have a corresponding
+  Python command. A macro recorder captures these commands in sequence,
+  allowing users to:
+
+    - Record a series of actions as a Python script
+    - Edit the recorded script to add logic (loops, conditionals)
+    - Replay macros to automate repetitive tasks
+    - Share macros with other users
+
+  This requires that the application architecture follows a strict
+  command pattern where all model modifications go through a command
+  layer that can be serialized to Python. This architectural decision
+  must be made from day one — retrofitting macro recording is extremely
+  difficult.
+
+  8.6  DEPENDENCIES
+  ------------------
+
+    - python3-dev (system package, Python development headers)
+    - pybind11 (header-only, via CMake FetchContent or system package)
+    - PythonOCC (optional, for pre-built OCCT bindings)
+
+================================================================================
+  9. MESHING LIBRARIES
+================================================================================
+
+  Recommended: Gmsh (optional component)
+  Website:     https://gmsh.info
+  License:     GPL 2.0+
+  Language:    C++
+
+  Gmsh provides:
+    - Automatic 2D and 3D finite element mesh generation
+    - Integration with OCCT for geometry input (since Gmsh 3.0)
+    - Multiple meshing algorithms
+    - Mesh quality optimization
+
+  Alternative:
+    - TetGen: Tetrahedral mesh generation, BSD-like license for
+      academic use.
+    - NetGen/NETGEN: Another open-source meshing tool with OCCT
+      integration.
+
+  Note: Meshing is primarily needed for FEA simulation features and
+  can be deferred to a later development phase.
+
+================================================================================
+  10. COMPUTATIONAL GEOMETRY
+================================================================================
+
+  Recommended: CGAL (optional component)
+  Website:     https://www.cgal.org
+  License:     GPL / LGPL (module-dependent)
+  Language:    C++
+
+  CGAL provides algorithms for:
+    - Convex hulls and Delaunay triangulations
+    - Boolean operations on meshes
+    - Mesh processing and repair
+    - Surface reconstruction
+    - Minkowski sums
+
+  CGAL is a supplementary library for operations not covered by OCCT's
+  built-in algorithms. Its use should be evaluated on a per-feature basis
+  due to mixed licensing across modules.
+
+================================================================================
+  10.5. VERSION CONTROL INTEGRATION
+================================================================================
+
+  Recommended: libgit2
+  Website:     https://libgit2.org
+  Source:      https://github.com/libgit2/libgit2
+  License:     GPL 2.0 with linking exception
+  Language:    C
+
+  libgit2 is a portable, pure C implementation of the Git core methods
+  provided as a linkable library. It provides:
+
+    - Repository init, clone, open
+    - Staging, committing, branching, merging
+    - Remote operations (push, pull, fetch)
+    - Diff and status queries
+    - Reference and object database access
+
+  The linking exception in libgit2's license permits use in non-GPL
+  software, making it compatible with HobbyCAD's GPL 3.0 license
+  without additional constraints.
+
+  Advantages:
+    - Mature and battle-tested (used by GitHub Desktop, GitKraken,
+      Visual Studio, Sourcetree, and many others)
+    - Pure C with clean API — easy to call from C++ directly or
+      via thin wrappers
+    - Cross-platform (Linux, macOS, Windows, iOS fully supported)
+    - No dependency on a git installation — self-contained
+    - Re-entrant and thread-safe
+    - Available in Ubuntu, Homebrew, vcpkg, and most package
+      managers as libgit2-dev
+    - Well-documented API
+
+  Disadvantages:
+    - C API requires manual memory management (git_*_free calls);
+      mitigated by C++ RAII wrappers (see cppgit2 / libgit2pp)
+    - Does not support every git feature — notably Git LFS, git
+      submodules (partial), sparse checkout, and some newer
+      protocol v2 features are missing or incomplete
+    - Occasional behavioral differences from canonical git in
+      edge cases (merge strategies, config parsing)
+    - Slower than system git for some operations on very large
+      repositories
+
+  HobbyCAD uses libgit2 for its built-in version control panel
+  (see project_definition.txt Section 5.5). The system git binary
+  is used as a fallback for operations libgit2 does not support
+  (e.g., Git LFS). GitHub API integration uses REST API v3 or the
+  gh CLI tool for repository creation and authentication.
+
+  C++ WRAPPER OPTIONS:
+
+    cppgit2
+      Source:   https://github.com/p-ranav/cppgit2
+      License:  MIT
+      A modern C++ (C++11+) wrapper around libgit2. Provides RAII
+      resource management and a more idiomatic C++ API. Builds
+      libgit2 from source as a submodule.
+      Advantages:
+        - Eliminates manual git_*_free calls
+        - Type-safe, exception-based error handling
+        - Header-only-friendly design
+      Disadvantages:
+        - Smaller community, less actively maintained
+        - Adds a build dependency layer over libgit2
+
+    libgit2pp
+      Source:   https://github.com/marcelocantos/libgit2pp
+      License:  MIT
+      A single-header C++ wrapper using metaprogramming to wrap
+      libgit2 functions with smart pointers and RAII.
+      Advantages:
+        - Single header file, minimal integration effort
+        - Clever operator[] API reduces boilerplate significantly
+      Disadvantages:
+        - Unconventional API style may surprise contributors
+        - Very small project, single maintainer
+
+    Direct C API with custom RAII:
+      HobbyCAD could also use libgit2's C API directly with a
+      thin project-specific RAII wrapper (unique_ptr with custom
+      deleters). This avoids external wrapper dependencies at the
+      cost of more boilerplate.
+
+  ALTERNATIVES TO LIBGIT2:
+
+    System git binary (via subprocess)
+      License:  GPL 2.0
+      Invoke git commands via QProcess or popen().
+      Advantages:
+        - Zero library dependency — just needs git installed
+        - Always feature-complete (supports LFS, submodules,
+          sparse checkout, protocol v2, everything)
+        - Behavior is always identical to canonical git
+        - Simpler implementation for basic operations
+      Disadvantages:
+        - Requires git to be installed on the user's system
+        - Process spawn overhead for each operation — slow for
+          frequent queries (status, diff) in the UI
+        - Parsing text output is fragile (locale-dependent,
+          format changes between git versions)
+        - Less portable — git may not be available or may be
+          an unexpected version on some systems
+        - No in-process access to git objects or refs
+
+    gitoxide (gix)
+      Source:   https://github.com/GitoxideLabs/gitoxide
+      License:  MIT / Apache 2.0
+      A pure Rust implementation of Git, aiming to be a modern
+      replacement for libgit2.
+      Advantages:
+        - Memory-safe by design (Rust)
+        - Often faster than libgit2 for repository traversal
+          and object access
+        - Supports Git protocol v2
+        - Permissive license (MIT/Apache 2.0)
+      Disadvantages:
+        - Rust library — not directly callable from C++. Would
+          require FFI bindings (C API) which do not yet exist
+          in a stable, published form
+        - Not yet feature-complete — still maturing, some
+          operations are missing or marked unstable
+        - Adds Rust toolchain as a build dependency, which is
+          a significant complexity increase for a C++/Qt project
+        - Much smaller ecosystem of users compared to libgit2
+      Verdict: Promising long-term but not practical for a C++
+      project today. Worth revisiting if stable C bindings are
+      published.
+
+    JGit
+      Source:   https://www.eclipse.org/jgit/
+      License:  EDL 1.0 (BSD-style)
+      A pure Java implementation of Git, used by Eclipse IDE and
+      Gerrit.
+      Advantages:
+        - Very mature and feature-complete
+        - Permissive license
+      Disadvantages:
+        - Java — requires JVM, completely impractical for a
+          C++/Qt application
+      Verdict: Not applicable for HobbyCAD.
+
+    Dulwich
+      Source:   https://github.com/jelmer/dulwich
+      License:  GPL 2.0+ / Apache 2.0
+      A pure Python implementation of Git.
+      Advantages:
+        - Could be used from HobbyCAD's embedded Python
+          interpreter for scripting-level git operations
+        - No compiled dependencies
+      Disadvantages:
+        - Python-only — too slow for UI-level operations
+          (status queries, diff generation)
+        - Cannot be used for the core C++ version control panel
+      Verdict: Potentially useful as an optional Python scripting
+      addon, but not as the primary git integration library.
+
+  RECOMMENDATION SUMMARY:
+
+    Primary:   libgit2 (C API, optionally with cppgit2 or custom
+               RAII wrappers for C++ ergonomics)
+    Fallback:  System git binary via QProcess for operations
+               libgit2 does not support (LFS, advanced merges)
+    Future:    Monitor gitoxide for stable C bindings; if
+               published, evaluate as a potential libgit2
+               replacement for improved performance and safety
+
+================================================================================
+  11. RECOMMENDED STACK SUMMARY
+================================================================================
+
+  +-------------------------+----------------------------+----------------+
+  | Layer                   | Library                    | License        |
+  +-------------------------+----------------------------+----------------+
+  | Modeling Kernel         | OpenCascade (OCCT)         | LGPL 2.1       |
+  | GUI Framework           | Qt 6                       | LGPL 3.0       |
+  | 3D Viewport             | OCCT AIS + OpenGL 3.3+     | LGPL 2.1       |
+  | Constraint Solver       | SolveSpace Solver          | GPL 3.0*       |
+  | STEP I/O                | OCCT (built-in)            | LGPL 2.1       |
+  | STL I/O                 | OCCT (built-in)            | LGPL 2.1       |
+  | OBJ I/O                 | OCCT (built-in) / Assimp   | LGPL 2.1 / BSD |
+  | Python Scripting        | CPython + pybind11         | PSF / BSD      |
+  | OCCT Python Bindings    | PythonOCC (optional)       | LGPL 3.0       |
+  | Git Integration         | libgit2                    | GPL 2.0 + LE** |
+  | Meshing (optional)      | Gmsh                       | GPL 2.0+       |
+  | Comp. Geometry (opt.)   | CGAL                       | GPL/LGPL       |
+  +-------------------------+----------------------------+----------------+
+
+  * SolveSpace solver licensing requires review for integration method.
+  ** libgit2 is GPL 2.0 with a linking exception that permits use in
+     proprietary and non-GPL software. See project_definition.txt
+     Section 5.5 for version control integration details.
+
+  Build System: CMake
+  Primary Language: C++ (C++17 or later)
+  Scripting: Python (via pybind11 or similar, for extensibility)
+
+================================================================================
+  12. BUILD SYSTEM AND DEPENDENCIES
+================================================================================
+
+  Build Tool:    CMake 3.20+
+  Compiler:      GCC 12+ or Clang 15+
+  C++ Standard:  C++17 minimum (C++20 preferred)
+
+  System Dependencies (Ubuntu/Debian):
+    - libocct-*-dev (or build OCCT from source)
+    - qt6-base-dev, qt6-3d-dev
+    - libgl-dev, libglu-dev
+    - python3-dev (for embedded scripting interpreter)
+    - pybind11-dev (or via CMake FetchContent)
+
+  Optional Dependencies:
+    - python3-pythonocc-core (pre-built OCCT Python bindings)
+    - libgmsh-dev (meshing)
+    - libcgal-dev (computational geometry)
+    - libassimp-dev (additional mesh format support)
+
+================================================================================
+  13. LICENSING SUMMARY
+================================================================================
+
+  The recommended stack is predominantly LGPL-licensed, which permits
+  use in both open-source and proprietary applications provided that:
+
+    - LGPL libraries are dynamically linked
+    - Users can replace LGPL library versions
+    - License notices and source availability are maintained
+
+  The GPL-licensed components (SolveSpace solver, Gmsh, some CGAL
+  modules) would require the overall project to be GPL-licensed if
+  statically linked, or careful isolation if a more permissive license
+  is desired.
+
+  Recommended project license: GPL 3.0 (maximizes compatibility with
+  all components) or LGPL 3.0 (if GPL components can be isolated or
+  replaced).
+
+================================================================================
+  14. HOBBYMESH: COMPANION TOOL ADDITIONAL LIBRARIES
+================================================================================
+
+  HobbyMesh is a companion mesh editing and 3D printing preparation
+  tool inspired by Autodesk Meshmixer (now abandoned). It shares the
+  HobbyCAD core libraries (Qt 6, OCCT, OpenGL) and adds specialized
+  mesh processing libraries. See the Use Case document for full
+  feature specifications and competitive positioning.
+
+  The following libraries are needed in addition to the HobbyCAD core
+  stack:
+
+  14.1  MESH DATA STRUCTURES
+  ---------------------------
+
+    OpenMesh
+    Website:   https://www.graphics.rwth-aachen.de/software/openmesh/
+    License:   BSD 3-Clause
+    Language:  C++
+
+    Halfedge-based mesh data structure optimized for mesh traversal
+    and manipulation. Provides efficient adjacency queries (vertex
+    neighbors, edge loops, face rings) essential for sculpting,
+    selection, and local mesh operations. Lightweight and fast.
+
+    Alternative:
+      libigl (header-only, MPL 2.0) — provides mesh processing
+      algorithms on top of Eigen matrices. Less structured than
+      OpenMesh but more flexible for algorithm prototyping.
+
+  14.2  MESH PROCESSING AND REPAIR
+  ---------------------------------
+
+    CGAL - Polygon Mesh Processing Module
+    Website:   https://www.cgal.org
+    License:   GPL 3.0+
+    Language:  C++
+
+    Provides algorithms for:
+      - Hole filling (triangulation-based and smoothing-based)
+      - Self-intersection detection and removal
+      - Mesh simplification (edge collapse with error bounds)
+      - Remeshing (isotropic and adaptive)
+      - Connected component detection and separation
+      - Normal computation and repair
+      - Mesh smoothing (Laplacian, bilateral)
+      - Corefinement and Boolean operations on meshes
+
+    MeshFix
+    Website:   https://github.com/MarcoAttworx/MeshFix-V2.1
+    License:   GPL 2.0
+    Language:  C++
+
+    Automatic repair tool for converting raw digitized mesh data into
+    clean, watertight manifold meshes. Handles hole filling, non-
+    manifold resolution, and intersection removal in a single pass.
+    Useful as a backend for the "auto-repair" feature.
+
+  14.3  VOXELIZATION AND MAKE SOLID
+  ----------------------------------
+
+    OpenVDB
+    Website:   https://www.openvdb.org
+    License:   MPL 2.0
+    Language:  C++
+
+    Sparse volumetric data structure library originally developed by
+    DreamWorks Animation. Used for implementing the "Make Solid"
+    feature:
+      1. Voxelize the input mesh into a level set
+      2. Apply morphological operations (dilate/erode) to close
+         internal gaps
+      3. Extract a watertight surface via marching cubes or dual
+         contouring
+
+    OpenVDB is the industry standard for volumetric operations and
+    handles meshes that are too broken for surface-based repair
+    approaches.
+
+    Alternative:
+      Custom voxelizer using OCCT or CGAL — possible but OpenVDB is
+      significantly more optimized for this class of operations.
+
+  14.4  MESH I/O (EXTENDED FORMATS)
+  ----------------------------------
+
+    Assimp (Open Asset Import Library)
+    Website:   https://www.assimp.org
+    License:   BSD 3-Clause
+    Language:  C/C++
+
+    Adds import/export support for formats beyond what OCCT provides:
+      - PLY (point clouds and meshes with attributes)
+      - 3MF (modern 3D printing format)
+      - AMF (additive manufacturing format)
+      - OFF (simple mesh format)
+      - glTF/GLB (web visualization)
+      - FBX (limited, Autodesk interchange)
+      - Collada/DAE
+
+    Note: For 3MF specifically, lib3mf (BSD license) may provide
+    better support than Assimp for the full 3MF specification
+    including materials and build platform layout.
+
+  14.5  POINT CLOUD PROCESSING (OPTIONAL)
+  -----------------------------------------
+
+    PCL (Point Cloud Library)
+    Website:   https://pointclouds.org
+    License:   BSD 2-Clause
+    Language:  C++
+
+    Needed only if HobbyMesh supports 3D scan import and processing:
+      - Point cloud filtering and downsampling
+      - Normal estimation from point clouds
+      - Surface reconstruction (Poisson, marching cubes)
+      - ICP (Iterative Closest Point) registration for scan alignment
+
+    This is a large dependency and should only be included if scan
+    processing is a confirmed feature requirement.
+
+  14.6  HOBBYMESH ADDITIONAL STACK SUMMARY
+  ------------------------------------------
+
+  +---------------------------+-----------------------------+-----------+
+  | Function                  | Library                     | License   |
+  +---------------------------+-----------------------------+-----------+
+  | Shared: UI Framework      | Qt 6                        | LGPL 3.0  |
+  | Shared: Viewport          | OpenGL 3.3+                 | -         |
+  | Shared: Geometry Core     | OCCT                        | LGPL 2.1  |
+  | Shared: Python Scripting  | CPython + pybind11          | PSF / BSD |
+  | Mesh Data Structure       | OpenMesh                    | BSD       |
+  | Mesh Processing / Repair  | CGAL (Polygon Mesh Proc.)   | GPL 3.0+  |
+  | Auto-Repair               | MeshFix                     | GPL 2.0   |
+  | Voxelization / Make Solid | OpenVDB                     | MPL 2.0   |
+  | Extended Mesh I/O         | Assimp                      | BSD       |
+  | 3MF Support               | lib3mf                      | BSD       |
+  | Point Cloud (optional)    | PCL                         | BSD       |
+  +---------------------------+-----------------------------+-----------+
+
+  HobbyMesh License: GPL 3.0 (required due to CGAL and MeshFix
+  dependencies).
+
+================================================================================
+  APPENDIX B: BLENDER LIBRARY REFERENCE
+================================================================================
+
+  Although Blender is not a CAD program, it is the most successful
+  open-source 3D application and its library choices are informative
+  for HobbyCAD/HobbyMesh development. Blender also has a community-
+  developed CAD Sketcher plugin that adds parametric constraint-based
+  sketching, demonstrating that such features can be layered onto a
+  mesh-based application.
+
+  Blender's key library dependencies:
+
+    Rendering:
+      Cycles (internal) — Physically-based path tracer (Blender's own)
+      EEVEE (internal)  — Real-time renderer (Blender's own)
+      OpenGL / Vulkan   — GPU rendering API
+
+    Geometry / Math:
+      Eigen             — Linear algebra (header-only, MPL 2.0)
+      OpenSubdiv        — Subdivision surfaces (Pixar, Apache 2.0)
+      Bullet            — Physics engine (zlib license)
+      Manifold          — Mesh Boolean operations
+
+    Volumetrics / VFX:
+      OpenVDB           — Volumetric data (DreamWorks, MPL 2.0)
+      OpenColorIO       — Color management (Academy SW Foundation)
+      OpenImageIO       — Image I/O (BSD)
+      OpenEXR / Imath   — HDR image format (Academy SW Foundation)
+      Alembic           — Scene interchange (MIT)
+
+    Performance:
+      TBB               — Threading Building Blocks (Apache 2.0)
+      Embree            — Ray tracing kernels (Intel, Apache 2.0)
+      OIDN              — AI denoiser (Intel, Apache 2.0)
+
+    Scripting:
+      Python (CPython)  — Scripting and plugin system
+      pybind11 / custom — Python C++ bindings
+
+    UI:
+      Custom (internal) — Blender uses its own UI toolkit, not Qt/GTK
+
+    File Formats:
+      Assimp-like internal importers for FBX, OBJ, STL, glTF, USD,
+      Collada, Alembic, and many others
+
+  Libraries shared with HobbyCAD/HobbyMesh stack:
+    OpenVDB (used in HobbyMesh for Make Solid / voxelization),
+    Python/pybind11 (scripting), Eigen (may be useful for surface
+    fitting in mesh-to-B-Rep pipeline), and the general approach of
+    CMake-based builds with precompiled dependency packages.
+
+  Key Observations:
+    - Blender uses its own custom UI toolkit rather than Qt or GTK.
+      This provides maximum control but at enormous development cost.
+      HobbyCAD chooses Qt 6 to avoid reinventing the wheel.
+    - Blender's plugin ecosystem is entirely Python-based, validating
+      our choice of Python as the scripting/plugin language.
+    - Blender manages ~50+ third-party library dependencies via a
+      custom CMake-based build system with precompiled library
+      packages per platform. This level of complexity should be
+      avoided for HobbyCAD by relying on system packages where
+      possible and limiting the dependency count.
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

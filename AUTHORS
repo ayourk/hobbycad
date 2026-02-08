@@ -1,0 +1,57 @@
+================================================================================
+  HOBBYCAD / HOBBYMESH — AUTHORS
+================================================================================
+
+  This file lists all individuals who have contributed to the
+  HobbyCAD and HobbyMesh projects.
+
+  By submitting code, documentation, or other creative works that
+  are merged into the main repository, contributors accept the
+  copyright assignment policy described in project_definition.txt
+  Section 12.5. In summary: all contributions merged into the main
+  codebase are copyright-transferred to the project author to
+  simplify licensing decisions.
+
+  Contributors who do not wish to transfer copyright may publish
+  modifications independently under the project's license terms
+  (GPL 3.0), but such code will not be merged into the main
+  codebase. See project_definition.txt Section 12.5 for full
+  details.
+
+  All contributors must acknowledge the contribution agreement
+  (project_definition.txt Section 12.7) before their first
+  contribution is accepted.
+
+  See also:
+    - project_definition.txt Section 12: Licensing and Community Contributions
+    - security_risks.txt Section 6.3: Community contribution review
+
+================================================================================
+  PROJECT AUTHOR
+================================================================================
+
+  Aaron Yourk <ayourk@gmail.com>
+
+================================================================================
+  CONTRIBUTORS
+================================================================================
+
+  Contributors are listed with their area(s) of contribution
+  and the date the contribution was accepted. Format:
+
+    Name <email>
+      - YYYY-MM-DD  Area of contribution (brief description)
+      - YYYY-MM-DD  Area of contribution (brief description)
+
+  Example:
+
+    Jane Doe <jane@example.com>
+      - 2027-03-15  DXF import/export plugin (Phase 2 file format support)
+      - 2027-06-02  Bug fixes in sketch constraint solver
+
+  (No contributors yet — this section will be updated as
+  contributions are accepted.)
+
+================================================================================
+  END OF FILE
+================================================================================
