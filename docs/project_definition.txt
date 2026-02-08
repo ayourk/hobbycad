@@ -25,7 +25,7 @@
   9. SVG Support Strategy
   10. Image Reference Support
   11. Timeline and Motion Studies
-  12. Community Code Contributions
+  12. Licensing and Community Contributions
   13. Development Phases
   14. Reference Materials and Resources
   15. Documentation Standards

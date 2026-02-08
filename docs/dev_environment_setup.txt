@@ -254,17 +254,9 @@
       libqt6svg6-dev \
       qmake6
 
-  For 3D viewport integration (Qt3D, if used):
-
-    sudo apt-get install -y \
-      qt6-3d-dev \
-      libqt6-3dcore6 \
-      libqt6-3drender6
-
-  Note: Qt3D may or may not be used depending on whether the OCCT
-  AIS viewer is embedded directly in a QOpenGLWidget (preferred for
-  Phase 0) or whether Qt3D scene graph is used. Install both sets
-  of packages to keep options open.
+  Note: HobbyCAD does NOT use Qt3D. The 3D viewport uses OCCT's AIS
+  viewer embedded directly in a QOpenGLWidget. The Qt3D scene graph
+  module (qt6-3d-dev, libqt63dcore6, libqt63drender6) is not needed.
 
   4.4  PYTHON (FOR FUTURE SCRIPTING SUPPORT)
   --------------------------------------------
@@ -428,14 +420,7 @@
   6.4.2. Some Qt 6.4 features may not be available. The CMakeLists
   should specify find_package(Qt6 6.2 REQUIRED ...) as the minimum.
 
-  Qt 6 3D packages (qt6-3d-dev) may NOT be available in the 22.04
-  repository. Check availability:
-
-    apt-cache search qt6-3d
-
-  If not available, Qt3D may need to be built from source or
-  obtained from a PPA for 22.04 targets. Phase 0 can avoid Qt3D
-  by using direct QOpenGLWidget + OCCT AIS integration.
+  Qt3D is not used by HobbyCAD (see Section 4.3 note).
 
   5.4  PYTHON (22.04)
   --------------------
@@ -481,18 +466,21 @@
   This table summarizes the key version differences between Ubuntu
   22.04 (Jammy) and 24.04 (Noble) for HobbyCAD's dependencies.
 
-  +---------------------+--------------+--------------+-----------+
-  | Package             | 22.04 Jammy  | 24.04 Noble  | Impact    |
-  +---------------------+--------------+--------------+-----------+
-  | GCC                 | 11.x         | 13.x         | Low       |
-  | CMake               | 3.22.x       | 3.28.x       | Low       |
-  | Python              | 3.10.x       | 3.12.x       | Medium    |
-  | Qt 6                | 6.2.4        | 6.4.2        | Medium    |
-  | OCCT                | 7.5.x        | 7.6.x (t64)  | Medium    |
-  | pybind11            | 2.9.x        | 2.11.x       | Low       |
-  | Ninja               | 1.10.x       | 1.11.x       | None      |
-  | libzip              | 1.7.x        | 1.10.x       | Low       |
-  +---------------------+--------------+--------------+-----------+
+  +---------------------+--------------+--------------+------------------+-----------+
+  | Package             | 22.04 Jammy  | 24.04 Noble  | Latest (Feb '26) | Impact    |
+  +---------------------+--------------+--------------+------------------+-----------+
+  | GCC                 | 11.x         | 13.x         | 15.2             | Low       |
+  | CMake               | 3.22.x       | 3.28.x       | 4.2.3            | Low       |
+  | Python              | 3.10.x       | 3.12.x       | 3.14.3           | Medium    |
+  | Qt 6                | 6.2.4        | 6.4.2        | 6.10.2           | Medium    |
+  | OCCT                | 7.5.x        | 7.6.x (t64)  | 7.9.3 *          | Medium    |
+  | pybind11            | 2.9.x        | 2.11.x       | 3.0.1            | Low       |
+  | Ninja               | 1.10.x       | 1.11.x       | 1.13.1           | None      |
+  | libzip              | 1.7.x        | 1.10.x       | 1.11.4           | Low       |
+  +---------------------+--------------+--------------+------------------+-----------+
+
+  * OCCT 8.0.0 is in release candidate stage, planned for Q1 2026.
+    See Section 6.1 for OCCT version gap analysis.
 
   Impact Legend:
     None   - No code changes needed
@@ -924,8 +912,8 @@
 
     hobbycad/
       CMakeLists.txt             Top-level build file
-      README.txt                 Project overview
-      LICENSE                    GPL 3.0 license text
+      README.md                  Project overview
+      LICENSE                    GPL 3.0 (only) license text
       AUTHORS                    Contributors list
       docs/
         project_definition.txt
@@ -1339,7 +1327,6 @@
 
     .\vcpkg install qtbase:x64-windows
     .\vcpkg install qtsvg:x64-windows
-    .\vcpkg install qt3d:x64-windows
 
   Option B: Via Qt Online Installer (recommended for full Qt):
 
@@ -1354,7 +1341,6 @@
     - MSVC 2019/2022 64-bit binaries
     - Qt 5 Compatibility Module (optional)
     - Qt Shader Tools (for OpenGL support)
-    - Qt 3D (if used)
 
   Default install location: C:\Qt\6.x.x\msvc2019_64\
 
