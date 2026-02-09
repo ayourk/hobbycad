@@ -1,0 +1,188 @@
+# =================================================================
+#  HobbyCAD .gitignore
+# =================================================================
+
+# -----------------------------------------------------------------
+#  Build directories
+# -----------------------------------------------------------------
+build/
+build-*/
+AppDir/
+
+# -----------------------------------------------------------------
+#  CMake generated files
+# -----------------------------------------------------------------
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeUserPresets.json
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+install_manifest.txt
+
+# -----------------------------------------------------------------
+#  Ninja / Make
+# -----------------------------------------------------------------
+*.ninja
+.ninja_deps
+.ninja_log
+Makefile
+
+# -----------------------------------------------------------------
+#  Compiled objects and binaries
+# -----------------------------------------------------------------
+*.o
+*.obj
+*.so
+*.so.*
+*.a
+*.lib
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+moc_*.cpp
+moc_*.h
+ui_*.h
+qrc_*.cpp
+
+# -----------------------------------------------------------------
+#  MSVC / Visual Studio (Windows platform stub)
+# -----------------------------------------------------------------
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.ipch
+*.sdf
+*.suo
+*.opensdf
+*.user
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+x64/
+x86/
+Debug/
+Release/
+RelWithDebInfo/
+MinSizeRel/
+.vs/
+*.vcxproj.user
+
+# -----------------------------------------------------------------
+#  Debian packaging artifacts
+# -----------------------------------------------------------------
+debian/files
+debian/.debhelper/
+debian/hobbycad/
+debian/tmp/
+debian/*.debhelper.log
+debian/*.substvars
+*.deb
+*.ddeb
+*.dsc
+*.changes
+*.buildinfo
+*.upload
+
+# -----------------------------------------------------------------
+#  AppImage artifacts
+# -----------------------------------------------------------------
+*.AppImage
+*.AppImage.zsync
+
+# -----------------------------------------------------------------
+#  tools/ directory (downloaded binaries, not source)
+# -----------------------------------------------------------------
+tools/*.AppImage
+tools/*.AppImage.zsync
+
+# -----------------------------------------------------------------
+#  Python
+# -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.venv/
+venv/
+
+# -----------------------------------------------------------------
+#  Editor and IDE files
+# -----------------------------------------------------------------
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.kate-swp
+*.kdev4
+*.kdev_include_paths
+.project
+.cproject
+.settings/
+*.creator
+*.creator.user
+*.files
+*.includes
+*.config
+
+# -----------------------------------------------------------------
+#  ccache
+# -----------------------------------------------------------------
+.ccache/
+
+# -----------------------------------------------------------------
+#  OS generated files — macOS
+# -----------------------------------------------------------------
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+Icon?
+
+# -----------------------------------------------------------------
+#  OS generated files — Windows
+# -----------------------------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.stackdump
+[Dd]esktop.ini
+
+# -----------------------------------------------------------------
+#  Core dumps
+# -----------------------------------------------------------------
+core
+core.*
+vgcore.*
+
+# -----------------------------------------------------------------
+#  Coverage and profiling
+# -----------------------------------------------------------------
+*.gcda
+*.gcno
+*.gcov
+lcov.info
+coverage/
+
+# -----------------------------------------------------------------
+#  Doxygen output
+# -----------------------------------------------------------------
+docs/html/
+docs/latex/
+docs/xml/

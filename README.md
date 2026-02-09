@@ -58,6 +58,15 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 
 **Primary development platform:** Ubuntu 24.04 LTS
 
+**HobbyCAD PPA** — some dependencies are not in the Ubuntu repositories and are provided via a Launchpad PPA:
+
+```
+sudo add-apt-repository ppa:ayourk/hobbycad
+sudo apt-get update
+```
+
+Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See `dev_environment_setup.txt` Sections 7–8 for details.
+
 ## Development Phases
 
 | Phase | Goal | Key Deliverable |

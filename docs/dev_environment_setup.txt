@@ -543,43 +543,41 @@
   7.1  SOLVESPACE SOLVER LIBRARY
   --------------------------------
 
-  Status: NOT in Ubuntu repositories (neither 22.04 nor 24.04)
+  Status: PACKAGED — available in the HobbyCAD PPA (see Section 8)
   Needed: Phase 1 (sketch constraint solving)
   License: GPL 3.0
 
   SolveSpace provides a standalone constraint solver library
   (libslvs) that can be built separately from the full SolveSpace
-  application. This MUST be packaged as a .deb and hosted on the
-  HobbyCAD Launchpad PPA (see Section 8).
+  application. It has been packaged as a .deb and is hosted on
+  the HobbyCAD Launchpad PPA (see Section 8).
 
-  Suggested .deb package names:
-    libslvs3          Runtime shared library
-    libslvs-dev       Development headers and cmake config
+  Binary packages:
+    libslvs1          Runtime shared library (libslvs.so.3.2,
+                      soname libslvs.so.1)
+    libslvs-dev       Development headers and CMake config
 
-  Build steps (for .deb packaging):
+  Current PPA version (as of 2026-02-08):
+    Noble (24.04):  libslvs 3.2.git~20260208-1~ppa2~noble1
+    Jammy (22.04):  libslvs 3.2.git~20260208-1~ppa2~jammy1
 
-    git clone https://github.com/solvespace/solvespace.git
-    cd solvespace
-    git submodule update --init
-    mkdir build && cd build
-    cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
-             -DENABLE_GUI=OFF \
-             -DENABLE_CLI=OFF \
-             -DENABLE_TESTS=OFF
-    make -j$(nproc)
+  Built from SolveSpace git master snapshot dated 2026-02-08.
+  Source tarball: libslvs_3.2.git~20260208.orig.tar.xz
 
-  The .deb must be produced using standard Debian packaging tools
-  (debhelper, dpkg-buildpackage) and uploaded to the Launchpad PPA
-  for both jammy (22.04) and noble (24.04).
+  Install from PPA:
+    sudo add-apt-repository ppa:ayourk/hobbycad
+    sudo apt-get update
+    sudo apt-get install libslvs-dev
 
-  Note: SolveSpace is not needed for Phase 0. Packaging can be
-  deferred until Phase 1 development begins.
+  Note: SolveSpace is not needed for Phase 0. The PPA packages
+  are available now for Phase 1 development when it begins.
 
-  7.2  HOBBYMESH DEPENDENCIES (FUTURE)
-  ---------------------------------------
+  7.2  HOBBYMESH DEPENDENCIES
+  ------------------------------
 
-  The following packages are needed for HobbyMesh (Phase 5) and
-  are listed here for reference. They are NOT needed for Phase 0.
+  The following packages are needed for HobbyMesh (Phase 5).
+  They are NOT needed for Phase 0 but have been pre-packaged
+  and are available in the HobbyCAD PPA.
 
   Available in both 22.04 and 24.04 repos:
     sudo apt-get install -y \
@@ -588,27 +586,39 @@
       libassimp-dev \
       libeigen3-dev
 
-  NOT in Ubuntu repos — must be packaged as .debs for the PPA:
+  PACKAGED in the HobbyCAD PPA (ppa:ayourk/hobbycad):
 
     OpenMesh:
-      Source:    https://www.graphics.rwth-aachen.de/software/openmesh/
+      Status:   PACKAGED (2026-02-08)
+      Source:   https://www.graphics.rwth-aachen.de/software/openmesh/
       Git:      https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
       License:  BSD 3-Clause
       Packages: libopenmesh, libopenmesh-dev
+      Noble:    libopenmesh 11.0.0.git~20260208-1~ppa1~noble1
+      Jammy:    libopenmesh 11.0.0.git~20260208-1~ppa1~jammy1
 
     lib3mf:
-      Source:    https://github.com/3MFConsortium/lib3mf
+      Status:   PACKAGED (2026-02-08)
+      Source:   https://github.com/3MFConsortium/lib3mf
       License:  BSD 2-Clause
-      Packages: lib3mf, lib3mf-dev
+      Packages: lib3mf2, lib3mf-dev
+      Noble:    lib3mf 2.4.1.git~20260208-1~ppa1~noble1
+      Jammy:    lib3mf 2.4.1.git~20260208-1~ppa1~jammy1
 
     MeshFix:
-      Source:    https://github.com/MarcoAttene/MeshFix-V2.1
+      Status:   PACKAGED (2026-02-08)
+      Source:   https://github.com/MarcoAttene/MeshFix-V2.1
       License:  GPL 2.0
-      Packages: libmeshfix, libmeshfix-dev
+      Packages: meshfix (CLI tool), libmeshfix (runtime),
+                libmeshfix-dev (development headers)
+      Noble:    meshfix 2.1.git~20260208-1~ppa1~noble1
+      Jammy:    meshfix 2.1.git~20260208-1~ppa1~jammy1
 
-  All custom .deb packages must be built for both jammy (22.04) and
-  noble (24.04) using standard Debian packaging tools and uploaded
-  to the HobbyCAD Launchpad PPA.
+  Install all PPA dependencies:
+    sudo add-apt-repository ppa:ayourk/hobbycad
+    sudo apt-get update
+    sudo apt-get install libslvs-dev libopenmesh-dev \
+      lib3mf-dev libmeshfix-dev
 
   7.3  PACKAGING POLICY
   -----------------------
@@ -644,10 +654,10 @@
 
     Custom Packages (not in any Ubuntu repo):
 
-      1. SolveSpace solver library (libslvs-dev) — Phase 1+
-      2. OpenMesh (libopenmesh-dev) — Phase 5+
-      3. lib3mf (lib3mf-dev) — Phase 5+
-      4. MeshFix (libmeshfix-dev) — Phase 5+
+      1. SolveSpace solver library (libslvs-dev) — DONE (2026-02-08)
+      2. OpenMesh (libopenmesh-dev) — DONE (2026-02-08)
+      3. lib3mf (lib3mf-dev) — DONE (2026-02-08)
+      4. MeshFix (libmeshfix-dev) — DONE (2026-02-08)
 
     Backports to 22.04 (Jammy):
 
@@ -720,46 +730,62 @@
   8.2  PPA NAMING AND ORGANIZATION
   ----------------------------------
 
-  Suggested Launchpad PPA structure:
+  The HobbyCAD Launchpad PPA:
 
-    ppa:hobbycad/hobbycad-deps
-      - Contains all custom-packaged dependencies (libslvs,
-        libopenmesh, lib3mf, libmeshfix, etc.)
-      - Contains all backported dependencies (OCCT, Qt, etc.)
+    ppa:ayourk/hobbycad
+    https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad
+
+  This single PPA contains:
+      - All custom-packaged dependencies (libslvs, libopenmesh,
+        lib3mf, meshfix)
+      - All backported dependencies (when needed)
+      - HobbyCAD and HobbyMesh release packages (when the
+        project reaches a distributable state)
       - Covers both jammy (22.04) and noble (24.04)
       - Packages are versioned to not conflict with potential
         future Ubuntu repository updates (use ~ppa suffix)
 
-    ppa:hobbycad/hobbycad-release
-      - Contains HobbyCAD and HobbyMesh release packages
-      - Added when the project reaches a distributable state
-
   8.3  PPA PACKAGE VERSIONING
   -----------------------------
 
-  To avoid conflicts with distro packages, PPA backports should
-  use the following version suffix convention:
+  To avoid conflicts with distro packages, PPA packages use the
+  following version suffix convention:
 
-    <upstream_version>-<debian_revision>~hobbycad~<distro>1
+    <upstream_version>-<debian_revision>~ppa<N>~<distro>1
 
-  Examples:
-    opencascade 7.6.3-1~hobbycad~jammy1    (backport to 22.04)
-    opencascade 7.8.0-1~hobbycad~noble1    (backport to 24.04)
-    libslvs 3.1-1~hobbycad~jammy1          (custom package)
-    libslvs 3.1-1~hobbycad~noble1          (custom package)
+  The upstream_version may include a git~YYYYMMDD suffix to
+  indicate a git snapshot taken on the specified date rather
+  than a tagged release. If the package is built from a tagged
+  upstream release, this suffix is absent.
 
-  The ~hobbycad~ infix ensures:
+  Examples (published — git snapshots):
+    libslvs     3.2.git~20260208-1~ppa2~noble1    (custom package)
+    libslvs     3.2.git~20260208-1~ppa2~jammy1     (custom package)
+    libopenmesh 11.0.0.git~20260208-1~ppa1~noble1  (custom package)
+    libopenmesh 11.0.0.git~20260208-1~ppa1~jammy1  (custom package)
+    lib3mf      2.4.1.git~20260208-1~ppa1~noble1   (custom package)
+    lib3mf      2.4.1.git~20260208-1~ppa1~jammy1   (custom package)
+    meshfix     2.1.git~20260208-1~ppa1~noble1      (custom package)
+    meshfix     2.1.git~20260208-1~ppa1~jammy1      (custom package)
+
+  Examples (future — tagged release backports):
+    opencascade 7.9.3-1~ppa1~noble1                (backport to 24.04)
+    opencascade 7.9.3-1~ppa1~jammy1                (backport to 22.04)
+
+  The ~ppa<N>~ infix ensures:
     - The package sorts lower than any future distro package with
       the same upstream version (apt version comparison rules)
     - The source of the package is identifiable
     - Jammy and Noble builds are distinguishable
+    - The ppa revision number <N> can be incremented for
+      packaging fixes without changing the upstream version
 
   8.4  PPA SETUP FOR DEVELOPERS
   -------------------------------
 
   Once the PPA is established, developers add it with:
 
-    sudo add-apt-repository ppa:hobbycad/hobbycad-deps
+    sudo add-apt-repository ppa:ayourk/hobbycad
     sudo apt-get update
 
   Then install custom and backported packages normally via apt-get.
@@ -790,7 +816,9 @@
       3. Build locally for testing: dpkg-buildpackage -us -uc
       4. Test locally: sudo dpkg -i ../<package>.deb
       5. Build signed source package: debuild -S -sa
-      6. Upload to PPA: dput ppa:hobbycad/hobbycad-deps \
+         (use -sd for subsequent uploads where the orig tarball
+         is already on Launchpad)
+      6. Upload to PPA: dput ppa:ayourk/hobbycad \
            ../<package>_source.changes
       7. Launchpad builds the .deb in a clean environment for each
          target release (jammy, noble) automatically
@@ -802,7 +830,7 @@
          Or from Debian sid/testing if the Ubuntu version is also
          too old.
       2. Modify debian/changelog to add a new entry with the
-         backport version suffix (~hobbycad~jammy1)
+         backport version suffix (~ppa1~jammy1)
       3. Resolve any build dependency issues (may require
          backporting additional packages first)
       4. Build and test locally
@@ -816,7 +844,8 @@
     No PPA needed. All dependencies are in standard repos.
 
   Phase 1:
-    PPA needed for SolveSpace solver library (libslvs).
+    DONE — SolveSpace solver library (libslvs) packaged and
+    published in PPA for both Noble and Jammy (2026-02-08).
     Evaluate whether OCCT 7.5 (22.04) needs backporting.
 
   Phase 3:
@@ -824,8 +853,10 @@
     compatibility.
 
   Phase 5:
-    PPA needed for OpenMesh, lib3mf, MeshFix.
-    Evaluate CGAL and OpenVDB version requirements.
+    DONE — OpenMesh, lib3mf, MeshFix packaged and published
+    in PPA for both Noble and Jammy (2026-02-08).
+    Evaluate CGAL and OpenVDB version requirements when
+    Phase 5 development begins.
 
   Ongoing:
     Monitor upstream releases of OCCT, Qt, CGAL, and other core
@@ -842,14 +873,30 @@
   9.1  VERIFY OCCT
   ------------------
 
-    pkg-config --modversion opencascade
+  OCCT does not ship pkg-config (.pc) files on Ubuntu. It uses
+  CMake config files instead. To verify the installed version:
+
+    dpkg -l | grep libocct
+
+  Or check the CMake config version file directly:
+
+    grep "PACKAGE_VERSION " \
+      /usr/lib/*/cmake/opencascade/OpenCASCADEConfigVersion.cmake
 
   Expected output (24.04): 7.6.3
   Expected output (22.04): 7.5.x
 
-  If pkg-config doesn't find it, try:
+  To verify CMake can find it, create a minimal test:
 
-    dpkg -l | grep libocct
+    cmake -B /tmp/occt-test -S /dev/null \
+      -DCMAKE_MODULE_PATH="" \
+      -DFIND_PACKAGE_MESSAGE_DETAILS_OpenCASCADE=1 \
+      2>&1 | head -5
+
+  Or simply use find_package in your CMakeLists.txt:
+
+    find_package(OpenCASCADE REQUIRED)
+    message(STATUS "OCCT version: ${OpenCASCADE_VERSION}")
 
   9.2  VERIFY QT 6
   ------------------
@@ -873,36 +920,30 @@
   Expected: OpenGL version 4.x or higher. If this shows a version
   lower than 4.0, check GPU drivers.
 
-  9.5  VERIFY CMAKE CAN FIND OCCT AND QT
-  -----------------------------------------
+  9.5  FULL DEPENDENCY VERIFICATION (BUILD AND RUN)
+  ---------------------------------------------------
 
-  Create a temporary test directory and CMakeLists.txt:
+  The devtest/ directory (at the project root) contains a standalone
+  build test that compiles and links against every HobbyCAD and
+  HobbyMesh dependency across all development phases, then exercises
+  each one at runtime.
 
-    mkdir /tmp/hobbycad-test && cd /tmp/hobbycad-test
-    cat > CMakeLists.txt << 'EOF'
-    cmake_minimum_required(VERSION 3.20)
-    project(HobbyCAD_DepCheck)
+  Phase 0 dependencies are required — cmake will fail if missing.
+  All later-phase dependencies are optional and report [WARN] with
+  corrective install commands if absent.
 
-    find_package(OpenCASCADE REQUIRED)
-    message(STATUS "OCCT version: ${OpenCASCADE_VERSION}")
-    message(STATUS "OCCT include: ${OpenCASCADE_INCLUDE_DIR}")
+  Usage:
 
-    find_package(Qt6 6.2 REQUIRED COMPONENTS
-      Core Gui Widgets OpenGL OpenGLWidgets)
-    message(STATUS "Qt6 version: ${Qt6_VERSION}")
+    cd devtest
+    cmake -B build
+    cmake --build build -j$(nproc)
+    ./build/depcheck
 
-    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-    message(STATUS "Python version: ${Python3_VERSION}")
-    EOF
+  Exit code 0 means all Phase 0 dependencies are OK (warnings are
+  informational).  Exit code 1 means one or more Phase 0 dependencies
+  failed — see Section 12 for troubleshooting.
 
-    cmake -B build .
-
-  If this completes without errors and prints the expected versions,
-  the development environment is ready for Phase 0.
-
-  Clean up:
-
-    rm -rf /tmp/hobbycad-test
+  See devtest/README.txt for full details and expected output.
 
 ================================================================================
   10. PROJECT DIRECTORY STRUCTURE
@@ -915,6 +956,10 @@
       README.md                  Project overview
       LICENSE                    GPL 3.0 (only) license text
       AUTHORS                    Contributors list
+      devtest/
+        CMakeLists.txt           Dependency verification build
+        depcheck.cpp             Test program (all phases)
+        README.txt                 Usage and expected output
       docs/
         project_definition.txt
         cad_library_recommendations.txt
@@ -944,12 +989,18 @@
       scripts/
         install_deps_24.04.sh    Dependency install script (24.04)
         install_deps_22.04.sh    Dependency install script (22.04)
+      tools/
+        README.txt               Tool download instructions
+        (linuxdeploy, plugins — not checked in)
 
 ================================================================================
   11. BUILDING PHASE 0
 ================================================================================
 
-  Once the development environment is set up and verified:
+  Once the development environment is set up and verified (Section 9),
+  HobbyCAD can be built via two targets: a Debian package (.deb) for
+  Ubuntu/Debian systems, and an AppImage for portable distribution
+  to other Linux distributions.
 
   11.1  CLONE THE REPOSITORY
   ----------------------------
@@ -957,30 +1008,167 @@
     git clone <repository-url> hobbycad
     cd hobbycad
 
-  11.2  CONFIGURE WITH CMAKE
-  ----------------------------
+  11.2  DEVELOPER BUILD (QUICK ITERATION)
+  -----------------------------------------
+
+  For day-to-day development, build directly without packaging:
 
     cmake -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_INSTALL_PREFIX=/usr/local
 
+    cmake --build build -j$(nproc)
+
   Ninja is recommended over Make for faster builds. Use
   -DCMAKE_BUILD_TYPE=Release for optimized builds.
 
-  11.3  BUILD
-  ------------
-
-    cmake --build build -j$(nproc)
-
-  11.4  RUN
-  ----------
+  Run from the build tree:
 
     ./build/src/hobbycad/hobbycad
 
-  11.5  INSTALL (OPTIONAL)
-  --------------------------
+  11.3  DEBIAN PACKAGE (.deb)
+  -----------------------------
 
-    sudo cmake --install build
+  The primary distribution format for Ubuntu and Debian-based
+  systems.  This builds a proper .deb that integrates with the
+  system package manager (apt), tracks dependencies, and can be
+  uploaded to the HobbyCAD PPA.
+
+  Prerequisites:
+
+    sudo apt-get install -y \
+      debhelper-compat dh-cmake \
+      dpkg-dev fakeroot lintian devscripts
+
+  The Debian packaging files live in the debian/ directory at the
+  project root:
+
+    debian/
+      changelog              Version history (dpkg-parsechangelog)
+      compat                 Debhelper compat level
+      control                Package metadata, dependencies
+      copyright              Machine-readable copyright (DEP-5)
+      rules                  Build rules (dh with cmake)
+      hobbycad.install       File installation list
+      hobbycad.desktop       Desktop entry for application menu
+
+  Build the .deb locally:
+
+    dpkg-buildpackage -us -uc -b
+
+  This produces a .deb in the parent directory:
+
+    ls ../*.deb
+    ../hobbycad_0.0.1-1_amd64.deb
+
+  Test the package:
+
+    sudo dpkg -i ../hobbycad_0.0.1-1_amd64.deb
+    sudo apt-get install -f    # resolve any missing dependencies
+    hobbycad                   # launch from system PATH
+
+  Remove the package:
+
+    sudo apt-get remove hobbycad
+
+  Upload to PPA (see Section 8.5 for full workflow):
+
+    debuild -S -sa
+    dput ppa:ayourk/hobbycad ../hobbycad_0.0.1-1_source.changes
+
+  Key points for the debian/control file:
+
+    - Build-Depends must list every -dev package from Section 4
+    - Depends must use ${shlibs:Depends} and ${misc:Depends} so
+      dpkg-shlibdeps automatically resolves runtime libraries
+    - The PPA dependencies (libslvs, libopenmesh, lib3mf, meshfix)
+      are listed as Build-Depends only when their respective phases
+      are enabled in the build
+
+  11.4  APPIMAGE (.AppImage)
+  ----------------------------
+
+  The portable distribution format for any Linux distribution with
+  a recent enough glibc.  The AppImage bundles HobbyCAD and all its
+  dependencies into a single executable file that requires no
+  installation.
+
+  Prerequisites:
+
+    # Download into the tools/ directory (see tools/README.txt)
+    cd tools
+    wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+    wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+    chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+    cd ..
+
+  Build a Release configuration with /usr prefix (required for
+  AppImage directory structure):
+
+    cmake -B build-appimage -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr
+
+    cmake --build build-appimage -j$(nproc)
+
+  Install into a staging directory (AppDir):
+
+    DESTDIR=$(pwd)/AppDir cmake --install build-appimage
+
+  This creates the AppDir layout:
+
+    AppDir/
+      usr/
+        bin/
+          hobbycad
+        lib/
+          (shared libraries installed by the project)
+        share/
+          applications/
+            hobbycad.desktop
+          icons/
+            hicolor/
+              256x256/apps/hobbycad.png
+              scalable/apps/hobbycad.svg
+
+  Run linuxdeploy to bundle all dependencies and create the
+  AppImage:
+
+    export LDAI_UPDATE_INFORMATION="gh-releases-zsync|ayourk|HobbyCAD|latest|HobbyCAD-*x86_64.AppImage.zsync"
+    ./tools/linuxdeploy-x86_64.AppImage \
+      --appdir AppDir \
+      --plugin qt \
+      --output appimage
+
+  This produces a self-contained executable:
+
+    HobbyCAD-x86_64.AppImage
+
+  Test the AppImage:
+
+    chmod +x HobbyCAD-x86_64.AppImage
+    ./HobbyCAD-x86_64.AppImage
+
+  Key points for AppImage builds:
+
+    - The .desktop file and icon MUST be present in the AppDir for
+      linuxdeploy to generate a valid AppImage
+    - The Qt plugin automatically bundles Qt libraries, plugins,
+      and platform themes
+    - OCCT libraries (TK*.so) must be bundled — linuxdeploy
+      handles this automatically via ldd resolution
+    - PPA libraries (libslvs, libopenmesh, lib3mf, libmeshfix) are
+      bundled automatically if they are installed system-wide or
+      if they are installed into the AppDir staging tree
+    - The LDAI_UPDATE_INFORMATION variable enables delta updates
+      via AppImageUpdate (optional but recommended for releases)
+    - Test on a clean system (or container) to verify all
+      dependencies are bundled:
+        docker run --rm -v $(pwd):/app ubuntu:22.04 /app/HobbyCAD-x86_64.AppImage --help
+
+  Clean up build artifacts:
+
+    rm -rf build-appimage AppDir
 
 ================================================================================
   12. TROUBLESHOOTING
