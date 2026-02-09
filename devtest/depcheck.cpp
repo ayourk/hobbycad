@@ -5,6 +5,8 @@
 //  Compiles and links against every HobbyCAD / HobbyMesh dependency,
 //  then exercises each one at runtime to verify the installation.
 //
+//  Cross-platform: Linux, Windows (MSVC/MinGW), macOS (Apple Clang).
+//
 //  Phase 0 (Foundation) — required:
 //    OCCT, Qt 6, libgit2, libzip, OpenGL
 //
@@ -24,10 +26,13 @@
 // =====================================================================
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
+#include <memory>
+#include <ctime>
 
-// ---- Phase 0 (required) --------------------------------------------
+// ---- Phase 0 (required) — OCCT ------------------------------------
 
 #include <Standard_Version.hxx>
 #include <BRep_Builder.hxx>
@@ -36,27 +41,52 @@
 #include <StlAPI_Writer.hxx>
 #include <IGESControl_Writer.hxx>
 
-#include <QtCore/qconfig.h>
-#include <QApplication>
-#include <QOpenGLWidget>
-
-#include <git2.h>
-#include <zip.h>
-#include <GL/gl.h>
-
-// ---- Phase 1 (optional) --------------------------------------------
-
-#ifdef HAVE_SLVS
-#include <slvs.h>
-#endif
-
-// ---- Phase 3 (optional) --------------------------------------------
+// ---- Phase 3 (optional) — pybind11 --------------------------------
+//
+// pybind11 MUST be included BEFORE Qt headers on all platforms.
+// Qt defines a "slots" macro (via qobjectdefs.h) that collides with
+// Python 3.12's use of "slots" as a C struct member name in object.h.
+// Including pybind11 first ensures Python.h is parsed before Qt's
+// macro definitions take effect.
 
 #ifdef HAVE_PYBIND11
 #include <pybind11/embed.h>
 #endif
 
-// ---- Phase 5 (optional) --------------------------------------------
+// ---- Phase 0 (required) — Qt 6 ------------------------------------
+
+#include <QtCore/qconfig.h>
+#include <QApplication>
+#include <QOpenGLWidget>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QSurfaceFormat>
+
+// ---- Phase 0 (required) — libgit2, libzip -------------------------
+
+#include <git2.h>
+#include <zip.h>
+
+// ---- Phase 0 (required) — OpenGL ----------------------------------
+//
+// Platform-specific OpenGL header paths.
+
+#if defined(__APPLE__)
+    #include <OpenGL/gl.h>
+#elif defined(_WIN32)
+    #include <windows.h>
+    #include <GL/gl.h>
+#else
+    #include <GL/gl.h>
+#endif
+
+// ---- Phase 1 (optional) — libslvs ---------------------------------
+
+#ifdef HAVE_SLVS
+#include <slvs.h>
+#endif
+
+// ---- Phase 5 (optional) -------------------------------------------
 
 #ifdef HAVE_OPENMESH
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
@@ -99,6 +129,18 @@ struct DepResult {
     std::string fix;        // corrective action for WARN/FAIL
 };
 
+// Platform name for install hints in runtime output
+static const char* platform_name()
+{
+#if defined(__APPLE__)
+    return "macos";
+#elif defined(_WIN32)
+    return "windows";
+#else
+    return "linux";
+#endif
+}
+
 // =====================================================================
 //  Tests
 // =====================================================================
@@ -133,25 +175,26 @@ int main(int argc, char* argv[])
             r.detail = "BRep + STEP/STL/IGES writers OK";
         } catch (...) {
             r.detail = "exception during OCCT test";
-            r.fix    = "sudo apt install libocct-data-exchange-dev "
-                       "libocct-modeling-algorithms-dev "
-                       "libocct-visualization-dev";
+            r.fix    = "install OCCT dev packages";
         }
         add(r);
     }
 
     // Qt 6 — GUI framework
+    //
+    // QApplication is created here and kept alive so the OpenGL test
+    // below can create a context and query the real GL version.
+    std::unique_ptr<QApplication> qapp;
     {
         std::string ver = QT_VERSION_STR;
         DepResult r{"0", "Qt 6", ver, FAIL, "", ""};
         try {
-            QApplication app(argc, argv);
+            qapp = std::make_unique<QApplication>(argc, argv);
             r.status = PASS;
             r.detail = "QApplication + OpenGLWidgets OK";
         } catch (...) {
             r.detail = "exception during Qt test";
-            r.fix    = "sudo apt install qt6-base-dev libqt6opengl6-dev "
-                       "libqt6openglwidgets6 libqt6svg6-dev";
+            r.fix    = "install Qt 6 dev packages";
         }
         add(r);
     }
@@ -179,15 +222,60 @@ int main(int argc, char* argv[])
     }
 
     // OpenGL — 3D viewport
+    //
+    // With QApplication alive, we can create a QOffscreenSurface and
+    // QOpenGLContext to query the real GL version string from the
+    // driver.  This mirrors the startup sequence in HobbyCAD (see
+    // project_definition.txt Section 13.1).
     {
         DepResult r{"0", "OpenGL", "", FAIL, "", ""};
-        auto fn = glGetString;
-        if (fn != nullptr) {
-            r.status = PASS;
-            r.detail = "glGetString symbol OK";
+        if (qapp) {
+            QSurfaceFormat fmt;
+            fmt.setMajorVersion(3);
+            fmt.setMinorVersion(3);
+            fmt.setProfile(QSurfaceFormat::CoreProfile);
+
+            QOffscreenSurface surface;
+            surface.setFormat(fmt);
+            surface.create();
+
+            QOpenGLContext ctx;
+            ctx.setFormat(fmt);
+            if (ctx.create() && ctx.makeCurrent(&surface)) {
+                const char* glVer =
+                    reinterpret_cast<const char*>(glGetString(GL_VERSION));
+                const char* glRenderer =
+                    reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+                if (glVer) {
+                    r.version = glVer;
+                    r.status  = PASS;
+                    r.detail  = glRenderer ? glRenderer : "context OK";
+                } else {
+                    r.status = PASS;
+                    r.detail = "context created but glGetString returned null";
+                }
+                ctx.doneCurrent();
+            } else {
+                // No GPU / headless — still PASS if symbol linked
+                auto fn = glGetString;
+                if (fn != nullptr) {
+                    r.status = PASS;
+                    r.detail = "no GL context (headless?) — symbol linked OK";
+                } else {
+                    r.detail = "glGetString symbol missing";
+                    r.fix    = "install OpenGL dev packages / GPU drivers";
+                }
+            }
         } else {
-            r.detail = "glGetString symbol missing";
-            r.fix    = "sudo apt install libgl-dev libglu1-mesa-dev";
+            // QApplication failed — can't create GL context
+            auto fn = glGetString;
+            if (fn != nullptr) {
+                r.status = PASS;
+                r.detail = "symbol linked OK (no Qt app for context)";
+            } else {
+                r.detail = "glGetString symbol missing";
+                r.fix    = "install OpenGL dev packages / GPU drivers";
+            }
         }
         add(r);
     }
@@ -199,7 +287,6 @@ int main(int argc, char* argv[])
 #ifdef HAVE_SLVS
     {
         DepResult r{"1", "libslvs", "", PASS, "", ""};
-        // Create a minimal system and verify the solver runs
         Slvs_System sys = {};
         Slvs_Param params[2];
         Slvs_Entity entities[1];
@@ -223,10 +310,16 @@ int main(int argc, char* argv[])
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo add-apt-repository ppa:ayourk/hobbycad && "
+                  "sudo apt install libslvs-dev";
+        else
+            fix = "build from source: "
+                  "https://github.com/solvespace/solvespace";
         DepResult r{"1", "libslvs", "not found", WARN,
-            "needed for sketch constraint solving",
-            "sudo add-apt-repository ppa:ayourk/hobbycad && "
-            "sudo apt install libslvs-dev"};
+            "needed for sketch constraint solving", fix};
         add(r);
     }
 #endif
@@ -254,16 +347,23 @@ int main(int argc, char* argv[])
             }
         } catch (const std::exception& e) {
             r.detail = std::string("exception: ") + e.what();
-            r.fix    = "sudo apt install pybind11-dev python3-dev";
+            r.fix    = "install pybind11 + Python dev packages";
         }
         add(r);
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo apt install pybind11-dev python3-dev "
+                  "python3-pybind11";
+        else if (std::string(plat) == "windows")
+            fix = "vcpkg install pybind11:x64-windows";
+        else
+            fix = "brew install pybind11 python";
         DepResult r{"3", "pybind11", "not found", WARN,
-            "needed for Python scripting",
-            "sudo apt install pybind11-dev python3-dev "
-            "python3-pybind11"};
+            "needed for Python scripting", fix};
         add(r);
     }
 #endif
@@ -288,10 +388,16 @@ int main(int argc, char* argv[])
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo add-apt-repository ppa:ayourk/hobbycad && "
+                  "sudo apt install libopenmesh-dev";
+        else
+            fix = "build from source: "
+                  "https://www.graphics.rwth-aachen.de/software/openmesh/";
         DepResult r{"5", "OpenMesh", "not found", WARN,
-            "needed for mesh half-edge operations",
-            "sudo add-apt-repository ppa:ayourk/hobbycad && "
-            "sudo apt install libopenmesh-dev"};
+            "needed for mesh half-edge operations", fix};
         add(r);
     }
 #endif
@@ -307,34 +413,44 @@ int main(int argc, char* argv[])
         } catch (const std::exception& e) {
             r.status = FAIL;
             r.detail = std::string("exception: ") + e.what();
-            r.fix    = "sudo add-apt-repository ppa:ayourk/hobbycad && "
-                       "sudo apt install lib3mf-dev";
+            r.fix    = "install lib3mf dev packages";
         }
         add(r);
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo add-apt-repository ppa:ayourk/hobbycad && "
+                  "sudo apt install lib3mf-dev";
+        else
+            fix = "build from source: "
+                  "https://github.com/3MFConsortium/lib3mf";
         DepResult r{"5", "lib3mf", "not found", WARN,
-            "needed for 3MF format support",
-            "sudo add-apt-repository ppa:ayourk/hobbycad && "
-            "sudo apt install lib3mf-dev"};
+            "needed for 3MF format support", fix};
         add(r);
     }
 #endif
 
 #ifdef HAVE_MESHFIX
     {
-        // MeshFix: link-time verification (library linked successfully)
         DepResult r{"5", "MeshFix", "", PASS,
             "library linked OK", ""};
         add(r);
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo add-apt-repository ppa:ayourk/hobbycad && "
+                  "sudo apt install libmeshfix-dev";
+        else
+            fix = "build from source: "
+                  "https://github.com/MarcoAttene/MeshFix-V2.1";
         DepResult r{"5", "MeshFix", "not found", WARN,
-            "needed for automatic mesh repair",
-            "sudo add-apt-repository ppa:ayourk/hobbycad && "
-            "sudo apt install libmeshfix-dev"};
+            "needed for automatic mesh repair", fix};
         add(r);
     }
 #endif
@@ -356,9 +472,16 @@ int main(int argc, char* argv[])
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo apt install libcgal-dev";
+        else if (std::string(plat) == "windows")
+            fix = "vcpkg install cgal:x64-windows";
+        else
+            fix = "brew install cgal";
         DepResult r{"5", "CGAL", "not found", WARN,
-            "needed for computational geometry algorithms",
-            "sudo apt install libcgal-dev"};
+            "needed for computational geometry algorithms", fix};
         add(r);
     }
 #endif
@@ -376,9 +499,16 @@ int main(int argc, char* argv[])
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo apt install libopenvdb-dev";
+        else if (std::string(plat) == "windows")
+            fix = "vcpkg install openvdb:x64-windows";
+        else
+            fix = "brew install openvdb";
         DepResult r{"5", "OpenVDB", "not found", WARN,
-            "needed for voxelization / Make Solid",
-            "sudo apt install libopenvdb-dev"};
+            "needed for voxelization / Make Solid", fix};
         add(r);
     }
 #endif
@@ -395,9 +525,16 @@ int main(int argc, char* argv[])
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo apt install libassimp-dev";
+        else if (std::string(plat) == "windows")
+            fix = "vcpkg install assimp:x64-windows";
+        else
+            fix = "brew install assimp";
         DepResult r{"5", "Assimp", "not found", WARN,
-            "needed for multi-format mesh import",
-            "sudo apt install libassimp-dev"};
+            "needed for multi-format mesh import", fix};
         add(r);
     }
 #endif
@@ -415,9 +552,16 @@ int main(int argc, char* argv[])
     }
 #else
     {
+        std::string fix;
+        const char* plat = platform_name();
+        if (std::string(plat) == "linux")
+            fix = "sudo apt install libeigen3-dev";
+        else if (std::string(plat) == "windows")
+            fix = "vcpkg install eigen3:x64-windows";
+        else
+            fix = "brew install eigen";
         DepResult r{"5", "Eigen", "not found", WARN,
-            "needed for linear algebra (used by CGAL/MeshFix)",
-            "sudo apt install libeigen3-dev"};
+            "needed for linear algebra (used by CGAL/MeshFix)", fix};
         add(r);
     }
 #endif
@@ -426,9 +570,6 @@ int main(int argc, char* argv[])
     //  Report
     // =================================================================
 
-    std::cout << "===== HobbyCAD Dependency Check =====\n";
-
-    std::string current_phase;
     const char* phase_names[] = {
         "Phase 0: Foundation",
         "Phase 1: Basic Modeling",
@@ -438,43 +579,118 @@ int main(int argc, char* argv[])
         "Phase 5: HobbyMesh"
     };
 
-    for (const auto& r : results) {
-        if (r.phase != current_phase) {
-            current_phase = r.phase;
-            int idx = std::stoi(current_phase);
-            std::cout << "\n  -- " << phase_names[idx] << " --\n";
+    // Generate report into a lambda that writes to any ostream
+    auto write_report = [&](std::ostream& out, bool verbose) {
+        if (verbose) {
+            // Timestamp
+            std::time_t now = std::time(nullptr);
+            char timebuf[64];
+            std::strftime(timebuf, sizeof(timebuf),
+                          "%Y-%m-%d %H:%M:%S %Z", std::localtime(&now));
+            out << "Timestamp: " << timebuf << "\n";
+
+            // Compiler info
+#if defined(__clang__)
+    #if defined(__apple_build_version__)
+            out << "Compiler:  Apple Clang " << __clang_version__ << "\n";
+    #else
+            out << "Compiler:  Clang " << __clang_version__ << "\n";
+    #endif
+#elif defined(__GNUC__)
+            out << "Compiler:  GCC " << __GNUC__ << "."
+                << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__ << "\n";
+#elif defined(_MSC_VER)
+            out << "Compiler:  MSVC " << _MSC_FULL_VER << "\n";
+#else
+            out << "Compiler:  unknown\n";
+#endif
+
+            // C++ standard
+            out << "C++ std:   " << __cplusplus << "\n";
+
+            // Architecture
+#if defined(__x86_64__) || defined(_M_X64)
+            out << "Arch:      x86_64\n";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+            out << "Arch:      arm64\n";
+#elif defined(__i386__) || defined(_M_IX86)
+            out << "Arch:      x86\n";
+#else
+            out << "Arch:      unknown\n";
+#endif
+
+            // Build type
+#ifdef NDEBUG
+            out << "Build:     Release\n";
+#else
+            out << "Build:     Debug\n";
+#endif
+            out << "\n";
         }
 
-        const char* tag = (r.status == PASS) ? "PASS" :
-                          (r.status == WARN) ? "WARN" : "FAIL";
-        std::cout << "  [" << tag << "] " << r.name;
-        if (!r.version.empty())
-            std::cout << " " << r.version;
-        if (!r.detail.empty())
-            std::cout << " — " << r.detail;
-        std::cout << "\n";
-        if (!r.fix.empty())
-            std::cout << "         -> " << r.fix << "\n";
-    }
+        out << "===== HobbyCAD Dependency Check =====\n"
+            << "Platform: " << platform_name() << "\n";
 
-    std::cout << "\n===== Results: "
-              << pass << " passed, "
-              << warn << " warnings, "
-              << fail << " failed"
-              << " out of " << (pass + warn + fail)
-              << " =====\n";
+        std::string current_phase;
+        for (const auto& r : results) {
+            if (r.phase != current_phase) {
+                current_phase = r.phase;
+                int idx = std::stoi(current_phase);
+                out << "\n  -- " << phase_names[idx] << " --\n";
+            }
 
-    if (fail > 0) {
-        std::cout << "\nPhase 0 dependencies are MISSING. "
-                  << "HobbyCAD cannot build.\n"
-                  << "See dev_environment_setup.txt Section 12 "
-                  << "for troubleshooting.\n";
-    } else if (warn > 0) {
-        std::cout << "\nPhase 0 OK. Optional dependencies above "
-                  << "can be installed when needed.\n";
+            const char* tag = (r.status == PASS) ? "PASS" :
+                              (r.status == WARN) ? "WARN" : "FAIL";
+            out << "  [" << tag << "] " << r.name;
+            if (!r.version.empty())
+                out << " " << r.version;
+            if (!r.detail.empty())
+                out << " — " << r.detail;
+            out << "\n";
+            if (!r.fix.empty())
+                out << "         -> " << r.fix << "\n";
+        }
+
+        out << "\n===== Results: "
+            << pass << " passed, "
+            << warn << " warnings, "
+            << fail << " failed"
+            << " out of " << (pass + warn + fail)
+            << " =====\n";
+
+        if (fail > 0) {
+            out << "\nPhase 0 dependencies are MISSING. "
+                << "HobbyCAD cannot build.\n"
+                << "See dev_environment_setup.txt for "
+                << "troubleshooting.\n";
+        } else if (warn > 0) {
+            out << "\nPhase 0 OK. Optional dependencies above "
+                << "can be installed when needed.\n";
+        } else {
+            out << "\nAll dependencies installed. "
+                << "Ready for all phases.\n";
+        }
+    };
+
+    // Write to stdout (compact)
+    write_report(std::cout, false);
+
+    // Append runtime results to devtest.log (started by CMake)
+    const char* log_path =
+#ifdef DEPCHECK_LOG_PATH
+        DEPCHECK_LOG_PATH;
+#else
+        "devtest.log";
+#endif
+
+    std::ofstream logfile(log_path, std::ios::app);
+    if (logfile.is_open()) {
+        logfile << "--- Runtime Results ---\n\n";
+        write_report(logfile, true);
+        logfile.close();
+        std::cout << "\nLog written to " << log_path << "\n";
     } else {
-        std::cout << "\nAll dependencies installed. "
-                  << "Ready for all phases.\n";
+        std::cerr << "\nWarning: could not write " << log_path << "\n";
     }
 
     return fail > 0 ? 1 : 0;

@@ -81,6 +81,96 @@
   Platform Stubs: Windows (MSYS2/MinGW-w64 or MSVC),
                   macOS (Apple Clang + Homebrew)
 
+  Minimum OS versions:
+
+    Linux:    Ubuntu 22.04 LTS or equivalent (glibc 2.35+)
+    Windows:  Windows 10 version 1809 (October 2018 Update), 64-bit
+    macOS:    macOS 12 Monterey, 64-bit Intel or Apple Silicon
+
+  These minimums are dictated primarily by Qt 6 platform
+  requirements.  OCCT requires OpenGL 3.3+ on all platforms.
+  On macOS, OpenGL is deprecated by Apple and capped at 4.1
+  but remains functional.
+
+  AppImage compatibility: the AppImage's glibc floor is set by
+  the build host.  Building on Ubuntu 24.04 produces an AppImage
+  requiring glibc 2.39+, which will not run on 22.04 or older
+  distros.  For development and testing this is acceptable; for
+  release distribution, build on Ubuntu 22.04 (glibc 2.35) or
+  use a 22.04 container for maximum compatibility.
+
+  Virtual machines: OpenGL support varies significantly by
+  hypervisor.  HobbyCAD requires OpenGL 3.3 at minimum.
+
+    VMware Workstation/Fusion:
+      OpenGL 3.3 supported since Workstation 12 / Fusion 8
+        (requires virtual hardware version 12+, host GPU with
+        DX11 on Windows or OpenGL 4.0 on Linux/macOS)
+      OpenGL 4.1 supported in newer versions
+      OpenGL 4.3 supported in Workstation 17 / Fusion 13
+        (requires hardware version 20+)
+      HobbyCAD should work in VMware with 3D acceleration
+      enabled and VMware Tools / open-vm-tools installed.
+
+    VirtualBox:
+      VirtualBox's OpenGL support depends on the guest OS:
+
+      Linux guests with VMSVGA controller and Guest Additions:
+        Mesa's SVGA3D gallium driver provides OpenGL 3.3 (the
+        same driver used by VMware guests).  This meets
+        HobbyCAD's minimum.  Requires:
+          - VMSVGA graphics controller (default for Linux guests)
+          - 3D Acceleration enabled in VM display settings
+          - Guest Additions installed
+          - At least 128 MB video memory
+          - Verify with: glxinfo | grep "OpenGL version"
+            Expected: "3.3 (Compatibility Profile) Mesa ..."
+        Results vary by host GPU, host OS, and VirtualBox
+        version.  3D acceleration remains marked "experimental"
+        by Oracle and some configurations may fail to enable
+        it or report only OpenGL 2.1.
+
+      Windows guests:
+        Limited to OpenGL 2.1 via VirtualBox's own translation
+        layer.  Does NOT meet HobbyCAD's 3.3 minimum.
+
+      VirtualBox is documented as a best-effort configuration.
+
+    QEMU/KVM with virtio-gpu (virgl):
+      OpenGL 3.3 supported since QEMU 2.6 with virgl enabled.
+      OpenGL 4.3 with Mesa 18.2+ in the guest, 4.6 with Mesa
+      23.2+.  Requirements:
+        Host:  Linux kernel 4.4+, QEMU 2.6+, virglrenderer
+               library installed, host GPU with OpenGL 4.0+
+               and open-source Mesa drivers (Intel or AMD
+               recommended; NVIDIA proprietary drivers have
+               known issues with virglrenderer)
+        Guest: Linux kernel 4.4+ (virtio-gpu KMS driver),
+               Mesa with the virgl gallium driver enabled
+        Note:  virgl currently supports Linux guests only.
+               Windows guest support is work-in-progress.
+      Ubuntu 22.04+ ships all required host and guest
+      components by default.  Enable 3D acceleration in
+      virt-manager: set Video to "Virtio" and check the
+      "3D acceleration" box, or use the virtio-vga-gl
+      device on the QEMU command line.
+
+    GPU passthrough (VFIO):
+      Passes a physical GPU directly to the VM.  Full native
+      OpenGL support and performance.  Requires IOMMU (VT-d /
+      AMD-Vi), a dedicated GPU for the VM, and a compatible
+      host configuration.
+
+  Test with glxinfo (Linux) or the OpenGL Extensions Viewer
+  (Windows) to verify the reported version before attempting
+  to build or run HobbyCAD in a VM.
+
+  Windows 7/8/8.1: not supported.  Qt 6 dropped Windows 7
+  support entirely starting with Qt 6.0.  The last Qt version
+  with official Windows 7 support was Qt 5.15.  HobbyCAD
+  requires Qt 6 and will not run on Windows versions prior to
+  Windows 10.
+
   Part A of this document covers the primary Linux/Unix development
   environment. Part B documents the Windows support stub. Part C
   documents the macOS support stub.
@@ -166,6 +256,8 @@
           LIBGL_ALWAYS_SOFTWARE=1 ./hobbycad
 
         This is useful for CI/CD testing but not for interactive use.
+        llvmpipe OpenGL 3.3 requires Mesa 10.2 (June 2014) or later;
+        all supported Ubuntu LTS versions ship a much newer Mesa.
 
       Verifying GPU OpenGL version:
 
@@ -227,7 +319,11 @@
       libocct-modeling-data-dev \
       libocct-ocaf-dev \
       libocct-visualization-dev \
-      occt-misc
+      occt-misc \
+      libtbb-dev
+
+  OCCT uses Intel TBB (Threading Building Blocks) for parallelism.
+  The libtbb-dev package is required at link time.
 
   Note: On Ubuntu 24.04, the runtime library packages have a "t64"
   suffix (e.g., libocct-foundation-7.6t64) due to the Y2038 time_t
@@ -321,6 +417,14 @@
       libzip-dev \
       libminizip-dev
 
+  Note: The libzip-dev CMake config references companion tool
+  binaries (zipcmp, zipmerge, ziptool) from a separate package.
+  HobbyCAD's build uses pkg-config to find libzip, which avoids
+  this issue.  If you encounter CMake errors about missing
+  /usr/bin/zipcmp, install the tools package:
+
+    sudo apt-get install -y zipcmp zipmerge ziptool
+
   4.9  GIT INTEGRATION (VERSION CONTROL)
   ----------------------------------------
 
@@ -348,7 +452,7 @@
       libocct-data-exchange-dev libocct-draw-dev \
       libocct-foundation-dev libocct-modeling-algorithms-dev \
       libocct-modeling-data-dev libocct-ocaf-dev \
-      libocct-visualization-dev occt-misc \
+      libocct-visualization-dev occt-misc libtbb-dev \
       qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
       qt6-tools-dev-tools libqt6opengl6-dev \
       libqt6openglwidgets6 libqt6svg6-dev qmake6 \
@@ -394,7 +498,8 @@
       libocct-modeling-data-dev \
       libocct-ocaf-dev \
       libocct-visualization-dev \
-      occt-misc
+      occt-misc \
+      libtbb-dev
 
   Note: The -dev package names are the same, but the runtime
   libraries will be libocct-*-7.5 instead of libocct-*-7.6t64.
@@ -448,7 +553,7 @@
       libocct-data-exchange-dev libocct-draw-dev \
       libocct-foundation-dev libocct-modeling-algorithms-dev \
       libocct-modeling-data-dev libocct-ocaf-dev \
-      libocct-visualization-dev occt-misc \
+      libocct-visualization-dev occt-misc libtbb-dev \
       qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
       qt6-tools-dev-tools libqt6opengl6-dev \
       libqt6openglwidgets6 libqt6svg6-dev qmake6 \
@@ -867,60 +972,7 @@
   9. VERIFYING THE INSTALLATION
 ================================================================================
 
-  After installing all packages, verify that the key dependencies
-  are correctly installed and detectable by CMake.
-
-  9.1  VERIFY OCCT
-  ------------------
-
-  OCCT does not ship pkg-config (.pc) files on Ubuntu. It uses
-  CMake config files instead. To verify the installed version:
-
-    dpkg -l | grep libocct
-
-  Or check the CMake config version file directly:
-
-    grep "PACKAGE_VERSION " \
-      /usr/lib/*/cmake/opencascade/OpenCASCADEConfigVersion.cmake
-
-  Expected output (24.04): 7.6.3
-  Expected output (22.04): 7.5.x
-
-  To verify CMake can find it, create a minimal test:
-
-    cmake -B /tmp/occt-test -S /dev/null \
-      -DCMAKE_MODULE_PATH="" \
-      -DFIND_PACKAGE_MESSAGE_DETAILS_OpenCASCADE=1 \
-      2>&1 | head -5
-
-  Or simply use find_package in your CMakeLists.txt:
-
-    find_package(OpenCASCADE REQUIRED)
-    message(STATUS "OCCT version: ${OpenCASCADE_VERSION}")
-
-  9.2  VERIFY QT 6
-  ------------------
-
-    qmake6 --version
-
-  Expected output (24.04): QMake version 6.4.2
-  Expected output (22.04): QMake version 6.2.4
-
-  9.3  VERIFY PYTHON
-  --------------------
-
-    python3 --version
-    python3 -c "import pybind11; print(pybind11.__version__)"
-
-  9.4  VERIFY OPENGL
-  --------------------
-
-    glxinfo | grep "OpenGL version"
-
-  Expected: OpenGL version 4.x or higher. If this shows a version
-  lower than 4.0, check GPU drivers.
-
-  9.5  FULL DEPENDENCY VERIFICATION (BUILD AND RUN)
+  9.1  FULL DEPENDENCY VERIFICATION (BUILD AND RUN)
   ---------------------------------------------------
 
   The devtest/ directory (at the project root) contains a standalone
@@ -930,7 +982,10 @@
 
   Phase 0 dependencies are required — cmake will fail if missing.
   All later-phase dependencies are optional and report [WARN] with
-  corrective install commands if absent.
+  corrective install commands if absent.  As phases are implemented
+  and their dependencies become required for the build, devtest
+  will be updated to promote those from [WARN] to [FAIL], and this
+  documentation will be adjusted accordingly.
 
   Usage:
 
@@ -944,6 +999,24 @@
   failed — see Section 12 for troubleshooting.
 
   See devtest/README.txt for full details and expected output.
+
+  Individual packages can also be spot-checked with commands like
+  dpkg -l | grep libocct, qmake6 --version, and
+  python3 -c "import pybind11; print(pybind11.__version__)".
+
+  9.2  VERIFY OPENGL (DRIVER-LEVEL)
+  -----------------------------------
+
+  The devtest OpenGL check creates a minimal offscreen context and
+  reports whatever version that context provides (typically 3.3 Core
+  as requested).  To verify the full OpenGL version supported by
+  your GPU driver, use glxinfo:
+
+    glxinfo | grep "OpenGL version"
+
+  Expected: OpenGL version 4.x or higher.  If this shows a version
+  lower than 4.0, check GPU drivers.  HobbyCAD requires OpenGL 3.3
+  at minimum (see project_definition.txt Section 13.1).
 
 ================================================================================
   10. PROJECT DIRECTORY STRUCTURE
@@ -990,8 +1063,14 @@
         install_deps_24.04.sh    Dependency install script (24.04)
         install_deps_22.04.sh    Dependency install script (22.04)
       tools/
-        README.txt               Tool download instructions
-        (linuxdeploy, plugins — not checked in)
+        README.txt               Build and packaging tools
+        linux/
+          build-appimage.sh      AppImage build + logging script
+          README.txt             Linux packaging details
+        windows/
+          README.txt             Windows packaging (future)
+        macos/
+          README.txt             macOS packaging (future)
 
 ================================================================================
   11. BUILDING PHASE 0
@@ -1093,88 +1172,46 @@
   dependencies into a single executable file that requires no
   installation.
 
-  Prerequisites:
+  Build an AppImage:
 
-    # Download into the tools/ directory (see tools/README.txt)
-    cd tools
-    wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-    wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
-    chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
-    cd ..
+    ./tools/linux/build-appimage.sh
 
-  Build a Release configuration with /usr prefix (required for
-  AppImage directory structure):
+  The script handles the full pipeline: fetching linuxdeploy tools
+  (if not already present), configuring a Release build, compiling,
+  staging into an AppDir, bundling dependencies via linuxdeploy,
+  and producing the final HobbyCAD-x86_64.AppImage file.
 
-    cmake -B build-appimage -G Ninja \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr
+  All output is logged to build-appimage.log in the project root,
+  following the same convention as devtest.log.
 
-    cmake --build build-appimage -j$(nproc)
-
-  Install into a staging directory (AppDir):
-
-    DESTDIR=$(pwd)/AppDir cmake --install build-appimage
-
-  This creates the AppDir layout:
-
-    AppDir/
-      usr/
-        bin/
-          hobbycad
-        lib/
-          (shared libraries installed by the project)
-        share/
-          applications/
-            hobbycad.desktop
-          icons/
-            hicolor/
-              256x256/apps/hobbycad.png
-              scalable/apps/hobbycad.svg
-
-  Run linuxdeploy to bundle all dependencies and create the
-  AppImage:
-
-    export LDAI_UPDATE_INFORMATION="gh-releases-zsync|ayourk|HobbyCAD|latest|HobbyCAD-*x86_64.AppImage.zsync"
-    ./tools/linuxdeploy-x86_64.AppImage \
-      --appdir AppDir \
-      --plugin qt \
-      --output appimage
-
-  This produces a self-contained executable:
-
-    HobbyCAD-x86_64.AppImage
-
-  Test the AppImage:
-
-    chmod +x HobbyCAD-x86_64.AppImage
-    ./HobbyCAD-x86_64.AppImage
-
-  Key points for AppImage builds:
-
-    - The .desktop file and icon MUST be present in the AppDir for
-      linuxdeploy to generate a valid AppImage
-    - The Qt plugin automatically bundles Qt libraries, plugins,
-      and platform themes
-    - OCCT libraries (TK*.so) must be bundled — linuxdeploy
-      handles this automatically via ldd resolution
-    - PPA libraries (libslvs, libopenmesh, lib3mf, libmeshfix) are
-      bundled automatically if they are installed system-wide or
-      if they are installed into the AppDir staging tree
-    - The LDAI_UPDATE_INFORMATION variable enables delta updates
-      via AppImageUpdate (optional but recommended for releases)
-    - Test on a clean system (or container) to verify all
-      dependencies are bundled:
-        docker run --rm -v $(pwd):/app ubuntu:22.04 /app/HobbyCAD-x86_64.AppImage --help
-
-  Clean up build artifacts:
-
-    rm -rf build-appimage AppDir
+  See tools/linux/README.txt for manual build steps, AppDir
+  layout, and troubleshooting notes.
 
 ================================================================================
   12. TROUBLESHOOTING
 ================================================================================
 
-  12.1  CMAKE CAN'T FIND OPENCASCADE
+  12.1  START WITH DEVTEST
+  --------------------------
+
+  Before investigating specific errors, run the dependency
+  verification suite:
+
+    cd devtest
+    cmake -B build
+    cmake --build build -j$(nproc)
+    ./build/depcheck
+
+  devtest checks every HobbyCAD dependency, reports versions, and
+  gives corrective install commands for anything missing.  The
+  results are logged to devtest/devtest.log for reference.
+
+  If devtest passes (exit code 0) but HobbyCAD fails to build,
+  the problem is likely in the project source rather than the
+  environment.  If devtest itself fails, the sections below
+  address common dependency issues.
+
+  12.2  CMAKE CAN'T FIND OPENCASCADE
   -------------------------------------
 
   If find_package(OpenCASCADE) fails:
@@ -1186,7 +1223,7 @@
     - On 22.04, the cmake config may be at a different path:
         find /usr -name "OpenCASCADEConfig.cmake" 2>/dev/null
 
-  12.2  CMAKE CAN'T FIND QT 6
+  12.3  CMAKE CAN'T FIND QT 6
   ------------------------------
 
   If find_package(Qt6) fails:
@@ -1196,7 +1233,7 @@
         /usr/lib/x86_64-linux-gnu/cmake/Qt6/
     - Try: cmake -DQt6_DIR=/usr/lib/x86_64-linux-gnu/cmake/Qt6 ...
 
-  12.3  OPENGL ERRORS AT RUNTIME
+  12.4  OPENGL ERRORS AT RUNTIME
   ---------------------------------
 
   If the application crashes or shows a black viewport:
@@ -1209,7 +1246,7 @@
     - Try running with software rendering to isolate:
         LIBGL_ALWAYS_SOFTWARE=1 ./hobbycad
 
-  12.4  T64 LIBRARY CONFLICTS (24.04 ONLY)
+  12.5  T64 LIBRARY CONFLICTS (24.04 ONLY)
   -------------------------------------------
 
   Ubuntu 24.04 introduced t64 suffixes on libraries for the Y2038
@@ -1219,7 +1256,7 @@
     - Install KiCad via Flatpak or AppImage instead of apt
     - Or manually resolve conflicts (see Section 4.2 note)
 
-  12.5  PKG-CONFIG CAN'T FIND PACKAGES
+  12.6  PKG-CONFIG CAN'T FIND PACKAGES
   ---------------------------------------
 
   If pkg-config fails for OCCT or other libraries:
@@ -1246,6 +1283,11 @@
   platform. This section documents the minimum environment needed
   to build HobbyCAD Phase 0 on Windows.
 
+  Minimum version: Windows 10 version 1809 (October 2018 Update)
+  or later, 64-bit only.  This is dictated by Qt 6, which requires
+  Windows 10 1809+ for DPI-awareness APIs and other platform
+  features.  Windows 7, 8, and 8.1 are not supported.
+
   Windows does not ship with a built-in C++ compiler, so one must
   be installed. The recommended toolchain is MSYS2 with MinGW-w64,
   which provides a fully free and open-source GCC-based build
@@ -1267,6 +1309,36 @@
 
   Note: Windows support is community-maintained. It may lag behind
   the Linux build and may not receive the same level of testing.
+
+  WSL2 NOTE: Windows Subsystem for Linux 2 runs a real Linux kernel
+  and can build HobbyCAD using the Linux instructions in Part A.
+  However, mixing WSL2 and native Windows toolchains can cause
+  problems:
+
+    - Do not use vcpkg or MSYS2 packages installed on the Windows
+      side from within WSL2 (or vice versa).  Each environment
+      needs its own complete toolchain.
+    - File paths differ between Windows (C:\...) and WSL2
+      (/mnt/c/...).  CMake caches are not transferable between
+      the two.  Always do a clean build when switching.
+    - WSL2's GPU support (WSLg) can run OpenGL applications, but
+      driver versions and performance may differ from native
+      Windows.  Use glxinfo inside WSL2 to verify.
+    - Git line endings can conflict.  Configure git in WSL2 with:
+        git config --global core.autocrlf input
+      And on the Windows side:
+        git config --global core.autocrlf true
+    - Building natively on Windows (Sections 14–18) produces a
+      native .exe that does not require WSL2 to run.  Building
+      in WSL2 produces a Linux binary.  Choose one approach per
+      development workflow.
+    - Cross-compiling Windows .exe binaries from within WSL2
+      (using mingw-w64 cross-compilers like x86_64-w64-mingw32-g++)
+      is technically possible but not supported.  Qt 6, OCCT, and
+      vcpkg dependencies would all need to be cross-compiled or
+      sourced as Windows binaries, and CMake toolchain configuration
+      becomes significantly more complex.  Use native Windows
+      tools for Windows builds.
 
 ================================================================================
   14. WINDOWS PREREQUISITES
@@ -1638,7 +1710,40 @@
     git clone <repository-url> hobbycad
     cd hobbycad
 
-  18.2  CONFIGURE WITH CMAKE (MSYS2 / MINGW-W64 + VCPKG)
+  18.2  VERIFY DEPENDENCIES WITH DEVTEST
+  ----------------------------------------
+
+  Before configuring the full project, run the dependency
+  verification suite to confirm everything is installed:
+
+  From MSYS2 (MinGW64 shell):
+
+    cd devtest
+    cmake -B build
+    cmake --build build
+    ./build/depcheck.exe
+
+  From a Visual Studio Developer Command Prompt:
+
+    cd devtest
+    cmake -B build
+    cmake --build build
+    .\build\depcheck.exe
+
+  If using vcpkg, add the toolchain file:
+
+    cmake -B build ^
+      -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+  devtest works with any CMake generator.  If Ninja is not installed,
+  CMake uses the platform default and devtest prints a [WARN] —
+  install Ninja before building the main project.
+
+  Exit code 0 means all Phase 0 dependencies are OK.  Exit code 1
+  means one or more are missing — devtest output includes corrective
+  hints.  See devtest/README.txt for full details.
+
+  18.3  CONFIGURE WITH CMAKE (MSYS2 / MINGW-W64 + VCPKG)
   ----------------------------------------------------------
 
   If using MSYS2 with vcpkg for dependencies:
@@ -1655,7 +1760,7 @@
   toolchain for that dependency, or build the dependency from
   source using MSYS2's Pacman where available.
 
-  18.3  CONFIGURE WITH CMAKE (VISUAL STUDIO + VCPKG)
+  18.4  CONFIGURE WITH CMAKE (VISUAL STUDIO + VCPKG)
   -----------------------------------------------------
 
   If using Visual Studio 2022 with vcpkg for all dependencies:
@@ -1670,7 +1775,7 @@
       -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake ^
       -DCMAKE_BUILD_TYPE=Debug
 
-  18.4  CONFIGURE WITH CMAKE (QT INSTALLER + VCPKG)
+  18.5  CONFIGURE WITH CMAKE (QT INSTALLER + VCPKG)
   ----------------------------------------------------
 
   If using Qt Online Installer for Qt and vcpkg for other deps
@@ -1682,7 +1787,7 @@
       -DQt6_DIR=C:\Qt\6.4.2\msvc2019_64\lib\cmake\Qt6 ^
       -DCMAKE_BUILD_TYPE=Debug
 
-  18.5  BUILD
+  18.6  BUILD
   ------------
 
   With Ninja (MSYS2 or VS Developer Prompt):
@@ -1697,7 +1802,7 @@
 
     cmake --build build --config Release
 
-  18.6  RUN
+  18.7  RUN
   ----------
 
     .\build\hobbycad.exe               (Ninja)
@@ -1711,7 +1816,17 @@
   19. WINDOWS TROUBLESHOOTING
 ================================================================================
 
-  19.1  CMAKE CAN'T FIND OPENCASCADE
+  19.1  START WITH DEVTEST
+  --------------------------
+
+  Before investigating specific errors, run the dependency
+  verification suite (see Section 18.2).  If devtest passes
+  (exit code 0) but the full project fails to build, the problem
+  is likely in the project source or CMake configuration rather
+  than the environment.  If devtest itself fails, the sections
+  below address common dependency issues.
+
+  19.2  CMAKE CAN'T FIND OPENCASCADE
   -------------------------------------
 
     - Ensure vcpkg install completed successfully
@@ -1719,14 +1834,14 @@
     - If using manual OCCT install, set:
         -DOpenCASCADE_DIR=C:\occt\cmake
 
-  19.2  CMAKE CAN'T FIND QT 6
+  19.3  CMAKE CAN'T FIND QT 6
   ------------------------------
 
     - If using Qt Installer, pass -DQt6_DIR=<path to Qt cmake>
     - If using vcpkg, ensure qtbase was installed successfully
     - Qt 6 vcpkg builds require a long time; check for build errors
 
-  19.3  DLL NOT FOUND AT RUNTIME
+  19.4  DLL NOT FOUND AT RUNTIME
   ---------------------------------
 
   Windows does not have an equivalent of Linux's rpath. If the
@@ -1740,12 +1855,31 @@
       windeployqt.exe on the built executable:
         C:\Qt\6.x.x\msvc2019_64\bin\windeployqt.exe hobbycad.exe
 
-  19.4  OPENGL ERRORS
+  19.5  OPENGL ERRORS
   ----------------------
 
   Windows generally has good OpenGL support via GPU drivers.
   Ensure you have the latest drivers from NVIDIA, AMD, or Intel.
   If running in a VM, software rendering may be needed.
+
+  19.6  WSL2 CONFLICTS
+  ----------------------
+
+  If you have both WSL2 and native Windows toolchains installed:
+
+    - CMake finds the wrong compiler: ensure you are running cmake
+      from the correct environment (MSYS2/cmd.exe for native,
+      WSL2 terminal for Linux builds).  Check with:
+        cmake --system-information | grep CMAKE_C_COMPILER
+    - Stale build cache: if switching between WSL2 and native
+      Windows, always delete the build directory and reconfigure:
+        rm -rf build && cmake -B build ...
+    - Line ending errors during build: verify your git autocrlf
+      setting matches the environment (see Section 13 WSL2 note)
+    - OpenGL crashes in WSL2: WSLg may not support all GPU
+      features.  Test with:
+        glxinfo | grep "OpenGL version"
+      If the version is too low, build and test natively instead.
 
 ================================================================================
 ================================================================================
@@ -1761,6 +1895,12 @@
   The goal is to ensure that HobbyCAD compiles and runs on macOS
   with basic functionality. Linux remains the primary development
   platform.
+
+  Minimum version: macOS 12 (Monterey) or later, 64-bit Intel
+  or Apple Silicon (arm64).  This is dictated by Qt 6's deployment
+  target and Xcode toolchain requirements.  OpenGL on macOS is
+  deprecated by Apple and capped at version 4.1, but remains
+  functional for HobbyCAD's OpenGL 3.3 minimum requirement.
 
   macOS includes a free C/C++ compiler (Apple Clang) as part of
   the Xcode Command Line Tools. No Xcode IDE installation is
@@ -1921,7 +2061,7 @@
 
     export Qt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
 
-  Or pass it directly to CMake (see Section 25.2).
+  Or pass it directly to CMake (see Section 25.3).
 
   22.3  PYBIND11
   ----------------
@@ -2071,7 +2211,31 @@
     git clone <repository-url> hobbycad
     cd hobbycad
 
-  25.2  CONFIGURE WITH CMAKE
+  25.2  VERIFY DEPENDENCIES WITH DEVTEST
+  ----------------------------------------
+
+  Before configuring the full project, run the dependency
+  verification suite to confirm everything is installed:
+
+    cd devtest
+    cmake -B build
+    cmake --build build -j$(sysctl -n hw.ncpu)
+    ./build/depcheck
+
+  If CMake cannot find Qt (keg-only in Homebrew):
+
+    cmake -B build \
+      -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
+
+  devtest works with any CMake generator.  If Ninja is not installed,
+  CMake uses the platform default and devtest prints a [WARN] —
+  install Ninja before building the main project.
+
+  Exit code 0 means all Phase 0 dependencies are OK.  Exit code 1
+  means one or more are missing — devtest output includes corrective
+  hints.  See devtest/README.txt for full details.
+
+  25.3  CONFIGURE WITH CMAKE
   ----------------------------
 
     cmake -B build -G Ninja \
@@ -2085,12 +2249,12 @@
       -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6 \
       -DOpenCASCADE_DIR=$(brew --prefix opencascade)/lib/cmake/opencascade
 
-  25.3  BUILD
+  25.4  BUILD
   ------------
 
     cmake --build build -j$(sysctl -n hw.ncpu)
 
-  25.4  RUN
+  25.5  RUN
   ----------
 
     ./build/src/hobbycad/hobbycad
@@ -2099,7 +2263,17 @@
   26. MACOS TROUBLESHOOTING
 ================================================================================
 
-  26.1  XCODE-SELECT: ERROR: COMMAND LINE TOOLS ALREADY INSTALLED
+  26.1  START WITH DEVTEST
+  --------------------------
+
+  Before investigating specific errors, run the dependency
+  verification suite (see Section 25.2).  If devtest passes
+  (exit code 0) but the full project fails to build, the problem
+  is likely in the project source or CMake configuration rather
+  than the environment.  If devtest itself fails, the sections
+  below address common dependency issues.
+
+  26.2  XCODE-SELECT: ERROR: COMMAND LINE TOOLS ALREADY INSTALLED
   -----------------------------------------------------------------
 
   This just means the tools are already installed. Check for
@@ -2112,7 +2286,7 @@
     sudo rm -rf /Library/Developer/CommandLineTools
     xcode-select --install
 
-  26.2  CMAKE CAN'T FIND OPENCASCADE
+  26.3  CMAKE CAN'T FIND OPENCASCADE
   -------------------------------------
 
     - Verify: brew list opencascade
@@ -2120,14 +2294,14 @@
     - On Apple Silicon, Homebrew prefix is /opt/homebrew
     - On Intel, Homebrew prefix is /usr/local
 
-  26.3  CMAKE CAN'T FIND QT 6
+  26.4  CMAKE CAN'T FIND QT 6
   ------------------------------
 
     - Qt is often "keg-only" in Homebrew (not symlinked)
     - Set: -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
     - Verify: ls $(brew --prefix qt@6)/lib/cmake/Qt6/Qt6Config.cmake
 
-  26.4  OPENGL DEPRECATION WARNINGS
+  26.5  OPENGL DEPRECATION WARNINGS
   ------------------------------------
 
   The compiler will emit deprecation warnings for OpenGL calls:
@@ -2145,7 +2319,7 @@
       add_definitions(-DGL_SILENCE_DEPRECATION)
     endif()
 
-  26.5  LINKER WARNINGS ON APPLE SILICON
+  26.6  LINKER WARNINGS ON APPLE SILICON
   -----------------------------------------
 
   If you see warnings about architecture mismatches, ensure all
@@ -2314,3 +2488,4 @@
 ================================================================================
   END OF DOCUMENT
 ================================================================================
+

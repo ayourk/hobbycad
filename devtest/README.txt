@@ -3,21 +3,60 @@
 =====================================================================
 
   This directory contains a standalone build test that verifies
-  every HobbyCAD and HobbyMesh dependency is correctly installed.
+  every HobbyCAD and HobbyMesh dependency across all development
+  phases.  It compiles and links a small program against all
+  libraries, then exercises each one at runtime.
 
-  It compiles and links a small program against all libraries, then
-  exercises each one at runtime.  Phase 0 dependencies are required;
-  later-phase dependencies report [WARN] with corrective action if
-  they are not installed.
+  Cross-platform: Linux, Windows, and macOS.
+
+  Phase 0 dependencies are required; later-phase dependencies
+  report [WARN] with platform-specific corrective action if they
+  are not installed.
 
 
-  QUICK START
-  -----------
+  QUICK START — LINUX
+  --------------------
 
     cd devtest
     cmake -B build
     cmake --build build -j$(nproc)
     ./build/depcheck
+
+
+  QUICK START — WINDOWS (vcpkg)
+  ------------------------------
+
+  From an MSYS2 MinGW64 shell or Visual Studio Developer Command
+  Prompt:
+
+    cd devtest
+    cmake -B build ^
+      -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+    cmake --build build
+    .\build\depcheck.exe
+
+  If Ninja is not installed, CMake uses the default generator and
+  prints a [WARN].  Install Ninja for consistency with the main
+  HobbyCAD build (see dev_environment_setup.txt Section 14).
+
+  If using the Qt Online Installer instead of vcpkg for Qt, also
+  pass -DQt6_DIR=C:\Qt\6.x.x\msvc2019_64\lib\cmake\Qt6.
+
+  See dev_environment_setup.txt Sections 13-19 for full Windows
+  environment setup.
+
+
+  QUICK START — MACOS (Homebrew)
+  --------------------------------
+
+    cd devtest
+    cmake -B build \
+      -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
+    cmake --build build -j$(sysctl -n hw.ncpu)
+    ./build/depcheck
+
+  See dev_environment_setup.txt Sections 20-26 for full macOS
+  environment setup.
 
 
   WHAT IT TESTS
@@ -46,17 +85,18 @@
       Eigen           Linear algebra
 
 
-  EXPECTED OUTPUT (Ubuntu 24.04, all packages installed)
-  -------------------------------------------------------
+  EXPECTED OUTPUT (all packages installed)
+  ------------------------------------------
 
     ===== HobbyCAD Dependency Check =====
+    Platform: linux
 
       -- Phase 0: Foundation --
       [PASS] OCCT 7.6.3 — BRep + STEP/STL/IGES writers OK
       [PASS] Qt 6 6.4.2 — QApplication + OpenGLWidgets OK
       [PASS] libgit2 1.7.2 — init + version query OK
       [PASS] libzip 1.10.1 — version query OK
-      [PASS] OpenGL — glGetString symbol OK
+      [PASS] OpenGL 4.6 (Mesa) — Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)
 
       -- Phase 1: Basic Modeling --
       [PASS] libslvs — solver invoked OK (result=0)
@@ -77,46 +117,22 @@
 
     All dependencies installed. Ready for all phases.
 
+  Version numbers will differ on Windows (vcpkg) and macOS
+  (Homebrew).  The Platform: line shows "windows" or "macos"
+  accordingly.
 
-  EXPECTED OUTPUT (Phase 0 only, no PPA packages)
-  ------------------------------------------------
 
-    ===== HobbyCAD Dependency Check =====
+  EXPECTED OUTPUT (Phase 0 only)
+  --------------------------------
 
-      -- Phase 0: Foundation --
-      [PASS] OCCT 7.6.3 — BRep + STEP/STL/IGES writers OK
-      [PASS] Qt 6 6.4.2 — QApplication + OpenGLWidgets OK
-      [PASS] libgit2 1.7.2 — init + version query OK
-      [PASS] libzip 1.10.1 — version query OK
-      [PASS] OpenGL — glGetString symbol OK
+  [WARN] lines show platform-appropriate install commands:
 
-      -- Phase 1: Basic Modeling --
-      [WARN] libslvs not found — needed for sketch constraint solving
-             -> sudo add-apt-repository ppa:ayourk/hobbycad && sudo apt install libslvs-dev
+    Linux:    sudo apt install ...  /  ppa:ayourk/hobbycad
+    Windows:  vcpkg install ...:x64-windows
+    macOS:    brew install ...
 
-      -- Phase 3: Python / Plugins / Version Control --
-      [WARN] pybind11 not found — needed for Python scripting
-             -> sudo apt install pybind11-dev python3-dev python3-pybind11
-
-      -- Phase 5: HobbyMesh --
-      [WARN] OpenMesh not found — needed for mesh half-edge operations
-             -> sudo add-apt-repository ppa:ayourk/hobbycad && sudo apt install libopenmesh-dev
-      [WARN] lib3mf not found — needed for 3MF format support
-             -> sudo add-apt-repository ppa:ayourk/hobbycad && sudo apt install lib3mf-dev
-      [WARN] MeshFix not found — needed for automatic mesh repair
-             -> sudo add-apt-repository ppa:ayourk/hobbycad && sudo apt install libmeshfix-dev
-      [WARN] CGAL not found — needed for computational geometry algorithms
-             -> sudo apt install libcgal-dev
-      [WARN] OpenVDB not found — needed for voxelization / Make Solid
-             -> sudo apt install libopenvdb-dev
-      [WARN] Assimp not found — needed for multi-format mesh import
-             -> sudo apt install libassimp-dev
-      [WARN] Eigen not found — needed for linear algebra (used by CGAL/MeshFix)
-             -> sudo apt install libeigen3-dev
-
-    ===== Results: 5 passed, 9 warnings, 0 failed out of 14 =====
-
-    Phase 0 OK. Optional dependencies above can be installed when needed.
+  Libraries not in vcpkg or Homebrew show a "build from source"
+  URL instead.
 
 
   EXIT CODES
@@ -126,15 +142,69 @@
     1   One or more Phase 0 dependencies FAILED
 
 
+  LOG FILE
+  --------
+
+  devtest.log is written in the devtest/ source directory and
+  captures the full pipeline from configure through runtime:
+
+    1. CMake configure phase — written during cmake -B build:
+       - Timestamp, generator, build type, source/build dirs
+       - Compiler identity, version, and path
+       - Platform detection
+       - Each dependency: found (with version and method) or
+         not found (with install hint)
+
+    2. Runtime test phase — appended by ./build/depcheck:
+       - Compiler, C++ standard, architecture, build type
+       - Per-dependency [PASS]/[WARN]/[FAIL] with versions
+       - OpenGL driver version and GPU renderer
+       - Summary counts
+
+  The log is overwritten on each cmake -B run (the configure
+  phase starts fresh) and appended to by each depcheck run.
+
+  Useful for bug reports, CI diagnostics, and verifying that
+  the correct library versions are being picked up.  Listed in
+  .gitignore — should not be committed.
+
+
+  PLATFORM NOTES
+  ---------------
+
+  Linux:
+    - pkg-config is used as fallback for libraries without CMake
+      config files
+    - libtbb-dev is required (OCCT links against TBB)
+    - PPA packages available for libslvs, libopenmesh, lib3mf,
+      meshfix
+    - See dev_environment_setup.txt Sections 4-5 for package lists
+
+  Windows:
+    - vcpkg toolchain file is required for CMake to find packages
+    - windeployqt runs automatically after build to copy Qt DLLs
+    - MSYS2/MinGW-w64 and MSVC are both supported
+    - See dev_environment_setup.txt Sections 15-16 for vcpkg setup
+
+  macOS:
+    - Qt is typically keg-only in Homebrew; pass Qt6_DIR explicitly
+    - OpenGL is deprecated on macOS but still functional (4.1 max)
+    - Works on both Apple Silicon (arm64) and Intel (x86_64)
+    - See dev_environment_setup.txt Section 23 for architecture notes
+
+
   FILES
   -----
 
-    CMakeLists.txt    Build system — finds all dependencies
+    CMakeLists.txt    Build system — cross-platform dependency detection
     depcheck.cpp      Test program — exercises each dependency
-    README            This file
+    README.txt        This file
+    devtest.log       Generated at runtime (not checked in)
 
 
   CLEAN UP
   --------
 
-    rm -rf build
+    Linux / macOS:    rm -rf build
+    Windows:          rmdir /s /q build
+
