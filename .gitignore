@@ -97,8 +97,16 @@ debian/*.substvars
 # -----------------------------------------------------------------
 #  tools/ directory (downloaded binaries, not source)
 # -----------------------------------------------------------------
-tools/*.AppImage
-tools/*.AppImage.zsync
+tools/linux/*.AppImage
+tools/linux/*.AppImage.zsync
+
+# -----------------------------------------------------------------
+#  devtest and build logs
+# -----------------------------------------------------------------
+devtest.log
+build-hobbycad.log
+build-hobbymesh.log
+build-appimage.log
 
 # -----------------------------------------------------------------
 #  Python
@@ -117,14 +125,28 @@ venv/
 *.swp
 *.swo
 *~
+
+# VS Code (Linux, Windows, macOS)
 .vscode/
+*.code-workspace
+.history/
+
+# JetBrains (CLion, etc.)
 .idea/
+
+# Kate
 *.kate-swp
+
+# KDevelop
 *.kdev4
 *.kdev_include_paths
+
+# Eclipse CDT
 .project
 .cproject
 .settings/
+
+# Qt Creator
 *.creator
 *.creator.user
 *.files

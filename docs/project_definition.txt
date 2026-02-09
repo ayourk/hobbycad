@@ -333,38 +333,39 @@
 
     Virtual Machines:
 
-      VirtualBox (7.0.10+, including 7.1.x and 7.2.x):
-        VirtualBox 7.0.10 (July 2023) added initial support for
-        OpenGL 4.1, which is above HobbyCAD's 3.3 requirement.
-        This support carries forward through 7.1.x and 7.2.x
-        (latest as of this writing: 7.2.6).
+      VirtualBox (7.x with VMSVGA, Linux guests):
+        Linux guests using the VMSVGA graphics controller get
+        OpenGL 3.3 via Mesa's SVGA3D gallium driver (the same
+        driver used by VMware guests).  This meets HobbyCAD's
+        minimum requirement.
 
         To use 3D acceleration in a Linux guest:
-          - Use the VMSVGA graphics controller (recommended for
+          - Use the VMSVGA graphics controller (default for
             Linux guests)
           - Enable 3D Acceleration in VM display settings
           - Install VirtualBox Guest Additions in the guest
           - Allocate at least 128 MB video memory
           - Verify with: glxinfo | grep "OpenGL version"
-            Expected: "OpenGL version string: 4.1 ..." or similar
-            via the SVGA3D Mesa driver
+            Expected: "OpenGL version string: 3.3 ..." via
+            the SVGA3D Mesa driver
 
         Caveats: VirtualBox 3D acceleration is still marked
         "experimental" by Oracle. Real-world results vary by
         host GPU, host OS, VirtualBox version, and guest Mesa
-        version. Some configurations may still report only OpenGL
-        2.1 or fail to enable 3D acceleration. If OpenGL 3.3 is
-        not achieved, HobbyCAD launches in Reduced Mode where the
-        2D sketch editor, file conversion, geometry operations,
-        feature tree, and Python scripting all work normally.
+        version. Some configurations may fail to enable 3D
+        acceleration or may report only OpenGL 2.1. If OpenGL
+        3.3 is not achieved, HobbyCAD launches in Reduced Mode
+        where the 2D sketch editor, file conversion, geometry
+        operations, feature tree, and Python scripting all work
+        normally.
 
         Tip: setting LIBGL_ALWAYS_SOFTWARE=1 forces Mesa llvmpipe,
-        which reports OpenGL 3.3+ and can confirm HobbyCAD works,
+        which reports OpenGL 4.5+ and can confirm HobbyCAD works,
         but at very low frame rates (not for interactive use).
 
-        Windows guests: OpenGL support remains limited to 2.1 at
-        best. HobbyCAD in a Windows VirtualBox guest will likely
-        run in Reduced Mode.
+        Windows guests: VirtualBox's own OpenGL translation layer
+        is limited to OpenGL 2.1.  HobbyCAD in a Windows
+        VirtualBox guest will run in Reduced Mode.
 
         VirtualBox is documented as a best-effort configuration.
 
@@ -375,9 +376,15 @@
         reduced compared to bare metal but generally usable.
 
       KVM/QEMU with virgl:
-        Supports OpenGL 4.3 via virglrenderer. HobbyCAD should
-        run in Full Mode. This is the best VM option for Linux
-        hosts.
+        Supports OpenGL 3.3+ via virglrenderer (OpenGL 4.3 with
+        Mesa 18.2+, OpenGL 4.6 with Mesa 23.2+).  Requires a
+        Linux host with KVM, QEMU 2.6+, virglrenderer, and a
+        host GPU with OpenGL 4.0+ using open-source Mesa drivers
+        (Intel or AMD recommended; NVIDIA proprietary drivers
+        have known issues).  Linux guests only; Windows virgl
+        support is work-in-progress.  Ubuntu 22.04+ ships all
+        required components.  HobbyCAD should run in Full Mode.
+        This is the best VM option for Linux hosts.
 
       General VM note: HobbyCAD in a VM is a best-effort
       configuration. For full performance, run on bare metal.
@@ -385,11 +392,14 @@
   SOFTWARE RENDERING FALLBACK:
 
   On Linux, Mesa's software rasterizer (llvmpipe) provides OpenGL
-  3.3+ without any GPU hardware. Performance is poor (single-digit
+  4.5+ without any GPU hardware. Performance is poor (single-digit
   FPS for complex models) but sufficient for automated testing and
   CI/CD pipelines. Invoke with:
 
     LIBGL_ALWAYS_SOFTWARE=1 ./hobbycad
+
+  llvmpipe OpenGL 3.3 requires Mesa 10.2 (June 2014) or later;
+  all supported Ubuntu LTS versions ship a much newer Mesa.
 
   GRACEFUL DEGRADATION:
 
@@ -2087,3 +2097,4 @@
 ================================================================================
   END OF DOCUMENT
 ================================================================================
+
