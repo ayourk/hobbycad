@@ -278,10 +278,10 @@ A CAD application of this scope requires several distinct functional layers:
     - Custom solver using numerical methods (Newton-Raphson): Maximum
       flexibility but significant development effort.
 
-  Note: The licensing of SolveSpace's solver should be carefully reviewed
-  for compatibility with the project's chosen license. The solver portion
-  may be extractable under more permissive terms depending on how it is
-  integrated.
+  Note: The SolveSpace solver library (libslvs) is GPL 3.0, which is
+  compatible with HobbyCAD's GPL 3.0 (only) license. The solver has
+  been packaged as libslvs1/libslvs-dev and is available in the
+  HobbyCAD PPA (ppa:ayourk/hobbycad) for both Jammy and Noble.
 
 ================================================================================
   7. FILE FORMAT SUPPORT
@@ -899,7 +899,8 @@ A CAD application of this scope requires several distinct functional layers:
   | Comp. Geometry (opt.)   | CGAL                       | GPL/LGPL       |
   +-------------------------+----------------------------+----------------+
 
-  * SolveSpace solver licensing requires review for integration method.
+  * SolveSpace solver is GPL 3.0, compatible with HobbyCAD's license.
+    Available as libslvs-dev in the HobbyCAD PPA.
   ** libgit2 is GPL 2.0 with a linking exception that permits use in
      proprietary and non-GPL software. See project_definition.txt
      Section 5.5 for version control integration details.
