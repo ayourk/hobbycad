@@ -1,0 +1,713 @@
+================================================================================
+  HobbyCAD — CODING STANDARDS AND FILE CONVENTIONS
+================================================================================
+
+  Project          : HobbyCAD
+  File             : docs/coding_standards.txt
+  Document Version : 0.0.1
+  Date             : 2026-02-09
+
+  AI Attribution   : This document was primarily generated with
+                     the assistance of Claude AI (Anthropic).
+                     Human review and editorial direction provided
+                     by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+    1. Purpose
+    2. File Header Format
+       2.1  C++ Source Files (.cpp)
+       2.2  C++ Header Files (.h)
+       2.3  CMakeLists.txt
+       2.4  Shell Scripts (.sh)
+       2.5  Qt Stylesheets (.qss)
+       2.6  Plain Text Documents (.txt)
+       2.7  Markdown Files (.md)
+       2.8  Data/Config Files (AUTHORS, .gitignore, etc.)
+    3. File Naming Conventions
+    4. Directory Structure and File Placement
+    5. Object Naming (setObjectName) Convention
+    6. License Headers
+    7. Include Order
+    8. General C++ Style
+
+================================================================================
+  1. PURPOSE
+================================================================================
+
+  This document defines the file conventions and coding standards for
+  all files in the HobbyCAD project.  Every version-controlled file
+  must follow the header format for its file type.
+
+  Goals:
+    - Every file is self-identifying (path, purpose, license)
+    - Consistent style across the entire project tree
+    - Easy to navigate by both humans and tools
+    - grep-friendly for locating files by path or purpose
+
+================================================================================
+  2. FILE HEADER FORMAT
+================================================================================
+
+  Every file begins with a header block that includes:
+
+    1. A visual separator line (comment style depends on file type)
+    2. The file's relative path from the project root
+    3. A short dash-separated title describing the file's purpose
+    4. An optional longer description (2-5 lines)
+    5. SPDX license identifier (see Section 6 for definition)
+    6. A closing separator line
+
+  The relative path is the FIRST meaningful content in the header.
+  This makes it possible to identify any file by viewing the first
+  few lines, even if it's been copied or moved.
+
+
+  2.1  C++ SOURCE FILES (.cpp)
+  -----------------------------
+
+    // =====================================================================
+    //  src/hobbycad/gui/clipanel.cpp — Embedded CLI terminal panel
+    // =====================================================================
+    //
+    //  Optional multi-line description of the file's purpose.
+    //  Keep to 2-5 lines maximum.
+    //
+    //  SPDX-License-Identifier: GPL-3.0-only
+    //
+    // =====================================================================
+
+  Rules:
+    - Separator line: exactly 69 characters (// + space + 65 '=' chars)
+    - Path line: //  path/from/root.cpp — Short Title
+    - The em-dash (—) separates the path from the title
+    - SPDX line is always present
+    - Blank comment line before and after the description block
+
+
+  2.2  C++ HEADER FILES (.h)
+  ---------------------------
+
+  Same format as .cpp files, followed by the include guard:
+
+    // =====================================================================
+    //  src/hobbycad/gui/clipanel.h — Embedded CLI terminal panel
+    // =====================================================================
+    //
+    //  Description of the class or module.
+    //
+    //  SPDX-License-Identifier: GPL-3.0-only
+    //
+    // =====================================================================
+
+    #ifndef HOBBYCAD_CLIPANEL_H
+    #define HOBBYCAD_CLIPANEL_H
+
+    ...
+
+    #endif  // HOBBYCAD_CLIPANEL_H
+
+  Include guard naming: HOBBYCAD_FILENAME_H (uppercase, underscores).
+  Always use #ifndef/#define, not #pragma once (portability).
+
+
+  2.3  CMakeLists.txt
+  --------------------
+
+    # =====================================================================
+    #  src/hobbycad/CMakeLists.txt — HobbyCAD Application
+    # =====================================================================
+    #
+    #  Description of what this build file produces.
+    #
+    # =====================================================================
+
+  Rules:
+    - Hash (#) comment style
+    - Same separator width (69 characters including # and space)
+
+
+  2.4  SHELL SCRIPTS (.sh)
+  -------------------------
+
+    #!/bin/bash
+    # =====================================================================
+    #  tools/linux/build-appimage.sh — HobbyCAD AppImage Build Script
+    # =====================================================================
+    #
+    #  Description of what the script does.
+    #
+    #  SPDX-License-Identifier: GPL-3.0-only
+    #
+    # =====================================================================
+
+  Rules:
+    - Shebang (#!/bin/bash) is always the first line
+    - Header block immediately follows the shebang
+    - Scripts must be executable (chmod +x)
+
+
+  2.5  QT STYLESHEETS (.qss)
+  ----------------------------
+
+    /* =====================================================================
+     *  themes/sample.qss — HobbyCAD Default Theme (Reference)
+     * =====================================================================
+     *
+     *  File: themes/sample.qss
+     *
+     *  Description of the theme or stylesheet.
+     *
+     *  SPDX-License-Identifier: GPL-3.0-only
+     *
+     * ===================================================================== */
+
+  Rules:
+    - CSS block comment style: /* ... */
+    - Each interior line starts with " * " (space-star-space)
+    - Separator lines: " *  " + 65 '=' characters
+    - Include a "File:" line for quick identification
+    - Section headers within the file use the same block comment style
+
+
+  2.6  PLAIN TEXT DOCUMENTS (.txt)
+  ---------------------------------
+
+    ================================================================================
+      HobbyCAD — DOCUMENT TITLE IN CAPS
+    ================================================================================
+
+      Project          : HobbyCAD
+      File             : docs/filename.txt
+      Document Version : 0.0.1
+      Date             : YYYY-MM-DD
+
+      AI Attribution   : This document was primarily generated with
+                         the assistance of Claude AI (Anthropic).
+                         Human review and editorial direction provided
+                         by the project author.
+
+  Rules:
+    - Separator: 80 '=' characters
+    - Title: indented 2 spaces, ALL CAPS
+    - Metadata block: Project, File, Document Version, Date
+    - AI Attribution block when applicable
+    - Section headers: indented 2 spaces, numbered, ALL CAPS
+    - Subsection headers: indented 2 spaces, numbered, Title Case
+    - Body text: indented 4 spaces
+    - Line width: 80 characters maximum
+
+
+  2.7  MARKDOWN FILES (.md)
+  --------------------------
+
+    # Title
+
+    <!-- File: README.md -->
+
+    Content begins here.
+
+  Rules:
+    - Standard Markdown heading with #
+    - HTML comment with file path on the third line
+    - No separator lines (Markdown's own formatting suffices)
+
+
+  2.8  DATA/CONFIG FILES (AUTHORS, .gitignore, etc.)
+  ----------------------------------------------------
+
+  Files without a natural comment syntax use the plain text document
+  format where possible:
+
+    ================================================================================
+      HOBBYCAD / HOBBYMESH — AUTHORS
+      File: AUTHORS
+    ================================================================================
+
+  For .gitignore:
+
+    # =====================================================================
+    #  .gitignore — HobbyCAD version control exclusions
+    # =====================================================================
+
+  For files that cannot contain comments (JSON, etc.), the file path
+  and purpose should be documented in the nearest README.txt.
+
+================================================================================
+  3. FILE NAMING CONVENTIONS
+================================================================================
+
+  Source code:
+    - All lowercase
+    - No underscores in filenames (e.g., climode.cpp, not cli_mode.cpp)
+    - Header and source share the same base name (climode.h, climode.cpp)
+    - Exception: compound names use no separator (viewportwidget.cpp)
+
+  Documents:
+    - Lowercase with underscores (project_definition.txt)
+    - Plain text format (.txt) for all project documentation
+    - Exception: README.md (Markdown for GitHub rendering)
+
+  Themes:
+    - Lowercase with underscores (dark_blue.qss)
+    - .qss extension (Qt stylesheet)
+    - sample.qss is the reference theme and must always exist
+
+  Build files:
+    - CMakeLists.txt (CMake standard)
+    - Uppercase README.txt for stub directories
+
+  Shell scripts:
+    - Lowercase with hyphens (build-appimage.sh)
+
+================================================================================
+  4. DIRECTORY STRUCTURE AND FILE PLACEMENT
+================================================================================
+
+  hobbycad/                        Project root
+    CMakeLists.txt                 Top-level build
+    README.md                      Project overview (GitHub)
+    LICENSE                        GPL 3.0 (only)
+    AUTHORS                        Contributors list
+    .gitignore                     VCS exclusions
+
+    docs/                          Project documentation
+      project_definition.txt       Master project spec
+      cad_library_recommendations.txt
+      cad_use_case_document.txt
+      dev_environment_setup.txt    Build environment setup
+      security_risks.txt           Threat model
+      coding_standards.txt         This document
+      theming.txt                  GUI theming guide
+
+    themes/                        User/community Qt stylesheet themes
+      sample.qss                   Reference theme (all IDs, defaults)
+      darkmode.qss                 Community dark mode theme
+
+    translations/                  Translation source files (.ts)
+      hobbycad_en.ts               English (reference/default)
+      hobbycad_pirate.ts           Pirate English (fun language)
+
+    src/
+      libhobbycad/                 Core library (no GUI dependency)
+        CMakeLists.txt
+        hobbycad/                  Public headers (installed)
+          core.h
+          document.h
+          brep_io.h
+          opengl_info.h
+        core.cpp
+        document.cpp
+        brep_io.cpp
+        opengl_info.cpp
+
+      hobbycad/                    Application executable
+        CMakeLists.txt
+        main.cpp                   Startup dispatcher
+        resources/                 Compile-time embedded resources
+          hobbycad.qrc             Qt resource collection file
+          themes/                  Built-in themes (embedded in binary)
+            default.qss            Default (platform-native) theme
+            darkmode.qss           Built-in dark mode theme
+        gui/                       GUI components (shared)
+          mainwindow.h/.cpp        Base window (menus, status, docks)
+          aboutdialog.h/.cpp       About dialog
+          clipanel.h/.cpp          Embedded CLI terminal widget
+          full/                    Full Mode (OpenGL 3.3+)
+            viewportwidget.h/.cpp  OCCT 3D viewport
+            fullmodewindow.h/.cpp  Full Mode window
+          reduced/                 Reduced Mode (no OpenGL)
+            reducedviewport.h/.cpp Disabled viewport placeholder
+            diagnosticdialog.h/.cpp GPU diagnostic dialog
+            reducedmodewindow.h/.cpp Reduced Mode window
+        cli/                       Command-Line Mode
+          climode.h/.cpp           Standalone REPL
+          cliengine.h/.cpp         Shared command dispatch
+          clihistory.h/.cpp        Persistent history
+          terminalinput.h/.cpp     zsh-style line editor
+
+      libhobbymesh/                Mesh library (future — Phase 5)
+        README.txt
+      hobbymesh/                   HobbyMesh app (future — Phase 5)
+        README.txt
+      plugins/                     Plugin infrastructure (future)
+        README.txt
+
+    tests/                         Unit/integration tests (future)
+      README.txt
+    cmake/                         Custom CMake find modules
+      README.txt
+    scripts/                       Helper scripts (future)
+      README.txt
+    tools/                         Build and packaging
+      README.txt
+      linux/
+        build-appimage.sh
+        README.txt
+      windows/
+        README.txt
+      macos/
+        README.txt
+
+  Placement rules:
+    - Documentation goes in docs/
+    - User/community themes go in themes/ (project root)
+    - Built-in themes go in src/hobbycad/resources/themes/ (compiled in)
+    - Translation source files (.ts) go in translations/
+    - No source code outside src/
+    - Each library/app has its own CMakeLists.txt
+    - Stub directories get a README.txt for git tracking
+    - Public headers in a hobbycad/ subdirectory for namespaced install
+
+================================================================================
+  5. OBJECT NAMING (setObjectName) CONVENTION
+================================================================================
+
+  Every QWidget subclass that could be targeted by a theme stylesheet
+  must call setObjectName() in its constructor.
+
+  Naming rules:
+    - PascalCase (e.g., CliPanel, FeatureTree)
+    - Descriptive of the widget's role, not its class
+    - Suffix "Dock" for QDockWidgets (e.g., TerminalDock)
+    - No prefix (no "m_", no "hobbycad_")
+
+  When adding a new widget:
+    1. Call setObjectName() with a PascalCase name
+    2. Add the name to docs/theming.txt Section 2
+    3. Add a section for it in themes/sample.qss
+    4. Update this document's directory tree if a new file was added
+
+  Current object names are listed in docs/theming.txt.
+
+================================================================================
+  6. LICENSE HEADERS
+================================================================================
+
+  6.1  SPDX License Identifiers
+  -------------------------------
+
+  SPDX (Software Package Data Exchange) is an open standard maintained
+  by the Linux Foundation for communicating software license information.
+  Rather than including the full license text in every file, SPDX
+  defines short, machine-readable identifiers for common licenses.
+
+  The SPDX specification is maintained at:
+    https://spdx.org/licenses/
+
+  HobbyCAD uses the following SPDX identifier:
+
+    SPDX-License-Identifier: GPL-3.0-only
+
+  This means: GNU General Public License version 3.0, and only
+  version 3.0 (not "or later").  The full license text is in the
+  LICENSE file at the project root.
+
+  The SPDX identifier serves as a compact, legally recognized way to
+  state the license.  It is understood by license scanners (REUSE,
+  FOSSology, ScanCode), package managers, and repository hosting
+  services (GitHub, GitLab).
+
+  6.2  Placement
+  ---------------
+
+  The SPDX identifier is placed in the file header block (see
+  Section 2) on its own line:
+
+    //  SPDX-License-Identifier: GPL-3.0-only
+
+  6.3  Exemptions
+  ----------------
+
+  Files that are not copyrightable (e.g., .gitignore patterns,
+  trivial data files) do not need a license header.
+
+  Third-party files retain their original license headers and are
+  documented in AUTHORS.
+
+================================================================================
+  7. INCLUDE ORDER
+================================================================================
+
+  C++ source files use this include order, with each group separated
+  by a blank line:
+
+    1. Own header ("viewportwidget.h")
+    2. Project headers from same module ("climode.h", "clihistory.h")
+    3. Project headers from other modules (<hobbycad/core.h>)
+    4. OCCT headers (<AIS_InteractiveContext.hxx>)
+    5. Qt headers (<QWidget>, <QString>)
+    6. Standard library headers (<iostream>, <cstdlib>)
+
+  Example:
+
+    #include "viewportwidget.h"
+
+    #include <hobbycad/core.h>
+    #include <hobbycad/document.h>
+
+    #include <AIS_Shape.hxx>
+    #include <V3d_View.hxx>
+
+    #include <QMouseEvent>
+    #include <QWidget>
+
+    #include <iostream>
+
+  Headers use angle brackets for installed/system headers and quotes
+  for project-relative headers.
+
+================================================================================
+  8. GENERAL C++ STYLE
+================================================================================
+
+  Language standard:   C++17
+  Naming:
+    - Classes:         PascalCase          (CliEngine, ViewportWidget)
+    - Functions:       camelCase           (buildPrompt, fitAll)
+    - Member vars:     m_camelCase         (m_history, m_viewer)
+    - Local vars:      camelCase           (nativeHandle, topColor)
+    - Constants:       UPPER_SNAKE_CASE    (HOBBYCAD_VERSION)
+    - Enum values:     PascalCase          (AIS_Shaded)
+    - Namespaces:      lowercase           (hobbycad)
+    - File names:      lowercase, no sep   (climode.cpp)
+
+  Braces:              Next line for functions, same line for control flow
+
+    void MyClass::doThing()
+    {
+        if (condition) {
+            ...
+        } else {
+            ...
+        }
+    }
+
+  Indentation:         4 spaces, no tabs
+  Line width:          Soft limit 80, hard limit 100
+  Namespace closing:   }  // namespace hobbycad
+
+  Class layout order:
+    1. public
+    2. signals (Qt)
+    3. public slots (Qt)
+    4. protected
+    5. private slots (Qt)
+    6. private
+
+  Pointer style:       Type* name  (star with type, not name)
+
+    QString* ptr;         // yes
+    QString *ptr;         // no
+
+  Auto:                Use when the type is obvious from context
+
+    auto* widget = new QLineEdit(this);   // obvious
+    auto result = engine->execute(line);  // obvious from RHS
+    int count = list.size();              // prefer explicit for primitives
+
+================================================================================
+  9. INTERNATIONALIZATION (i18n) AND TRANSLATION
+================================================================================
+
+  9.1  Overview
+  --------------
+
+  HobbyCAD uses Qt's built-in internationalization system.  English is
+  the default language — all user-visible strings in source code are
+  written in English and wrapped in tr().  Translations are maintained
+  as XML source files (.ts) edited by translators, compiled to binary
+  files (.qm) by lrelease, and loaded at runtime.
+
+  9.2  The tr() Function
+  -----------------------
+
+  Every user-visible string MUST be wrapped in tr():
+
+    // Correct:
+    m_statusLabel->setText(tr("Ready"));
+    auto* fileMenu = menuBar()->addMenu(tr("&File"));
+    setWindowTitle(tr("About HobbyCAD"));
+
+    // Wrong — not translatable:
+    m_statusLabel->setText("Ready");
+    m_statusLabel->setText(QStringLiteral("Ready"));
+
+  Use QStringLiteral() only for strings that are NOT user-visible:
+  object names, internal identifiers, file extensions, format strings
+  consumed by code.
+
+    setObjectName(QStringLiteral("CliPanel"));    // not user-visible
+    QStringLiteral("*.brep");                     // file filter pattern
+
+  9.3  Context and Disambiguation
+  --------------------------------
+
+  tr() uses the enclosing class name as the translation context.
+  If the same English string appears in multiple classes with different
+  meanings, add a disambiguation comment:
+
+    // In FileMenu:
+    tr("Open", "menu action — open a file")
+
+    // In NetworkDialog:
+    tr("Open", "connection state — port is open")
+
+  9.4  Plurals
+  -------------
+
+  Use tr() with %n for plural forms:
+
+    tr("%n shape(s) loaded", "", count)
+
+  Qt's translation system handles complex plural rules for languages
+  that have more than two plural forms (e.g., Russian, Arabic).
+
+  9.5  Translation Workflow
+  --------------------------
+
+  Source files (.ts) live in translations/ at the project root:
+
+    translations/
+      hobbycad_en.ts         English (reference — generated, not edited)
+      hobbycad_de.ts         German
+      hobbycad_fr.ts         French
+      hobbycad_ja.ts         Japanese
+      hobbycad_pirate.ts     Pirate English (fun/community language)
+
+  Workflow:
+
+    1. Developer writes code with tr() strings
+    2. Run lupdate to extract strings into .ts files:
+
+         lupdate src/ -ts translations/hobbycad_en.ts
+
+    3. Translator edits .ts files using Qt Linguist or a text editor
+       (.ts files are human-readable XML)
+    4. Run lrelease to compile .ts -> .qm:
+
+         lrelease translations/hobbycad_pirate.ts
+
+    5. .qm files are embedded into the binary via the .qrc resource
+       file, or installed alongside the application
+
+  9.6  Loading Translations at Runtime
+  --------------------------------------
+
+  The application loads translations at startup in main.cpp:
+
+    // 1. Try user-selected language from preferences
+    // 2. Fall back to system locale
+    // 3. Fall back to English (built-in, no translation needed)
+
+    QTranslator translator;
+    QString locale = preferredLanguage();  // from settings
+    if (locale.isEmpty()) {
+        locale = QLocale::system().name(); // e.g., "de_DE"
+    }
+
+    // Try embedded resource first, then external file
+    if (translator.load(":/translations/hobbycad_" + locale)) {
+        app.installTranslator(&translator);
+    } else if (translator.load("translations/hobbycad_" + locale)) {
+        app.installTranslator(&translator);
+    }
+    // If neither loads, English strings from tr() are used as-is.
+
+  9.7  Fun / Community Languages
+  --------------------------------
+
+  Non-standard languages like Pirate, Lolcat, Shakespearean, etc.
+  are welcome as community contributions.  They follow the same
+  .ts file format and workflow.  The language name is freeform:
+
+    hobbycad_pirate.ts     — "Arr, open ye BREP file!"
+    hobbycad_lolcat.ts     — "I CAN HAZ GEOMETRY?"
+    hobbycad_shakespeare.ts — "Pray, save thine document"
+
+  These are listed in the language selector alongside standard
+  locales.  The display name comes from the .ts file metadata.
+
+  9.8  Strings That Must NOT Be Translated
+  ------------------------------------------
+
+  The following must remain in English regardless of locale:
+
+    - BREP, STEP, STL, IGES (file format names)
+    - OCCT, Qt, OpenGL (technology names)
+    - Command names in the CLI (help, open, save, exit)
+    - File extensions (.brep, .brp, .qss, .qm)
+    - Object names (setObjectName values)
+    - Debug/log output
+    - SPDX identifiers
+
+================================================================================
+  10. THEME AND RESOURCE EMBEDDING
+================================================================================
+
+  10.1  Resource System Overview
+  -------------------------------
+
+  Qt's resource system (.qrc) compiles files into the application
+  binary at build time.  This ensures built-in themes and translations
+  are always available without requiring external files.
+
+  Resource files are accessed at runtime via the ":/" prefix:
+
+    QFile f(":/themes/default.qss");
+
+  10.2  File Layout
+  ------------------
+
+  Embedded resources live in src/hobbycad/resources/:
+
+    resources/
+      hobbycad.qrc             Resource collection file
+      themes/
+        default.qss            Platform-native defaults (compiled in)
+        darkmode.qss           Dark mode (compiled in)
+      translations/
+        hobbycad_en.qm         Compiled English translation
+        hobbycad_pirate.qm     Compiled Pirate translation
+
+  User/community themes live in themes/ at the project root:
+
+    themes/
+      sample.qss               Reference (all IDs documented)
+      darkmode.qss             Community dark mode variant
+
+  10.3  Theme Loading Order (Runtime)
+  ------------------------------------
+
+  The application resolves themes in this priority order:
+
+    1. Command-line flag:    --theme /path/to/mytheme.qss
+    2. Environment variable: HOBBYCAD_THEME=/path/to/mytheme.qss
+    3. User config file:     ~/.config/HobbyCAD/theme.qss
+    4. Built-in default:     :/themes/default.qss
+
+  At each step, if the file exists and is readable, it is loaded
+  and applied via qApp->setStyleSheet().  The first match wins.
+
+  10.4  Compile-Time vs Runtime Themes
+  --------------------------------------
+
+  Built-in themes (src/hobbycad/resources/themes/):
+    - Compiled into the binary via .qrc
+    - Always available, no external files needed
+    - Versioned with the source code
+    - Updated only with new releases
+
+  User/community themes (themes/ at project root, or ~/.config):
+    - Loaded at runtime from disk
+    - Can be modified without rebuilding
+    - Distributed separately from the application
+    - Community contributions welcome
+
+  The built-in default.qss and darkmode.qss should be kept minimal
+  and stable.  The community darkmode.qss in themes/ can evolve
+  independently with user feedback.
+
+

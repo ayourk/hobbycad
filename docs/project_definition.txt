@@ -3,6 +3,7 @@
 ================================================================================
 
   Project          : HobbyCAD
+  File             : docs/project_definition.txt
   Document Version : 0.0.1.1
   Date             : 2026-02-06
   Format           : Plain Text (all project documentation is plain text)
@@ -2088,6 +2089,21 @@
       file format parsing, Python scripting and plugin execution,
       git/network integration, supply chain, UI/UX trust issues,
       credential storage, and security configuration defaults.
+
+    coding_standards.txt
+      File header formats for all file types (C++, CMake, shell,
+      QSS, plain text, Markdown), file naming conventions, directory
+      structure, setObjectName convention, include order, and
+      general C++ style guide.
+
+    theming.txt
+      GUI theming guide: how to load Qt stylesheets, complete
+      widget objectName reference, QSS class selectors, example
+      dark theme, built-in terminal styling, and platform notes.
+
+    themes/sample.qss
+      Reference Qt stylesheet listing every widget ID with its
+      default values.  Starting point for custom themes.
 
     AUTHORS
       Project author and contributor listing with dates and areas

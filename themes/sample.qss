@@ -1,0 +1,393 @@
+/* =====================================================================
+ *  themes/sample.qss — HobbyCAD Default Theme (Reference)
+ * =====================================================================
+ *
+ *  File: themes/sample.qss
+ *
+ *  This stylesheet reproduces the application's built-in default
+ *  appearance.  Every widget with a setObjectName() call is listed
+ *  here with its actual default values.
+ *
+ *  Use this as a starting point for custom themes.  Copy this file,
+ *  rename it, and modify the values.  Load it with:
+ *
+ *      QFile f("themes/mytheme.qss");
+ *      if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+ *          qApp->setStyleSheet(f.readAll());
+ *
+ *  Selector syntax:
+ *      QClassName          — targets all instances of that Qt class
+ *      #ObjectName         — targets a specific named widget
+ *      QClassName#Name     — targets a specific widget by class + name
+ *
+ *  See docs/theming.txt for the full theming guide.
+ *
+ *  SPDX-License-Identifier: GPL-3.0-only
+ *
+ * ===================================================================== */
+
+
+/* =====================================================================
+ *  SECTION 1:  TOP-LEVEL WINDOWS
+ *
+ *  #MainWindow         — Base QMainWindow (both modes inherit this)
+ *  #FullModeWindow     — Full Mode (overrides MainWindow objectName)
+ *  #ReducedModeWindow  — Reduced Mode (overrides MainWindow objectName)
+ *
+ *  Note: The subclass setObjectName() call overwrites the base class
+ *  name, so at runtime the window is either #FullModeWindow or
+ *  #ReducedModeWindow, never #MainWindow.  Use QMainWindow for rules
+ *  that should apply to both modes.
+ * ===================================================================== */
+
+QMainWindow {
+    /* Platform default — no override by default.
+     * Uncomment to force a background: */
+    /* background-color: #efeff0; */
+}
+
+QMainWindow#FullModeWindow {
+    /* Full Mode specific — no extra styling by default */
+}
+
+QMainWindow#ReducedModeWindow {
+    /* Reduced Mode specific — no extra styling by default */
+}
+
+
+/* =====================================================================
+ *  SECTION 2:  MENU BAR AND MENUS
+ *
+ *  The menu bar and menus do not have custom objectNames — they use
+ *  Qt's default naming.  Target them by class.
+ *
+ *  Menu bar:          QMenuBar
+ *  Individual menus:  QMenu
+ *  Menu items:        QMenu::item
+ *  Separators:        QMenu::separator
+ * ===================================================================== */
+
+QMenuBar {
+    /* Platform default — no override by default */
+    /* background-color: palette(window); */
+    /* color: palette(window-text); */
+}
+
+QMenuBar::item:selected {
+    /* Platform default highlight */
+    /* background-color: palette(highlight); */
+}
+
+QMenu {
+    /* Platform default */
+    /* background-color: palette(window); */
+    /* color: palette(window-text); */
+    /* border: 1px solid palette(mid); */
+}
+
+QMenu::item:selected {
+    /* Platform default highlight */
+    /* background-color: palette(highlight); */
+    /* color: palette(highlighted-text); */
+}
+
+QMenu::separator {
+    /* height: 1px; */
+    /* background-color: palette(mid); */
+    /* margin: 4px 8px; */
+}
+
+
+/* =====================================================================
+ *  SECTION 3:  STATUS BAR
+ *
+ *  #StatusBar    — QStatusBar at the bottom of the window
+ *  #StatusLabel  — QLabel, left side ("Ready", "Opened: ...", etc.)
+ *  #GlModeLabel  — QLabel, right side (OpenGL version or "⚠ Reduced")
+ * ===================================================================== */
+
+QStatusBar#StatusBar {
+    /* Platform default */
+    /* background-color: palette(window); */
+    /* border-top: 1px solid palette(mid); */
+}
+
+QLabel#StatusLabel {
+    /* Platform default text color */
+    /* color: palette(window-text); */
+    /* padding-left: 4px; */
+}
+
+QLabel#GlModeLabel {
+    /* Platform default text color.
+     * In Reduced Mode this shows "⚠ Reduced Mode" —
+     * consider coloring it for visibility: */
+    /* color: palette(window-text); */
+    /* padding-right: 4px; */
+}
+
+
+/* =====================================================================
+ *  SECTION 4:  DOCK PANELS
+ *
+ *  #FeatureTreeDock  — QDockWidget wrapping the feature tree (left)
+ *  #TerminalDock     — QDockWidget wrapping the CLI panel (bottom)
+ *
+ *  Dock title bars can be styled with QDockWidget::title.
+ *  Dock close/float buttons: QDockWidget::close-button,
+ *                             QDockWidget::float-button
+ * ===================================================================== */
+
+QDockWidget#FeatureTreeDock {
+    /* Platform default */
+    /* color: palette(window-text); */
+}
+
+QDockWidget#FeatureTreeDock::title {
+    /* Platform default title bar */
+    /* background-color: palette(window); */
+    /* padding: 4px; */
+    /* text-align: left; */
+}
+
+QDockWidget#TerminalDock {
+    /* Platform default */
+    /* color: palette(window-text); */
+}
+
+QDockWidget#TerminalDock::title {
+    /* Platform default title bar */
+    /* background-color: palette(window); */
+    /* padding: 4px; */
+    /* text-align: left; */
+}
+
+
+/* =====================================================================
+ *  SECTION 5:  FEATURE TREE
+ *
+ *  #FeatureTree — QTreeWidget inside #FeatureTreeDock
+ *
+ *  Items:     QTreeWidget::item
+ *  Selected:  QTreeWidget::item:selected
+ *  Branches:  QTreeWidget::branch
+ *  Header:    QHeaderView::section
+ * ===================================================================== */
+
+QTreeWidget#FeatureTree {
+    /* Platform default */
+    /* background-color: palette(base); */
+    /* color: palette(text); */
+    /* border: 1px solid palette(mid); */
+}
+
+QTreeWidget#FeatureTree::item {
+    /* padding: 2px 0; */
+}
+
+QTreeWidget#FeatureTree::item:selected {
+    /* background-color: palette(highlight); */
+    /* color: palette(highlighted-text); */
+}
+
+QTreeWidget#FeatureTree QHeaderView::section {
+    /* background-color: palette(button); */
+    /* color: palette(button-text); */
+    /* padding: 4px; */
+    /* border: none; */
+    /* border-bottom: 1px solid palette(mid); */
+}
+
+
+/* =====================================================================
+ *  SECTION 6:  3D VIEWPORT (Full Mode)
+ *
+ *  #Viewport — QWidget with WA_PaintOnScreen, rendered by OCCT
+ *
+ *  IMPORTANT: QSS background-color has NO EFFECT on this widget.
+ *  The viewport background is an OCCT gradient set in C++:
+ *
+ *      Top:    rgb(38, 45, 56)   =  #262d38
+ *      Bottom: rgb(89, 102, 122) =  #59667a
+ *
+ *  To change the viewport background, modify the Quantity_Color
+ *  values in viewportwidget.cpp :: initViewer().
+ * ===================================================================== */
+
+QWidget#Viewport {
+    /* No effect — OCCT owns this surface.
+     * Documented here for completeness. */
+    /* background-color: #262d38; */   /* would be ignored */
+}
+
+
+/* =====================================================================
+ *  SECTION 7:  DISABLED VIEWPORT (Reduced Mode)
+ *
+ *  #ReducedViewport — QFrame shown when OpenGL 3.3 is unavailable
+ *
+ *  Displays a dark background with a warning icon and message.
+ *  The warning icon color (#dcb432) and text color (#b4b9c3) are
+ *  painted in C++ via QPainter, not via stylesheet.
+ *
+ *  The background color IS controllable via QSS.
+ * ===================================================================== */
+
+QFrame#ReducedViewport {
+    background-color: #2d3037;
+    border: 1px solid palette(mid);
+    /* Painted text (not QSS-controllable):
+     *   Warning icon:  #dcb432  (amber)
+     *   Message text:  #b4b9c3  (light grey)
+     */
+}
+
+
+/* =====================================================================
+ *  SECTION 8:  CLI TERMINAL PANEL
+ *
+ *  #CliPanel — QPlainTextEdit functioning as a terminal emulator.
+ *              The prompt and user input are on the same line at the
+ *              bottom of the document.  Text above the prompt is
+ *              read-only.  The cursor sits after the prompt.
+ *
+ *  The terminal has built-in dark styling applied in clipanel.cpp.
+ *  The values below match those built-in defaults.  A global
+ *  application stylesheet overrides widget-level stylesheets, so
+ *  including these selectors in your theme will take effect.
+ * ===================================================================== */
+
+QPlainTextEdit#CliPanel {
+    background-color: #1e2126;
+    color: #cccccc;
+    border: none;
+    selection-background-color: #3a4250;
+    selection-color: #ffffff;
+    /* Font is set programmatically to the system monospace font
+     * at 10pt.  Override here if desired:
+     * font-family: "Hack", "DejaVu Sans Mono", monospace;
+     * font-size: 10pt;
+     */
+}
+
+
+/* =====================================================================
+ *  SECTION 9:  SPLITTER HANDLES
+ *
+ *  QSplitter::handle — the draggable divider between panes.
+ *  In Reduced Mode, a vertical splitter separates the disabled
+ *  viewport from the CLI panel.
+ * ===================================================================== */
+
+QSplitter::handle:vertical {
+    /* Platform default */
+    /* background-color: palette(mid); */
+    height: 4px;
+}
+
+QSplitter::handle:horizontal {
+    /* Platform default */
+    /* background-color: palette(mid); */
+    width: 4px;
+}
+
+
+/* =====================================================================
+ *  SECTION 10:  DIALOGS
+ *
+ *  #AboutDialog      — Help > About HobbyCAD dialog
+ *  #DiagnosticDialog  — OpenGL diagnostic dialog (Reduced Mode)
+ * ===================================================================== */
+
+QDialog#AboutDialog {
+    /* Platform default */
+    /* background-color: palette(window); */
+    /* color: palette(window-text); */
+}
+
+QDialog#DiagnosticDialog {
+    /* Platform default */
+    /* background-color: palette(window); */
+    /* color: palette(window-text); */
+}
+
+
+/* =====================================================================
+ *  SECTION 11:  BUTTONS
+ *
+ *  No buttons have custom objectNames yet.  Target by class.
+ *  Buttons appear in dialogs (Close, Copy, Continue, Exit).
+ * ===================================================================== */
+
+QPushButton {
+    /* Platform default */
+    /* background-color: palette(button); */
+    /* color: palette(button-text); */
+    /* border: 1px solid palette(mid); */
+    /* border-radius: 3px; */
+    /* padding: 5px 15px; */
+}
+
+QPushButton:hover {
+    /* background-color: palette(light); */
+}
+
+QPushButton:pressed {
+    /* background-color: palette(dark); */
+}
+
+
+/* =====================================================================
+ *  SECTION 12:  SCROLLBARS
+ *
+ *  Appear in CliPanel, FeatureTree, and any future scrollable areas.
+ * ===================================================================== */
+
+QScrollBar:vertical {
+    /* Platform default */
+    /* background: palette(base); */
+    /* width: 12px; */
+}
+
+QScrollBar::handle:vertical {
+    /* background: palette(mid); */
+    /* border-radius: 4px; */
+    /* min-height: 20px; */
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    /* height: 0px; */  /* hides arrow buttons */
+}
+
+QScrollBar:horizontal {
+    /* background: palette(base); */
+    /* height: 12px; */
+}
+
+QScrollBar::handle:horizontal {
+    /* background: palette(mid); */
+    /* border-radius: 4px; */
+    /* min-width: 20px; */
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    /* width: 0px; */
+}
+
+
+/* =====================================================================
+ *  SECTION 13:  TOOLTIPS
+ *
+ *  Tooltips appear on the GlModeLabel and potentially future widgets.
+ * ===================================================================== */
+
+QToolTip {
+    /* Platform default */
+    /* background-color: palette(tooltip-base); */
+    /* color: palette(tooltip-text); */
+    /* border: 1px solid palette(mid); */
+    /* padding: 4px; */
+}
+

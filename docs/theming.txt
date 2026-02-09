@@ -1,0 +1,264 @@
+// =====================================================================
+//  docs/theming.txt — HobbyCAD GUI Theming Guide
+// =====================================================================
+//
+//  File: docs/theming.txt
+//
+//  HobbyCAD uses Qt stylesheets (QSS) for GUI theming.  Every
+//  significant widget has a named objectName so it can be targeted
+//  individually.  Qt stylesheets use a CSS-like syntax.
+//
+//  This document covers:
+//    1. How to load a theme
+//    2. Widget object names reference
+//    3. Qt class names for broad selectors
+//    4. Writing a theme stylesheet
+//    5. Built-in dark terminal styling
+//    6. Tips and gotchas
+//
+//  SPDX-License-Identifier: GPL-3.0-only
+//
+// =====================================================================
+
+
+== 1.  How to Load a Theme ==
+
+Themes are plain-text .qss files.  To apply one, the application
+will load the file at startup and call:
+
+    qApp->setStyleSheet(fileContents);
+
+Future phases will add:
+  - A preferences dialog with theme selection
+  - A HOBBYCAD_THEME environment variable
+  - A --theme <file.qss> command-line flag
+  - Hot-reload of themes during development
+
+For development/testing today, you can apply a stylesheet by adding
+this to main.cpp after QApplication creation:
+
+    QFile f("path/to/theme.qss");
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        app.setStyleSheet(f.readAll());
+    }
+
+
+== 2.  Widget Object Names Reference ==
+
+Every named widget can be targeted with the #id selector in QSS:
+
+    #Viewport { border: 2px solid #ff0000; }
+
+Below is the complete list of object names as of Phase 0.
+
+--- Top-level windows ---
+
+  MainWindow              Base QMainWindow (inherited by both modes)
+  FullModeWindow          Full Mode window (has 3D viewport)
+  ReducedModeWindow       Reduced Mode window (viewport disabled)
+
+--- Viewport ---
+
+  Viewport                Full Mode 3D viewport (QWidget, OCCT)
+  ReducedViewport         Reduced Mode disabled viewport (QFrame)
+
+--- Dock panels ---
+
+  FeatureTreeDock         QDockWidget wrapping the feature tree
+  FeatureTree             QTreeWidget inside the feature tree dock
+  TerminalDock            QDockWidget wrapping the CLI panel
+
+--- CLI terminal panel ---
+
+  CliPanel                QPlainTextEdit — terminal emulator widget
+                          (prompt + input on same line, cursor at end)
+
+--- Status bar ---
+
+  StatusBar               QStatusBar at the bottom of the window
+  StatusLabel             QLabel — left side status text ("Ready")
+  GlModeLabel             QLabel — right side OpenGL/mode indicator
+
+--- Dialogs ---
+
+  AboutDialog             About HobbyCAD dialog
+  DiagnosticDialog        OpenGL diagnostic dialog (Reduced Mode)
+
+
+== 3.  Qt Class Names for Broad Selectors ==
+
+QSS can target widgets by their Qt class name for broad styling.
+These apply to ALL instances of that class:
+
+    QMainWindow       { background: #2b2b2b; }
+    QMenuBar          { background: #333; color: #eee; }
+    QMenu             { background: #333; color: #eee; }
+    QMenu::item:selected { background: #555; }
+    QStatusBar        { background: #2b2b2b; color: #ccc; }
+    QDockWidget       { titlebar-close-icon: url(...); }
+    QDockWidget::title { background: #383838; }
+    QTreeWidget       { background: #2b2b2b; color: #ccc; }
+    QPlainTextEdit    { background: #1e2126; color: #ccc; }
+    QLineEdit         { background: #262930; color: #e6e6e6; }
+    QPushButton       { background: #444; color: #eee; }
+    QDialog           { background: #2b2b2b; color: #ccc; }
+    QLabel            { color: #ccc; }
+    QSplitter::handle { background: #3a3f4b; }
+
+Combine class and ID for precision:
+
+    QPlainTextEdit#CliPanel  { background: #1e2126; }
+    QLabel#GlModeLabel       { color: #ffaa00; }
+
+
+== 4.  Writing a Theme Stylesheet ==
+
+A complete dark theme example:
+
+    /* --- Window background --- */
+    QMainWindow, QDialog {
+        background-color: #2b2d30;
+        color: #cccccc;
+    }
+
+    /* --- Menu bar --- */
+    QMenuBar {
+        background-color: #2b2d30;
+        color: #cccccc;
+    }
+    QMenuBar::item:selected {
+        background-color: #3d4047;
+    }
+    QMenu {
+        background-color: #2b2d30;
+        color: #cccccc;
+        border: 1px solid #3a3f4b;
+    }
+    QMenu::item:selected {
+        background-color: #3d4047;
+    }
+
+    /* --- Status bar --- */
+    QStatusBar {
+        background-color: #2b2d30;
+        color: #999999;
+    }
+
+    /* --- Dock panels --- */
+    QDockWidget {
+        color: #cccccc;
+    }
+    QDockWidget::title {
+        background-color: #323438;
+        padding: 4px;
+    }
+
+    /* --- Feature tree --- */
+    QTreeWidget#FeatureTree {
+        background-color: #2b2d30;
+        color: #cccccc;
+        border: none;
+    }
+    QTreeWidget#FeatureTree::item:selected {
+        background-color: #3d4047;
+    }
+
+    /* --- Terminal panel --- */
+    QPlainTextEdit#CliPanel {
+        background-color: #1e2126;
+        color: #cccccc;
+        border: none;
+        selection-background-color: #3a4250;
+    }
+
+    /* --- Splitter handles --- */
+    QSplitter::handle {
+        background-color: #3a3f4b;
+        height: 3px;
+    }
+
+    /* --- Buttons --- */
+    QPushButton {
+        background-color: #3d4047;
+        color: #cccccc;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 5px 15px;
+    }
+    QPushButton:hover {
+        background-color: #4a4d55;
+    }
+    QPushButton:pressed {
+        background-color: #333;
+    }
+
+    /* --- Scrollbars --- */
+    QScrollBar:vertical {
+        background: #2b2d30;
+        width: 10px;
+    }
+    QScrollBar::handle:vertical {
+        background: #555;
+        border-radius: 4px;
+        min-height: 20px;
+    }
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {
+        height: 0px;
+    }
+
+
+== 5.  Built-in Dark Terminal Styling ==
+
+The CLI panel (#CliPanel) has hardcoded dark styling
+applied via stylesheet in clipanel.cpp.  A global theme stylesheet
+will override these because application-level stylesheets have
+higher specificity than widget-level ones.
+
+If your theme is light and you want to keep the terminal dark, use
+the #id selector to re-apply dark colors:
+
+    QPlainTextEdit#CliPanel {
+        background-color: #1e2126;
+        color: #cccccc;
+    }
+
+If your theme is dark and you want the terminal to match, simply
+include the terminal selector in your theme — it will override the
+built-in default.
+
+
+== 6.  Tips and Gotchas ==
+
+Specificity:
+  Application-level stylesheet > widget-level stylesheet.
+  #id selector > class selector > universal selector.
+  If a theme sets QPlainTextEdit colors globally, it will
+  affect the terminal.  Use #id selectors for precision.
+
+Viewport (Full Mode):
+  The 3D viewport (#Viewport) uses WA_PaintOnScreen with OCCT
+  owning the OpenGL context.  QSS background-color has no
+  effect on it — the viewport background is set via OCCT's
+  V3d_View::SetBgGradientColors() in viewportwidget.cpp.
+
+Fonts:
+  QSS can set fonts, but the terminal panel uses
+  QFontDatabase::FixedFont programmatically.  To override:
+      #CliPanel { font-family: "JetBrains Mono"; font-size: 10pt; }
+
+Testing themes:
+  Until the preferences UI exists, the fastest way to iterate
+  is to load the stylesheet in main.cpp (see section 1) and
+  rebuild.  A hot-reload mechanism is planned.
+
+Adding new widgets:
+  When creating new widgets, always call setObjectName() with
+  a descriptive PascalCase name.  Add the name to this document
+  so theme authors can target it.
+
+Platform differences:
+  Some Qt widgets render differently on GTK vs KDE vs macOS.
+  QSS overrides platform style completely for targeted widgets.
+  Test on your target platforms.
+
