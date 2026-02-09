@@ -3,6 +3,7 @@
 ================================================================================
 
   Project          : HobbyCAD
+  File             : docs/dev_environment_setup.txt
   Document Version : 0.0.1.1
   Date             : 2026-02-06
   Format           : Plain Text (all project documentation is plain text)
@@ -1022,55 +1023,88 @@
   10. PROJECT DIRECTORY STRUCTURE
 ================================================================================
 
-  Recommended directory layout for the HobbyCAD source tree:
+  Directory layout for the HobbyCAD source tree:
 
     hobbycad/
-      CMakeLists.txt             Top-level build file
-      README.md                  Project overview
-      LICENSE                    GPL 3.0 (only) license text
-      AUTHORS                    Contributors list
+      CMakeLists.txt               Top-level build file
+      README.md                    Project overview
+      LICENSE                      GPL 3.0 (only) license text
+      AUTHORS                      Contributors list
+      .gitignore                   Version control exclusions
       devtest/
-        CMakeLists.txt           Dependency verification build
-        depcheck.cpp             Test program (all phases)
+        CMakeLists.txt             Dependency verification build
+        depcheck.cpp               Test program (all phases)
         README.txt                 Usage and expected output
       docs/
         project_definition.txt
         cad_library_recommendations.txt
         cad_use_case_document.txt
-        dev_environment_setup.txt (this document)
+        dev_environment_setup.txt  (this document)
         security_risks.txt
+        coding_standards.txt       File conventions and C++ style
+        theming.txt                GUI theming guide
+      themes/
+        sample.qss                 Reference theme (all widget IDs)
+        darkmode.qss               Community dark mode theme
+      translations/
+        hobbycad_en.ts             English reference (generated)
       src/
-        hobbycad/
-          main.cpp               Application entry point
+        libhobbycad/               Reusable core library (no GUI)
           CMakeLists.txt
-          app/
-            mainwindow.h/.cpp    Qt main window
-            viewportwidget.h/.cpp  OCCT AIS viewer widget
-          core/
-            document.h/.cpp      Document model (bodies, features)
-            brep_io.h/.cpp       BREP file read/write
+          hobbycad/                Public headers (installed as hobbycad/*.h)
+            core.h                 Library init/shutdown, export macros
+            document.h             Document model (shapes, file path)
+            brep_io.h              BREP file read/write utilities
+            opengl_info.h          OpenGL capability query
+          core.cpp
+          document.cpp
+          brep_io.cpp
+          opengl_info.cpp
+        hobbycad/                  HobbyCAD application executable
           CMakeLists.txt
-        libhobbycad/
-          CMakeLists.txt         Shared library build
-        hobbymesh/               (future — Phase 5)
-          CMakeLists.txt
-      tests/
-        CMakeLists.txt
-        test_brep_io.cpp
-      cmake/
-        FindOpenCASCADE.cmake    Custom find module (if needed)
-      scripts/
-        install_deps_24.04.sh    Dependency install script (24.04)
-        install_deps_22.04.sh    Dependency install script (22.04)
+          main.cpp                 Startup dispatcher (mode selection)
+          resources/               Compile-time embedded resources
+            hobbycad.qrc           Qt resource collection file
+            themes/
+              default.qss          Built-in default theme
+              darkmode.qss         Built-in dark mode theme
+          gui/                     Shared GUI components
+            mainwindow.h/.cpp      Base main window (menus, status, docks)
+            aboutdialog.h/.cpp     About HobbyCAD dialog
+            clipanel.h/.cpp        Embedded CLI terminal widget
+            full/                  Full Mode (OpenGL 3.3+)
+              viewportwidget.h/.cpp  OCCT AIS viewer (plain QWidget)
+              fullmodewindow.h/.cpp  Full Mode main window
+            reduced/               Reduced Mode (no OpenGL)
+              reducedviewport.h/.cpp  Disabled viewport placeholder
+              diagnosticdialog.h/.cpp GPU diagnostic dialog
+              reducedmodewindow.h/.cpp Reduced Mode main window
+          cli/                     Command-Line Mode
+            climode.h/.cpp         Standalone REPL
+            cliengine.h/.cpp       Shared command dispatch engine
+            clihistory.h/.cpp      Persistent command history
+            terminalinput.h/.cpp   zsh-style terminal line editor
+        libhobbymesh/              Reusable mesh library (future — Phase 5)
+          README.txt               Stub for git tracking
+        hobbymesh/                 HobbyMesh application (future — Phase 5)
+          README.txt               Stub for git tracking
+        plugins/                   Plugin infrastructure (future — Phase 3+)
+          README.txt               Stub for git tracking
+      tests/                       Unit and integration tests (future)
+        README.txt                 Stub for git tracking
+      cmake/                       Custom CMake find modules
+        README.txt                 Stub for git tracking
+      scripts/                     Helper scripts (future)
+        README.txt                 Stub for git tracking
       tools/
-        README.txt               Build and packaging tools
+        README.txt                 Build and packaging tools
         linux/
-          build-appimage.sh      AppImage build + logging script
-          README.txt             Linux packaging details
+          build-appimage.sh        AppImage build + logging script
+          README.txt               Linux packaging details
         windows/
-          README.txt             Windows packaging (future)
+          README.txt               Windows packaging (future)
         macos/
-          README.txt             macOS packaging (future)
+          README.txt               macOS packaging (future)
 
 ================================================================================
   11. BUILDING PHASE 0

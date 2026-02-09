@@ -1,0 +1,39 @@
+/* =====================================================================
+ *  src/hobbycad/resources/themes/default.qss — Built-in Default Theme
+ * =====================================================================
+ *
+ *  File: src/hobbycad/resources/themes/default.qss
+ *
+ *  This is the compiled-in default theme.  It applies minimal
+ *  styling, allowing the platform's native Qt style to show through
+ *  for most widgets.  Only the terminal panel and reduced viewport
+ *  have explicit dark styling.
+ *
+ *  This file is embedded in the binary via hobbycad.qrc and loaded
+ *  as the fallback when no user theme is specified.
+ *
+ *  SPDX-License-Identifier: GPL-3.0-only
+ *
+ * ===================================================================== */
+
+
+/* ----- Terminal panel: always dark regardless of platform theme ----- */
+
+QPlainTextEdit#CliPanel {
+    background-color: #1e2126;
+    color: #cccccc;
+    border: none;
+    selection-background-color: #3a4250;
+    selection-color: #ffffff;
+}
+
+
+/* ----- Reduced viewport: dark placeholder ----- */
+
+QFrame#ReducedViewport {
+    background-color: #2d3037;
+}
+
+
+/* ----- Everything else: platform native (no overrides) ----- */
+

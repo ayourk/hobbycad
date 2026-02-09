@@ -1,0 +1,408 @@
+/* =====================================================================
+ *  themes/darkmode.qss — Community Dark Mode Theme
+ * =====================================================================
+ *
+ *  File: themes/darkmode.qss
+ *
+ *  Community-maintained dark theme for HobbyCAD.  This file lives at
+ *  the project root and can be loaded at runtime without rebuilding.
+ *
+ *  This starts as a copy of the built-in dark mode theme
+ *  (src/hobbycad/resources/themes/darkmode.qss) but is expected to
+ *  diverge based on community feedback.
+ *
+ *  To use at runtime:
+ *      HOBBYCAD_THEME=themes/darkmode.qss ./hobbycad
+ *
+ *  SPDX-License-Identifier: GPL-3.0-only
+ *
+ * ===================================================================== */
+
+
+/* =====================================================================
+ *  Global defaults
+ * ===================================================================== */
+
+QWidget {
+    background-color: #2b2d30;
+    color: #cccccc;
+}
+
+QMainWindow {
+    background-color: #2b2d30;
+}
+
+
+/* =====================================================================
+ *  Menu bar and menus
+ * ===================================================================== */
+
+QMenuBar {
+    background-color: #2b2d30;
+    color: #cccccc;
+    border-bottom: 1px solid #3a3f4b;
+}
+
+QMenuBar::item {
+    padding: 4px 8px;
+    background: transparent;
+}
+
+QMenuBar::item:selected {
+    background-color: #3d4047;
+}
+
+QMenu {
+    background-color: #2b2d30;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    padding: 4px 0;
+}
+
+QMenu::item {
+    padding: 4px 24px 4px 20px;
+}
+
+QMenu::item:selected {
+    background-color: #2d5a8c;
+    color: #ffffff;
+}
+
+QMenu::item:disabled {
+    color: #666666;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #3a3f4b;
+    margin: 4px 8px;
+}
+
+QMenu::indicator {
+    width: 14px;
+    height: 14px;
+    padding-left: 6px;
+}
+
+
+/* =====================================================================
+ *  Status bar
+ * ===================================================================== */
+
+QStatusBar#StatusBar {
+    background-color: #2b2d30;
+    color: #999999;
+    border-top: 1px solid #3a3f4b;
+}
+
+QLabel#StatusLabel {
+    color: #999999;
+    padding-left: 4px;
+}
+
+QLabel#GlModeLabel {
+    color: #999999;
+    padding-right: 4px;
+}
+
+
+/* =====================================================================
+ *  Dock panels
+ * ===================================================================== */
+
+QDockWidget {
+    color: #cccccc;
+    titlebar-close-icon: none;
+    titlebar-normal-icon: none;
+}
+
+QDockWidget::title {
+    background-color: #323438;
+    border: 1px solid #3a3f4b;
+    padding: 5px;
+    text-align: left;
+}
+
+QDockWidget::close-button,
+QDockWidget::float-button {
+    background: transparent;
+    border: none;
+    padding: 2px;
+}
+
+QDockWidget::close-button:hover,
+QDockWidget::float-button:hover {
+    background-color: #3d4047;
+}
+
+
+/* =====================================================================
+ *  Feature tree
+ * ===================================================================== */
+
+QTreeWidget#FeatureTree {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: none;
+    outline: none;
+}
+
+QTreeWidget#FeatureTree::item {
+    padding: 3px 0;
+}
+
+QTreeWidget#FeatureTree::item:selected {
+    background-color: #2d5a8c;
+    color: #ffffff;
+}
+
+QTreeWidget#FeatureTree::item:hover {
+    background-color: #3d4047;
+}
+
+QTreeWidget#FeatureTree QHeaderView::section {
+    background-color: #323438;
+    color: #999999;
+    padding: 4px;
+    border: none;
+    border-bottom: 1px solid #3a3f4b;
+}
+
+QTreeWidget#FeatureTree::branch:has-children:closed {
+    image: none;
+}
+
+QTreeWidget#FeatureTree::branch:has-children:open {
+    image: none;
+}
+
+
+/* =====================================================================
+ *  Terminal panel
+ * ===================================================================== */
+
+QPlainTextEdit#CliPanel {
+    background-color: #1e2126;
+    color: #cccccc;
+    border: none;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+
+/* =====================================================================
+ *  3D Viewport — OCCT owns the surface; this has no visual effect
+ *  but is included for completeness.
+ * ===================================================================== */
+
+QWidget#Viewport {
+    background-color: #1e2126;
+}
+
+
+/* =====================================================================
+ *  Reduced viewport placeholder
+ * ===================================================================== */
+
+QFrame#ReducedViewport {
+    background-color: #1a1a1d;
+    border: 1px solid #3a3f4b;
+}
+
+
+/* =====================================================================
+ *  Dialogs
+ * ===================================================================== */
+
+QDialog {
+    background-color: #2b2d30;
+    color: #cccccc;
+}
+
+QDialog QLabel {
+    color: #cccccc;
+}
+
+
+/* =====================================================================
+ *  Buttons
+ * ===================================================================== */
+
+QPushButton {
+    background-color: #3d4047;
+    color: #cccccc;
+    border: 1px solid #4a4d55;
+    border-radius: 3px;
+    padding: 5px 16px;
+    min-width: 60px;
+}
+
+QPushButton:hover {
+    background-color: #4a4d55;
+    border-color: #5a5d65;
+}
+
+QPushButton:pressed {
+    background-color: #2d5a8c;
+    border-color: #4a90d9;
+    color: #ffffff;
+}
+
+QPushButton:disabled {
+    background-color: #2b2d30;
+    color: #666666;
+    border-color: #3a3f4b;
+}
+
+QPushButton:focus {
+    border-color: #4a90d9;
+    outline: none;
+}
+
+
+/* =====================================================================
+ *  Text inputs (QLineEdit, QPlainTextEdit — not terminal-specific)
+ * ===================================================================== */
+
+QLineEdit {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    border-radius: 2px;
+    padding: 3px 6px;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus {
+    border-color: #4a90d9;
+}
+
+QPlainTextEdit {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+
+/* =====================================================================
+ *  Splitter handles
+ * ===================================================================== */
+
+QSplitter::handle {
+    background-color: #3a3f4b;
+}
+
+QSplitter::handle:vertical {
+    height: 3px;
+}
+
+QSplitter::handle:horizontal {
+    width: 3px;
+}
+
+QSplitter::handle:hover {
+    background-color: #4a90d9;
+}
+
+
+/* =====================================================================
+ *  Scrollbars
+ * ===================================================================== */
+
+QScrollBar:vertical {
+    background: #1a1a1d;
+    width: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #4a4d55;
+    border-radius: 4px;
+    min-height: 24px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #5a5d65;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background: #1a1a1d;
+    height: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: #4a4d55;
+    border-radius: 4px;
+    min-width: 24px;
+    margin: 2px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #5a5d65;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+
+/* =====================================================================
+ *  Tooltips
+ * ===================================================================== */
+
+QToolTip {
+    background-color: #3d4047;
+    color: #e6e6e6;
+    border: 1px solid #4a4d55;
+    padding: 4px 8px;
+}
+
+
+/* =====================================================================
+ *  File dialogs and message boxes
+ * ===================================================================== */
+
+QFileDialog {
+    background-color: #2b2d30;
+    color: #cccccc;
+}
+
+QMessageBox {
+    background-color: #2b2d30;
+    color: #cccccc;
+}
+
+
+/* =====================================================================
+ *  Checkbox and radio indicators (for future dialogs)
+ * ===================================================================== */
+
+QCheckBox {
+    color: #cccccc;
+    spacing: 6px;
+}
+
+QCheckBox::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #4a4d55;
+    border-radius: 2px;
+    background-color: #1a1a1d;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #2d5a8c;
+    border-color: #4a90d9;
+}
+

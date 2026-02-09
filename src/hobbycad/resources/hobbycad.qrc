@@ -1,0 +1,25 @@
+<!-- ===================================================================
+  src/hobbycad/resources/hobbycad.qrc — Qt Resource Collection
+  ===================================================================
+
+  Resources listed here are compiled into the application binary.
+  Access at runtime via the ":/" prefix, e.g.:
+
+      QFile f(":/themes/default.qss");
+
+  SPDX-License-Identifier: GPL-3.0-only
+  =================================================================== -->
+
+<RCC>
+    <qresource prefix="/">
+        <!-- Built-in themes -->
+        <file>themes/default.qss</file>
+        <file>themes/darkmode.qss</file>
+
+        <!-- Compiled translations (.qm) — add as they are created -->
+        <!-- <file>translations/hobbycad_de.qm</file> -->
+        <!-- <file>translations/hobbycad_fr.qm</file> -->
+        <!-- <file>translations/hobbycad_pirate.qm</file> -->
+    </qresource>
+</RCC>
+
