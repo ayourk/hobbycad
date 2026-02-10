@@ -7,6 +7,8 @@
 
 #include "gui/mainwindow.h"
 
+class QLabel;
+
 namespace hobbycad {
 
 class ViewportWidget;
@@ -20,11 +22,13 @@ public:
 
 protected:
     void onDocumentLoaded() override;
+    void onDocumentClosed() override;
 
 private:
     void displayShapes();
 
     ViewportWidget* m_viewport = nullptr;
+    QLabel*         m_axisLabel = nullptr;
 };
 
 }  // namespace hobbycad

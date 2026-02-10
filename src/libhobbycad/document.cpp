@@ -35,7 +35,8 @@ void Document::addShape(const TopoDS_Shape& shape)
 void Document::clear()
 {
     m_shapes.clear();
-    m_modified = true;
+    m_filePath.clear();
+    m_modified = false;
 }
 
 // ---- File I/O -------------------------------------------------------

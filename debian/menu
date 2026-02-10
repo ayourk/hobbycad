@@ -1,0 +1,5 @@
+?package(hobbycad):needs="X11" \
+  section="Applications/Science" \
+  title="HobbyCAD" \
+  command="/usr/bin/hobbycad" \
+  icon="/usr/share/pixmaps/hobbycad.xpm"

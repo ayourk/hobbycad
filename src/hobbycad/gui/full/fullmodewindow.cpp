@@ -5,6 +5,9 @@
 #include "fullmodewindow.h"
 #include "viewportwidget.h"
 
+#include <QLabel>
+#include <QStatusBar>
+
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ListOfInteractive.hxx>
 #include <AIS_Shape.hxx>
@@ -21,12 +24,60 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     setObjectName(QStringLiteral("FullModeWindow"));
     m_viewport = new ViewportWidget(this);
     setCentralWidget(m_viewport);
+
+    // Connect View > Reset View to the viewport
+    if (resetViewAction()) {
+        connect(resetViewAction(), &QAction::triggered,
+                m_viewport, &ViewportWidget::resetCamera);
+    }
+
+    // Connect View > Rotate Left/Right (90° around Z axis)
+    if (rotateLeftAction()) {
+        connect(rotateLeftAction(), &QAction::triggered,
+                this, [this]() { m_viewport->rotateCamera90(-2); });
+    }
+    if (rotateRightAction()) {
+        connect(rotateRightAction(), &QAction::triggered,
+                this, [this]() { m_viewport->rotateCamera90(2); });
+    }
+
     finalizeLayout();
+
+    // Axis indicator in the status bar (added after finalizeLayout
+    // so restoreState doesn't interfere with widget ordering)
+    m_axisLabel = new QLabel(tr("Axis: X"), this);
+    m_axisLabel->setObjectName(QStringLiteral("AxisLabel"));
+    statusBar()->addPermanentWidget(m_axisLabel);
+
+    connect(m_viewport, &ViewportWidget::rotationAxisChanged,
+            this, [this](ViewportWidget::RotationAxis axis) {
+        static const char* names[] = { "X", "Y", "Z" };
+        m_axisLabel->setText(tr("Axis: %1").arg(names[axis]));
+    });
 }
 
 void FullModeWindow::onDocumentLoaded()
 {
     displayShapes();
+}
+
+void FullModeWindow::onDocumentClosed()
+{
+    if (!m_viewport || m_viewport->context().IsNull()) return;
+
+    auto ctx = m_viewport->context();
+
+    // Remove only user shapes (AIS_Shape), preserving the trihedron,
+    // grid, and ViewCube.
+    AIS_ListOfInteractive displayed;
+    ctx->DisplayedObjects(displayed);
+    for (auto it = displayed.begin(); it != displayed.end(); ++it) {
+        if ((*it)->IsKind(STANDARD_TYPE(AIS_Shape)))
+            ctx->Remove(*it, false);
+    }
+
+    ctx->UpdateCurrentViewer();
+    m_viewport->resetCamera();
 }
 
 void FullModeWindow::displayShapes()

@@ -49,11 +49,21 @@ protected:
     /// Override to update the viewport when a new document is loaded.
     virtual void onDocumentLoaded() {}
 
+    /// Override to clear the viewport when a document is closed.
+    virtual void onDocumentClosed() {}
+
     /// Intercept window close to prompt for unsaved changes.
     void closeEvent(QCloseEvent* event) override;
 
     /// Access the View > Terminal toggle action.
     QAction* terminalToggleAction() const;
+
+    /// Access the View > Reset View action.
+    QAction* resetViewAction() const;
+
+    /// Access the View > Rotate Left/Right actions.
+    QAction* rotateLeftAction() const;
+    QAction* rotateRightAction() const;
 
     /// Hide the dock-based terminal (used by Reduced Mode which
     /// has its own central CLI panel instead).
@@ -67,6 +77,7 @@ private slots:
     void onFileOpen();
     void onFileSave();
     void onFileSaveAs();
+    void onFileClose();
     void onFileQuit();
     void onHelpAbout();
 
@@ -87,9 +98,13 @@ private:
     QAction* m_actionOpen   = nullptr;
     QAction* m_actionSave   = nullptr;
     QAction* m_actionSaveAs = nullptr;
+    QAction* m_actionClose  = nullptr;
     QAction* m_actionQuit   = nullptr;
     QAction* m_actionAbout  = nullptr;
     QAction* m_actionToggleTerminal = nullptr;
+    QAction* m_actionResetView = nullptr;
+    QAction* m_actionRotateLeft = nullptr;
+    QAction* m_actionRotateRight = nullptr;
 
     // Status bar
     QLabel* m_statusLabel   = nullptr;

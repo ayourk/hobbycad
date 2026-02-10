@@ -19,22 +19,30 @@
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Line.hxx>
+#include <AIS_SelectionScheme.hxx>
 #include <AIS_Shape.hxx>
 #include <AIS_Trihedron.hxx>
+#include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_NeutralWindow.hxx>
 #include <Aspect_Grid.hxx>
 #include <Geom_Axis2Placement.hxx>
 #include <Geom_CartesianPoint.hxx>
+#include <Graphic3d_TransformPers.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_DatumAspect.hxx>
+#include <SelectMgr_EntityOwner.hxx>
 #include <V3d_AmbientLight.hxx>
 #include <V3d_DirectionalLight.hxx>
 #include <Quantity_Color.hxx>
 
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QKeyEvent>
 #include <QResizeEvent>
+#include <QPushButton>
+
+#include <gp_Trsf.hxx>
 
 namespace hobbycad {
 
@@ -62,6 +70,17 @@ ViewportWidget::ViewportWidget(QWidget* parent)
 
     // Scale bar overlay (child widget, bottom-left)
     m_scaleBar = new ScaleBarWidget(this);
+
+    // Accept keyboard focus for PgUp/PgDn rotation
+    setFocusPolicy(Qt::StrongFocus);
+
+    // Continuous rotation timer (PgUp/PgDn): 5° every 1 second
+    m_spinTimer.setInterval(100);
+    connect(&m_spinTimer, &QTimer::timeout, this, [this]() {
+        if (m_spinDirection != 0.0) {
+            rotateCameraAxis(m_spinDirection * (M_PI / 36.0));  // 5°
+        }
+    });
 }
 
 ViewportWidget::~ViewportWidget()
@@ -152,6 +171,9 @@ void ViewportWidget::resizeEvent(QResizeEvent* event)
         updateScaleBar();
         m_scaleBar->move(0, height() - m_scaleBar->height());
     }
+
+    // Reposition rotation arrows around the ViewCube
+    positionRotationArrows();
 }
 
 // ---- Viewer initialization ------------------------------------------
@@ -199,6 +221,7 @@ void ViewportWidget::initViewer()
     // Set up the axis trihedron and grid
     setupAxisTrihedron();
     setupGrid();
+    setupViewCube();
 
     // ---- Camera orientation ---------------------------------------------
     //
@@ -300,22 +323,83 @@ void ViewportWidget::setupGrid()
                                Aspect_GDM_Lines);
 }
 
+// ---- Navigation cube (top-right corner) -----------------------------
+
+void ViewportWidget::setupViewCube()
+{
+    if (m_context.IsNull()) return;
+
+    m_viewCube = new AIS_ViewCube();
+
+    // Appearance
+    m_viewCube->SetSize(40.0);
+    m_viewCube->SetBoxColor(Quantity_Color(0.30, 0.34, 0.40, Quantity_TOC_RGB));
+    m_viewCube->SetTransparency(0.2);
+    m_viewCube->SetFont("Arial");
+    m_viewCube->SetFontHeight(12.0);
+    m_viewCube->SetTextColor(Quantity_Color(Quantity_NOC_WHITE));
+
+    // Behaviour
+    m_viewCube->SetFixedAnimationLoop(false);
+    m_viewCube->SetDrawAxes(false);  // we have our own trihedron
+
+    // Position in the top-right corner of the viewport
+    m_viewCube->SetTransformPersistence(
+        new Graphic3d_TransformPers(
+            Graphic3d_TMF_TriedronPers,
+            Aspect_TOTP_RIGHT_UPPER,
+            Graphic3d_Vec2i(85, 85)));
+
+    m_context->Display(m_viewCube, false);
+
+    // Set up the rotation arrow buttons around the cube
+    setupRotationArrows();
+}
+
 // ---- Mouse interaction ----------------------------------------------
+//
+// Right-click drag   = rotate
+// Middle-click drag  = pan
+// Scroll wheel       = zoom
+//
+// TODO: Make this configurable with presets (Fusion 360, FreeCAD,
+//       SolidWorks, Blender).
 
 void ViewportWidget::mousePressEvent(QMouseEvent* event)
 {
     m_lastMousePos = event->pos();
 
-    if (event->button() == Qt::MiddleButton) {
-        if (event->modifiers() & Qt::ShiftModifier) {
-            m_panning = true;
-        } else {
-            m_rotating = true;
-            if (!m_view.IsNull()) {
-                m_view->StartRotation(event->pos().x(),
-                                      event->pos().y());
+    if (event->button() == Qt::LeftButton) {
+        // Forward to AIS context for ViewCube click detection.
+        if (!m_context.IsNull() && !m_view.IsNull()) {
+            m_context->MoveTo(event->pos().x(), event->pos().y(),
+                              m_view, false);
+
+            // Check if the ViewCube is under the cursor
+            if (!m_viewCube.IsNull() && m_context->HasDetected()) {
+                Handle(AIS_InteractiveObject) detected =
+                    m_context->DetectedInteractive();
+                if (!detected.IsNull() &&
+                    detected == Handle(AIS_InteractiveObject)(m_viewCube)) {
+                    m_draggingViewCube = true;
+                    m_viewCubeDragStart = event->pos();
+
+                    // Start rotation for ViewCube drag
+                    m_view->StartRotation(event->pos().x(),
+                                          event->pos().y());
+                }
             }
         }
+    } else if (event->button() == Qt::RightButton) {
+        // RMB = rotate
+        m_rotating = true;
+        if (!m_view.IsNull()) {
+            m_view->StartRotation(event->pos().x(),
+                                  event->pos().y());
+        }
+    } else if (event->button() == Qt::MiddleButton) {
+        // MMB = pan
+        m_panning = true;
     }
 
     QWidget::mousePressEvent(event);
@@ -323,9 +407,35 @@ void ViewportWidget::mousePressEvent(QMouseEvent* event)
 
 void ViewportWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::MiddleButton) {
+    if (event->button() == Qt::LeftButton && m_draggingViewCube) {
+        // If the mouse barely moved, treat as a click → snap to face
+        QPoint delta = event->pos() - m_viewCubeDragStart;
+        if (delta.manhattanLength() < 5) {
+            if (!m_context.IsNull() && !m_view.IsNull()) {
+                m_context->MoveTo(event->pos().x(), event->pos().y(),
+                                  m_view, false);
+                if (m_context->HasDetected()) {
+                    Handle(SelectMgr_EntityOwner) owner =
+                        m_context->DetectedOwner();
+                    Handle(AIS_ViewCubeOwner) cubeOwner =
+                        Handle(AIS_ViewCubeOwner)::DownCast(owner);
+                    if (!cubeOwner.IsNull()) {
+                        m_viewCube->HandleClick(cubeOwner);
+                        for (int i = 0; i < 100; ++i) {
+                            if (!m_viewCube->UpdateAnimation(true)) break;
+                            m_view->Redraw();
+                        }
+                        updateScaleBar();
+                        update();
+                    }
+                }
+            }
+        }
+        m_draggingViewCube = false;
+    } else if (event->button() == Qt::RightButton) {
         m_rotating = false;
-        m_panning  = false;
+    } else if (event->button() == Qt::MiddleButton) {
+        m_panning = false;
     }
 
     QWidget::mouseReleaseEvent(event);
@@ -337,7 +447,17 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event)
 
     QPoint pos = event->pos();
 
-    if (m_rotating) {
+    // Always update AIS detection for ViewCube hover highlighting
+    if (!m_context.IsNull()) {
+        m_context->MoveTo(pos.x(), pos.y(), m_view, true);
+    }
+
+    if (m_draggingViewCube) {
+        // Drag on ViewCube = free rotate
+        m_view->Rotation(pos.x(), pos.y());
+        updateScaleBar();
+        update();
+    } else if (m_rotating) {
         m_view->Rotation(pos.x(), pos.y());
         updateScaleBar();
         update();
@@ -366,6 +486,213 @@ void ViewportWidget::wheelEvent(QWheelEvent* event)
     updateScaleBar();
     update();
     QWidget::wheelEvent(event);
+}
+
+// ---- Keyboard interaction -------------------------------------------
+//
+// PgUp = rotate CW around Z (5° per tick, 1 sec interval)
+// PgDn = rotate CCW around Z
+
+void ViewportWidget::keyPressEvent(QKeyEvent* event)
+{
+    if (event->isAutoRepeat()) {
+        event->accept();
+        return;  // ignore OS key repeat — we use our own timer
+    }
+
+    switch (event->key()) {
+        case Qt::Key_PageUp:
+            m_spinDirection = 1.0;  // CW
+            rotateCameraAxis(m_spinDirection * (M_PI / 36.0));
+            m_spinTimer.start();
+            event->accept();
+            return;
+
+        case Qt::Key_PageDown:
+            m_spinDirection = -1.0;  // CCW
+            rotateCameraAxis(m_spinDirection * (M_PI / 36.0));
+            m_spinTimer.start();
+            event->accept();
+            return;
+
+        case Qt::Key_Left:
+            rotateCameraAxis(-(M_PI / 2.0));  // -90° around selected axis
+            event->accept();
+            return;
+
+        case Qt::Key_Right:
+            rotateCameraAxis(M_PI / 2.0);  // +90° around selected axis
+            event->accept();
+            return;
+
+        case Qt::Key_X:
+            setRotationAxis(AxisX);
+            event->accept();
+            return;
+
+        case Qt::Key_Y:
+            setRotationAxis(AxisY);
+            event->accept();
+            return;
+
+        case Qt::Key_Z:
+            setRotationAxis(AxisZ);
+            event->accept();
+            return;
+
+        default:
+            break;
+    }
+
+    QWidget::keyPressEvent(event);
+}
+
+void ViewportWidget::keyReleaseEvent(QKeyEvent* event)
+{
+    if (event->isAutoRepeat()) {
+        event->accept();
+        return;
+    }
+
+    if (event->key() == Qt::Key_PageUp ||
+        event->key() == Qt::Key_PageDown) {
+        m_spinDirection = 0.0;
+        m_spinTimer.stop();
+        event->accept();
+    } else {
+        QWidget::keyReleaseEvent(event);
+    }
+}
+
+void ViewportWidget::rotateCameraZ(double angleRad)
+{
+    if (m_view.IsNull()) return;
+
+    Handle(Graphic3d_Camera) cam = m_view->Camera();
+    gp_Dir eye = cam->Direction();
+    gp_Dir up  = cam->Up();
+
+    gp_Ax1 zAxis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+    gp_Trsf rot;
+    rot.SetRotation(zAxis, angleRad);
+
+    cam->SetDirection(eye.Transformed(rot));
+    cam->SetUp(up.Transformed(rot));
+
+    m_view->Redraw();
+    updateScaleBar();
+    update();
+}
+
+void ViewportWidget::rotateCameraAxis(double angleRad)
+{
+    if (m_view.IsNull()) return;
+
+    Handle(Graphic3d_Camera) cam = m_view->Camera();
+    gp_Dir eye = cam->Direction();
+    gp_Dir up  = cam->Up();
+
+    gp_Dir axisDir;
+    switch (m_rotationAxis) {
+        case AxisX: axisDir = gp_Dir(1, 0, 0); break;
+        case AxisY: axisDir = gp_Dir(0, 1, 0); break;
+        case AxisZ: axisDir = gp_Dir(0, 0, 1); break;
+    }
+
+    gp_Ax1 rotAxis(gp_Pnt(0, 0, 0), axisDir);
+    gp_Trsf rot;
+    rot.SetRotation(rotAxis, angleRad);
+
+    cam->SetDirection(eye.Transformed(rot));
+    cam->SetUp(up.Transformed(rot));
+
+    m_view->Redraw();
+    updateScaleBar();
+    update();
+}
+
+void ViewportWidget::setRotationAxis(RotationAxis axis)
+{
+    if (m_rotationAxis != axis) {
+        m_rotationAxis = axis;
+        emit rotationAxisChanged(axis);
+    }
+}
+
+ViewportWidget::RotationAxis ViewportWidget::rotationAxis() const
+{
+    return m_rotationAxis;
+}
+
+// ---- Rotation arrow buttons around the ViewCube ---------------------
+//
+// Note: QPushButton overlay widgets cannot render on top of a
+// WA_PaintOnScreen surface (OCCT owns the GL context).  Navigation
+// controls are provided via the View menu instead:
+//   View > Reset View (Home key)
+//   ViewCube face/edge clicks for standard views
+//   Right-click drag for free rotation
+
+void ViewportWidget::setupRotationArrows()
+{
+    // Intentionally empty — buttons can't overlay WA_PaintOnScreen.
+    // Navigation is handled via ViewCube clicks and View menu.
+}
+
+void ViewportWidget::positionRotationArrows()
+{
+    // Intentionally empty — see setupRotationArrows().
+}
+
+void ViewportWidget::rotateCamera90(int axisDir)
+{
+    if (m_view.IsNull()) return;
+
+    // axisDir: ±1 = X-tilt, ±2 = Z-spin (sign = direction)
+    int axis = (axisDir > 0) ? axisDir : -axisDir;
+    double angle = (axisDir > 0) ? M_PI / 2.0 : -M_PI / 2.0;
+
+    // Get current camera direction and up
+    Handle(Graphic3d_Camera) cam = m_view->Camera();
+    gp_Dir eye = cam->Direction();
+    gp_Dir up  = cam->Up();
+
+    // Build rotation around the world axis
+    gp_Ax1 rotAxis;
+    switch (axis) {
+        case 1: rotAxis = gp_Ax1(gp_Pnt(0,0,0), gp_Dir(1,0,0)); break;  // X
+        case 2: rotAxis = gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)); break;  // Z
+        default: return;
+    }
+
+    gp_Trsf rot;
+    rot.SetRotation(rotAxis, angle);
+
+    gp_Dir newEye = eye.Transformed(rot);
+    gp_Dir newUp  = up.Transformed(rot);
+
+    cam->SetDirection(newEye);
+    cam->SetUp(newUp);
+
+    m_view->Redraw();
+    updateScaleBar();
+    update();
+}
+
+void ViewportWidget::resetCamera()
+{
+    if (m_view.IsNull()) return;
+
+    // Restore the default startup camera position
+    m_view->SetEye(1.0, -1.0, 1.0);
+    m_view->SetUp(0.0, 0.0, 1.0);
+    m_view->SetAt(0.0, 0.0, 0.0);
+    m_view->FitAll(0.5, false);
+    m_view->SetAt(0.0, 0.0, 30.0);
+
+    m_view->Redraw();
+    updateScaleBar();
+    update();
 }
 
 // ---- Scale bar helper -----------------------------------------------
