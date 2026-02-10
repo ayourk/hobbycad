@@ -1,0 +1,127 @@
+# .github/workflows/windows-build.yml
+#
+# Build HobbyCAD on Windows using vcpkg for dependency management.
+#
+# Phase 0 dependencies (Qt6, OpenCASCADE) come from the official
+# vcpkg registry. Future phases will pull libslvs, openmesh, etc.
+# from the hobbycad-vcpkg custom registry.
+#
+# First build is slow (~30 min) due to Qt6/OCCT compilation.
+# Subsequent builds use GitHub Actions cache via vcpkg binary
+# caching, reducing dependency install to ~2 min.
+
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_DEFAULT_TRIPLET: x64-windows
+
+jobs:
+  build:
+    name: Windows x64
+    runs-on: windows-latest
+
+    env:
+      # Enable vcpkg binary caching via GitHub Actions cache
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+    steps:
+      # ---- Setup --------------------------------------------------------
+
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Setup vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "C:\vcpkg" >> $env:GITHUB_PATH
+
+      # ---- Dependencies -------------------------------------------------
+
+      - name: Install dependencies via vcpkg
+        run: |
+          vcpkg install `
+            opencascade `
+            qtbase[widgets,opengl,gui] `
+            qtsvg `
+            --triplet x64-windows
+
+      # ---- Build --------------------------------------------------------
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      # ---- Package ------------------------------------------------------
+
+      - name: Package build
+        shell: pwsh
+        run: |
+          $installDir = "build\install"
+          cmake --install build --prefix $installDir
+
+          # Copy Qt and OCCT runtime DLLs alongside the executable
+          $binDir = "$installDir\bin"
+          $vcpkgBin = "C:\vcpkg\installed\x64-windows\bin"
+
+          # Qt plugins needed at runtime
+          $qtPluginDir = "$installDir\bin\platforms"
+          New-Item -ItemType Directory -Force -Path $qtPluginDir | Out-Null
+          Copy-Item "$vcpkgBin\..\plugins\platforms\qwindows.dll" $qtPluginDir -ErrorAction SilentlyContinue
+
+          # Copy all runtime DLLs the executable needs
+          $exePath = Get-ChildItem "$binDir\hobbycad.exe" -ErrorAction SilentlyContinue
+          if ($exePath) {
+              # Use dumpbin to find DLL dependencies, copy from vcpkg
+              $deps = & dumpbin /dependents $exePath.FullName 2>$null |
+                      Select-String '\.dll' |
+                      ForEach-Object { $_.ToString().Trim() }
+              foreach ($dll in $deps) {
+                  $src = Join-Path $vcpkgBin $dll
+                  if (Test-Path $src) {
+                      Copy-Item $src $binDir -ErrorAction SilentlyContinue
+                  }
+              }
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-windows-x64
+          path: build/install/
+          retention-days: 14
+          if-no-files-found: error

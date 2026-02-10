@@ -1636,23 +1636,63 @@
   approach for HobbyCAD because it pins dependency versions and
   makes builds reproducible.
 
-  Example vcpkg.json for HobbyCAD Phase 0:
+  HobbyCAD ships two vcpkg manifest files in the repository root:
+
+  vcpkg.json — declares all dependencies:
 
     {
       "name": "hobbycad",
       "version": "0.0.1",
+      "description": "A Linux-native, open-source, parametric 3D CAD application",
+      "homepage": "https://github.com/ayourk/hobbycad",
+      "license": "GPL-3.0-only",
       "dependencies": [
         "opencascade",
-        "qt6",
-        "pybind11",
-        "libzip",
-        "libpng",
-        "libjpeg-turbo"
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": ["widgets", "opengl", "gui"]
+        },
+        "qtsvg",
+        "opengl"
       ]
     }
 
+  vcpkg-configuration.json — configures the custom registry for
+  packages not available in the main vcpkg registry:
+
+    {
+      "default-registry": {
+        "kind": "builtin",
+        "baseline": "2026.01.16"
+      },
+      "registries": [
+        {
+          "kind": "git",
+          "repository": "https://github.com/ayourk/hobbycad-vcpkg",
+          "baseline": "<first-commit-hash>",
+          "packages": ["libslvs", "openmesh", "lib3mf", "meshfix"]
+        }
+      ]
+    }
+
+  The custom registry (ayourk/hobbycad-vcpkg) provides vcpkg ports
+  for four libraries that are not in the main vcpkg registry. These
+  are the same libraries provided by the Launchpad PPA on Ubuntu
+  (see Section 7). The registry sources are hosted as GitHub release
+  assets built from the same PPA orig tarballs.
+
+  Custom registry ports:
+
+    libslvs      3.2       SolveSpace constraint solver library
+    openmesh     11.0.0    Half-edge mesh data structure
+    lib3mf       2.4.1     3D Manufacturing Format I/O
+    meshfix      2.1       Mesh repair (MeshFix by Marco Attene)
+
   When CMake is configured with the vcpkg toolchain file, it will
-  automatically install these dependencies before building.
+  automatically install these dependencies before building. Both
+  the main vcpkg registry and the custom registry are resolved
+  automatically — no extra configuration is required.
 
 ================================================================================
   16. INSTALLING DEPENDENCIES VIA VCPKG
@@ -1788,29 +1828,52 @@
 
   See Section 16.2 Option B.
 
-  17.3  SOLVESPACE SOLVER (FUTURE — PHASE 1+)
-  -----------------------------------------------
+  17.3  CUSTOM REGISTRY PACKAGES (FUTURE — PHASE 1+)
+  -----------------------------------------------------
 
-  SolveSpace is not available as a vcpkg port. On Windows it must
-  be built from source using CMake.
+  The following libraries are not available in the main vcpkg
+  registry. They are provided by the HobbyCAD custom vcpkg
+  registry (ayourk/hobbycad-vcpkg) and are installed automatically
+  when using manifest mode (Section 15.2).
 
-  GitHub:         https://github.com/solvespace/solvespace
+  If not using manifest mode, these must be built from source.
+  See the custom registry portfiles for build configuration:
+    https://github.com/ayourk/hobbycad-vcpkg/tree/main/ports
 
-    git clone https://github.com/solvespace/solvespace.git
-    cd solvespace
-    git submodule update --init
+  libslvs (SolveSpace constraint solver):
 
-  With MSYS2 / MinGW-w64:
+    GitHub:         https://github.com/solvespace/solvespace
+    vcpkg port:     ayourk/hobbycad-vcpkg  ports/libslvs
+    License:        GPL 3.0
 
-    cmake -B build -G Ninja \
-      -DENABLE_GUI=OFF -DENABLE_CLI=OFF -DENABLE_TESTS=OFF
-    cmake --build build
+    The vcpkg port builds only the solver library (libslvs), not
+    the full SolveSpace GUI application. It is used by HobbyCAD's
+    2D sketch constraint solver in Phase 1+.
 
-  With Visual Studio:
+  OpenMesh (half-edge mesh data structure):
 
-    cmake -B build -G "Visual Studio 17 2022" -A x64 ^
-      -DENABLE_GUI=OFF -DENABLE_CLI=OFF -DENABLE_TESTS=OFF
-    cmake --build build --config Release
+    Project page:   https://www.graphics.rwth-aachen.de/software/openmesh/
+    GitHub:         https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
+    vcpkg port:     ayourk/hobbycad-vcpkg  ports/openmesh
+    License:        BSD 3-Clause
+
+  lib3mf (3D Manufacturing Format):
+
+    Project page:   https://3mf.io/
+    GitHub:         https://github.com/3MFConsortium/lib3mf
+    vcpkg port:     ayourk/hobbycad-vcpkg  ports/lib3mf
+    License:        BSD 2-Clause
+
+  MeshFix (mesh repair):
+
+    GitHub:         https://github.com/MarcoAttworke/MeshFix-V2.1
+    vcpkg port:     ayourk/hobbycad-vcpkg  ports/meshfix
+    License:        GPL 3.0+
+
+    The vcpkg port includes a cross-platform patch that separates
+    the library from the CLI executable, adds CMake package config
+    files, and fixes MSVC compatibility (CRT warnings, cstdint
+    include guard).
 
 ================================================================================
   18. BUILDING PHASE 0 ON WINDOWS
@@ -2203,30 +2266,62 @@
 
     brew install doxygen graphviz
 
-  22.6  SOLVESPACE SOLVER (FUTURE — PHASE 1+)
-  -----------------------------------------------
+  22.6  HOBBYCAD HOMEBREW TAP (FUTURE — PHASE 1+)
+  --------------------------------------------------
 
-  SolveSpace is not in Homebrew. It must be built from source:
+  The following libraries are not in Homebrew core. They are
+  provided by the HobbyCAD Homebrew tap:
 
-    git clone https://github.com/solvespace/solvespace.git
-    cd solvespace
-    git submodule update --init
-    cmake -B build -G Ninja \
-      -DENABLE_GUI=OFF -DENABLE_CLI=OFF -DENABLE_TESTS=OFF
-    cmake --build build
-    sudo cmake --install build
+    brew tap ayourk/hobbycad
+    brew install ayourk/hobbycad/libslvs
+    brew install ayourk/hobbycad/openmesh
+    brew install ayourk/hobbycad/lib3mf
+    brew install ayourk/hobbycad/meshfix
+
+  Tap repository:
+    https://github.com/ayourk/homebrew-hobbycad
+
+  These are the same libraries provided by the Launchpad PPA on
+  Ubuntu (Section 7) and the custom vcpkg registry on Windows
+  (Section 15.2). Source tarballs are shared across all three
+  packaging systems.
+
+  libslvs (SolveSpace constraint solver):
+
+    Upstream:       https://github.com/solvespace/solvespace
+    License:        GPL 3.0
+    Used by:        HobbyCAD Phase 1+ (2D sketch constraint solver)
+
+  OpenMesh (half-edge mesh data structure):
+
+    Upstream:       https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
+    License:        BSD 3-Clause
+    Used by:        HobbyMesh Phase 5+
+
+  lib3mf (3D Manufacturing Format):
+
+    Upstream:       https://github.com/3MFConsortium/lib3mf
+    License:        BSD 2-Clause
+    Used by:        HobbyMesh Phase 5+
+
+  MeshFix (mesh repair):
+
+    Upstream:       https://github.com/MarcoAttene/MeshFix-V2.1
+    License:        GPL 3.0+
+    Used by:        HobbyMesh Phase 5+
 
   22.7  HOBBYMESH DEPENDENCIES (FUTURE — PHASE 5+)
   ---------------------------------------------------
 
-  Available in Homebrew:
+  Available in Homebrew core:
 
     brew install cgal openvdb assimp eigen
 
-  NOT in Homebrew (must build from source):
-    - OpenMesh:   https://www.graphics.rwth-aachen.de/software/openmesh/
-    - lib3mf:     https://github.com/3MFConsortium/lib3mf
-    - MeshFix:    https://github.com/MarcoAttene/MeshFix
+  Available via the HobbyCAD Homebrew tap (see Section 22.6):
+
+    brew install ayourk/hobbycad/openmesh
+    brew install ayourk/hobbycad/lib3mf
+    brew install ayourk/hobbycad/meshfix
 
 ================================================================================
   23. MACOS ARCHITECTURE NOTES

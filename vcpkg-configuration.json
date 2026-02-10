@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg-configuration.schema.json",
+  "default-registry": {
+    "kind": "builtin",
+    "baseline": "2026.01.16"
+  },
+  "registries": [
+    {
+      "kind": "git",
+      "repository": "https://github.com/ayourk/hobbycad-vcpkg",
+      "baseline": "c0bca9d06d11e6134f220d36d54ebb8ef53ac16e",
+      "packages": ["libslvs", "openmesh", "lib3mf", "meshfix"]
+    }
+  ]
+}

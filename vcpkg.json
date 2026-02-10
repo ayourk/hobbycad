@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "hobbycad",
+  "version": "0.0.1",
+  "description": "A Linux-native, open-source, parametric 3D CAD application",
+  "homepage": "https://github.com/ayourk/hobbycad",
+  "license": "GPL-3.0-only",
+  "dependencies": [
+    "opencascade",
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": ["widgets", "opengl", "gui"]
+    },
+    "qtsvg",
+    "opengl"
+  ]
+}
