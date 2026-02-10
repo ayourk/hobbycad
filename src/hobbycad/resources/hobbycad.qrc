@@ -16,6 +16,9 @@
         <file>themes/default.qss</file>
         <file>themes/darkmode.qss</file>
 
+        <!-- Application icon (references the single copy in resources/) -->
+        <file alias="icons/hobbycad.svg">../../../resources/icons/hobbycad.svg</file>
+
         <!-- Compiled translations (.qm) — add as they are created -->
         <!-- <file>translations/hobbycad_de.qm</file> -->
         <!-- <file>translations/hobbycad_fr.qm</file> -->

@@ -74,11 +74,23 @@ ViewportWidget::ViewportWidget(QWidget* parent)
     // Accept keyboard focus for PgUp/PgDn rotation
     setFocusPolicy(Qt::StrongFocus);
 
-    // Continuous rotation timer (PgUp/PgDn): 5° every 1 second
-    m_spinTimer.setInterval(100);
+    // Continuous rotation timer (PgUp/PgDn): 5° every 100ms
+    m_spinTimer.setInterval(10);
     connect(&m_spinTimer, &QTimer::timeout, this, [this]() {
         if (m_spinDirection != 0.0) {
-            rotateCameraAxis(m_spinDirection * (M_PI / 36.0));  // 5°
+            rotateCameraAxis(m_spinDirection * (m_spinStepDeg * M_PI / 180.0));
+        }
+    });
+
+    // Animated 90° snap timer (Left/Right): 1° every 10ms = 0.9s total
+    m_snapTimer.setInterval(10);
+    connect(&m_snapTimer, &QTimer::timeout, this, [this]() {
+        if (m_snapRemaining > 0) {
+            rotateCameraAxis(m_snapStepRad);
+            --m_snapRemaining;
+        }
+        if (m_snapRemaining <= 0) {
+            m_snapTimer.stop();
         }
     });
 }
@@ -501,27 +513,31 @@ void ViewportWidget::keyPressEvent(QKeyEvent* event)
     }
 
     switch (event->key()) {
-        case Qt::Key_PageUp:
+        case Qt::Key_Up:
             m_spinDirection = 1.0;  // CW
-            rotateCameraAxis(m_spinDirection * (M_PI / 36.0));
+            rotateCameraAxis(m_spinDirection * (m_spinStepDeg * M_PI / 180.0));
             m_spinTimer.start();
             event->accept();
             return;
 
-        case Qt::Key_PageDown:
+        case Qt::Key_Down:
             m_spinDirection = -1.0;  // CCW
-            rotateCameraAxis(m_spinDirection * (M_PI / 36.0));
+            rotateCameraAxis(m_spinDirection * (m_spinStepDeg * M_PI / 180.0));
             m_spinTimer.start();
             event->accept();
             return;
 
         case Qt::Key_Left:
-            rotateCameraAxis(-(M_PI / 2.0));  // -90° around selected axis
+            m_snapStepRad = -(m_snapStepDeg * M_PI / 180.0);
+            m_snapRemaining = 90 / m_snapStepDeg;
+            m_snapTimer.start();
             event->accept();
             return;
 
         case Qt::Key_Right:
-            rotateCameraAxis(M_PI / 2.0);  // +90° around selected axis
+            m_snapStepRad = (m_snapStepDeg * M_PI / 180.0);
+            m_snapRemaining = 90 / m_snapStepDeg;
+            m_snapTimer.start();
             event->accept();
             return;
 
@@ -554,8 +570,8 @@ void ViewportWidget::keyReleaseEvent(QKeyEvent* event)
         return;
     }
 
-    if (event->key() == Qt::Key_PageUp ||
-        event->key() == Qt::Key_PageDown) {
+    if (event->key() == Qt::Key_Up ||
+        event->key() == Qt::Key_Down) {
         m_spinDirection = 0.0;
         m_spinTimer.stop();
         event->accept();
@@ -622,6 +638,18 @@ void ViewportWidget::setRotationAxis(RotationAxis axis)
 ViewportWidget::RotationAxis ViewportWidget::rotationAxis() const
 {
     return m_rotationAxis;
+}
+
+void ViewportWidget::setSpinParams(int stepDeg, int intervalMs)
+{
+    m_spinStepDeg = qBound(1, stepDeg, 45);
+    m_spinTimer.setInterval(qBound(1, intervalMs, 1000));
+}
+
+void ViewportWidget::setSnapParams(int stepDeg, int intervalMs)
+{
+    m_snapStepDeg = qBound(1, stepDeg, 15);
+    m_snapTimer.setInterval(qBound(1, intervalMs, 100));
 }
 
 // ---- Rotation arrow buttons around the ViewCube ---------------------

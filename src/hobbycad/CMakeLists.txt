@@ -11,7 +11,7 @@
 
 find_package(OpenCASCADE REQUIRED)
 find_package(Qt6 6.2 REQUIRED COMPONENTS
-    Core Gui Widgets OpenGL)
+    Core Gui Widgets OpenGL Svg)
 find_package(OpenGL REQUIRED)
 
 # ---- Source files ----------------------------------------------------
@@ -23,6 +23,7 @@ set(APP_SOURCES
     gui/mainwindow.cpp
     gui/aboutdialog.cpp
     gui/clipanel.cpp
+    gui/preferencesdialog.cpp
     gui/themevalidator.cpp
 
     # Full mode (OpenGL viewport)
@@ -46,6 +47,7 @@ set(APP_HEADERS
     gui/mainwindow.h
     gui/aboutdialog.h
     gui/clipanel.h
+    gui/preferencesdialog.h
     gui/themevalidator.h
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h
@@ -91,8 +93,15 @@ target_link_libraries(hobbycad PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::OpenGL
+    Qt6::Svg
     OpenGL::GL
     ${APP_OCCT_LIBS}
+)
+
+# Pass build-tool versions as compile definitions for the About dialog
+target_compile_definitions(hobbycad PRIVATE
+    HOBBYCAD_CMAKE_VERSION="${CMAKE_VERSION}"
+    HOBBYCAD_OCCT_VERSION="${OpenCASCADE_VERSION}"
 )
 
 # ---- Install ---------------------------------------------------------

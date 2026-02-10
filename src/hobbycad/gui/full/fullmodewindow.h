@@ -23,6 +23,7 @@ public:
 protected:
     void onDocumentLoaded() override;
     void onDocumentClosed() override;
+    void applyPreferences() override;
 
 private:
     void displayShapes();
