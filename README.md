@@ -5,7 +5,7 @@
 <p align="center">
   <img src="resources/icons/hobbycad.svg" alt="HobbyCAD Logo" width="128" height="128">
   <br><br>
-  <img src="https://img.shields.io/github/license/ayourk/hobbycad?label=License&color=blue" alt="License: GPL 3.0">
+  <img src="https://img.shields.io/badge/License-GPL_3.0--only-blue.svg" alt="License: GPL 3.0">
   <img src="https://img.shields.io/github/last-commit/ayourk/hobbycad" alt="Last Commit">
   <img src="https://img.shields.io/badge/Phase-0_(Foundation)-green.svg" alt="Phase 0">
   <img src="https://img.shields.io/badge/Platform-Linux-orange.svg" alt="Platform: Linux">
@@ -101,6 +101,27 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 | **Quick Start** | [One-line install](docs/dev_environment_setup.txt#L551) (§5.6) | Single `apt install` for all Phase 0 dependencies |
 | **Dependencies** | [Package installation](docs/dev_environment_setup.txt#L471) (§5) | Package differences from 24.04 |
 
+### Windows (Support Stub)
+
+| Section | Description |
+|---|---|
+| [Overview](docs/dev_environment_setup.txt#L1389) (§13) | Platform status and known limitations |
+| [Prerequisites](docs/dev_environment_setup.txt#L1456) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
+| [vcpkg setup](docs/dev_environment_setup.txt#L1603) (§15) | Package manager configuration for dependencies |
+| [Building](docs/dev_environment_setup.txt#L1816) (§18) | Build instructions for Windows |
+| [Troubleshooting](docs/dev_environment_setup.txt#L1928) (§19) | Windows-specific issues |
+
+### macOS (Support Stub)
+
+| Section | Description |
+|---|---|
+| [Overview](docs/dev_environment_setup.txt#L2003) (§20) | Platform status and OpenGL limitations |
+| [Prerequisites](docs/dev_environment_setup.txt#L2042) (§21) | Xcode and Homebrew requirements |
+| [Homebrew dependencies](docs/dev_environment_setup.txt#L2145) (§22) | Installing dependencies via Homebrew |
+| [Architecture notes](docs/dev_environment_setup.txt#L2232) (§23) | Intel vs. Apple Silicon considerations |
+| [Building](docs/dev_environment_setup.txt#L2317) (§25) | Build instructions for macOS |
+| [Troubleshooting](docs/dev_environment_setup.txt#L2375) (§26) | macOS-specific issues |
+
 ### General
 
 | Section | Description |
@@ -160,19 +181,19 @@ All project documentation is in plain text format:
 
 | Document | Description |
 |---|---|
-| `docs/project_definition.txt` | Project scope, design principles, file format spec, development phases, licensing framework |
-| `docs/cad_library_recommendations.txt` | Library analysis, alternatives considered, licensing, HobbyMesh stack |
-| `docs/cad_use_case_document.txt` | Use cases, target audience, competitive analysis, HobbyMesh specification |
-| `docs/dev_environment_setup.txt` | Build environment setup for Ubuntu 22.04/24.04, dependency installation, verification |
-| `docs/security_risks.txt` | Threat model, mitigations for file parsing, scripting, network, supply chain |
-| `AUTHORS` (Project root) | Project author and contributor listing |
+| [`docs/project_definition.txt`](docs/project_definition.txt) | Project scope, design principles, file format spec, development phases, licensing framework |
+| [`docs/cad_library_recommendations.txt`](docs/cad_library_recommendations.txt) | Library analysis, alternatives considered, licensing, HobbyMesh stack |
+| [`docs/cad_use_case_document.txt`](docs/cad_use_case_document.txt) | Use cases, target audience, competitive analysis, HobbyMesh specification |
+| [`docs/dev_environment_setup.txt`](docs/dev_environment_setup.txt) | Build environment setup for Ubuntu 22.04/24.04, dependency installation, verification |
+| [`docs/security_risks.txt`](docs/security_risks.txt) | Threat model, mitigations for file parsing, scripting, network, supply chain |
+| [`AUTHORS`](AUTHORS) (Project root) | Project author and contributor listing |
 
 ## Competitive Landscape
 
 HobbyCAD aims to fill a specific gap in the open-source CAD ecosystem:
 
-- **vs. FreeCAD** — FreeCAD is the most established open-source parametric CAD. HobbyCAD takes a different approach: a single unified workflow rather than separate workbenches, built from a clean codebase with opinionated UX decisions. FreeCAD's maturity and community are significant advantages; HobbyCAD trades that ecosystem for architectural cohesion.
 - **vs. Fusion 360 / Onshape** — Excellent commercial tools, but require cloud connectivity, subscriptions, and send telemetry. HobbyCAD is fully offline — your files are local, version control runs through git, and there's no account to create.
+- **vs. FreeCAD** — FreeCAD is the most established open-source parametric CAD. HobbyCAD takes a different approach: a single unified workflow rather than separate workbenches, built from a clean codebase with opinionated UX decisions. FreeCAD's maturity and community are significant advantages; HobbyCAD trades that ecosystem for architectural cohesion.
 - **vs. OpenSCAD** — OpenSCAD's code-first approach is powerful for programmatic modeling. HobbyCAD provides a visual parametric GUI with an optional Python scripting layer for automation.
 - **vs. SolidWorks / Inventor** — Industry-standard tools with deep feature sets. HobbyCAD targets hobbyists and makers who need solid modeling without commercial license costs or platform restrictions.
 

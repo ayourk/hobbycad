@@ -28,6 +28,7 @@
 #include <QMessageBox>
 #include <QTranslator>
 
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 
@@ -231,16 +232,31 @@ int main(int argc, char* argv[])
         forceReduced = true;
     }
 
+    // Step 5b: Check for forced window geometry via environment variable
+    //   HOBBYCAD_GEOMETRY=WxH  — force window to specific dimensions
+    //                            (e.g. HOBBYCAD_GEOMETRY=800x600)
+    int forceWidth = 0, forceHeight = 0;
+    const char* envGeometry = std::getenv("HOBBYCAD_GEOMETRY");
+    if (envGeometry) {
+        if (std::sscanf(envGeometry, "%dx%d", &forceWidth, &forceHeight) != 2) {
+            forceWidth = forceHeight = 0;
+        }
+    }
+
     int result = 0;
 
     if (glInfo.meetsMinimum() && !forceReduced) {
         // Step 6a: Full Mode — OpenGL 3.3+ available
         hobbycad::FullModeWindow window(glInfo);
+        if (forceWidth > 0 && forceHeight > 0)
+            window.resize(forceWidth, forceHeight);
         window.show();
         result = app.exec();
     } else {
         // Step 6b: Reduced Mode — OpenGL insufficient or forced
         hobbycad::ReducedModeWindow window(glInfo);
+        if (forceWidth > 0 && forceHeight > 0)
+            window.resize(forceWidth, forceHeight);
         window.show();
         result = app.exec();
     }
