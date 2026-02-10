@@ -99,8 +99,8 @@ CliResult CliEngine::cmdHelp() const
         "\n"
         "  help              Show this help message\n"
         "  version           Show HobbyCAD version\n"
-        "  open <file>       Open a BREP file\n"
-        "  save <file>       Save to a BREP file\n"
+        "  open <file>       Open a BREP file (.brep added if no extension)\n"
+        "  save <file>       Save to a BREP file (.brep added if no extension)\n"
         "  info              Show current document info\n"
         "  new               Create a new document with a test solid\n"
         "  cd [dir]          Change working directory (no arg = home)\n"
@@ -136,11 +136,25 @@ CliResult CliEngine::cmdOpen(const QStringList& args)
     CliResult r;
     if (args.isEmpty()) {
         r.exitCode = 1;
-        r.error = QStringLiteral("Usage: open <filename.brep>");
+        r.error = QStringLiteral("Usage: open <filename>");
         return r;
     }
 
     QString path = args.join(QStringLiteral(" "));
+
+    // Try the path as given first
+    if (!QFileInfo::exists(path)) {
+        // If no extension, try appending .brep
+        QString suffix = QFileInfo(path).suffix().toLower();
+        if (suffix.isEmpty()) {
+            QString withExt = path + QStringLiteral(".brep");
+            if (QFileInfo::exists(withExt))
+                path = withExt;
+            // else fall through with original path — readBrep will
+            // report the error
+        }
+    }
+
     QString err;
     auto shapes = brep_io::readBrep(path, &err);
     if (shapes.isEmpty()) {
@@ -159,13 +173,19 @@ CliResult CliEngine::cmdSave(const QStringList& args)
     CliResult r;
     if (args.isEmpty()) {
         r.exitCode = 1;
-        r.error = QStringLiteral("Usage: save <filename.brep>");
+        r.error = QStringLiteral("Usage: save <filename>");
         return r;
     }
 
     Document doc;
     doc.createTestSolid();
     QString path = args.join(QStringLiteral(" "));
+
+    // Auto-append .brep if no extension provided
+    QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix.isEmpty())
+        path += QStringLiteral(".brep");
+
     if (!doc.saveBrep(path)) {
         r.exitCode = 1;
         r.error = QStringLiteral("Error: could not save to ") + path;

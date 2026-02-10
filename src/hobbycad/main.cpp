@@ -19,11 +19,13 @@
 #include "cli/climode.h"
 #include "gui/full/fullmodewindow.h"
 #include "gui/reduced/reducedmodewindow.h"
+#include "gui/themevalidator.h"
 
 #include <QApplication>
 #include <QDir>
 #include <QFile>
 #include <QLocale>
+#include <QMessageBox>
 #include <QTranslator>
 
 #include <cstdlib>
@@ -160,7 +162,25 @@ int main(int argc, char* argv[])
     auto loadTheme = [&](const QString& path) -> bool {
         QFile f(path);
         if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            app.setStyleSheet(QString::fromUtf8(f.readAll()));
+            QString qss = QString::fromUtf8(f.readAll());
+
+            // Validate: reject themes where bg == fg
+            hobbycad::ThemeValidationResult vr =
+                hobbycad::validateTheme(qss);
+            if (!vr.valid) {
+                QString detail = vr.warnings.join(
+                    QStringLiteral("\n\n"));
+                QMessageBox::warning(nullptr,
+                    QObject::tr("Theme Rejected"),
+                    QObject::tr("The theme \"%1\" was not applied "
+                        "because it contains rules where the "
+                        "background color equals the text color, "
+                        "which would make text invisible.\n\n%2")
+                        .arg(path, detail));
+                return false;
+            }
+
+            app.setStyleSheet(qss);
             themeSource = path;
             return true;
         }

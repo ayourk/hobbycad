@@ -215,8 +215,50 @@
     - No separator lines (Markdown's own formatting suffices)
 
 
-  2.8  DATA/CONFIG FILES (AUTHORS, .gitignore, etc.)
-  ----------------------------------------------------
+  2.8  SVG FILES (.svg)
+  ----------------------
+
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!--
+      resources/icons/hobbycad.svg — HobbyCAD Application Icon
+
+      Optional multi-line description.
+
+      SPDX-License-Identifier: GPL-3.0-only
+    -->
+    <svg ...>
+
+  Rules:
+    - XML declaration on the first line
+    - HTML/XML comment block immediately after
+    - File path relative to project root on the first line of comment
+    - SPDX identifier inside the comment block
+
+
+  2.9  XPM FILES (.xpm)
+  ----------------------
+
+    /* =====================================================================
+     *  resources/icons/hobbycad.xpm — HobbyCAD Application Icon (XPM)
+     * =====================================================================
+     *
+     *  Optional multi-line description.
+     *
+     *  SPDX-License-Identifier: GPL-3.0-only
+     *
+     * ===================================================================== */
+    /* XPM */
+    static const char *hobbycad_xpm[] = {
+
+  Rules:
+    - Standard C block comment header (same style as QSS)
+    - The required /* XPM */ tag must appear immediately after the
+      header block (XPM parsers look for this literal string)
+    - File path relative to project root in the header
+
+
+  2.10  DATA/CONFIG FILES (AUTHORS, .gitignore, etc.)
+  -----------------------------------------------------
 
   Files without a natural comment syntax use the plain text document
   format where possible:
@@ -262,6 +304,14 @@
   Shell scripts:
     - Lowercase with hyphens (build-appimage.sh)
 
+  Icons:
+    - Canonical source is SVG (hobbycad.svg)
+    - XPM uses same base name (hobbycad.xpm)
+    - Sized PNGs use base name + hyphen + size (hobbycad-48.png)
+    - Platform icons: .ico (Windows), .icns (macOS)
+    - PNGs, .ico, and .icns are generated at build time from SVG
+      and should NOT be committed to version control
+
 ================================================================================
   4. DIRECTORY STRUCTURE AND FILE PLACEMENT
 ================================================================================
@@ -272,6 +322,21 @@
     LICENSE                        GPL 3.0 (only)
     AUTHORS                        Contributors list
     .gitignore                     VCS exclusions
+
+    debian/                        Debian packaging files
+      changelog                    Version history
+      compat                       Debhelper compat level (13)
+      control                      Package metadata, dependencies
+      copyright                    Machine-readable copyright (DEP-5)
+      rules                        Build rules (dh + cmake + Ninja)
+      hobbycad.install             File installation list
+      source/format                Source format (3.0 quilt)
+
+    resources/                     Desktop integration files
+      hobbycad.desktop             Freedesktop.org .desktop entry
+      icons/
+        hobbycad.svg               Application icon (scalable, canonical)
+        hobbycad.xpm               XPM fallback (window manager hints)
 
     docs/                          Project documentation
       project_definition.txt       Master project spec
@@ -315,6 +380,7 @@
           mainwindow.h/.cpp        Base window (menus, status, docks)
           aboutdialog.h/.cpp       About dialog
           clipanel.h/.cpp          Embedded CLI terminal widget
+          themevalidator.h/.cpp    QSS theme validation utility
           full/                    Full Mode (OpenGL 3.3+)
             viewportwidget.h/.cpp  OCCT 3D viewport
             fullmodewindow.h/.cpp  Full Mode window
@@ -337,7 +403,8 @@
 
     tests/                         Unit/integration tests (future)
       README.txt
-    cmake/                         Custom CMake find modules
+    cmake/                         Custom CMake modules
+      GenerateIcons.cmake          Build-time SVG to PNG/ICO/ICNS
       README.txt
     scripts/                       Helper scripts (future)
       README.txt
@@ -345,10 +412,14 @@
       README.txt
       linux/
         build-appimage.sh
+        build-deb.sh
+        build-dev.sh
         README.txt
       windows/
+        build-dev.bat
         README.txt
       macos/
+        build-dev.sh
         README.txt
 
   Placement rules:

@@ -1,5 +1,5 @@
 =====================================================================
-  devtest — HobbyCAD Dependency Verification
+  devtest/README.txt — HobbyCAD Dependency Verification
 =====================================================================
 
   This directory contains a standalone build test that verifies
@@ -68,6 +68,8 @@
       libgit2         Version control library
       libzip          Archive support
       OpenGL          3D viewport symbol linkage
+      rsvg-convert    SVG to PNG icon generation (build-time, required)
+      icotool         Windows .ico generation (Windows only, WARN)
 
     Phase 1 — Basic Modeling (optional):
       libslvs         SolveSpace constraint solver
@@ -97,6 +99,7 @@
       [PASS] libgit2 1.7.2 — init + version query OK
       [PASS] libzip 1.10.1 — version query OK
       [PASS] OpenGL 4.6 (Mesa) — Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)
+      [PASS] rsvg-convert 2.56.1 — SVG to PNG conversion available
 
       -- Phase 1: Basic Modeling --
       [PASS] libslvs — solver invoked OK (result=0)
@@ -113,13 +116,31 @@
       [PASS] Assimp 5.3.1 — Importer created OK
       [PASS] Eigen 3.4.0 — 3x3 identity matrix OK
 
-    ===== Results: 14 passed, 0 warnings, 0 failed out of 14 =====
+    ===== Results: 15 passed, 0 warnings, 0 failed out of 15 =====
 
     All dependencies installed. Ready for all phases.
+
+    Highest phase passed: 5 (Phase 5: HobbyMesh)
+
+    DEVTEST_RESULT: [PASS] Success!  Good up to and including Phase 5
 
   Version numbers will differ on Windows (vcpkg) and macOS
   (Homebrew).  The Platform: line shows "windows" or "macos"
   accordingly.
+
+
+  RESULT LINE
+  ------------
+
+  The final line of output (and of devtest.log) is one of:
+
+    DEVTEST_RESULT: [PASS] Success!  Good up to and including Phase N
+    DEVTEST_RESULT: [FAIL] Missing Phase 0 dependencies
+
+  build-dev.sh/.bat parses lines starting with "DEVTEST_RESULT:"
+  to skip devtest on subsequent runs.  If the result line is
+  missing or shows [FAIL], devtest is rerun automatically.
+  Delete devtest.log to force a rerun.
 
 
   EXPECTED OUTPUT (Phase 0 only)
@@ -160,6 +181,8 @@
        - Per-dependency [PASS]/[WARN]/[FAIL] with versions
        - OpenGL driver version and GPU renderer
        - Summary counts
+       - Highest phase passed
+       - Result line (Success/Failed)
 
   The log is overwritten on each cmake -B run (the configure
   phase starts fresh) and appended to by each depcheck run.

@@ -1,5 +1,5 @@
 // =====================================================================
-//  HobbyCAD Dependency Verification
+//  devtest/depcheck.cpp — HobbyCAD Dependency Verification
 // =====================================================================
 //
 //  Compiles and links against every HobbyCAD / HobbyMesh dependency,
@@ -8,7 +8,8 @@
 //  Cross-platform: Linux, Windows (MSVC/MinGW), macOS (Apple Clang).
 //
 //  Phase 0 (Foundation) — required:
-//    OCCT, Qt 6, libgit2, libzip, OpenGL
+//    OCCT, Qt 6, libgit2, libzip, OpenGL, rsvg-convert
+//    icotool (Windows only, optional — WARN if missing)
 //
 //  Phase 1 (Basic Modeling) — optional:
 //    libslvs (SolveSpace constraint solver)
@@ -31,6 +32,8 @@
 #include <vector>
 #include <memory>
 #include <ctime>
+#include <cstdio>
+#include <cstdlib>
 
 // ---- Phase 0 (required) — OCCT ------------------------------------
 
@@ -279,6 +282,88 @@ int main(int argc, char* argv[])
         }
         add(r);
     }
+
+    // rsvg-convert — SVG to PNG icon generation (build-time)
+    {
+        DepResult r{"0", "rsvg-convert", "", FAIL, "", ""};
+#if defined(_WIN32)
+        int rc = std::system("where rsvg-convert >nul 2>nul");
+#else
+        int rc = std::system("command -v rsvg-convert >/dev/null 2>&1");
+#endif
+        if (rc == 0) {
+            // Try to get version
+            FILE* fp = nullptr;
+#if defined(_WIN32)
+            fp = _popen("rsvg-convert --version 2>nul", "r");
+#else
+            fp = popen("rsvg-convert --version 2>/dev/null", "r");
+#endif
+            if (fp) {
+                char buf[128] = {};
+                if (fgets(buf, sizeof(buf), fp)) {
+                    std::string ver(buf);
+                    // Trim trailing newline
+                    while (!ver.empty() && (ver.back() == '\n' || ver.back() == '\r'))
+                        ver.pop_back();
+                    // Extract version number (e.g., "rsvg-convert version 2.56.1")
+                    auto pos = ver.rfind(' ');
+                    if (pos != std::string::npos)
+                        r.version = ver.substr(pos + 1);
+                    else
+                        r.version = ver;
+                }
+#if defined(_WIN32)
+                _pclose(fp);
+#else
+                pclose(fp);
+#endif
+            }
+            r.status = PASS;
+            r.detail = "SVG to PNG conversion available";
+        } else {
+            r.detail = "rsvg-convert not found";
+            const char* plat = platform_name();
+            if      (std::string(plat) == "linux")
+                r.fix = "sudo apt-get install -y librsvg2-bin";
+            else if (std::string(plat) == "macos")
+                r.fix = "brew install librsvg";
+            else
+                r.fix = "install librsvg / rsvg-convert";
+        }
+        add(r);
+    }
+
+    // icotool — .ico generation (Windows only, optional, build-time)
+#if defined(_WIN32)
+    {
+        DepResult r{"0", "icotool", "", WARN, "", ""};
+        int rc = std::system("where icotool >nul 2>nul");
+        if (rc == 0) {
+            FILE* fp = _popen("icotool --version 2>nul", "r");
+            if (fp) {
+                char buf[128] = {};
+                if (fgets(buf, sizeof(buf), fp)) {
+                    std::string ver(buf);
+                    while (!ver.empty() && (ver.back() == '\n' || ver.back() == '\r'))
+                        ver.pop_back();
+                    auto pos = ver.rfind(' ');
+                    if (pos != std::string::npos)
+                        r.version = ver.substr(pos + 1);
+                    else
+                        r.version = ver;
+                }
+                _pclose(fp);
+            }
+            r.status = PASS;
+            r.detail = "Windows .ico generation available";
+        } else {
+            r.detail = "icotool not found (optional — .ico generation disabled)";
+            r.fix = "install icoutils";
+        }
+        add(r);
+    }
+#endif
 
     // =================================================================
     //  PHASE 1: Basic Modeling (optional)
@@ -570,6 +655,37 @@ int main(int argc, char* argv[])
     //  Report
     // =================================================================
 
+    // Determine the highest phase where all tests passed (no FAIL).
+    // A phase is considered successful if every test in that phase
+    // has status PASS or WARN (WARN = optional dependency missing).
+    int highest_pass_phase = -1;
+    {
+        // Collect unique phases and check each
+        std::vector<std::string> phases;
+        for (const auto& r : results) {
+            if (phases.empty() || phases.back() != r.phase)
+                phases.push_back(r.phase);
+        }
+        for (const auto& ph : phases) {
+            bool phase_ok = true;
+            for (const auto& r : results) {
+                if (r.phase == ph && r.status == FAIL) {
+                    phase_ok = false;
+                    break;
+                }
+            }
+            if (phase_ok) {
+                int idx = std::stoi(ph);
+                if (idx > highest_pass_phase)
+                    highest_pass_phase = idx;
+            } else {
+                // Stop at first failed phase — higher phases
+                // depend on lower ones
+                break;
+            }
+        }
+    }
+
     const char* phase_names[] = {
         "Phase 0: Foundation",
         "Phase 1: Basic Modeling",
@@ -670,6 +786,21 @@ int main(int argc, char* argv[])
             out << "\nAll dependencies installed. "
                 << "Ready for all phases.\n";
         }
+
+        if (highest_pass_phase >= 0) {
+            out << "\nHighest phase passed: "
+                << highest_pass_phase << " ("
+                << phase_names[highest_pass_phase] << ")\n";
+        }
+
+        // Machine-readable final line for build-dev scripts.
+        // build-dev.sh parses lines starting with "DEVTEST_RESULT:"
+        if (fail > 0) {
+            out << "\nDEVTEST_RESULT: [FAIL] Missing Phase 0 dependencies\n";
+        } else {
+            out << "\nDEVTEST_RESULT: [PASS] Success!  Good up to and "
+                << "including Phase " << highest_pass_phase << "\n";
+        }
     };
 
     // Write to stdout (compact)
@@ -695,3 +826,4 @@ int main(int argc, char* argv[])
 
     return fail > 0 ? 1 : 0;
 }
+

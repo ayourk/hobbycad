@@ -1,6 +1,83 @@
 =====================================================================
-  tools/linux/ — Linux AppImage Packaging
+  tools/linux/README.txt — Linux Build and Packaging Tools
 =====================================================================
+
+  DEVELOPER BUILD
+  ----------------
+
+  build-dev.sh configures and builds HobbyCAD for day-to-day
+  development with logging.  See dev_environment_setup.txt
+  Section 11.2 for usage and examples.
+
+    ./tools/linux/build-dev.sh [debug|release] [clean] [run]
+
+
+  DEBIAN PACKAGE (.deb)
+  ----------------------
+
+  build-deb.sh builds a .deb package for Ubuntu/Debian systems.
+  See dev_environment_setup.txt Section 11.3 for full details.
+
+    ./tools/linux/build-deb.sh              # Build .deb
+    ./tools/linux/build-deb.sh install      # Build + install locally
+    ./tools/linux/build-deb.sh clean        # Remove build artifacts
+
+  Prerequisites:
+
+    sudo apt-get install -y \
+      debhelper-compat dh-cmake dpkg-dev fakeroot \
+      lintian devscripts ninja-build
+
+  The script:
+
+    1. Checks that all build prerequisites are installed
+    2. Verifies the debian/ packaging files are present
+    3. Runs dpkg-buildpackage to produce the .deb
+    4. Runs lintian to check for packaging issues
+    5. Optionally installs the package locally
+
+  Output lands in the parent directory of the project root:
+
+    ../hobbycad_0.0.1-1_amd64.deb
+
+  All output is logged to build-deb.log in the project root.
+
+  The debian/ directory at the project root contains:
+
+    debian/
+      changelog              Version history (dpkg-parsechangelog)
+      compat                 Debhelper compat level (13)
+      control                Package metadata and dependencies
+      copyright              Machine-readable copyright (DEP-5)
+      rules                  Build rules (dh + cmake + Ninja)
+      hobbycad.install       File installation list
+      source/
+        format               Source format (3.0 quilt)
+
+  The resources/ directory provides desktop integration files:
+
+    resources/
+      hobbycad.desktop       Freedesktop.org .desktop entry
+      icons/
+        hobbycad.svg         Application icon (scalable, canonical)
+        hobbycad.xpm         XPM fallback (window manager hints)
+
+  Additional icon formats (PNG, .ico, .icns) are generated at
+  build time from the SVG by cmake/GenerateIcons.cmake.  This
+  requires rsvg-convert:
+
+    sudo apt-get install -y librsvg2-bin
+
+  Optional tools for .ico generation:
+
+    sudo apt-get install -y icoutils    # icotool (preferred)
+    # or: sudo apt-get install -y imagemagick  # convert (fallback)
+
+  PPA upload (after local testing):
+
+    debuild -S -sa
+    dput ppa:ayourk/hobbycad ../hobbycad_0.0.1-1_source.changes
+
 
   BUILD AN APPIMAGE
   ------------------

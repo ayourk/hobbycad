@@ -23,10 +23,12 @@ set(APP_SOURCES
     gui/mainwindow.cpp
     gui/aboutdialog.cpp
     gui/clipanel.cpp
+    gui/themevalidator.cpp
 
     # Full mode (OpenGL viewport)
     gui/full/viewportwidget.cpp
     gui/full/fullmodewindow.cpp
+    gui/full/scalebarwidget.cpp
 
     # Reduced mode (no OpenGL)
     gui/reduced/reducedviewport.cpp
@@ -44,8 +46,10 @@ set(APP_HEADERS
     gui/mainwindow.h
     gui/aboutdialog.h
     gui/clipanel.h
+    gui/themevalidator.h
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h
+    gui/full/scalebarwidget.h
     gui/reduced/reducedviewport.h
     gui/reduced/diagnosticdialog.h
     gui/reduced/reducedmodewindow.h
@@ -67,6 +71,11 @@ add_executable(hobbycad ${APP_SOURCES} ${APP_HEADERS} ${APP_RESOURCES})
 
 target_include_directories(hobbycad PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Treat OCCT headers as system headers to suppress deprecation warnings
+# from NCollection_StlIterator.hxx (std::iterator is deprecated in C++17).
+target_include_directories(hobbycad SYSTEM PRIVATE
     ${OpenCASCADE_INCLUDE_DIR}
 )
 
@@ -96,9 +105,11 @@ install(FILES
     OPTIONAL
 )
 
-install(FILES
-    ${CMAKE_SOURCE_DIR}/resources/icons/hobbycad.svg
-    DESTINATION share/icons/hicolor/scalable/apps
-    OPTIONAL
+# Icon generation and installation handled by cmake/GenerateIcons.cmake
+include(${CMAKE_SOURCE_DIR}/cmake/GenerateIcons.cmake)
+generate_icons(
+    SVG    ${CMAKE_SOURCE_DIR}/resources/icons/hobbycad.svg
+    OUTPUT ${CMAKE_BINARY_DIR}/icons
+    NAME   hobbycad
 )
 

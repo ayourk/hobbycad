@@ -47,8 +47,14 @@ target_include_directories(hobbycad-lib
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
-    PRIVATE
+    SYSTEM PRIVATE
         ${OpenCASCADE_INCLUDE_DIR}
+)
+
+# Suppress deprecation warnings from OCCT headers (std::iterator in
+# NCollection_StlIterator.hxx).  These are upstream issues we can't fix.
+target_compile_options(hobbycad-lib PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-deprecated-declarations>
 )
 
 # OCCT libraries needed by the core (no visualization)
