@@ -1,6 +1,22 @@
 # HobbyCAD
 
+<!-- File: README.md -->
+
+<p align="center">
+  <img src="resources/icons/hobbycad.svg" alt="HobbyCAD Logo" width="128" height="128">
+  <br><br>
+  <img src="https://img.shields.io/github/license/ayourk/hobbycad?label=License&color=blue" alt="License: GPL 3.0">
+  <img src="https://img.shields.io/github/last-commit/ayourk/hobbycad" alt="Last Commit">
+  <img src="https://img.shields.io/badge/Phase-0_(Foundation)-green.svg" alt="Phase 0">
+  <img src="https://img.shields.io/badge/Platform-Linux-orange.svg" alt="Platform: Linux">
+  <img src="https://img.shields.io/badge/PPA-ayourk%2Fhobbycad-purple.svg" alt="PPA">
+</p>
+
 **A Linux-native, open-source, parametric 3D CAD application — for hobbyists, by hobbyists.**
+
+<p align="center">
+  <img src="resources/screenshot.png" alt="HobbyCAD Phase 0 — 3D viewport with test geometry" width="720">
+</p>
 
 HobbyCAD is a parametric 3D solid modeler designed for mechanical engineering, product design, and hobbyist fabrication. It delivers professional-quality tools without proprietary software, cloud lock-in, or subscription fees.
 
@@ -31,7 +47,7 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 - Directory-first project format (`.hcad` manifest + plain-text files) — fully inspectable, hand-editable, and diff-friendly
 - Tiered startup: Full Mode (OpenGL 3.3+), Reduced Mode (GUI without 3D viewport), Command-Line Mode (headless/batch)
 
-### HobbyMesh Companion Tool
+### HobbyMesh Companion Tool (Planned)
 
 - Mesh editing, repair, and analysis
 - 3D printing preparation: Make Solid, hollowing, supports, orientation optimization, wall thickness analysis
@@ -65,7 +81,37 @@ sudo add-apt-repository ppa:ayourk/hobbycad
 sudo apt-get update
 ```
 
-Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See `dev_environment_setup.txt` Sections 7–8 for details.
+Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See [`docs/dev_environment_setup.txt` §7–8](docs/dev_environment_setup.txt#L646) for details.
+
+## Development Setup
+
+Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_environment_setup.txt).
+
+### Ubuntu 24.04 LTS (Primary Development Platform)
+
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | [One-line install](docs/dev_environment_setup.txt#L447) (§4.10) | Single `apt install` for all Phase 0 dependencies |
+| **Dependencies** | [Package installation](docs/dev_environment_setup.txt#L288) (§4) | Per-component install with explanations |
+
+### Ubuntu 22.04 LTS (Minimum Target)
+
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | [One-line install](docs/dev_environment_setup.txt#L551) (§5.6) | Single `apt install` for all Phase 0 dependencies |
+| **Dependencies** | [Package installation](docs/dev_environment_setup.txt#L471) (§5) | Package differences from 24.04 |
+
+### General
+
+| Section | Description |
+|---|---|
+| [Prerequisites](docs/dev_environment_setup.txt#L180) (§3) | Required tools and minimum versions |
+| [PPA packages](docs/dev_environment_setup.txt#L646) (§7) | Dependencies requiring source build or PPA (libslvs, etc.) |
+| [Launchpad PPA](docs/dev_environment_setup.txt#L753) (§8) | PPA setup, packaging workflow, versioning |
+| [Version differences](docs/dev_environment_setup.txt#L573) (§6) | OCCT, Qt, and Python differences between 22.04 and 24.04 |
+| [Verify installation](docs/dev_environment_setup.txt#L977) (§9) | Dependency and OpenGL verification steps |
+| [Building Phase 0](docs/dev_environment_setup.txt#L1134) (§11) | Clone, dev build, .deb, and AppImage instructions |
+| [Troubleshooting](docs/dev_environment_setup.txt#L1303) (§12) | Common build issues and fixes |
 
 ## Development Phases
 
@@ -100,13 +146,13 @@ HobbyCAD and HobbyMesh are licensed under the **GNU General Public License v3.0 
 - A **commercial license** may be offered in the future for entities redistributing HobbyCAD or derivatives commercially
 - **AGPL 3.0** is under consideration and may be adopted at any time; the copyright assignment policy preserves this option
 
-See `project_definition.txt` Section 12 for the full licensing framework.
+See [`docs/project_definition.txt` §12](docs/project_definition.txt#L1400) for the full licensing framework.
 
 ## Contributing
 
 Contributions are welcome. All code merged into the main repository requires copyright assignment to the project author, enabling unified licensing decisions. Contributors are acknowledged in the `AUTHORS` file.
 
-A contribution agreement (CLA) mechanism will be defined before external contributions are accepted. See `project_definition.txt` Sections 12.5–12.7 for details.
+A contribution agreement (CLA) mechanism will be defined before external contributions are accepted. See [`docs/project_definition.txt` §12.5–12.7](docs/project_definition.txt#L1537) for details.
 
 ## Project Documentation
 
@@ -114,23 +160,23 @@ All project documentation is in plain text format:
 
 | Document | Description |
 |---|---|
-| `project_definition.txt` | Project scope, design principles, file format spec, development phases, licensing framework |
-| `cad_library_recommendations.txt` | Library analysis, alternatives considered, licensing, HobbyMesh stack |
-| `cad_use_case_document.txt` | Use cases, target audience, competitive analysis, HobbyMesh specification |
-| `dev_environment_setup.txt` | Build environment setup for Ubuntu 22.04/24.04, dependency installation, verification |
-| `security_risks.txt` | Threat model, mitigations for file parsing, scripting, network, supply chain |
-| `AUTHORS` | Project author and contributor listing |
+| `docs/project_definition.txt` | Project scope, design principles, file format spec, development phases, licensing framework |
+| `docs/cad_library_recommendations.txt` | Library analysis, alternatives considered, licensing, HobbyMesh stack |
+| `docs/cad_use_case_document.txt` | Use cases, target audience, competitive analysis, HobbyMesh specification |
+| `docs/dev_environment_setup.txt` | Build environment setup for Ubuntu 22.04/24.04, dependency installation, verification |
+| `docs/security_risks.txt` | Threat model, mitigations for file parsing, scripting, network, supply chain |
+| `AUTHORS` (Project root) | Project author and contributor listing |
 
 ## Competitive Landscape
 
-HobbyCAD occupies a unique position in the open-source CAD ecosystem:
+HobbyCAD aims to fill a specific gap in the open-source CAD ecosystem:
 
-- **vs. FreeCAD** — Clean architecture built from scratch, unified UX instead of fragmented workbenches, opinionated design choices over committee-driven feature sprawl
-- **vs. Fusion 360 / Onshape** — No cloud dependency, no subscription, no telemetry, version control through git instead of proprietary cloud backends
-- **vs. OpenSCAD** — Visual parametric modeling with a GUI, not code-only; Python scripting available for those who want it
-- **vs. SolidWorks / Inventor** — Free and open source, Linux-native, no license server
+- **vs. FreeCAD** — FreeCAD is the most established open-source parametric CAD. HobbyCAD takes a different approach: a single unified workflow rather than separate workbenches, built from a clean codebase with opinionated UX decisions. FreeCAD's maturity and community are significant advantages; HobbyCAD trades that ecosystem for architectural cohesion.
+- **vs. Fusion 360 / Onshape** — Excellent commercial tools, but require cloud connectivity, subscriptions, and send telemetry. HobbyCAD is fully offline — your files are local, version control runs through git, and there's no account to create.
+- **vs. OpenSCAD** — OpenSCAD's code-first approach is powerful for programmatic modeling. HobbyCAD provides a visual parametric GUI with an optional Python scripting layer for automation.
+- **vs. SolidWorks / Inventor** — Industry-standard tools with deep feature sets. HobbyCAD targets hobbyists and makers who need solid modeling without commercial license costs or platform restrictions.
 
-HobbyMesh fills the gap left by Autodesk Meshmixer (abandoned, never properly available on Linux) for mesh editing and 3D print preparation.
+HobbyMesh aims to fill the gap left by Autodesk Meshmixer (discontinued, never fully supported on Linux) for mesh editing and 3D print preparation.
 
 ## Contact
 

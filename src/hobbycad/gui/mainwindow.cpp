@@ -5,6 +5,7 @@
 #include "mainwindow.h"
 #include "aboutdialog.h"
 #include "clipanel.h"
+#include "preferencesdialog.h"
 
 #include <QAction>
 #include <QApplication>
@@ -110,18 +111,31 @@ void MainWindow::hideDockTerminal()
 
 void MainWindow::finalizeLayout()
 {
-    // Restore window geometry and dock/toolbar state from settings.
-    // Settings are stored in ~/.config/HobbyCAD/HobbyCAD.conf
-    // (path determined by QApplication organizationName/applicationName).
+    // Restore window geometry and dock/toolbar state from settings,
+    // but only if the user hasn't disabled session restore.
     QSettings settings;
-    if (settings.contains(QStringLiteral("window/geometry"))) {
-        restoreGeometry(
-            settings.value(QStringLiteral("window/geometry")).toByteArray());
+    bool restoreSession = settings.value(
+        QStringLiteral("preferences/restoreSession"), true).toBool();
+
+    if (restoreSession) {
+        if (settings.contains(QStringLiteral("window/geometry"))) {
+            restoreGeometry(
+                settings.value(QStringLiteral("window/geometry")).toByteArray());
+        }
+        if (settings.contains(QStringLiteral("window/state"))) {
+            restoreState(
+                settings.value(QStringLiteral("window/state")).toByteArray());
+        }
     }
-    if (settings.contains(QStringLiteral("window/state"))) {
-        restoreState(
-            settings.value(QStringLiteral("window/state")).toByteArray());
-    }
+
+    // Sync toggle actions to actual dock visibility after restoreState.
+    // Use !isHidden() rather than isVisible() because the main window
+    // hasn't been show()n yet — isVisible() always returns false during
+    // construction, which would hide every dock via the toggled signal.
+    if (m_actionToggleFeatureTree && m_featureTreeDock)
+        m_actionToggleFeatureTree->setChecked(!m_featureTreeDock->isHidden());
+    if (m_actionToggleTerminal && m_terminalDock)
+        m_actionToggleTerminal->setChecked(!m_terminalDock->isHidden());
 
     updateTitle();
 }
@@ -164,7 +178,6 @@ void MainWindow::createMenus()
         this, &MainWindow::onHelpAbout);
 
     // View menu (inserted between File and Help)
-    // We add it after Help is created, then move it before Help
     auto* viewMenu = new QMenu(tr("&View"), this);
     menuBar()->insertMenu(helpMenu->menuAction(), viewMenu);
 
@@ -172,6 +185,11 @@ void MainWindow::createMenus()
         QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft));
     m_actionToggleTerminal->setCheckable(true);
     m_actionToggleTerminal->setChecked(false);
+
+    m_actionToggleFeatureTree = viewMenu->addAction(tr("&Feature Tree"),
+        QKeySequence(Qt::CTRL | Qt::Key_F));
+    m_actionToggleFeatureTree->setCheckable(true);
+    m_actionToggleFeatureTree->setChecked(true);
 
     viewMenu->addSeparator();
 
@@ -182,6 +200,11 @@ void MainWindow::createMenus()
     m_actionRotateLeft = viewMenu->addAction(tr("Rotate &Left 90°"));
 
     m_actionRotateRight = viewMenu->addAction(tr("Rotate Ri&ght 90°"));
+
+    viewMenu->addSeparator();
+
+    m_actionPreferences = viewMenu->addAction(tr("&Preferences..."),
+        QKeySequence::Preferences, this, &MainWindow::onEditPreferences);
 }
 
 // ---- Status bar -----------------------------------------------------
@@ -233,6 +256,12 @@ void MainWindow::createDockPanels()
     m_featureTreeDock->setWidget(tree);
 
     addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
+
+    // Connect View > Feature Tree toggle to dock visibility
+    connect(m_actionToggleFeatureTree, &QAction::toggled,
+            m_featureTreeDock, &QDockWidget::setVisible);
+    connect(m_featureTreeDock, &QDockWidget::visibilityChanged,
+            m_actionToggleFeatureTree, &QAction::setChecked);
 
     // Embedded terminal panel
     m_terminalDock = new QDockWidget(tr("Terminal"), this);
@@ -455,6 +484,19 @@ void MainWindow::onHelpAbout()
 {
     AboutDialog dlg(m_glInfo, this);
     dlg.exec();
+}
+
+void MainWindow::onEditPreferences()
+{
+    PreferencesDialog dlg(this);
+    if (dlg.exec() == QDialog::Accepted) {
+        applyPreferences();
+    }
+}
+
+void MainWindow::applyPreferences()
+{
+    // Subclasses override to apply settings to the viewport, etc.
 }
 
 // ---- Helpers --------------------------------------------------------

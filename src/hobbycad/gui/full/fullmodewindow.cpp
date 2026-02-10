@@ -6,6 +6,7 @@
 #include "viewportwidget.h"
 
 #include <QLabel>
+#include <QSettings>
 #include <QStatusBar>
 
 #include <AIS_InteractiveContext.hxx>
@@ -54,6 +55,9 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
         static const char* names[] = { "X", "Y", "Z" };
         m_axisLabel->setText(tr("Axis: %1").arg(names[axis]));
     });
+
+    // Apply saved preferences (rotation axis, spin/snap params, grid)
+    applyPreferences();
 }
 
 void FullModeWindow::onDocumentLoaded()
@@ -78,6 +82,37 @@ void FullModeWindow::onDocumentClosed()
 
     ctx->UpdateCurrentViewer();
     m_viewport->resetCamera();
+}
+
+void FullModeWindow::applyPreferences()
+{
+    QSettings s;
+    s.beginGroup(QStringLiteral("preferences"));
+
+    // Rotation axis
+    int axis = s.value(QStringLiteral("defaultAxis"), 0).toInt();
+    m_viewport->setRotationAxis(
+        static_cast<ViewportWidget::RotationAxis>(qBound(0, axis, 2)));
+
+    // PgUp/PgDn
+    int pgStep = s.value(QStringLiteral("pgUpStepDeg"), 10).toInt();
+    int pgInt  = s.value(QStringLiteral("spinInterval"), 10).toInt();
+    m_viewport->setSpinParams(pgStep, pgInt);
+
+    // Arrow snap animation
+    int snapStep = s.value(QStringLiteral("snapStepDeg"), 10).toInt();
+    int snapInt  = s.value(QStringLiteral("snapInterval"), 10).toInt();
+    m_viewport->setSnapParams(snapStep, snapInt);
+
+    // Grid
+    bool showGrid = s.value(QStringLiteral("showGrid"), true).toBool();
+    m_viewport->setGridVisible(showGrid);
+
+    s.endGroup();
+
+    // Update axis label
+    static const char* names[] = { "X", "Y", "Z" };
+    m_axisLabel->setText(tr("Axis: %1").arg(names[m_viewport->rotationAxis()]));
 }
 
 void FullModeWindow::displayShapes()

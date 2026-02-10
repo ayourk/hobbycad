@@ -52,6 +52,9 @@ protected:
     /// Override to clear the viewport when a document is closed.
     virtual void onDocumentClosed() {}
 
+    /// Override to apply changed preferences to the viewport.
+    virtual void applyPreferences();
+
     /// Intercept window close to prompt for unsaved changes.
     void closeEvent(QCloseEvent* event) override;
 
@@ -79,6 +82,7 @@ private slots:
     void onFileSaveAs();
     void onFileClose();
     void onFileQuit();
+    void onEditPreferences();
     void onHelpAbout();
 
 private:
@@ -101,7 +105,9 @@ private:
     QAction* m_actionClose  = nullptr;
     QAction* m_actionQuit   = nullptr;
     QAction* m_actionAbout  = nullptr;
+    QAction* m_actionPreferences = nullptr;
     QAction* m_actionToggleTerminal = nullptr;
+    QAction* m_actionToggleFeatureTree = nullptr;
     QAction* m_actionResetView = nullptr;
     QAction* m_actionRotateLeft = nullptr;
     QAction* m_actionRotateRight = nullptr;

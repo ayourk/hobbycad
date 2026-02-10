@@ -379,7 +379,9 @@
       clang-tidy \
       doxygen \
       graphviz \
-      lcov
+      lcov \
+      librsvg2-bin \
+      icoutils
 
   4.6  IMAGE FORMAT SUPPORT
   ---------------------------
@@ -462,7 +464,8 @@
       libpng-dev libjpeg-dev netpbm \
       libzip-dev libminizip-dev \
       libgit2-dev \
-      gdb valgrind clang-format clang-tidy doxygen graphviz lcov
+      gdb valgrind clang-format clang-tidy doxygen graphviz lcov \
+      librsvg2-bin icoutils
 
 ================================================================================
   5. PACKAGE INSTALLATION - UBUNTU 22.04 LTS (Minimum Target)
@@ -563,7 +566,8 @@
       libpng-dev libjpeg-dev netpbm \
       libzip-dev libminizip-dev \
       libgit2-dev \
-      gdb valgrind clang-format clang-tidy doxygen graphviz lcov
+      gdb valgrind clang-format clang-tidy doxygen graphviz lcov \
+      librsvg2-bin icoutils
 
 ================================================================================
   6. PACKAGE VERSION DIFFERENCES (22.04 vs 24.04)
@@ -1031,6 +1035,20 @@
       LICENSE                      GPL 3.0 (only) license text
       AUTHORS                      Contributors list
       .gitignore                   Version control exclusions
+      debian/
+        changelog                  Version history
+        compat                     Debhelper compat level (13)
+        control                    Package metadata, dependencies
+        copyright                  Machine-readable copyright (DEP-5)
+        rules                      Build rules (dh + cmake + Ninja)
+        hobbycad.install           File installation list
+        source/
+          format                   Source format (3.0 quilt)
+      resources/
+        hobbycad.desktop           Freedesktop.org .desktop entry
+        icons/
+          hobbycad.svg             Application icon (scalable, canonical)
+          hobbycad.xpm             XPM fallback (window manager hints)
       devtest/
         CMakeLists.txt             Dependency verification build
         depcheck.cpp               Test program (all phases)
@@ -1093,7 +1111,8 @@
           README.txt               Stub for git tracking
       tests/                       Unit and integration tests (future)
         README.txt                 Stub for git tracking
-      cmake/                       Custom CMake find modules
+      cmake/                       Custom CMake modules
+        GenerateIcons.cmake        Build-time SVG to PNG/ICO/ICNS
         README.txt                 Stub for git tracking
       scripts/                     Helper scripts (future)
         README.txt                 Stub for git tracking
@@ -1101,8 +1120,9 @@
         README.txt                 Build and packaging tools
         linux/
           build-appimage.sh        AppImage build + logging script
+          build-deb.sh             Debian package build script
           build-dev.sh             Developer build with logging
-          README.txt               Linux packaging details
+          README.txt               Linux build and packaging details
         windows/
           build-dev.bat            Developer build with logging
           README.txt               Windows packaging (future)
@@ -1196,14 +1216,34 @@
 
     debian/
       changelog              Version history (dpkg-parsechangelog)
-      compat                 Debhelper compat level
+      compat                 Debhelper compat level (13)
       control                Package metadata, dependencies
       copyright              Machine-readable copyright (DEP-5)
-      rules                  Build rules (dh with cmake)
+      rules                  Build rules (dh + cmake + Ninja)
       hobbycad.install       File installation list
-      hobbycad.desktop       Desktop entry for application menu
+      source/
+        format               Source format (3.0 quilt)
 
-  Build the .deb locally:
+  Desktop integration files (in source tree):
+
+    resources/
+      hobbycad.desktop       Freedesktop.org .desktop entry
+      icons/
+        hobbycad.svg         Application icon (scalable, canonical)
+        hobbycad.xpm         XPM fallback (window manager hints)
+
+  Platform-specific icons (PNG, .ico, .icns) are generated at
+  build time from the SVG via cmake/GenerateIcons.cmake.
+  Requires rsvg-convert (librsvg2-bin).  The XPM is installed
+  to share/pixmaps/ for legacy window manager support.
+
+  Build the .deb using the script:
+
+    ./tools/linux/build-deb.sh              # build only
+    ./tools/linux/build-deb.sh install      # build + install locally
+    ./tools/linux/build-deb.sh clean        # remove build artifacts
+
+  Or manually:
 
     dpkg-buildpackage -us -uc -b
 

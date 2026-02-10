@@ -9,45 +9,28 @@
   Design: Yellow #2 pencil over a cyan speed square,
   pencil tip resting in the right-angle corner.
 
+  The viewBox includes 16px padding on all sides to prevent
+  edge clipping in Qt's SVG renderer.
+
+  The speed square border uses a filled path (outer triangle
+  minus inner triangle via evenodd) instead of clip-path +
+  doubled strokes, for reliable rendering in Qt's SVG engine.
+
   SPDX-License-Identifier: GPL-3.0-only
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- Transparent background (no fill) -->
-
-  <defs>
-    <!-- Clip to bottom-right triangle.  The clip edge IS the
-         diagonal, so half of each stroke is clipped away.
-         Stroke-width is doubled (28) so the visible portion
-         is 14px — matching the filled-path version. -->
-    <clipPath id="sq-clip">
-      <polygon points="128,0 128,128 0,128"/>
-    </clipPath>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-16 -16 160 160">
 
   <!-- === SPEED SQUARE (behind pencil) === -->
-  <g id="speed-square" clip-path="url(#sq-clip)">
-    <!-- Right angle (two legs) — stroke 28, visible 14 after clip -->
-    <polyline
-      points="128,0 128,128 0,128"
-      fill="none"
-      stroke="#00bcd4"
-      stroke-width="28"
-      stroke-linejoin="miter"
-      stroke-linecap="butt"
-    />
+  <g id="speed-square">
+    <!-- Border: outer triangle with inner triangle cut out.
+         Outer: (128,0)-(128,128)-(0,128)  clockwise
+         Inner: 14px inset; hypotenuse offset is 14*sqrt(2) ≈ 19.8
+                (114,33.8)-(114,114)-(33.8,114)  counter-clockwise -->
+    <path fill="#00bcd4" fill-rule="evenodd"
+          d="M128,0 L128,128 L0,128 Z
+             M114,33.8 L33.8,114 L114,114 Z"/>
 
-    <!-- Hypotenuse — stroke 28, visible 14 after clip -->
-    <line
-      x1="128" y1="0" x2="0" y2="128"
-      stroke="#00bcd4"
-      stroke-width="28"
-      stroke-linecap="butt"
-    />
-
-    <!-- Tick marks: black diagonals, stroke-width 3.5 (1/4 of 14).
-         Each tick starts 1px inward from the diagonal (x+y=128)
-         and extends to 7px inward (1/2 of visible 14px thickness).
-         Direction: (+0.707, +0.707). -->
+    <!-- Tick marks along hypotenuse -->
     <g stroke="black" stroke-width="3.5" stroke-linecap="butt">
       <line x1="115.9" y1="13.5"  x2="120.1" y2="17.7"/>
       <line x1="103.1" y1="26.3"  x2="107.3" y2="30.5"/>
