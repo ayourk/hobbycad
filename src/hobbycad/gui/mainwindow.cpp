@@ -22,6 +22,31 @@
 
 namespace hobbycad {
 
+// Standard file dialog filter — BREP first so Qt uses it as default.
+// "All Files" lets the user bypass the auto-extension behavior.
+static const QString kBrepFilter =
+    QStringLiteral("BREP Files (*.brep *.brp);;All Files (*)");
+
+// Ensure a save path has the .brep extension when the BREP filter is
+// selected.  When "All Files" is active, the path is left as-is.
+static QString ensureBrepExtension(const QString& path,
+                                   const QString& selectedFilter)
+{
+    if (path.isEmpty())
+        return path;
+
+    // If the user chose "All Files", don't touch the extension
+    if (selectedFilter.contains(QStringLiteral("*.*")) ||
+        selectedFilter.startsWith(QStringLiteral("All")))
+        return path;
+
+    QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix.isEmpty())
+        return path + QStringLiteral(".brep");
+
+    return path;
+}
+
 MainWindow::MainWindow(const OpenGLInfo& glInfo, QWidget* parent)
     : QMainWindow(parent)
     , m_glInfo(glInfo)
@@ -32,8 +57,7 @@ MainWindow::MainWindow(const OpenGLInfo& glInfo, QWidget* parent)
     createStatusBar();
     createDockPanels();
 
-    // Start with a test solid
-    m_document.createTestSolid();
+    // Start with an empty document
     updateTitle();
 }
 
@@ -231,12 +255,22 @@ void MainWindow::onFileOpen()
 {
     if (!maybeSave()) return;
 
+    QString selectedFilter;
     QString path = QFileDialog::getOpenFileName(this,
         tr("Open BREP File"),
         QString(),
-        tr("BREP Files (*.brep *.brp);;All Files (*)"));
+        kBrepFilter,
+        &selectedFilter);
 
     if (path.isEmpty()) return;
+
+    // If the file doesn't exist and the BREP filter is active,
+    // try appending .brep before giving up
+    if (!QFileInfo::exists(path)) {
+        QString withExt = ensureBrepExtension(path, selectedFilter);
+        if (withExt != path && QFileInfo::exists(withExt))
+            path = withExt;
+    }
 
     if (m_document.loadBrep(path)) {
         updateTitle();
@@ -269,12 +303,16 @@ void MainWindow::onFileSave()
 
 void MainWindow::onFileSaveAs()
 {
+    QString selectedFilter;
     QString path = QFileDialog::getSaveFileName(this,
         tr("Save BREP File"),
         QString(),
-        tr("BREP Files (*.brep *.brp);;All Files (*)"));
+        kBrepFilter,
+        &selectedFilter);
 
     if (path.isEmpty()) return;
+
+    path = ensureBrepExtension(path, selectedFilter);
 
     if (m_document.saveBrep(path)) {
         updateTitle();
@@ -338,14 +376,18 @@ bool MainWindow::maybeSave()
     if (clicked == saveBtn) {
         // Try to save — if the doc is new, prompt for a filename
         if (m_document.isNew()) {
+            QString selectedFilter;
             QString path = QFileDialog::getSaveFileName(this,
                 tr("Save BREP File"),
                 QString(),
-                tr("BREP Files (*.brep *.brp);;All Files (*)"));
+                kBrepFilter,
+                &selectedFilter);
 
             if (path.isEmpty()) {
                 return false;  // user cancelled the save dialog
             }
+
+            path = ensureBrepExtension(path, selectedFilter);
 
             if (!m_document.saveBrep(path)) {
                 QMessageBox::warning(this,

@@ -27,7 +27,12 @@
 class QMouseEvent;
 class QWheelEvent;
 
+class AIS_Trihedron;
+class AIS_InteractiveObject;
+
 namespace hobbycad {
+
+class ScaleBarWidget;
 
 class ViewportWidget : public QWidget, protected AIS_ViewController {
     Q_OBJECT
@@ -39,8 +44,17 @@ public:
     /// Access the AIS interactive context for displaying shapes.
     Handle(AIS_InteractiveContext) context() const;
 
+    /// Access the V3d_View (needed by scale bar, etc.).
+    Handle(V3d_View) view() const;
+
     /// Reset the camera to view all displayed objects.
     void fitAll();
+
+    /// Show or hide the XZ ground grid.
+    void setGridVisible(bool visible);
+
+    /// Returns true if the grid is currently visible.
+    bool isGridVisible() const;
 
     /// QPaintEngine must return nullptr for WA_PaintOnScreen widgets.
     QPaintEngine* paintEngine() const override { return nullptr; }
@@ -57,11 +71,17 @@ protected:
 
 private:
     void initViewer();
+    void setupAxisTrihedron();
+    void setupGrid();
+    void updateScaleBar();
 
     Handle(V3d_Viewer)             m_viewer;
     Handle(V3d_View)               m_view;
     Handle(AIS_InteractiveContext)  m_context;
     bool                           m_initialized = false;
+    bool                           m_gridVisible = true;
+
+    ScaleBarWidget* m_scaleBar = nullptr;
 
     // Mouse tracking
     QPoint m_lastMousePos;

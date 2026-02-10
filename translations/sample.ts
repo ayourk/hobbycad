@@ -429,5 +429,30 @@ Click for details</translation>
     </message>
 </context>
 
+<!-- ===================================================================
+  Context: QObject (global — used in main.cpp)
+  File:    src/hobbycad/main.cpp
+  =================================================================== -->
+<context>
+    <n>QObject</n>
+
+    <message>
+        <source>Theme Rejected</source>
+        <comment>Warning dialog title: theme failed validation</comment>
+        <translation type="unfinished">Theme Rejected</translation>
+    </message>
+
+    <message>
+        <source>The theme "%1" was not applied because it contains rules where the background color equals the text color, which would make text invisible.
+
+%2</source>
+        <comment>Warning dialog body: theme validation failure.
+  %1 = theme file path, %2 = detailed warnings</comment>
+        <translation type="unfinished">The theme "%1" was not applied because it contains rules where the background color equals the text color, which would make text invisible.
+
+%2</translation>
+    </message>
+</context>
+
 </TS>
 

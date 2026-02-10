@@ -209,6 +209,13 @@ coverage/
 /*.zip
 
 # -----------------------------------------------------------------
+#  Generated icon files (built from resources/icons/hobbycad.svg)
+# -----------------------------------------------------------------
+resources/icons/hobbycad-*.png
+resources/icons/hobbycad.ico
+resources/icons/hobbycad.icns
+
+# -----------------------------------------------------------------
 #  Doxygen output
 # -----------------------------------------------------------------
 docs/html/

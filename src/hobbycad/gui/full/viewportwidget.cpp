@@ -15,12 +15,19 @@
 // =====================================================================
 
 #include "viewportwidget.h"
+#include "scalebarwidget.h"
 
 #include <AIS_InteractiveContext.hxx>
+#include <AIS_Line.hxx>
 #include <AIS_Shape.hxx>
+#include <AIS_Trihedron.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_NeutralWindow.hxx>
+#include <Aspect_Grid.hxx>
+#include <Geom_Axis2Placement.hxx>
+#include <Geom_CartesianPoint.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_DatumAspect.hxx>
 #include <V3d_AmbientLight.hxx>
 #include <V3d_DirectionalLight.hxx>
 #include <Quantity_Color.hxx>
@@ -52,6 +59,9 @@ ViewportWidget::ViewportWidget(QWidget* parent)
 
     // Minimum size so the viewport isn't zero-sized at startup
     setMinimumSize(200, 200);
+
+    // Scale bar overlay (child widget, bottom-left)
+    m_scaleBar = new ScaleBarWidget(this);
 }
 
 ViewportWidget::~ViewportWidget()
@@ -69,13 +79,41 @@ Handle(AIS_InteractiveContext) ViewportWidget::context() const
     return m_context;
 }
 
+Handle(V3d_View) ViewportWidget::view() const
+{
+    return m_view;
+}
+
 void ViewportWidget::fitAll()
 {
     if (!m_view.IsNull()) {
         m_view->FitAll(0.01, false);
         m_view->Invalidate();
+        updateScaleBar();
         update();
     }
+}
+
+void ViewportWidget::setGridVisible(bool visible)
+{
+    m_gridVisible = visible;
+    if (!m_viewer.IsNull()) {
+        if (visible)
+            m_viewer->ActivateGrid(Aspect_GT_Rectangular,
+                                   Aspect_GDM_Lines);
+        else
+            m_viewer->DeactivateGrid();
+
+        if (!m_view.IsNull()) {
+            m_view->Invalidate();
+            update();
+        }
+    }
+}
+
+bool ViewportWidget::isGridVisible() const
+{
+    return m_gridVisible;
 }
 
 // ---- Paint / resize -------------------------------------------------
@@ -108,6 +146,12 @@ void ViewportWidget::resizeEvent(QResizeEvent* event)
         m_view->MustBeResized();
         m_view->Invalidate();
     }
+
+    // Position scale bar at bottom-left (width is auto-sized)
+    if (m_scaleBar) {
+        updateScaleBar();
+        m_scaleBar->move(0, height() - m_scaleBar->height());
+    }
 }
 
 // ---- Viewer initialization ------------------------------------------
@@ -138,8 +182,6 @@ void ViewportWidget::initViewer()
     m_view->SetImmediateUpdate(false);
 
     // Wrap the widget's native window handle.
-    // Because we set WA_NativeWindow + WA_PaintOnScreen, the widget
-    // has a real X11 Window (or HWND on Windows) that OCCT can use.
     Handle(Aspect_NeutralWindow) nativeWindow =
         new Aspect_NeutralWindow();
 
@@ -154,9 +196,108 @@ void ViewportWidget::initViewer()
     m_context = new AIS_InteractiveContext(m_viewer);
     m_context->SetDisplayMode(AIS_Shaded, true);
 
-    // Default view orientation
-    m_view->SetProj(V3d_XposYnegZpos);
-    m_view->FitAll(0.01, false);
+    // Set up the axis trihedron and grid
+    setupAxisTrihedron();
+    setupGrid();
+
+    // ---- Camera orientation ---------------------------------------------
+    //
+    // Isometric view with:
+    //   X (red)   — lower-right
+    //   Y (green) — upper-right (with -Y extension to lower-left)
+    //   Z (blue)  — up
+    //
+    // Eye at (+1, -1, +1) looking toward origin.
+
+    m_view->SetEye(1.0, -1.0, 1.0);
+    m_view->SetUp(0.0, 0.0, 1.0);
+    m_view->SetAt(0.0, 0.0, 0.0);
+    m_view->FitAll(0.5, false);
+    m_view->SetAt(0.0, 0.0, 30.0);
+
+    // Initialize scale bar
+    m_scaleBar->setView(m_view);
+    updateScaleBar();
+}
+
+// ---- Axis trihedron (RGB) -------------------------------------------
+
+void ViewportWidget::setupAxisTrihedron()
+{
+    if (m_context.IsNull()) return;
+
+    // Create a trihedron at the origin.
+    // Axis2Placement defines the coordinate system:
+    //   origin, Z direction (main axis), X direction
+    Handle(Geom_Axis2Placement) placement =
+        new Geom_Axis2Placement(
+            gp_Pnt(0.0, 0.0, 0.0),    // origin
+            gp_Dir(0.0, 0.0, 1.0),    // Z axis (main/up)
+            gp_Dir(1.0, 0.0, 0.0));   // X axis
+
+    Handle(AIS_Trihedron) trihedron = new AIS_Trihedron(placement);
+
+    // Configure axis colors: X=Red, Y=Green, Z=Blue
+    trihedron->SetDatumPartColor(Prs3d_DatumParts_XAxis,
+        Quantity_Color(Quantity_NOC_RED));
+    trihedron->SetDatumPartColor(Prs3d_DatumParts_YAxis,
+        Quantity_Color(Quantity_NOC_GREEN));
+    trihedron->SetDatumPartColor(Prs3d_DatumParts_ZAxis,
+        Quantity_Color(Quantity_NOC_BLUE1));
+
+    // Set axis length proportional to default view (300 mm)
+    trihedron->SetSize(300.0);
+
+    // Display as wireframe (default mode) — not selectable
+    m_context->Display(trihedron, false);
+    m_context->Deactivate(trihedron);
+
+    // Extend the Y axis into the -Y direction at the same length.
+    // AIS_Trihedron only draws the positive direction, so we add a
+    // separate green line from origin to (0, -300, 0).
+    {
+        Handle(Geom_CartesianPoint) p1 = new Geom_CartesianPoint(
+            gp_Pnt(0.0, 0.0, 0.0));
+        Handle(Geom_CartesianPoint) p2 = new Geom_CartesianPoint(
+            gp_Pnt(0.0, -300.0, 0.0));
+        Handle(AIS_Line) negY = new AIS_Line(p1, p2);
+        negY->SetColor(Quantity_Color(Quantity_NOC_GREEN));
+        negY->SetWidth(1.0);
+        m_context->Display(negY, false);
+        m_context->Deactivate(negY);
+    }
+}
+
+// ---- Ground grid (XZ plane) -----------------------------------------
+
+void ViewportWidget::setupGrid()
+{
+    if (m_viewer.IsNull()) return;
+
+    // Set the grid to lie on the XZ plane (Y = 0) since Y points
+    // toward the user.  The grid plane is defined by the viewer's
+    // "private grid" coordinate system.
+    //
+    // Rectangular grid with 10 mm spacing, 100 mm major divisions.
+    m_viewer->SetRectangularGridValues(
+        0.0, 0.0,        // origin X, Z offset on the plane
+        10.0, 10.0,      // step in X and Z (10 mm)
+        0.0);            // rotation angle
+
+    m_viewer->SetRectangularGridGraphicValues(
+        100.0, 100.0,    // size X, Z (rendered extent — OCCT auto-tiles)
+        0.0);            // offset from plane
+
+    // Grid line colors
+    Quantity_Color gridColor(0.35, 0.38, 0.42, Quantity_TOC_RGB);
+    Quantity_Color tenthColor(0.50, 0.53, 0.58, Quantity_TOC_RGB);
+
+    m_viewer->Grid()->SetColors(gridColor, tenthColor);
+
+    // Activate the grid
+    if (m_gridVisible)
+        m_viewer->ActivateGrid(Aspect_GT_Rectangular,
+                               Aspect_GDM_Lines);
 }
 
 // ---- Mouse interaction ----------------------------------------------
@@ -198,11 +339,13 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event)
 
     if (m_rotating) {
         m_view->Rotation(pos.x(), pos.y());
+        updateScaleBar();
         update();
     } else if (m_panning) {
         m_view->Pan(pos.x() - m_lastMousePos.x(),
                     m_lastMousePos.y() - pos.y());
         m_lastMousePos = pos;
+        updateScaleBar();
         update();
     }
 
@@ -220,8 +363,19 @@ void ViewportWidget::wheelEvent(QWheelEvent* event)
         m_view->SetZoom(0.9);
     }
 
+    updateScaleBar();
     update();
     QWidget::wheelEvent(event);
+}
+
+// ---- Scale bar helper -----------------------------------------------
+
+void ViewportWidget::updateScaleBar()
+{
+    if (m_scaleBar) {
+        m_scaleBar->updateScale();
+        m_scaleBar->move(0, height() - m_scaleBar->height());
+    }
 }
 
 }  // namespace hobbycad

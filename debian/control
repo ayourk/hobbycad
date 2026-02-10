@@ -1,0 +1,54 @@
+Source: hobbycad
+Section: graphics
+Priority: optional
+Maintainer: Aaron Yourk <ayourk@users.launchpad.net>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake (>= 3.20),
+ ninja-build,
+ pkg-config,
+ qt6-base-dev (>= 6.2),
+ qt6-base-dev-tools,
+ libqt6opengl6-dev,
+ libqt6openglwidgets6,
+ libqt6svg6-dev,
+ libocct-data-exchange-dev,
+ libocct-foundation-dev,
+ libocct-modeling-algorithms-dev,
+ libocct-modeling-data-dev,
+ libocct-ocaf-dev,
+ libocct-visualization-dev,
+ libtbb-dev,
+ libgl-dev,
+ libglu1-mesa-dev,
+ libegl-dev,
+ libxkbcommon-dev,
+ libzip-dev,
+ libgit2-dev,
+ librsvg2-bin,
+ icoutils
+Standards-Version: 4.6.2
+Homepage: https://github.com/ayourk/hobbycad
+Vcs-Git: https://github.com/ayourk/hobbycad.git
+Vcs-Browser: https://github.com/ayourk/hobbycad
+Rules-Requires-Root: no
+
+Package: hobbycad
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends}
+Recommends:
+ occt-misc
+Description: Open-source parametric 3D CAD for hobbyists
+ HobbyCAD is a Linux-native parametric 3D solid modeler built on
+ OpenCASCADE Technology (OCCT) and Qt 6.  It provides boundary
+ representation (B-Rep) modeling with STEP, IGES, STL, and OBJ
+ import/export, a tiered startup system that adapts to available
+ GPU capabilities, and an embedded command-line terminal for
+ scripting and batch operations.
+ .
+ HobbyCAD operates in three modes depending on the system:
+ Full Mode (OpenGL 3.3+), Reduced Mode (no GPU required for
+ file conversion and geometry operations), and Command-Line
+ Mode (headless batch processing).

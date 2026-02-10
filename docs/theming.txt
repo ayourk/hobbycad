@@ -257,6 +257,17 @@ Adding new widgets:
   a descriptive PascalCase name.  Add the name to this document
   so theme authors can target it.
 
+Theme validation:
+  Before applying a theme, HobbyCAD validates the QSS to ensure
+  no selector has background-color equal to color (foreground).
+  If a collision is found, the theme is rejected and a warning
+  dialog tells the user which selector(s) have the problem.  The
+  application falls back to the next theme in the priority chain.
+
+  This prevents invisible text from a bad theme.  The validation
+  is implemented in themevalidator.h/.cpp and called from the
+  loadTheme() helper in main.cpp.
+
 Platform differences:
   Some Qt widgets render differently on GTK vs KDE vs macOS.
   QSS overrides platform style completely for targeted widgets.

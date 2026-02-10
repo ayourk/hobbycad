@@ -1633,6 +1633,15 @@
     - Display a test solid (e.g., a box) in the viewport
     - Basic camera controls (rotate, pan, zoom)
     - Application skeleton: menu bar, status bar, empty side panels
+    - Unsaved changes prompt on exit (Close Without Saving / Save
+      and Close / Cancel) — triggered by File > Quit, window close
+      button, terminal "exit" command, File > New, and File > Open
+    - Window geometry and dock state persistence via QSettings
+      (saved to ~/.config/HobbyCAD/HobbyCAD.conf on Linux)
+    - Theme validation: reject QSS themes where background-color
+      equals foreground color (prevents invisible text)
+    - Embedded terminal panel (single QPlainTextEdit acting as a
+      terminal emulator with inline prompt and cursor)
 
   Tiered Startup Modes:
 
@@ -2093,13 +2102,16 @@
     coding_standards.txt
       File header formats for all file types (C++, CMake, shell,
       QSS, plain text, Markdown), file naming conventions, directory
-      structure, setObjectName convention, include order, and
+      structure, setObjectName convention, include order,
+      internationalization workflow, theme/resource embedding, and
       general C++ style guide.
 
     theming.txt
       GUI theming guide: how to load Qt stylesheets, complete
       widget objectName reference, QSS class selectors, example
-      dark theme, built-in terminal styling, and platform notes.
+      dark theme, built-in terminal styling, theme validation
+      (background/foreground collision rejection), and platform
+      notes.
 
     themes/sample.qss
       Reference Qt stylesheet listing every widget ID with its

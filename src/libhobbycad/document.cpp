@@ -75,10 +75,11 @@ void Document::createTestSolid()
 {
     m_shapes.clear();
 
-    // Create a 50x30x20 mm box centered at the origin
+    // Create a 20x20x20 mm cube sitting on the XY plane at the origin.
+    // Bottom face centered on X/Y at Z=0, top face at Z=20.
     BRepPrimAPI_MakeBox boxMaker(
-        gp_Pnt(-25.0, -15.0, -10.0),
-        50.0, 30.0, 20.0
+        gp_Pnt(-10.0, -10.0, 0.0),
+        20.0, 20.0, 20.0
     );
     boxMaker.Build();
 
