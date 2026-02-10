@@ -78,6 +78,21 @@ QAction* MainWindow::terminalToggleAction() const
     return m_actionToggleTerminal;
 }
 
+QAction* MainWindow::resetViewAction() const
+{
+    return m_actionResetView;
+}
+
+QAction* MainWindow::rotateLeftAction() const
+{
+    return m_actionRotateLeft;
+}
+
+QAction* MainWindow::rotateRightAction() const
+{
+    return m_actionRotateRight;
+}
+
 void MainWindow::hideDockTerminal()
 {
     if (m_terminalDock) {
@@ -134,6 +149,11 @@ void MainWindow::createMenus()
 
     fileMenu->addSeparator();
 
+    m_actionClose = fileMenu->addAction(tr("&Close"),
+        QKeySequence::Close, this, &MainWindow::onFileClose);
+
+    fileMenu->addSeparator();
+
     m_actionQuit = fileMenu->addAction(tr("&Quit"),
         QKeySequence::Quit, this, &MainWindow::onFileQuit);
 
@@ -152,6 +172,16 @@ void MainWindow::createMenus()
         QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft));
     m_actionToggleTerminal->setCheckable(true);
     m_actionToggleTerminal->setChecked(false);
+
+    viewMenu->addSeparator();
+
+    m_actionResetView = viewMenu->addAction(tr("&Reset View"),
+        QKeySequence(Qt::Key_Home));
+    // Connected in FullModeWindow to viewport->resetCamera()
+
+    m_actionRotateLeft = viewMenu->addAction(tr("Rotate &Left 90°"));
+
+    m_actionRotateRight = viewMenu->addAction(tr("Rotate Ri&ght 90°"));
 }
 
 // ---- Status bar -----------------------------------------------------
@@ -327,6 +357,17 @@ void MainWindow::onFileSaveAs()
 void MainWindow::onFileQuit()
 {
     close();  // triggers closeEvent()
+}
+
+void MainWindow::onFileClose()
+{
+    if (!maybeSave()) return;
+
+    m_document.clear();
+    m_document.setModified(false);
+    updateTitle();
+    onDocumentClosed();
+    m_statusLabel->setText(tr("Document closed"));
 }
 
 // ---- Close event / unsaved changes ---------------------------------
