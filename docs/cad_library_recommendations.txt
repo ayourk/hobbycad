@@ -3,6 +3,7 @@
 ================================================================================
 
   Project          : HobbyCAD
+  File             : docs/cad_library_recommendations.txt
   Document Version : 0.0.1.1
   Date             : 2026-02-06
   Format           : Plain Text (all project documentation is plain text)

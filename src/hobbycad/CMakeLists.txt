@@ -104,6 +104,25 @@ target_compile_definitions(hobbycad PRIVATE
     HOBBYCAD_OCCT_VERSION="${OpenCASCADE_VERSION}"
 )
 
+# ---- Translation (lupdate) -------------------------------------------
+#
+#  Generates the .ts translation file from source tr() calls.
+#  This is an explicit target — not part of "all" — so normal
+#  builds are not slowed down.
+#
+#  Usage:  cmake --build build --target hobbycad_lupdate
+#
+find_package(Qt6 COMPONENTS LinguistTools QUIET)
+if(Qt6LinguistTools_FOUND)
+    set(TS_FILES
+        ${CMAKE_SOURCE_DIR}/translations/hobbycad_en.ts
+    )
+    qt_add_lupdate(hobbycad
+        TS_FILES ${TS_FILES}
+        OPTIONS -no-obsolete
+    )
+endif()
+
 # ---- Install ---------------------------------------------------------
 
 install(TARGETS hobbycad RUNTIME DESTINATION bin)

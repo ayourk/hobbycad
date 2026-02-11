@@ -145,14 +145,14 @@ private:
     // Continuous rotation (PgUp/PgDn)
     QTimer  m_spinTimer;
     double  m_spinDirection = 0.0;  // +1 = CW, -1 = CCW, 0 = idle
-    int     m_spinStepDeg   = 5;    // degrees per tick
+    int     m_spinStepDeg   = 10;   // degrees per tick
     RotationAxis m_rotationAxis = AxisX;  // default: rotate around X
 
     // Animated 90° snap rotation (Left/Right arrows)
     QTimer  m_snapTimer;
     double  m_snapStepRad = 0.0;   // per-tick step (radians)
     int     m_snapRemaining = 0;   // ticks left
-    int     m_snapStepDeg   = 2;   // degrees per frame
+    int     m_snapStepDeg   = 10;  // degrees per frame
 };
 
 }  // namespace hobbycad

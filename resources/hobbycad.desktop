@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=HobbyCAD
+GenericName=3D CAD Application
+Comment=Parametric 3D solid modeler for hobbyists
+Exec=hobbycad %F
+Icon=hobbycad
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+MimeType=application/x-brep;
+Keywords=CAD;3D;modeling;parametric;BREP;STEP;
+StartupNotify=true

@@ -169,6 +169,7 @@ jobs:
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet x64-windows `
+            --overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports `
             --x-install-root=vcpkg_installed
 
       - name: Configure CMake

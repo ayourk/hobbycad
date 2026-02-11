@@ -1,0 +1,14 @@
+hobbycad (0.0.1-1) unstable; urgency=low
+
+  * Initial release (Phase 0 -- Foundation).
+  * BREP file open, display, and save.
+  * Qt 6 GUI with OCCT AIS 3D viewport.
+  * Tiered startup: Full Mode, Reduced Mode, Command-Line Mode.
+  * Feature tree panel (placeholder).
+  * Embedded terminal with command history.
+  * Preferences dialog.
+  * About dialog with OpenGL diagnostics.
+  * Dark mode and custom theme support.
+
+ -- Aaron Yourk <ayourk@gmail.com>  Sat, 08 Feb 2026 00:00:00 -0600
+

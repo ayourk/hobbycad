@@ -1,35 +1,66 @@
-=====================================================================
-  tools/macos/README.txt — macOS Build and Packaging Tools
-=====================================================================
+================================================================================
+  tools/macos/ -- macOS Environment Setup and Build Scripts
+================================================================================
 
-  ENVIRONMENT SETUP
-  ------------------
+  Scripts for setting up a macOS development environment and
+  building HobbyCAD on macOS 12 (Monterey) or later, Intel or
+  Apple Silicon.
 
-  setup-env.sh checks for required tools and offers to install
-  anything missing.  It handles Xcode Command Line Tools, Homebrew,
-  build tools, the HobbyCAD tap, pinned dependencies, and
-  CMAKE_PREFIX_PATH configuration.
+  Environment Setup
+  -------------------
 
-    bash tools/macos/setup-env.sh
+  Two setup scripts are provided -- choose the one matching your
+  shell:
 
-  Run this first on a fresh Mac.  See dev_environment_setup.txt
-  Section 21 for manual setup details.
+  setup-env.sh        Interactive bash script for bash, zsh, and
+                      other POSIX-compatible shells.
 
+  setup-env.csh       Interactive csh/tcsh script for C shell users.
 
-  DEVELOPER BUILD
-  ----------------
+  Both scripts perform the same 7 steps:
 
-  build-dev.sh configures and builds HobbyCAD for day-to-day
-  development with logging.  See dev_environment_setup.txt
-  Section 11.2 for usage and examples.
+      1. Check prerequisites (macOS version, disk space)
+      2. Install Xcode Command Line Tools (if not present)
+      3. Install Homebrew (if not present)
+      4. Install build tools (cmake, ninja, pkg-config)
+      5. Offer to clone the HobbyCAD repository
+      6. Install dependencies from the HobbyCAD Homebrew tap
+         (pinned opencascade, libzip, libgit2 formulas)
+      7. Print summary with verification commands
 
-    ./tools/macos/build-dev.sh [debug|release] [clean] [run]
+      Usage:
+        bash  tools/macos/setup-env.sh                # Install
+        bash  tools/macos/setup-env.sh --uninstall    # Roll back
 
+        tcsh  tools/macos/setup-env.csh               # Install
+        tcsh  tools/macos/setup-env.csh --uninstall   # Roll back
 
-  .DMG PACKAGING
+      Parameters:
+        --repo-url <url>    Override the default repository URL
+        --clone-dir <path>  Override the default clone directory
+
+      Shell environment changes:
+        CMAKE_PREFIX_PATH   Set in shell rc file (~/.zshrc, etc.)
+        HOBBYCAD_CLONE      Points to the cloned repository
+
+      The setup-env.sh script auto-detects the active shell
+      (bash, zsh, fish, ksh) and writes exports to the correct
+      rc file.  The setup-env.csh script uses setenv syntax for
+      tcsh/csh.
+
+  Build Scripts
   ---------------
 
-  macOS packaging tools and scripts will be added here as
-  macOS support progresses.  See dev_environment_setup.txt
-  Part C (Sections 20–26) for the current macOS build setup.
+  build-dev.sh        Developer build with logging.
+                      Uses CMake + Ninja. Output logged to
+                      build-hobbycad.log in the project root.
 
+      Usage:
+        ./tools/macos/build-dev.sh                   # Debug build
+        ./tools/macos/build-dev.sh release           # Release build
+        ./tools/macos/build-dev.sh clean             # Clean only
+        ./tools/macos/build-dev.sh run               # Run (build if needed)
+        ./tools/macos/build-dev.sh clean release run # Clean + Release + Run
+
+  See docs/dev_environment_setup.txt Sections 20-26 for full
+  macOS development details.

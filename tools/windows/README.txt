@@ -1,34 +1,64 @@
-=====================================================================
-  tools/windows/README.txt — Windows Build and Packaging Tools
-=====================================================================
+================================================================================
+  tools/windows/ -- Windows Environment Setup and Build Scripts
+================================================================================
 
-  ENVIRONMENT SETUP
-  ------------------
+  Scripts for setting up a Windows development environment and
+  building HobbyCAD on Windows 10 version 1809 or later (64-bit).
 
-  setup-env.ps1 checks for required tools and offers to install
-  anything missing.  It handles MSYS2 download/install, UCRT64
-  toolchain packages, PATH configuration, and vcpkg bootstrap.
+  Environment Setup
+  -------------------
 
-    powershell -ExecutionPolicy Bypass -File tools\windows\setup-env.ps1
+  setup-env.ps1       Interactive PowerShell script that automates
+                      the full MSYS2 + UCRT64 development environment.
 
-  Run this first on a fresh Windows machine.  See
-  dev_environment_setup.txt Section 14 for manual setup details.
+      What it does (7 steps):
+        1. Check administrator privileges
+        2. Install MSYS2 (if not present)
+        3. Install UCRT64 toolchain packages via pacman
+        4. Configure PATH and environment variables
+        5. Offer to clone the HobbyCAD repository
+        6. Bootstrap vcpkg
+        7. Print summary with verification commands
 
+      Usage:
+        .\setup-env.ps1                   # Install everything
+        .\setup-env.ps1 -Uninstall        # Roll back all changes
 
-  DEVELOPER BUILD
-  ----------------
+      Parameters:
+        -RepoUrl <url>    Override the default repository URL
+        -CloneDir <path>  Override the default clone directory
 
-  build-dev.bat configures and builds HobbyCAD for day-to-day
-  development with logging.  See dev_environment_setup.txt
-  Section 11.2 for usage and examples.
+      The script detects whether it is running from inside the
+      HobbyCAD repository (standalone vs in-repo mode) and
+      adjusts its behavior accordingly.
 
-    tools\windows\build-dev.bat [debug|release] [clean] [run]
+      Registry changes (HKCU\Environment):
+        - PATH            Adds MSYS2 ucrt64/bin and usr/bin
+        - VCPKG_ROOT      Points to the vcpkg installation
+        - HOBBYCAD_CLONE  Points to the cloned repository (if cloned)
 
+      All registry values use REG_EXPAND_SZ to preserve
+      references like %USERPROFILE%.
 
-  INSTALLER PACKAGING
-  --------------------
+  Build Scripts
+  ---------------
 
-  Windows packaging tools and scripts will be added here as
-  Windows support progresses.  See dev_environment_setup.txt
-  Part B (Sections 13–19) for the current Windows build setup.
+  build-dev.bat       Developer build with logging.
+                      Uses CMake + Ninja. Output logged to
+                      build-hobbycad.log in the project root.
 
+  Continuous Integration
+  -----------------------
+
+  The project CI (.github/workflows/windows-build.yml) runs two
+  parallel jobs:
+
+    "HobbyCAD via MSYS"   MSYS2 UCRT64 / GCC / pacman packages.
+                           Matches the local setup from setup-env.ps1.
+
+    "HobbyCAD via MSVC"   Visual Studio / cl.exe / vcpkg manifest.
+                           Tests MSVC compatibility with pinned
+                           dependency versions from vcpkg.json.
+
+  See docs/dev_environment_setup.txt Sections 13-19 for full
+  Windows development details.

@@ -1,18 +1,25 @@
-=====================================================================
-  tools/ — Build and Packaging Tools
-=====================================================================
+================================================================================
+  tools/ -- Build and Packaging Tools
+================================================================================
 
-  Platform-specific build scripts and packaging tools are
-  organized into subdirectories:
+  Platform-specific build scripts, environment setup scripts, and
+  packaging helpers.
 
-    linux/      AppImage packaging (linuxdeploy)
-    windows/    Windows installer packaging (future)
-    macos/      macOS .dmg packaging (future)
+  Subdirectories
+  ---------------
 
-  Each subdirectory contains its own README.txt with usage
-  instructions, manual build steps, and troubleshooting notes.
+    linux/      Build scripts for Ubuntu 22.04 / 24.04 LTS
+                  build-dev.sh        Developer build with logging
+                  build-deb.sh        Debian package (.deb) build
+                  build-appimage.sh   AppImage portable build
 
-  Downloaded third-party binaries (linuxdeploy, etc.) are stored
-  alongside the scripts that use them and are not checked into
-  version control (see .gitignore).
+    windows/    Environment setup and build scripts for Windows 10+
+                  setup-env.ps1       Automated MSYS2/vcpkg setup (PowerShell)
+                  build-dev.bat       Developer build with logging
 
+    macos/      Environment setup and build scripts for macOS 12+
+                  setup-env.sh        Automated Homebrew setup (bash/zsh)
+                  setup-env.csh       Automated Homebrew setup (tcsh/csh)
+                  build-dev.sh        Developer build with logging
+
+  See docs/dev_environment_setup.txt for full platform instructions.
