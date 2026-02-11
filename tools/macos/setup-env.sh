@@ -5,10 +5,12 @@
 #
 #  Checks for required tools and offers to install anything missing.
 #  Handles Xcode Command Line Tools, Homebrew, build tools, the
-#  HobbyCAD Homebrew tap, pinned dependencies, and CMAKE_PREFIX_PATH.
+#  HobbyCAD Homebrew tap, pinned dependencies, repository clone,
+#  and CMAKE_PREFIX_PATH.
 #
-#  The recommended toolchain is Apple Clang (from Xcode CLT) with
-#  Homebrew for package management.
+#  Can be run from inside a git clone or downloaded standalone.
+#  When run standalone, it offers to clone the repository after
+#  the toolchain is set up.
 #
 #  Run with:
 #    bash tools/macos/setup-env.sh
@@ -62,18 +64,47 @@ confirm() {
 # --- Parse arguments ---------------------------------------------------
 
 NON_INTERACTIVE=0
+REPO_URL="https://github.com/ayourk/hobbycad.git"
+CLONE_DIR=""
+
 for arg in "$@"; do
     case "$arg" in
-        --yes|-y)  NON_INTERACTIVE=1 ;;
+        --yes|-y)       NON_INTERACTIVE=1 ;;
+        --repo-url=*)   REPO_URL="${arg#*=}" ;;
+        --clone-dir=*)  CLONE_DIR="${arg#*=}" ;;
         --help|-h)
-            echo "Usage: setup-env.sh [--yes]"
+            echo "Usage: setup-env.sh [OPTIONS]"
             echo ""
-            echo "  --yes, -y   Answer yes to all prompts"
-            echo "  --help, -h  Show this help"
+            echo "  --yes, -y           Answer yes to all prompts"
+            echo "  --repo-url=URL      Repository URL"
+            echo "  --clone-dir=DIR     Clone target (parent dir)"
+            echo "  --help, -h          Show this help"
             exit 0
             ;;
     esac
 done
+
+# --- Detect standalone vs. in-repo ------------------------------------
+#
+# If this script lives at tools/macos/setup-env.sh inside a
+# HobbyCAD clone, the repo root is two directories up and will
+# contain CMakeLists.txt.  If the script was downloaded on its
+# own, that path won't exist.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+IS_IN_REPO=false
+REPO_ROOT=""
+CLONE_PATH=""
+
+CANDIDATE_ROOT="$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd)" \
+    || true
+if [ -n "$CANDIDATE_ROOT" ] &&
+   [ -f "$CANDIDATE_ROOT/CMakeLists.txt" ]; then
+    if grep -qi "hobbycad" "$CANDIDATE_ROOT/CMakeLists.txt"; then
+        IS_IN_REPO=true
+        REPO_ROOT="$CANDIDATE_ROOT"
+    fi
+fi
 
 # --- Banner ------------------------------------------------------------
 
@@ -90,6 +121,12 @@ else
     BREW_PREFIX="/usr/local"
     info "Architecture: Intel (x86_64)"
 fi
+
+if [ "$IS_IN_REPO" = true ]; then
+    info "Repo root:    $REPO_ROOT"
+else
+    info "Mode:         standalone (not inside a clone)"
+fi
 echo ""
 
 ALL_OK=true
@@ -98,7 +135,7 @@ ALL_OK=true
 #  1. XCODE COMMAND LINE TOOLS
 # ===================================================================
 
-header "1/6  Xcode Command Line Tools"
+header "1/7  Xcode Command Line Tools"
 
 if xcode-select -p &>/dev/null; then
     ok "Xcode CLT installed."
@@ -128,7 +165,7 @@ fi
 #  2. HOMEBREW
 # ===================================================================
 
-header "2/6  Homebrew"
+header "2/7  Homebrew"
 
 if command -v brew &>/dev/null; then
     ok "Homebrew found: $(brew --version | head -1)"
@@ -167,7 +204,7 @@ fi
 #  3. BUILD TOOLS (cmake, ninja, python)
 # ===================================================================
 
-header "3/6  Build tools"
+header "3/7  Build tools"
 
 if command -v brew &>/dev/null; then
     TOOLS_MISSING=()
@@ -226,7 +263,7 @@ fi
 #  4. HOBBYCAD HOMEBREW TAP + DEPENDENCIES
 # ===================================================================
 
-header "4/6  HobbyCAD dependencies"
+header "4/7  HobbyCAD dependencies"
 
 if command -v brew &>/dev/null; then
 
@@ -323,10 +360,68 @@ else
 fi
 
 # ===================================================================
-#  5. CMAKE_PREFIX_PATH
+#  5. REPOSITORY
 # ===================================================================
 
-header "5/6  CMAKE_PREFIX_PATH"
+header "5/7  HobbyCAD Repository"
+
+if [ "$IS_IN_REPO" = true ]; then
+    ok "Running from inside a clone at $REPO_ROOT"
+    CLONE_PATH="$REPO_ROOT"
+else
+    info "Script is running standalone (not inside a clone)."
+
+    if command -v git &>/dev/null; then
+        if confirm "Clone the HobbyCAD repository?"; then
+            # Determine target directory
+            if [ -n "$CLONE_DIR" ]; then
+                TARGET_PARENT="$CLONE_DIR"
+            elif [ "$NON_INTERACTIVE" = "1" ]; then
+                TARGET_PARENT="$(pwd)"
+            else
+                DEFAULT="$(pwd)"
+                printf "  Clone to? [%s/hobbycad] " "$DEFAULT"
+                read -r answer
+                if [ -z "$answer" ]; then
+                    TARGET_PARENT="$DEFAULT"
+                else
+                    TARGET_PARENT="$answer"
+                fi
+            fi
+
+            TARGET_DIR="$TARGET_PARENT/hobbycad"
+
+            if [ -d "$TARGET_DIR/.git" ]; then
+                ok "Repository already exists at $TARGET_DIR"
+                CLONE_PATH="$TARGET_DIR"
+            else
+                info "Cloning to $TARGET_DIR..."
+                if git clone "$REPO_URL" "$TARGET_DIR"; then
+                    ok "Cloned to $TARGET_DIR"
+                    CLONE_PATH="$TARGET_DIR"
+                else
+                    fail "git clone failed."
+                    info "Clone manually:"
+                    info "  git clone $REPO_URL"
+                    ALL_OK=false
+                fi
+            fi
+        else
+            info "Clone manually when ready:"
+            info "  git clone $REPO_URL"
+        fi
+    else
+        warn "Git not available yet — cannot clone."
+        info "Install Xcode CLT first (step 1), then re-run."
+        ALL_OK=false
+    fi
+fi
+
+# ===================================================================
+#  6. CMAKE_PREFIX_PATH
+# ===================================================================
+
+header "6/7  CMAKE_PREFIX_PATH"
 
 if command -v brew &>/dev/null; then
     # Build the expected value
@@ -419,10 +514,10 @@ else
 fi
 
 # ===================================================================
-#  6. SUMMARY
+#  7. SUMMARY
 # ===================================================================
 
-header "6/6  Summary"
+header "7/7  Summary"
 
 # Final tool verification
 if command -v clang++ &>/dev/null; then
@@ -443,28 +538,51 @@ fi
 
 echo ""
 
+NCPU=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
 if [ "$ALL_OK" = true ]; then
     ok "Environment is ready."
     echo ""
     info "Next steps:"
-    info "  1. Clone the repo:"
-    info "       git clone <repository-url> hobbycad"
-    info "       cd hobbycad"
+
+    # Step numbering adjusts based on whether clone happened
+    STEP=1
+
+    if [ -z "$CLONE_PATH" ]; then
+        info "  $STEP. Clone the repo:"
+        info "       git clone $REPO_URL hobbycad"
+        info "       cd hobbycad"
+        STEP=$((STEP + 1))
+    else
+        info "  Repository: $CLONE_PATH"
+    fi
+
     info ""
-    info "  2. Verify dependencies:"
-    info "       cd devtest"
+    info "  $STEP. Verify dependencies:"
+    if [ -n "$CLONE_PATH" ]; then
+        info "       cd $CLONE_PATH/devtest"
+    else
+        info "       cd devtest"
+    fi
     info "       cmake -B build"
-    NCPU=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
     info "       cmake --build build -j$NCPU"
     info "       ./build/depcheck"
+    STEP=$((STEP + 1))
+
     info ""
-    info "  3. Build HobbyCAD:"
-    info "       cd .."
+    info "  $STEP. Build HobbyCAD:"
+    if [ -n "$CLONE_PATH" ]; then
+        info "       cd $CLONE_PATH"
+    else
+        info "       cd .."
+    fi
     info "       cmake -B build -G Ninja \\"
     info "         -DCMAKE_BUILD_TYPE=Debug"
     info "       cmake --build build -j$NCPU"
+    STEP=$((STEP + 1))
+
     info ""
-    info "  4. Run:"
+    info "  $STEP. Run:"
     info "       ./build/src/hobbycad/hobbycad"
 else
     fail "Some items need attention — see above."

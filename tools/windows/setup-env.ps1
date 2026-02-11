@@ -4,7 +4,11 @@
 #
 #  Checks for required tools and offers to install anything missing.
 #  Handles MSYS2 download/install, UCRT64 packages, PATH config,
-#  and vcpkg bootstrap.
+#  repository clone, and vcpkg bootstrap.
+#
+#  Can be run from inside a git clone or downloaded standalone.
+#  When run standalone, it offers to clone the repository after
+#  the toolchain is set up.
 #
 #  The recommended toolchain is MSYS2 with MinGW-w64 (GCC).  For
 #  Visual Studio / MSVC, see docs/dev_environment_setup.txt Section
@@ -27,12 +31,21 @@
 
 .DESCRIPTION
     See docs/dev_environment_setup.txt Sections 13-18 for full details.
+    Can be run from inside a git clone or downloaded standalone.
 
 .PARAMETER VcpkgRoot
     Where to clone/find vcpkg.  Default: C:\vcpkg
 
 .PARAMETER Msys2Root
     Where to find/install MSYS2.  Default: C:\msys64
+
+.PARAMETER RepoUrl
+    HobbyCAD git repository URL.
+    Default: https://github.com/ayourk/hobbycad.git
+
+.PARAMETER CloneDir
+    Where to clone HobbyCAD (standalone mode only).
+    Prompted interactively if not specified.
 
 .PARAMETER SkipVcpkg
     Skip vcpkg setup entirely.
@@ -44,6 +57,9 @@
 param(
     [string]$VcpkgRoot = "C:\vcpkg",
     [string]$Msys2Root = "C:\msys64",
+    [string]$RepoUrl =
+        "https://github.com/ayourk/hobbycad.git",
+    [string]$CloneDir = "",
     [switch]$SkipVcpkg,
     [switch]$NonInteractive,
     [switch]$Help
@@ -52,7 +68,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Continue"
 
-# --- Helpers ---------------------------------------------------------------
+# --- Helpers -----------------------------------------------------------
 
 function Write-Header($msg) {
     Write-Host ""
@@ -192,7 +208,33 @@ function Get-Msys2InstallerUrl {
     }
 }
 
-# --- Banner ----------------------------------------------------------------
+# --- Detect standalone vs. in-repo ------------------------------------
+#
+# If this script lives at tools/windows/setup-env.ps1 inside a
+# HobbyCAD clone, the repo root is two directories up and will
+# contain CMakeLists.txt.  If the script was downloaded on its
+# own, that path won't exist.
+
+$repoRoot  = ""
+$isInRepo  = $false
+$clonePath = ""
+
+$candidateRoot = (Resolve-Path (
+    Join-Path $PSScriptRoot "..\.."
+) -ErrorAction SilentlyContinue)
+if ($candidateRoot) {
+    $candidateCML = Join-Path $candidateRoot "CMakeLists.txt"
+    if (Test-Path $candidateCML) {
+        $content = Get-Content $candidateCML -Raw `
+            -ErrorAction SilentlyContinue
+        if ($content -and $content -match "hobbycad") {
+            $isInRepo = $true
+            $repoRoot = $candidateRoot.Path
+        }
+    }
+}
+
+# --- Banner ------------------------------------------------------------
 
 if ($Help) {
     Get-Help $MyInvocation.MyCommand.Path -Detailed
@@ -208,6 +250,13 @@ Write-Host "  MSYS2 root: $Msys2Root" `
     -ForegroundColor DarkGray
 Write-Host "  vcpkg root: $VcpkgRoot" `
     -ForegroundColor DarkGray
+if ($isInRepo) {
+    Write-Host "  Repo root:  $repoRoot" `
+        -ForegroundColor DarkGray
+} else {
+    Write-Host "  Mode:       standalone (not inside a clone)" `
+        -ForegroundColor DarkGray
+}
 Write-Host ""
 
 $allOk     = $true
@@ -218,7 +267,7 @@ $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
 #  1. MSYS2 BASE INSTALL
 # ===================================================================
 
-Write-Header "1/6  MSYS2"
+Write-Header "1/7  MSYS2"
 
 $msys2Exe = Join-Path $Msys2Root "msys2.exe"
 
@@ -267,7 +316,7 @@ if (Test-Path $msys2Exe) {
 #  2. MSYS2 UCRT64 PACKAGES
 # ===================================================================
 
-Write-Header "2/6  MSYS2 Packages (UCRT64 toolchain)"
+Write-Header "2/7  MSYS2 Packages (UCRT64 toolchain)"
 
 $msys2Packages = @(
     "base-devel",
@@ -344,7 +393,7 @@ if ($msys2Present) {
 #  3. PATH
 # ===================================================================
 
-Write-Header "3/6  PATH — UCRT64 binaries"
+Write-Header "3/7  PATH — UCRT64 binaries"
 
 $gppPath = Join-Path $ucrt64Bin "g++.exe"
 
@@ -376,7 +425,7 @@ if (Test-Command "g++") {
 #  4. TOOL VERIFICATION
 # ===================================================================
 
-Write-Header "4/6  Tool Verification"
+Write-Header "4/7  Tool Verification"
 
 $gitPath = Join-Path $Msys2Root "usr\bin\git.exe"
 
@@ -428,10 +477,77 @@ if (Test-Command "cmake") {
 }
 
 # ===================================================================
-#  5. VCPKG
+#  5. REPOSITORY
 # ===================================================================
 
-Write-Header "5/6  vcpkg"
+Write-Header "5/7  HobbyCAD Repository"
+
+if ($isInRepo) {
+    Write-Ok "Running from inside a clone at $repoRoot"
+    $clonePath = $repoRoot
+} else {
+    Write-Info "Script is running standalone (not inside a clone)."
+
+    $canGit = Test-Command "git"
+    if (-not $canGit) {
+        $msys2Git = Join-Path $Msys2Root "usr\bin\git.exe"
+        $canGit = Test-Path $msys2Git
+    }
+
+    if ($canGit) {
+        if (Confirm-Action "Clone the HobbyCAD repository?") {
+            # Determine target directory
+            if ($CloneDir -ne "") {
+                $targetParent = $CloneDir
+            } elseif ($NonInteractive) {
+                $targetParent = (Get-Location).Path
+            } else {
+                $default = (Get-Location).Path
+                $answer = Read-Host (
+                    "  Clone to? [$default\hobbycad]"
+                )
+                if ($answer -eq '') {
+                    $targetParent = $default
+                } else {
+                    $targetParent = $answer
+                }
+            }
+
+            $targetDir = Join-Path $targetParent "hobbycad"
+
+            if (Test-Path (Join-Path $targetDir ".git")) {
+                Write-Ok "Repository already exists at $targetDir"
+                $clonePath = $targetDir
+            } else {
+                Write-Info "Cloning to $targetDir..."
+                git clone $RepoUrl $targetDir
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Ok "Cloned to $targetDir"
+                    $clonePath = $targetDir
+                } else {
+                    Write-Fail "git clone failed."
+                    Write-Info "Clone manually:"
+                    Write-Info "  git clone $RepoUrl"
+                    $allOk = $false
+                }
+            }
+        } else {
+            Write-Info "Clone manually when ready:"
+            Write-Info "  git clone $RepoUrl"
+        }
+    } else {
+        Write-Warn "Git not available yet — cannot clone."
+        Write-Info "Install MSYS2 and packages (steps 1-2),"
+        Write-Info "then re-run this script."
+        $allOk = $false
+    }
+}
+
+# ===================================================================
+#  6. VCPKG
+# ===================================================================
+
+Write-Header "6/7  vcpkg"
 
 if ($SkipVcpkg) {
     Write-Info "Skipped (-SkipVcpkg flag set)."
@@ -518,10 +634,10 @@ if ($SkipVcpkg) {
 }
 
 # ===================================================================
-#  6. SUMMARY
+#  7. SUMMARY
 # ===================================================================
 
-Write-Header "6/6  Summary"
+Write-Header "7/7  Summary"
 
 if ($needPath) {
     Write-Warn "PATH was not updated."
@@ -536,26 +652,48 @@ if ($allOk) {
     Write-Ok "Environment is ready."
     Write-Host ""
     Write-Info "Next steps:"
-    Write-Info "  1. Clone the repo:"
-    Write-Info "       git clone <repository-url> hobbycad"
-    Write-Info "       cd hobbycad"
+
+    # Step numbering adjusts based on whether clone happened
+    $step = 1
+
+    if ($clonePath -eq "") {
+        Write-Info "  $step. Clone the repo:"
+        Write-Info "       git clone $RepoUrl hobbycad"
+        Write-Info "       cd hobbycad"
+        $step++
+    } else {
+        Write-Info "  Repository: $clonePath"
+    }
+
     Write-Info ""
-    Write-Info "  2. Verify dependencies:"
-    Write-Info "       cd devtest"
+    Write-Info "  $step. Verify dependencies:"
+    if ($clonePath -ne "") {
+        Write-Info "       cd $clonePath\devtest"
+    } else {
+        Write-Info "       cd devtest"
+    }
     Write-Info "       cmake -B build \"
     Write-Info "         -DCMAKE_TOOLCHAIN_FILE=$tcf"
     Write-Info "       cmake --build build"
     Write-Info "       .\build\depcheck.exe"
+    $step++
+
     Write-Info ""
-    Write-Info "  3. Build HobbyCAD:"
-    Write-Info "       cd .."
+    Write-Info "  $step. Build HobbyCAD:"
+    if ($clonePath -ne "") {
+        Write-Info "       cd $clonePath"
+    } else {
+        Write-Info "       cd .."
+    }
     Write-Info "       cmake -B build -G Ninja \"
     Write-Info "         -DCMAKE_TOOLCHAIN_FILE=$tcf \"
     Write-Info "         -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic \"
     Write-Info "         -DCMAKE_BUILD_TYPE=Debug"
     Write-Info "       cmake --build build"
+    $step++
+
     Write-Info ""
-    Write-Info "  4. Run:"
+    Write-Info "  $step. Run:"
     Write-Info "       .\build\hobbycad.exe"
 } else {
     Write-Fail "Some items need attention — see above."
