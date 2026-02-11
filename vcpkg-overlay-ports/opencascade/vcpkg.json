@@ -1,0 +1,21 @@
+{
+  "name": "opencascade",
+  "version": "7.6.2",
+  "port-version": 1,
+  "description": "Open CASCADE Technology (OCCT) — 3D surface and solid modeling",
+  "homepage": "https://dev.opencascade.org/",
+  "license": "LGPL-2.1-only",
+  "dependencies": [
+    "freetype",
+    "rapidjson",
+    "tcl",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 ================================================================================
 
   Project:         HobbyCAD / HobbyMesh
+  File:            docs/security_risks.txt
   Document:        Security Risks and Mitigations
   Author:          Aaron (project author)
   Created:         2026-02-07

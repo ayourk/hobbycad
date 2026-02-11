@@ -11,32 +11,67 @@
 
 namespace hobbycad {
 
+// Format a label + value pair, wrapping long values at maxWidth with
+// continuation lines indented to the value column.
+static QString formatField(const QString& label, const QString& value,
+                           int labelWidth = 19, int maxWidth = 80)
+{
+    QString padded = label.leftJustified(labelWidth);
+    int valueWidth = maxWidth - labelWidth;
+    if (valueWidth <= 0 || value.length() <= valueWidth) {
+        return padded + value + QStringLiteral("\n");
+    }
+
+    QString result;
+    QString indent = QString(labelWidth, QLatin1Char(' '));
+    int pos = 0;
+    bool first = true;
+    while (pos < value.length()) {
+        int chunkLen = qMin(valueWidth, value.length() - pos);
+
+        // Try to break at a word boundary (space or slash)
+        if (pos + chunkLen < value.length()) {
+            int breakAt = -1;
+            for (int i = pos + chunkLen - 1; i > pos; --i) {
+                QChar ch = value[i];
+                if (ch == QLatin1Char(' ') || ch == QLatin1Char('/') ||
+                    ch == QLatin1Char(',')) {
+                    breakAt = i + 1;
+                    break;
+                }
+            }
+            if (breakAt > pos) chunkLen = breakAt - pos;
+        }
+
+        result += (first ? padded : indent) +
+                  value.mid(pos, chunkLen) + QStringLiteral("\n");
+        pos += chunkLen;
+        first = false;
+    }
+    return result;
+}
+
 QString OpenGLInfo::summary() const
 {
     QString text;
-    text += QStringLiteral("OpenGL Version:    ") +
-            (version.isEmpty() ? QStringLiteral("N/A") : version) +
-            QStringLiteral("\n");
-    text += QStringLiteral("GLSL Version:      ") +
-            (glslVersion.isEmpty() ? QStringLiteral("N/A") : glslVersion) +
-            QStringLiteral("\n");
-    text += QStringLiteral("Renderer:          ") +
-            (renderer.isEmpty() ? QStringLiteral("N/A") : renderer) +
-            QStringLiteral("\n");
-    text += QStringLiteral("Vendor:            ") +
-            (vendor.isEmpty() ? QStringLiteral("N/A") : vendor) +
-            QStringLiteral("\n");
-    text += QStringLiteral("Context Creation:  ");
+    text += formatField(QStringLiteral("OpenGL Version:"),
+                        version.isEmpty() ? QStringLiteral("N/A") : version);
+    text += formatField(QStringLiteral("GLSL Version:"),
+                        glslVersion.isEmpty() ? QStringLiteral("N/A") : glslVersion);
+    text += formatField(QStringLiteral("Renderer:"),
+                        renderer.isEmpty() ? QStringLiteral("N/A") : renderer);
+    text += formatField(QStringLiteral("Vendor:"),
+                        vendor.isEmpty() ? QStringLiteral("N/A") : vendor);
 
+    QString status;
     if (contextCreated) {
-        text += QStringLiteral("success");
+        status = QStringLiteral("success");
     } else {
-        text += QStringLiteral("failed");
-        if (!errorMessage.isEmpty()) {
-            text += QStringLiteral(" — ") + errorMessage;
-        }
+        status = QStringLiteral("failed");
+        if (!errorMessage.isEmpty())
+            status += QStringLiteral(" — ") + errorMessage;
     }
-    text += QStringLiteral("\n");
+    text += formatField(QStringLiteral("Context Creation:"), status);
 
     return text;
 }

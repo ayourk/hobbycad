@@ -25,8 +25,8 @@ namespace hobbycad {
 
 // Standard file dialog filter — BREP first so Qt uses it as default.
 // "All Files" lets the user bypass the auto-extension behavior.
-static const QString kBrepFilter =
-    QStringLiteral("BREP Files (*.brep *.brp);;All Files (*)");
+static const char kBrepFilter[] =
+    QT_TR_NOOP("BREP Files (*.brep *.brp);;All Files (*)");
 
 // Ensure a save path has the .brep extension when the BREP filter is
 // selected.  When "All Files" is active, the path is left as-is.
@@ -318,7 +318,7 @@ void MainWindow::onFileOpen()
     QString path = QFileDialog::getOpenFileName(this,
         tr("Open BREP File"),
         QString(),
-        kBrepFilter,
+        tr(kBrepFilter),
         &selectedFilter);
 
     if (path.isEmpty()) return;
@@ -366,7 +366,7 @@ void MainWindow::onFileSaveAs()
     QString path = QFileDialog::getSaveFileName(this,
         tr("Save BREP File"),
         QString(),
-        kBrepFilter,
+        tr(kBrepFilter),
         &selectedFilter);
 
     if (path.isEmpty()) return;
@@ -450,7 +450,7 @@ bool MainWindow::maybeSave()
             QString path = QFileDialog::getSaveFileName(this,
                 tr("Save BREP File"),
                 QString(),
-                kBrepFilter,
+                tr(kBrepFilter),
                 &selectedFilter);
 
             if (path.isEmpty()) {

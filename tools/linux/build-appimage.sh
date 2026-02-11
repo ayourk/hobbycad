@@ -1,6 +1,6 @@
 #!/bin/bash
 # =====================================================================
-#  HobbyCAD AppImage Build Script
+#  tools/linux/build-appimage.sh — HobbyCAD AppImage Build Script
 # =====================================================================
 #
 #  Builds a portable AppImage from a Release configuration.
@@ -326,3 +326,4 @@ log ""
 log "--- Done ---"
 log "Finished: $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
 log ""
+

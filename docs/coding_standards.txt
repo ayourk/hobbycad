@@ -3,9 +3,10 @@
 ================================================================================
 
   Project          : HobbyCAD
+  Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/coding_standards.txt
-  Document Version : 0.0.1
-  Date             : 2026-02-09
+  Document Version : 0.0.3
+  Date             : 2026-02-11
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -22,7 +23,6 @@
        2.2  C++ Header Files (.h)
        2.3  CMakeLists.txt
        2.4  Shell Scripts (.sh)
-       2.4a PowerShell Scripts (.ps1)
        2.5  Qt Stylesheets (.qss)
        2.6  Plain Text Documents (.txt)
        2.7  Markdown Files (.md)
@@ -31,6 +31,7 @@
     4. Directory Structure and File Placement
     5. Object Naming (setObjectName) Convention
     6. License Headers
+       6.4  Developer Certificate of Origin (DCO)
     7. Include Order
     8. General C++ Style
 
@@ -39,8 +40,23 @@
 ================================================================================
 
   This document defines the file conventions and coding standards for
-  all files in the HobbyCAD project.  Every version-controlled file
-  must follow the header format for its file type.
+  all files in the HobbyCAD project family.  Every version-controlled
+  file must follow the header format for its file type.
+
+  The project spans multiple repositories:
+
+    Local Directory     GitHub Repository           Description
+    ───────────────     ─────────────────           ───────────
+    HobbyCAD/           ayourk/hobbycad             Main application
+    HobbyCAD-vcpkg/     ayourk/hobbycad-vcpkg       vcpkg custom registry
+    HobbyCAD-homebrew/  ayourk/homebrew-hobbycad     Homebrew tap
+    HobbyCAD-libs/      not in any repo              PPA library packaging
+    HobbyCAD-outside/   not in any repo              Session docs, notes
+
+  All repos live under /wd8tb/ai/ on the developer's machine.
+  Binary files (images, archives, compiled objects) are NOT stored
+  in the main HobbyCAD repository.  HobbyCAD-libs stores tarballs
+  and source packages alongside debian packaging.
 
   Goals:
     - Every file is self-identifying (path, purpose, license)
@@ -55,22 +71,28 @@
   Every file begins with a header block that includes:
 
     1. A visual separator line (comment style depends on file type)
-    2. The file's relative path from the project root
-    3. A short dash-separated title describing the file's purpose
-    4. An optional longer description (2-5 lines)
-    5. SPDX license identifier (see Section 6 for definition)
-    6. A closing separator line
+    2. The repository name (local directory name)
+    3. The file's relative path from the repository root
+    4. A short dash-separated title describing the file's purpose
+    5. An optional longer description (2-5 lines)
+    6. SPDX license identifier (see Section 6 for definition)
+    7. A closing separator line
 
-  The relative path is the FIRST meaningful content in the header.
-  This makes it possible to identify any file by viewing the first
-  few lines, even if it's been copied or moved.
+  The repository and relative path are the FIRST meaningful content
+  in the header.  This makes it possible to identify any file's home
+  repository and location by viewing the first few lines, even if it
+  has been copied or moved.
+
+  For files stored outside of all repositories, use:
+    "not in any repo"
+  in place of the repository name.
 
 
   2.1  C++ SOURCE FILES (.cpp)
   -----------------------------
 
     // =====================================================================
-    //  src/hobbycad/gui/clipanel.cpp — Embedded CLI terminal panel
+    //  HobbyCAD — src/hobbycad/gui/clipanel.cpp — Embedded CLI terminal panel
     // =====================================================================
     //
     //  Optional multi-line description of the file's purpose.
@@ -82,8 +104,8 @@
 
   Rules:
     - Separator line: exactly 69 characters (// + space + 65 '=' chars)
-    - Path line: //  path/from/root.cpp — Short Title
-    - The em-dash (—) separates the path from the title
+    - Path line: //  RepoName — path/from/root.cpp — Short Title
+    - The em-dashes (—) separate repo, path, and title
     - SPDX line is always present
     - Blank comment line before and after the description block
 
@@ -94,7 +116,7 @@
   Same format as .cpp files, followed by the include guard:
 
     // =====================================================================
-    //  src/hobbycad/gui/clipanel.h — Embedded CLI terminal panel
+    //  HobbyCAD — src/hobbycad/gui/clipanel.h — Embedded CLI terminal panel
     // =====================================================================
     //
     //  Description of the class or module.
@@ -118,7 +140,7 @@
   --------------------
 
     # =====================================================================
-    #  src/hobbycad/CMakeLists.txt — HobbyCAD Application
+    #  HobbyCAD — src/hobbycad/CMakeLists.txt — HobbyCAD Application
     # =====================================================================
     #
     #  Description of what this build file produces.
@@ -135,7 +157,7 @@
 
     #!/bin/bash
     # =====================================================================
-    #  tools/linux/build-appimage.sh — HobbyCAD AppImage Build Script
+    #  HobbyCAD — tools/linux/build-appimage.sh — AppImage Build Script
     # =====================================================================
     #
     #  Description of what the script does.
@@ -150,36 +172,14 @@
     - Scripts must be executable (chmod +x)
 
 
-  2.4a  POWERSHELL SCRIPTS (.ps1)
-  --------------------------------
-
-    # =====================================================================
-    #  tools/windows/setup-env.ps1 — Windows environment setup
-    # =====================================================================
-    #
-    #  Description of what the script does.
-    #
-    #  SPDX-License-Identifier: GPL-3.0-only
-    #
-    # =====================================================================
-
-  Rules:
-    - Same header format as .sh scripts (# comment style)
-    - No shebang line (PowerShell does not use one)
-    - The project header comes BEFORE any <# ... #> help block
-    - The <# .SYNOPSIS / .DESCRIPTION #> block is optional but
-      recommended (enables Get-Help integration)
-    - Indentation: 4 spaces, no tabs (same as all project files)
-    - Line width: soft 80, hard 100 (same as all project files)
-
-
   2.5  QT STYLESHEETS (.qss)
   ----------------------------
 
     /* =====================================================================
-     *  themes/sample.qss — HobbyCAD Default Theme (Reference)
+     *  HobbyCAD — themes/sample.qss — Default Theme (Reference)
      * =====================================================================
      *
+     *  Repository: HobbyCAD (ayourk/hobbycad)
      *  File: themes/sample.qss
      *
      *  Description of the theme or stylesheet.
@@ -192,7 +192,7 @@
     - CSS block comment style: /* ... */
     - Each interior line starts with " * " (space-star-space)
     - Separator lines: " *  " + 65 '=' characters
-    - Include a "File:" line for quick identification
+    - Include a "Repository:" and "File:" line for quick identification
     - Section headers within the file use the same block comment style
 
 
@@ -204,6 +204,7 @@
     ================================================================================
 
       Project          : HobbyCAD
+      Repository       : HobbyCAD (ayourk/hobbycad)
       File             : docs/filename.txt
       Document Version : 0.0.1
       Date             : YYYY-MM-DD
@@ -216,7 +217,9 @@
   Rules:
     - Separator: 80 '=' characters
     - Title: indented 2 spaces, ALL CAPS
-    - Metadata block: Project, File, Document Version, Date
+    - Metadata block: Project, Repository, File, Document Version, Date
+    - Repository uses the local directory name with GitHub name in parens
+    - For files outside all repos: "Repository : not in any repo"
     - AI Attribution block when applicable
     - Section headers: indented 2 spaces, numbered, ALL CAPS
     - Subsection headers: indented 2 spaces, numbered, Title Case
@@ -229,13 +232,13 @@
 
     # Title
 
-    <!-- File: README.md -->
+    <!-- HobbyCAD — README.md -->
 
     Content begins here.
 
   Rules:
     - Standard Markdown heading with #
-    - HTML comment with file path on the third line
+    - HTML comment with repo name and file path on the third line
     - No separator lines (Markdown's own formatting suffices)
 
 
@@ -244,7 +247,7 @@
 
     <?xml version="1.0" encoding="UTF-8"?>
     <!--
-      resources/icons/hobbycad.svg — HobbyCAD Application Icon
+      HobbyCAD — resources/icons/hobbycad.svg — Application Icon
 
       Optional multi-line description.
 
@@ -255,7 +258,7 @@
   Rules:
     - XML declaration on the first line
     - HTML/XML comment block immediately after
-    - File path relative to project root on the first line of comment
+    - Repo name, file path, and title on the first line of comment
     - SPDX identifier inside the comment block
 
 
@@ -263,7 +266,7 @@
   ----------------------
 
     /* =====================================================================
-     *  resources/icons/hobbycad.xpm — HobbyCAD Application Icon (XPM)
+     *  HobbyCAD — resources/icons/hobbycad.xpm — Application Icon (XPM)
      * =====================================================================
      *
      *  Optional multi-line description.
@@ -278,7 +281,7 @@
     - Standard C block comment header (same style as QSS)
     - The required /* XPM */ tag must appear immediately after the
       header block (XPM parsers look for this literal string)
-    - File path relative to project root in the header
+    - Repo name and file path in the header
 
 
   2.10  DATA/CONFIG FILES (AUTHORS, .gitignore, etc.)
@@ -289,13 +292,14 @@
 
     ================================================================================
       HOBBYCAD / HOBBYMESH — AUTHORS
+      Repository: HobbyCAD (ayourk/hobbycad)
       File: AUTHORS
     ================================================================================
 
   For .gitignore:
 
     # =====================================================================
-    #  .gitignore — HobbyCAD version control exclusions
+    #  HobbyCAD — .gitignore — Version control exclusions
     # =====================================================================
 
   For files that cannot contain comments (JSON, etc.), the file path
@@ -326,7 +330,7 @@
     - Uppercase README.txt for stub directories
 
   Shell scripts:
-    - Lowercase with hyphens (build-appimage.sh, setup-env.ps1)
+    - Lowercase with hyphens (build-appimage.sh)
 
   Icons:
     - Canonical source is SVG (hobbycad.svg)
@@ -340,12 +344,23 @@
   4. DIRECTORY STRUCTURE AND FILE PLACEMENT
 ================================================================================
 
-  hobbycad/                        Project root
+  The project spans multiple repositories under /wd8tb/ai/:
+
+  4.1  HobbyCAD (ayourk/hobbycad) — Main Application
+  -----------------------------------------------------
+
+  HobbyCAD/                        Repository root
     CMakeLists.txt                 Top-level build
     README.md                      Project overview (GitHub)
     LICENSE                        GPL 3.0 (only)
     AUTHORS                        Contributors list
     .gitignore                     VCS exclusions
+    vcpkg.json                     vcpkg manifest (Phase 0 deps)
+    vcpkg-configuration.json       vcpkg registries config
+
+    .github/
+      workflows/
+        windows-build.yml          Windows CI (MSYS2 + MSVC)
 
     debian/                        Debian packaging files
       changelog                    Version history
@@ -354,6 +369,7 @@
       copyright                    Machine-readable copyright (DEP-5)
       rules                        Build rules (dh + cmake + Ninja)
       hobbycad.install             File installation list
+      menu                         Fluxbox menu entry
       source/format                Source format (3.0 quilt)
 
     resources/                     Desktop integration files
@@ -379,6 +395,12 @@
       hobbycad_en.ts               English (reference/default)
       hobbycad_pirate.ts           Pirate English (fun language)
 
+    vcpkg-overlay-ports/           vcpkg port overrides
+      opencascade/                 OCCT 7.6.2 MSVC fix
+        portfile.cmake
+        vcpkg.json
+        fix-msvc-unsigned-char.patch
+
     src/
       libhobbycad/                 Core library (no GUI dependency)
         CMakeLists.txt
@@ -403,11 +425,13 @@
         gui/                       GUI components (shared)
           mainwindow.h/.cpp        Base window (menus, status, docks)
           aboutdialog.h/.cpp       About dialog
+          preferencesdialog.h/.cpp Preferences dialog
           clipanel.h/.cpp          Embedded CLI terminal widget
           themevalidator.h/.cpp    QSS theme validation utility
           full/                    Full Mode (OpenGL 3.3+)
             viewportwidget.h/.cpp  OCCT 3D viewport
             fullmodewindow.h/.cpp  Full Mode window
+            scalebarwidget.h/.cpp  Scale bar overlay
           reduced/                 Reduced Mode (no OpenGL)
             reducedviewport.h/.cpp Disabled viewport placeholder
             diagnosticdialog.h/.cpp GPU diagnostic dialog
@@ -425,6 +449,10 @@
       plugins/                     Plugin infrastructure (future)
         README.txt
 
+    devtest/                       Build-time dependency checks
+      CMakeLists.txt
+      README.txt
+      depcheck.cpp
     tests/                         Unit/integration tests (future)
       README.txt
     cmake/                         Custom CMake modules
@@ -440,16 +468,104 @@
         build-dev.sh
         README.txt
       windows/
+        setup-env.ps1              MSYS2/vcpkg setup automation
         build-dev.bat
-        setup-env.ps1
         README.txt
       macos/
+        setup-env.sh               Homebrew/env setup (bash/zsh)
+        setup-env.csh              Homebrew/env setup (tcsh/csh)
         build-dev.sh
-        setup-env.sh
         README.txt
 
+
+  4.2  HobbyCAD-vcpkg (ayourk/hobbycad-vcpkg) — vcpkg Registry
+  ---------------------------------------------------------------
+
+  HobbyCAD-vcpkg/                  Repository root
+    .gitignore
+    LICENSE
+    README.md
+    .github/
+      workflows/
+        build-ports.yml            Port build/test CI
+    ports/
+      lib3mf/
+        portfile.cmake
+        vcpkg.json
+      libslvs/
+        portfile.cmake
+        vcpkg.json
+        0001-handle-missing-git-directory.patch
+      meshfix/
+        portfile.cmake
+        vcpkg.json
+        build-shared-library-cross-platform.patch
+      openmesh/
+        portfile.cmake
+        vcpkg.json
+    scripts/
+      update-versions.sh           Version database updater
+    sources/
+      README.txt                   Tarballs uploaded as release assets
+    versions/
+      baseline.json
+      l-/lib3mf.json
+      l-/libslvs.json
+      m-/meshfix.json
+      o-/openmesh.json
+
+
+  4.3  HobbyCAD-homebrew (ayourk/homebrew-hobbycad) — Homebrew Tap
+  ------------------------------------------------------------------
+
+  Note: Local directory is HobbyCAD-homebrew, GitHub repo is
+  homebrew-hobbycad (Homebrew naming convention).
+
+  HobbyCAD-homebrew/               Repository root
+    .gitignore
+    README.md
+    populate-sha256.sh             SHA256 hash population script
+    Formula/
+      opencascade@7.6.3.rb
+      libzip@1.7.3.rb
+      libgit2@1.7.2.rb
+
+
+  4.4  HobbyCAD-libs — PPA Library Packaging
+  ---------------------------------------------
+
+  Debian packaging source for PPA-hosted dependency libraries.
+  Tarballs and source packages are stored in their respective
+  subdirectories alongside the debian/ packaging.  This directory
+  is NOT a git repository.
+
+  HobbyCAD-libs/                   Directory root (not a repo)
+    lib3mf/
+      debian/                      lib3mf 2.4.1 PPA packaging
+      *.dsc, *.tar.*               Source packages and tarballs
+    MeshFix/
+      debian/                      MeshFix 2.1 PPA packaging
+      *.dsc, *.tar.*               Source packages and tarballs
+    openmesh/
+      debian/                      OpenMesh 11.0.0 PPA packaging
+      *.dsc, *.tar.*               Source packages and tarballs
+    solvespace/
+      debian/                      SolveSpace solver 3.2 PPA packaging
+      *.dsc, *.tar.*               Source packages and tarballs
+
+
+  4.5  HobbyCAD-outside — Non-Repository Files
+  -----------------------------------------------
+
+  Files that support development but are NOT committed to any
+  version-controlled repository.
+
+  HobbyCAD-outside/                Directory root (not a repo)
+    conversation_preferences.txt   Claude session preferences
+    session_summary_YYYY-MM-DD.txt Session handoff summaries
+
   Placement rules:
-    - Documentation goes in docs/
+    - Documentation goes in docs/ (within HobbyCAD repo)
     - User/community themes go in themes/ (project root)
     - Built-in themes go in src/hobbycad/resources/themes/ (compiled in)
     - Translation source files (.ts) go in translations/
@@ -457,6 +573,14 @@
     - Each library/app has its own CMakeLists.txt
     - Stub directories get a README.txt for git tracking
     - Public headers in a hobbycad/ subdirectory for namespaced install
+    - Binary files (images, archives, compiled objects) are NEVER
+      stored in the main HobbyCAD repository.  HobbyCAD-libs stores
+      tarballs and source packages alongside debian packaging.
+    - Session documents (conversation_preferences.txt,
+      session_summary_*.txt) go in HobbyCAD-outside/
+    - vcpkg port definitions go in HobbyCAD-vcpkg
+    - Homebrew formulas go in HobbyCAD-homebrew
+    - PPA debian packaging goes in HobbyCAD-libs
 
 ================================================================================
   5. OBJECT NAMING (setObjectName) CONVENTION
@@ -523,6 +647,38 @@
 
   Third-party files retain their original license headers and are
   documented in AUTHORS.
+
+  6.4  Developer Certificate of Origin (DCO)
+  --------------------------------------------
+
+  All commits to HobbyCAD repositories must include a Signed-off-by
+  trailer certifying that the contributor has the right to submit
+  the code under the project's license.  This follows the Developer
+  Certificate of Origin (https://developercertificate.org/), the
+  same mechanism used by the Linux kernel.
+
+  The sign-off is a single line at the end of the commit message:
+
+    Signed-off-by: Your Name <your.email@example.com>
+
+  How to sign off:
+
+    Command line:     git commit -s
+                      git commit --signoff
+
+    Fix past commits: git rebase --signoff HEAD~N
+
+    Make it default:  git config --global format.signoff true
+
+  GitHub's web interface will add the trailer automatically when
+  the "Require contributors to sign off on web-based commits"
+  setting is enabled (configured per-repository).
+
+  CI enforcement:
+
+    .github/workflows/dco.yml runs on every pull request and
+    rejects any commit missing a valid Signed-off-by trailer.
+    The check is required to pass before merging.
 
 ================================================================================
   7. INCLUDE ORDER
