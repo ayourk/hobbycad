@@ -351,6 +351,7 @@
 
   HobbyCAD/                        Repository root
     CMakeLists.txt                 Top-level build
+    CMakePresets.json              Build presets (all platforms)
     README.md                      Project overview (GitHub)
     LICENSE                        GPL 3.0 (only)
     AUTHORS                        Contributors list
@@ -360,6 +361,7 @@
 
     .github/
       workflows/
+        dco.yml                    DCO sign-off enforcement
         windows-build.yml          Windows CI (MSYS2 + MSVC)
 
     debian/                        Debian packaging files

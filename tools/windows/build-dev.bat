@@ -233,11 +233,21 @@ goto :eof
     call :log "--- Configuring (CMake) ---"
     call :log ""
 
-    cmake -B "%BUILD_DIR%" ^
-        -G "!GENERATOR!" ^
-        -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
-        -DCMAKE_INSTALL_PREFIX="%PROJECT_ROOT%\install" ^
-        -S "%PROJECT_ROOT%" >> "%LOG%" 2>&1
+    REM Auto-detect preset family: msvc if VCPKG_ROOT is set, else msys2
+    if defined VCPKG_ROOT (
+        set "PRESET_FAMILY=msvc"
+    ) else (
+        set "PRESET_FAMILY=msys2"
+    )
+
+    REM Build type to lowercase for preset name
+    set "BT_LOWER=%BUILD_TYPE%"
+    if /i "%BUILD_TYPE%"=="Debug"   set "BT_LOWER=debug"
+    if /i "%BUILD_TYPE%"=="Release" set "BT_LOWER=release"
+
+    set "PRESET=!PRESET_FAMILY!-!BT_LOWER!"
+
+    cmake --preset "!PRESET!" -S "%PROJECT_ROOT%" >> "%LOG%" 2>&1
 
     if %errorlevel% neq 0 (
         call :log "  CMake configure FAILED — see %LOG%"
@@ -248,7 +258,7 @@ goto :eof
     call :log "--- Building (%JOBS% jobs) ---"
     call :log ""
 
-    cmake --build "%BUILD_DIR%" --config %BUILD_TYPE% -j %JOBS% >> "%LOG%" 2>&1
+    cmake --build --preset "!PRESET!" -j %JOBS% >> "%LOG%" 2>&1
 
     if %errorlevel% neq 0 (
         call :log "====================================================================="

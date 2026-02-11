@@ -1,0 +1,188 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "linux-debug",
+            "displayName": "Linux Debug",
+            "description": "Debug build for Linux (GCC, Ninja)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_INSTALL_PREFIX": "/usr/local"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux Release",
+            "description": "Release build for Linux (GCC, Ninja)",
+            "inherits": "linux-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "linux-appimage",
+            "displayName": "Linux AppImage",
+            "description": "Release build for AppImage packaging (prefix /usr)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-appimage",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_INSTALL_PREFIX": "/usr"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "macOS Debug",
+            "description": "Debug build for macOS (Ninja or Make)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_INSTALL_PREFIX": "/usr/local"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "macOS Release",
+            "description": "Release build for macOS (Ninja or Make)",
+            "inherits": "macos-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "msys2-debug",
+            "displayName": "Windows MSYS2/GCC Debug",
+            "description": "Debug build for MSYS2 UCRT64 (GCC, Ninja)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "environment": {
+                "PATH": "$penv{MSYS2_ROOT}/ucrt64/bin;$penv{PATH}"
+            }
+        },
+        {
+            "name": "msys2-release",
+            "displayName": "Windows MSYS2/GCC Release",
+            "description": "Release build for MSYS2 UCRT64 (GCC, Ninja)",
+            "inherits": "msys2-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "msvc-debug",
+            "displayName": "Windows MSVC Debug",
+            "description": "Debug build for MSVC with vcpkg",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "msvc-release",
+            "displayName": "Windows MSVC Release",
+            "description": "Release build for MSVC with vcpkg",
+            "inherits": "msvc-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "linux-debug",
+            "displayName": "Linux Debug",
+            "configurePreset": "linux-debug"
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux Release",
+            "configurePreset": "linux-release"
+        },
+        {
+            "name": "linux-translations",
+            "displayName": "Update Translations (.ts)",
+            "configurePreset": "linux-debug",
+            "targets": ["hobbycad_lupdate"]
+        },
+        {
+            "name": "linux-appimage",
+            "displayName": "Linux AppImage",
+            "configurePreset": "linux-appimage"
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "macOS Debug",
+            "configurePreset": "macos-debug"
+        },
+        {
+            "name": "macos-release",
+            "displayName": "macOS Release",
+            "configurePreset": "macos-release"
+        },
+        {
+            "name": "macos-translations",
+            "displayName": "Update Translations (.ts)",
+            "configurePreset": "macos-debug",
+            "targets": ["hobbycad_lupdate"]
+        },
+        {
+            "name": "msys2-debug",
+            "displayName": "MSYS2/GCC Debug",
+            "configurePreset": "msys2-debug"
+        },
+        {
+            "name": "msys2-release",
+            "displayName": "MSYS2/GCC Release",
+            "configurePreset": "msys2-release"
+        },
+        {
+            "name": "msvc-debug",
+            "displayName": "MSVC Debug",
+            "configurePreset": "msvc-debug"
+        },
+        {
+            "name": "msvc-release",
+            "displayName": "MSVC Release",
+            "configurePreset": "msvc-release"
+        }
+    ]
+}

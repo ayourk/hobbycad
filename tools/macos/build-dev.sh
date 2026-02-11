@@ -197,18 +197,25 @@ do_build() {
     echo "--- Configuring (CMake) ---"
     echo ""
 
-    cmake -B "${BUILD_DIR}" \
-        -G "${GENERATOR}" \
-        -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        "${CMAKE_EXTRA_ARGS[@]}" \
-        -S "${PROJECT_ROOT}"
+    local preset="macos-${BUILD_TYPE,,}"
+
+    # Export Homebrew paths so CMake can find them
+    if [ ${#CMAKE_EXTRA_ARGS[@]} -gt 0 ]; then
+        for extra in "${CMAKE_EXTRA_ARGS[@]}"; do
+            case "${extra}" in
+                -DCMAKE_PREFIX_PATH=*) export CMAKE_PREFIX_PATH="${extra#-DCMAKE_PREFIX_PATH=}" ;;
+                -DOpenCASCADE_DIR=*)   export OpenCASCADE_DIR="${extra#-DOpenCASCADE_DIR=}" ;;
+            esac
+        done
+    fi
+
+    cmake --preset "${preset}" -S "${PROJECT_ROOT}"
 
     echo ""
     echo "--- Building (${GENERATOR}, ${CORES} jobs) ---"
     echo ""
 
-    cmake --build "${BUILD_DIR}" -j"${CORES}"
+    cmake --build --preset "${preset}" -j"${CORES}"
 
     echo ""
 

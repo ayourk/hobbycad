@@ -9,9 +9,16 @@
 #    hobbycad      — Application executable (GUI + CLI modes)
 #
 #  Usage:
-#    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-#    cmake --build build
+#    cmake --preset linux-debug
+#    cmake --build --preset linux-debug
 #    ./build/src/hobbycad/hobbycad
+#
+#  Available presets: linux-debug, linux-release, linux-appimage,
+#    macos-debug, macos-release, msys2-debug, msys2-release,
+#    msvc-debug, msvc-release, linux-translations, macos-translations
+#
+#  See CMakePresets.json for full list. Manual configure:
+#    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 #
 #  Options:
 #    -DHOBBYCAD_CORE_LINKAGE=STATIC|SHARED|OBJECT  (default: STATIC)

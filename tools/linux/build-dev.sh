@@ -164,17 +164,14 @@ do_build() {
     echo "--- Configuring (CMake) ---"
     echo ""
 
-    cmake -B "${BUILD_DIR}" \
-        -G Ninja \
-        -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -S "${PROJECT_ROOT}"
+    local preset="linux-${BUILD_TYPE,,}"
+    cmake --preset "${preset}" -S "${PROJECT_ROOT}"
 
     echo ""
     echo "--- Building (Ninja, $(nproc) jobs) ---"
     echo ""
 
-    cmake --build "${BUILD_DIR}" -j"$(nproc)"
+    cmake --build --preset "${preset}" -j"$(nproc)"
 
     echo ""
 
