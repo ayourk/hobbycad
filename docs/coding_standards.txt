@@ -22,6 +22,7 @@
        2.2  C++ Header Files (.h)
        2.3  CMakeLists.txt
        2.4  Shell Scripts (.sh)
+       2.4a PowerShell Scripts (.ps1)
        2.5  Qt Stylesheets (.qss)
        2.6  Plain Text Documents (.txt)
        2.7  Markdown Files (.md)
@@ -147,6 +148,29 @@
     - Shebang (#!/bin/bash) is always the first line
     - Header block immediately follows the shebang
     - Scripts must be executable (chmod +x)
+
+
+  2.4a  POWERSHELL SCRIPTS (.ps1)
+  --------------------------------
+
+    # =====================================================================
+    #  tools/windows/setup-env.ps1 — Windows environment setup
+    # =====================================================================
+    #
+    #  Description of what the script does.
+    #
+    #  SPDX-License-Identifier: GPL-3.0-only
+    #
+    # =====================================================================
+
+  Rules:
+    - Same header format as .sh scripts (# comment style)
+    - No shebang line (PowerShell does not use one)
+    - The project header comes BEFORE any <# ... #> help block
+    - The <# .SYNOPSIS / .DESCRIPTION #> block is optional but
+      recommended (enables Get-Help integration)
+    - Indentation: 4 spaces, no tabs (same as all project files)
+    - Line width: soft 80, hard 100 (same as all project files)
 
 
   2.5  QT STYLESHEETS (.qss)
@@ -302,7 +326,7 @@
     - Uppercase README.txt for stub directories
 
   Shell scripts:
-    - Lowercase with hyphens (build-appimage.sh)
+    - Lowercase with hyphens (build-appimage.sh, setup-env.ps1)
 
   Icons:
     - Canonical source is SVG (hobbycad.svg)
@@ -417,9 +441,11 @@
         README.txt
       windows/
         build-dev.bat
+        setup-env.ps1
         README.txt
       macos/
         build-dev.sh
+        setup-env.sh
         README.txt
 
   Placement rules:
