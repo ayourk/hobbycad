@@ -81,13 +81,13 @@ sudo add-apt-repository ppa:ayourk/hobbycad
 sudo apt-get update
 ```
 
-Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See [`docs/dev_environment_setup.txt` §7–8](docs/dev_environment_setup.txt#L646) for details.
+Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See [`docs/dev_environment_setup.txt` §7–8](docs/dev_environment_setup.txt#L718) for details.
 
-**HobbyCAD vcpkg Registry** — the same four libraries are available for Windows (and macOS) via a custom vcpkg registry. The repository ships `vcpkg.json` and `vcpkg-configuration.json` in the project root — vcpkg resolves the custom registry automatically during the build. See [`docs/dev_environment_setup.txt` §15.2](docs/dev_environment_setup.txt#L1631) for details.
+**HobbyCAD vcpkg Registry** — the same four libraries are available for Windows (and macOS) via a custom vcpkg registry. The repository ships `vcpkg.json` and `vcpkg-configuration.json` in the project root — vcpkg resolves the custom registry automatically during the build. See [`docs/dev_environment_setup.txt` §15.2](docs/dev_environment_setup.txt#L1707) for details.
 
 Registry: https://github.com/ayourk/hobbycad-vcpkg
 
-**HobbyCAD Homebrew Tap** — the same four libraries are available for macOS via a Homebrew tap. See [`docs/dev_environment_setup.txt` §22.6](docs/dev_environment_setup.txt#L2269) for details.
+**HobbyCAD Homebrew Tap** — the same four libraries are available for macOS via a Homebrew tap. See [`docs/dev_environment_setup.txt` §22.6](docs/dev_environment_setup.txt#L2423) for details.
 
 ```
 brew tap ayourk/hobbycad
@@ -117,37 +117,37 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 
 | Section | Description |
 |---|---|
-| [Overview](docs/dev_environment_setup.txt#L1389) (§13) | Platform status and known limitations |
-| [Prerequisites](docs/dev_environment_setup.txt#L1456) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
-| [vcpkg setup](docs/dev_environment_setup.txt#L1603) (§15) | Package manager and custom registry configuration |
-| [vcpkg dependencies](docs/dev_environment_setup.txt#L1698) (§16) | Installing Phase 0 dependencies |
-| [Custom registry ports](docs/dev_environment_setup.txt#L1831) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| [Building](docs/dev_environment_setup.txt#L1879) (§18) | Build instructions for Windows |
-| [Troubleshooting](docs/dev_environment_setup.txt#L1991) (§19) | Windows-specific issues |
+| [Overview](docs/dev_environment_setup.txt#L1465) (§13) | Platform status and known limitations |
+| [Prerequisites](docs/dev_environment_setup.txt#L1532) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
+| [vcpkg setup](docs/dev_environment_setup.txt#L1679) (§15) | Package manager and custom registry configuration |
+| [vcpkg dependencies](docs/dev_environment_setup.txt#L1788) (§16) | Installing Phase 0 dependencies |
+| [Custom registry ports](docs/dev_environment_setup.txt#L1930) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| [Building](docs/dev_environment_setup.txt#L1990) (§18) | Build instructions for Windows |
+| [Troubleshooting](docs/dev_environment_setup.txt#L2102) (§19) | Windows-specific issues |
 
 ### macOS (Support Stub)
 
 | Section | Description |
 |---|---|
-| [Overview](docs/dev_environment_setup.txt#L2066) (§20) | Platform status and OpenGL limitations |
-| [Prerequisites](docs/dev_environment_setup.txt#L2105) (§21) | Xcode and Homebrew requirements |
-| [Homebrew dependencies](docs/dev_environment_setup.txt#L2208) (§22) | Installing dependencies via Homebrew |
-| [Homebrew tap](docs/dev_environment_setup.txt#L2269) (§22.6) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| [Architecture notes](docs/dev_environment_setup.txt#L2327) (§23) | Intel vs. Apple Silicon considerations |
-| [Building](docs/dev_environment_setup.txt#L2412) (§25) | Build instructions for macOS |
-| [Troubleshooting](docs/dev_environment_setup.txt#L2470) (§26) | macOS-specific issues |
+| [Overview](docs/dev_environment_setup.txt#L2177) (§20) | Platform status and OpenGL limitations |
+| [Prerequisites](docs/dev_environment_setup.txt#L2216) (§21) | Xcode and Homebrew requirements |
+| [Homebrew dependencies](docs/dev_environment_setup.txt#L2319) (§22) | Installing dependencies via Homebrew |
+| [Homebrew tap](docs/dev_environment_setup.txt#L2423) (§22.6) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| [Architecture notes](docs/dev_environment_setup.txt#L2485) (§23) | Intel vs. Apple Silicon considerations |
+| [Building](docs/dev_environment_setup.txt#L2570) (§25) | Build instructions for macOS |
+| [Troubleshooting](docs/dev_environment_setup.txt#L2633) (§26) | macOS-specific issues |
 
 ### General
 
 | Section | Description |
 |---|---|
 | [Prerequisites](docs/dev_environment_setup.txt#L180) (§3) | Required tools and minimum versions |
-| [PPA packages](docs/dev_environment_setup.txt#L646) (§7) | Dependencies requiring source build or PPA (libslvs, etc.) |
-| [Launchpad PPA](docs/dev_environment_setup.txt#L753) (§8) | PPA setup, packaging workflow, versioning |
+| [PPA packages](docs/dev_environment_setup.txt#L718) (§7) | Dependencies requiring source build or PPA (libslvs, etc.) |
+| [Launchpad PPA](docs/dev_environment_setup.txt#L829) (§8) | PPA setup, packaging workflow, versioning |
 | [Version differences](docs/dev_environment_setup.txt#L573) (§6) | OCCT, Qt, and Python differences between 22.04 and 24.04 |
-| [Verify installation](docs/dev_environment_setup.txt#L977) (§9) | Dependency and OpenGL verification steps |
-| [Building Phase 0](docs/dev_environment_setup.txt#L1134) (§11) | Clone, dev build, .deb, and AppImage instructions |
-| [Troubleshooting](docs/dev_environment_setup.txt#L1303) (§12) | Common build issues and fixes |
+| [Verify installation](docs/dev_environment_setup.txt#L1053) (§9) | Dependency and OpenGL verification steps |
+| [Building Phase 0](docs/dev_environment_setup.txt#L1210) (§11) | Clone, dev build, .deb, and AppImage instructions |
+| [Troubleshooting](docs/dev_environment_setup.txt#L1379) (§12) | Common build issues and fixes |
 
 ## Development Phases
 
@@ -182,13 +182,13 @@ HobbyCAD and HobbyMesh are licensed under the **GNU General Public License v3.0 
 - A **commercial license** may be offered in the future for entities redistributing HobbyCAD or derivatives commercially
 - **AGPL 3.0** is under consideration and may be adopted at any time; the copyright assignment policy preserves this option
 
-See [`docs/project_definition.txt` §12](docs/project_definition.txt#L1400) for the full licensing framework.
+See [`docs/project_definition.txt` §12](docs/project_definition.txt#L1414) for the full licensing framework.
 
 ## Contributing
 
 Contributions are welcome. All code merged into the main repository requires copyright assignment to the project author, enabling unified licensing decisions. Contributors are acknowledged in the `AUTHORS` file.
 
-A contribution agreement (CLA) mechanism will be defined before external contributions are accepted. See [`docs/project_definition.txt` §12.5–12.7](docs/project_definition.txt#L1537) for details.
+A contribution agreement (CLA) mechanism will be defined before external contributions are accepted. See [`docs/project_definition.txt` §12.5–12.7](docs/project_definition.txt#L1551) for details.
 
 ## Project Documentation
 

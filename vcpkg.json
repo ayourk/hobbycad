@@ -1,4 +1,5 @@
 {
+  "$comment": "HobbyCAD vcpkg manifest — located at <project-root>/vcpkg.json",
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "hobbycad",
   "version": "0.0.1",
@@ -13,6 +14,18 @@
       "features": ["widgets", "opengl", "gui"]
     },
     "qtsvg",
-    "opengl"
+    "opengl",
+    "libzip",
+    "libpng",
+    "libjpeg-turbo",
+    "libgit2"
+  ],
+  "$overrides-note": "Pinned to Ubuntu 24.04 LTS versions — see docs/dev_environment_setup.txt §6.4",
+  "overrides": [
+    { "name": "opencascade", "version": "7.6.2" },
+    { "name": "qtbase",      "version": "6.4.2" },
+    { "name": "qtsvg",       "version": "6.4.2" },
+    { "name": "libzip",      "version": "1.7.3" },
+    { "name": "libgit2",     "version": "1.8.0" }
   ]
 }
