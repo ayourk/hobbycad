@@ -570,32 +570,40 @@
       librsvg2-bin icoutils
 
 ================================================================================
-  6. PACKAGE VERSION DIFFERENCES (22.04 vs 24.04)
+  6. PACKAGE VERSION DIFFERENCES (22.04 vs 24.04) AND CROSS-PLATFORM PINNING
 ================================================================================
 
-  This table summarizes the key version differences between Ubuntu
-  22.04 (Jammy) and 24.04 (Noble) for HobbyCAD's dependencies.
+  Ubuntu 24.04 (Noble) is the reference platform. Windows (vcpkg)
+  and macOS (Homebrew) builds pin dependency versions to match the
+  24.04 versions as closely as possible, ensuring consistent
+  behavior across all three platforms.
 
-  +---------------------+--------------+--------------+------------------+-----------+
-  | Package             | 22.04 Jammy  | 24.04 Noble  | Latest (Feb '26) | Impact    |
-  +---------------------+--------------+--------------+------------------+-----------+
-  | GCC                 | 11.x         | 13.x         | 15.2             | Low       |
-  | CMake               | 3.22.x       | 3.28.x       | 4.2.3            | Low       |
-  | Python              | 3.10.x       | 3.12.x       | 3.14.3           | Medium    |
-  | Qt 6                | 6.2.4        | 6.4.2        | 6.10.2           | Medium    |
-  | OCCT                | 7.5.x        | 7.6.x (t64)  | 7.9.3 *          | Medium    |
-  | pybind11            | 2.9.x        | 2.11.x       | 3.0.1            | Low       |
-  | Ninja               | 1.10.x       | 1.11.x       | 1.13.1           | None      |
-  | libzip              | 1.7.x        | 1.10.x       | 1.11.4           | Low       |
-  +---------------------+--------------+--------------+------------------+-----------+
+  +---------------------+--------------+--------------+--------------+--------------+-----------+
+  | Package             | 22.04 Jammy  | 24.04 Noble  | vcpkg Pin    | Homebrew Pin | Impact    |
+  +---------------------+--------------+--------------+--------------+--------------+-----------+
+  | GCC / MSVC          | 11.x         | 13.x         | MSVC 2022    | Apple Clang  | Low       |
+  | CMake               | 3.22.x       | 3.28.x       | (system)     | (system)     | Low       |
+  | Python              | 3.10.x       | 3.12.x       | (system)     | (system)     | Medium    |
+  | Qt 6                | 6.2.4        | 6.4.2        | 6.4.2        | (not pinned) | Medium    |
+  | OCCT                | 7.5.x        | 7.6.3        | 7.6.2 *      | 7.6.3        | Medium    |
+  | pybind11            | 2.9.x        | 2.11.1       | (not pinned) | (not pinned) | Low       |
+  | Ninja               | 1.10.x       | 1.11.x       | (system)     | (system)     | None      |
+  | libzip              | 1.7.3        | 1.7.3        | 1.7.3        | 1.7.3        | Low       |
+  | libgit2             | 1.4.x        | 1.7.2        | 1.8.0 **     | 1.7.2        | Low       |
+  +---------------------+--------------+--------------+--------------+--------------+-----------+
 
-  * OCCT 8.0.0 is in release candidate stage, planned for Q1 2026.
-    See Section 6.1 for OCCT version gap analysis.
+  *  OCCT 7.6.3 is not available in vcpkg; 7.6.2 is the nearest
+     version in the 7.6.x series. The API is identical between
+     7.6.2 and 7.6.3 (patch-level bugfixes only).
 
-  Impact Legend:
-    None   - No code changes needed
-    Low    - Minor CMake adjustments may be needed
-    Medium - API differences exist, conditional code may be needed
+  ** libgit2 1.7.x does not exist in vcpkg (jumps from 1.6.4 to
+     1.8.0). We pin to 1.8.0 as the nearest version above 24.04's
+     1.7.2. The libgit2 C API is stable across minor versions.
+
+  Qt 6.4.2 is not pinned in Homebrew because building Qt from source
+  takes over two hours. Use the Qt Online Installer for exact parity
+  (Section 16.2), or brew install qt@6 for a rolling-latest Qt 6.x
+  which is source-compatible.
 
   6.1  OCCT 7.5 vs 7.6 NOTES
   -----------------------------
@@ -642,6 +650,70 @@
   For Phase 0, Python is not a critical dependency. Any Python
   issues between versions can be deferred to Phase 3 (scripting).
 
+  6.4  CROSS-PLATFORM VERSION PINNING STRATEGY
+  -----------------------------------------------
+
+  HobbyCAD uses Ubuntu 24.04 package versions as the canonical
+  reference for all platforms. Windows (vcpkg) and macOS (Homebrew)
+  builds pin their dependency versions to match 24.04 as closely as
+  the respective package managers allow.
+
+  Why pin versions?
+
+    - Consistent API surface: code written against OCCT 7.6.x on
+      Linux will behave identically on Windows and macOS.
+    - Reproducible builds: every developer gets the same library
+      versions regardless of when they set up their environment.
+    - Reduced test matrix: one API version to test rather than
+      permutations of old/new across platforms.
+
+  How it works (vcpkg):
+
+    The project's vcpkg.json contains an "overrides" section that
+    forces vcpkg to install specific versions, overriding whatever
+    the current vcpkg baseline would normally resolve to:
+
+      "overrides": [
+        { "name": "opencascade", "version": "7.6.2" },
+        { "name": "qtbase",      "version": "6.4.2" },
+        { "name": "qtsvg",       "version": "6.4.2" },
+        { "name": "libzip",      "version": "1.7.3" },
+        { "name": "libgit2",     "version": "1.8.0" }
+      ]
+
+    When a developer runs cmake with the vcpkg toolchain, these
+    versions are installed automatically. No manual intervention
+    is needed.
+
+  How it works (Homebrew):
+
+    The HobbyCAD Homebrew tap (ayourk/homebrew-hobbycad) provides
+    version-pinned formulas that download directly from upstream
+    GitHub release tarballs:
+
+      brew install ayourk/hobbycad/opencascade@7.6.3
+      brew install ayourk/hobbycad/libzip@1.7.3
+      brew install ayourk/hobbycad/libgit2@1.7.2
+
+    These are keg-only (they do not conflict with Homebrew core
+    formulas). CMake must be told where to find them via
+    CMAKE_PREFIX_PATH — see Section 22.5 and Section 25.3.
+
+    Qt 6.4.2 is NOT pinned via Homebrew because building Qt from
+    source takes over two hours. Developers who need exact version
+    parity should install Qt 6.4.2 via the Qt Online Installer
+    (see Section 16.2). Otherwise, brew install qt@6 (rolling
+    latest) provides source-compatible Qt 6.x.
+
+  When to update pinned versions:
+
+    - When the primary development platform moves to a new Ubuntu
+      LTS release (e.g. 26.04).
+    - When a pinned version has a critical security vulnerability
+      that requires an out-of-band update.
+    - When a new phase requires features only available in newer
+      library versions.
+
 ================================================================================
   7. PACKAGES REQUIRING SOURCE BUILD OR PPA
 ================================================================================
@@ -673,6 +745,7 @@
 
   Built from SolveSpace git master snapshot dated 2026-02-08.
   Source tarball: libslvs_3.2.git~20260208.orig.tar.xz
+  Download:       https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/libslvs_3.2.git.20260208.orig.tar.gz
 
   Install from PPA:
     sudo add-apt-repository ppa:ayourk/hobbycad
@@ -706,6 +779,7 @@
       Packages: libopenmesh, libopenmesh-dev
       Noble:    libopenmesh 11.0.0.git~20260208-1~ppa1~noble1
       Jammy:    libopenmesh 11.0.0.git~20260208-1~ppa1~jammy1
+      Download: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/libopenmesh_11.0.0.git.20260208.orig.tar.gz
 
     lib3mf:
       Status:   PACKAGED (2026-02-08)
@@ -714,6 +788,7 @@
       Packages: lib3mf2, lib3mf-dev
       Noble:    lib3mf 2.4.1.git~20260208-1~ppa1~noble1
       Jammy:    lib3mf 2.4.1.git~20260208-1~ppa1~jammy1
+      Download: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/lib3mf_2.4.1.git.20260208.orig.tar.gz
 
     MeshFix:
       Status:   PACKAGED (2026-02-08)
@@ -723,6 +798,7 @@
                 libmeshfix-dev (development headers)
       Noble:    meshfix 2.1.git~20260208-1~ppa1~noble1
       Jammy:    meshfix 2.1.git~20260208-1~ppa1~jammy1
+      Download: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/meshfix_2.1.git.20260208.orig.tar.gz
 
   Install all PPA dependencies:
     sudo add-apt-repository ppa:ayourk/hobbycad
@@ -1638,14 +1714,12 @@
 
   HobbyCAD ships two vcpkg manifest files in the repository root:
 
-  vcpkg.json — declares all dependencies:
+  vcpkg.json — declares all dependencies and pins versions to match
+  Ubuntu 24.04 (see Section 6.4 for rationale):
 
     {
       "name": "hobbycad",
       "version": "0.0.1",
-      "description": "A Linux-native, open-source, parametric 3D CAD application",
-      "homepage": "https://github.com/ayourk/hobbycad",
-      "license": "GPL-3.0-only",
       "dependencies": [
         "opencascade",
         {
@@ -1654,9 +1728,25 @@
           "features": ["widgets", "opengl", "gui"]
         },
         "qtsvg",
-        "opengl"
+        "opengl",
+        "libzip",
+        "libpng",
+        "libjpeg-turbo",
+        "libgit2"
+      ],
+      "overrides": [
+        { "name": "opencascade", "version": "7.6.2" },
+        { "name": "qtbase",      "version": "6.4.2" },
+        { "name": "qtsvg",       "version": "6.4.2" },
+        { "name": "libzip",      "version": "1.7.3" },
+        { "name": "libgit2",     "version": "1.8.0" }
       ]
     }
+
+  The "overrides" section forces vcpkg to install the exact version
+  specified, regardless of the current vcpkg baseline. This ensures
+  Windows and macOS builds use the same library versions as Ubuntu
+  24.04 (see Section 6 for the full version comparison table).
 
   vcpkg-configuration.json — configures the custom registry for
   packages not available in the main vcpkg registry:
@@ -1670,7 +1760,7 @@
         {
           "kind": "git",
           "repository": "https://github.com/ayourk/hobbycad-vcpkg",
-          "baseline": "<first-commit-hash>",
+          "baseline": "465ba185597aa67c13e248fffa8ec71549c5fafb",
           "packages": ["libslvs", "openmesh", "lib3mf", "meshfix"]
         }
       ]
@@ -1715,6 +1805,10 @@
   GitHub:         https://github.com/Open-Cascade-SAS/OCCT
   Releases:       https://github.com/Open-Cascade-SAS/OCCT/releases
 
+  Pinned version: 7.6.2 (matching Ubuntu 24.04's 7.6.3; nearest
+  version available in vcpkg — see Section 6.4). In manifest mode,
+  the vcpkg.json "overrides" section pins this automatically.
+
   Note: The vcpkg port disables the Draw module (which requires
   Tcl/Tk). This is fine for HobbyCAD — Draw is only needed for
   OCCT's own test harness.
@@ -1722,10 +1816,14 @@
   Pre-built Windows binaries are also available directly from
   OpenCASCADE if the vcpkg port is insufficient:
     https://dev.opencascade.org/release
-  Download: opencascade-7.9.3-vc14-64.zip (or latest version)
+  Download: opencascade-7.6.3-vc14-64.zip (to match Ubuntu 24.04)
 
   16.2  QT 6
   ------------
+
+  Pinned version: 6.4.2 (exact match with Ubuntu 24.04). In
+  manifest mode, the vcpkg.json "overrides" section pins qtbase and
+  qtsvg to 6.4.2 automatically.
 
   Option A: Via vcpkg (simpler, smaller footprint):
 
@@ -1749,7 +1847,8 @@
   Installer:      https://www.qt.io/download-qt-installer-oss
 
   Run the installer and select:
-    - Qt 6.4.x or later (match the version used on Linux)
+    - Qt 6.4.2 (to match Ubuntu 24.04 — do NOT select a newer
+      version unless you have a specific reason)
     - MSVC 2019/2022 64-bit binaries
     - Qt 5 Compatibility Module (optional)
     - Qt Shader Tools (for OpenGL support)
@@ -1840,9 +1939,10 @@
   See the custom registry portfiles for build configuration:
     https://github.com/ayourk/hobbycad-vcpkg/tree/main/ports
 
-  libslvs (SolveSpace constraint solver):
+  libslvs 3.2 (SolveSpace constraint solver):
 
     GitHub:         https://github.com/solvespace/solvespace
+    Release:        https://github.com/solvespace/solvespace/releases/tag/v3.2-rc1
     vcpkg port:     ayourk/hobbycad-vcpkg  ports/libslvs
     License:        GPL 3.0
 
@@ -1850,30 +1950,41 @@
     the full SolveSpace GUI application. It is used by HobbyCAD's
     2D sketch constraint solver in Phase 1+.
 
-  OpenMesh (half-edge mesh data structure):
+  OpenMesh 11.0.0 (half-edge mesh data structure):
 
     Project page:   https://www.graphics.rwth-aachen.de/software/openmesh/
-    GitHub:         https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
+    Download:       https://www.graphics.rwth-aachen.de/software/openmesh/download/
+    GitLab:         https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
     vcpkg port:     ayourk/hobbycad-vcpkg  ports/openmesh
     License:        BSD 3-Clause
 
-  lib3mf (3D Manufacturing Format):
+    Source tarballs and pre-compiled Windows binaries (daily
+    builds) are available from the download page.
+
+  lib3mf 2.4.1 (3D Manufacturing Format):
 
     Project page:   https://3mf.io/
     GitHub:         https://github.com/3MFConsortium/lib3mf
+    Releases:       https://github.com/3MFConsortium/lib3mf/releases
+    Windows SDK:    https://github.com/3MFConsortium/lib3mf/releases/download/v2.4.1/lib3mf_sdk_v2.4.1.zip
+    Docs:           https://lib3mf.readthedocs.io/en/release-2.4.1/
     vcpkg port:     ayourk/hobbycad-vcpkg  ports/lib3mf
     License:        BSD 2-Clause
 
-  MeshFix (mesh repair):
+    Pre-built Windows SDK (includes DLL, headers, and language
+    bindings) is available from the GitHub releases page.
 
-    GitHub:         https://github.com/MarcoAttworke/MeshFix-V2.1
+  MeshFix 2.1 (mesh repair):
+
+    GitHub:         https://github.com/MarcoAttene/MeshFix-V2.1
     vcpkg port:     ayourk/hobbycad-vcpkg  ports/meshfix
     License:        GPL 3.0+
 
-    The vcpkg port includes a cross-platform patch that separates
-    the library from the CLI executable, adds CMake package config
-    files, and fixes MSVC compatibility (CRT warnings, cstdint
-    include guard).
+    No pre-built binaries are available upstream. The vcpkg port
+    includes a cross-platform patch that separates the library
+    from the CLI executable, adds CMake package config files, and
+    fixes MSVC compatibility (CRT warnings, cstdint include
+    guard).
 
 ================================================================================
   18. BUILDING PHASE 0 ON WINDOWS
@@ -2214,13 +2325,16 @@
   22.1  OPENCASCADE TECHNOLOGY (OCCT)
   -------------------------------------
 
-    brew install opencascade
+    brew install ayourk/hobbycad/opencascade@7.6.3
 
-  Homebrew formula:
-    https://formulae.brew.sh/formula/opencascade
+  This installs OCCT 7.6.3 (pinned to match Ubuntu 24.04) as a
+  keg-only formula. It does not conflict with the Homebrew core
+  opencascade formula. Because it is keg-only, you must pass
+  CMAKE_PREFIX_PATH to CMake — see Section 22.5.
 
-  This installs OCCT headers, libraries, and CMake config files.
-  Homebrew typically provides a recent version (7.7.x or 7.8.x).
+  If you prefer the rolling-latest version from Homebrew core
+  (currently 7.8.x or newer), use `brew install opencascade`
+  instead, but note the version mismatch with the Linux build.
 
   22.2  QT 6
   ------------
@@ -2230,13 +2344,18 @@
   Homebrew formula:
     https://formulae.brew.sh/formula/qt
 
-  Note: After installation, Homebrew may report that Qt is
-  "keg-only" (not symlinked into /opt/homebrew). You may need to
-  set Qt6_DIR for CMake:
+  Note: Homebrew's qt@6 is a rolling-latest formula (currently
+  6.7.x or 6.8.x) — NOT version-pinned to 6.4.2. Building Qt
+  from source takes 2+ hours, making a pinned formula impractical.
 
-    export Qt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
+  For exact version parity with Ubuntu 24.04, install Qt 6.4.2 via
+  the Qt Online Installer instead (see Section 16.2). For most
+  development work, the rolling Homebrew version is fine — Qt 6
+  maintains source compatibility within the 6.x series.
 
-  Or pass it directly to CMake (see Section 25.3).
+  After installation, Homebrew may report that Qt is "keg-only"
+  (not symlinked into /opt/homebrew). The CMAKE_PREFIX_PATH in
+  Section 22.5 already accounts for this.
 
   22.3  PYBIND11
   ----------------
@@ -2249,7 +2368,18 @@
   22.4  ZIP AND IMAGE LIBRARIES
   --------------------------------
 
-    brew install libzip libpng jpeg-turbo
+    brew install ayourk/hobbycad/libzip@1.7.3 libpng jpeg-turbo
+
+  The libzip formula is pinned to 1.7.3 (matching Ubuntu 24.04)
+  and is keg-only. libpng and jpeg-turbo are installed from
+  Homebrew core (not pinned — they have stable APIs).
+
+  22.4a  LIBGIT2
+  ----------------
+
+    brew install ayourk/hobbycad/libgit2@1.7.2
+
+  Pinned to 1.7.2 (matching Ubuntu 24.04), keg-only.
 
   Note: Qt's QImage handles PPM/PNM natively. Netpbm command-line
   tools are available via Homebrew if needed for development:
@@ -2259,12 +2389,36 @@
   22.5  ONE-LINE INSTALL (ALL PHASE 0 PACKAGES)
   ------------------------------------------------
 
-    brew install cmake ninja opencascade qt@6 pybind11 \
-      libzip libpng jpeg-turbo libgit2
+    # Tap first
+    brew tap ayourk/hobbycad
+
+    # Pinned formulas (keg-only, matching Ubuntu 24.04)
+    brew install ayourk/hobbycad/opencascade@7.6.3 \
+      ayourk/hobbycad/libzip@1.7.3 \
+      ayourk/hobbycad/libgit2@1.7.2
+
+    # From Homebrew core (not pinned)
+    brew install cmake ninja qt@6 pybind11 libpng jpeg-turbo
 
   Optional development tools:
 
     brew install doxygen graphviz
+
+  IMPORTANT — keg-only formulas and CMAKE_PREFIX_PATH:
+
+  The three pinned formulas are keg-only (they are NOT symlinked
+  into /opt/homebrew). You must tell CMake where to find them by
+  setting CMAKE_PREFIX_PATH.  Add this to your shell profile
+  (e.g. ~/.zshrc):
+
+    export CMAKE_PREFIX_PATH="\
+    $(brew --prefix ayourk/hobbycad/opencascade@7.6.3):\
+    $(brew --prefix ayourk/hobbycad/libzip@1.7.3):\
+    $(brew --prefix ayourk/hobbycad/libgit2@1.7.2):\
+    $(brew --prefix qt@6)"
+
+  Or pass -DCMAKE_PREFIX_PATH="..." to cmake directly — see
+  Section 25.3.
 
   22.6  HOBBYCAD HOMEBREW TAP (FUTURE — PHASE 1+)
   --------------------------------------------------
@@ -2286,25 +2440,29 @@
   (Section 15.2). Source tarballs are shared across all three
   packaging systems.
 
-  libslvs (SolveSpace constraint solver):
+  libslvs 3.2 (SolveSpace constraint solver):
 
     Upstream:       https://github.com/solvespace/solvespace
+    Release:        https://github.com/solvespace/solvespace/releases/tag/v3.2-rc1
     License:        GPL 3.0
     Used by:        HobbyCAD Phase 1+ (2D sketch constraint solver)
 
-  OpenMesh (half-edge mesh data structure):
+  OpenMesh 11.0.0 (half-edge mesh data structure):
 
     Upstream:       https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
+    Download:       https://www.graphics.rwth-aachen.de/software/openmesh/download/
     License:        BSD 3-Clause
     Used by:        HobbyMesh Phase 5+
 
-  lib3mf (3D Manufacturing Format):
+  lib3mf 2.4.1 (3D Manufacturing Format):
 
     Upstream:       https://github.com/3MFConsortium/lib3mf
+    Releases:       https://github.com/3MFConsortium/lib3mf/releases
+    Docs:           https://lib3mf.readthedocs.io/en/release-2.4.1/
     License:        BSD 2-Clause
     Used by:        HobbyMesh Phase 5+
 
-  MeshFix (mesh repair):
+  MeshFix 2.1 (mesh repair):
 
     Upstream:       https://github.com/MarcoAttene/MeshFix-V2.1
     License:        GPL 3.0+
@@ -2445,16 +2603,21 @@
   25.3  CONFIGURE WITH CMAKE
   ----------------------------
 
+  If you set CMAKE_PREFIX_PATH in your shell profile (see Section
+  22.5), this is all you need:
+
+    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+  If you did not export CMAKE_PREFIX_PATH, pass it directly:
+
     cmake -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Debug \
-      -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
+      -DCMAKE_PREFIX_PATH="$(brew --prefix ayourk/hobbycad/opencascade@7.6.3);$(brew --prefix ayourk/hobbycad/libzip@1.7.3);$(brew --prefix ayourk/hobbycad/libgit2@1.7.2);$(brew --prefix qt@6)"
 
-  If CMake cannot find OCCT:
-
-    cmake -B build -G Ninja \
-      -DCMAKE_BUILD_TYPE=Debug \
-      -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6 \
-      -DOpenCASCADE_DIR=$(brew --prefix opencascade)/lib/cmake/opencascade
+  Note: use semicolons (;) inside the -D argument, not colons.
+  CMake interprets the value as a CMake list (semicolon-separated).
+  The colon-separated form works in the environment variable but
+  not in the -D flag.
 
   25.4  BUILD
   ------------
@@ -2496,16 +2659,24 @@
   26.3  CMAKE CAN'T FIND OPENCASCADE
   -------------------------------------
 
+    If using the pinned formula (recommended):
+    - Verify: brew list ayourk/hobbycad/opencascade@7.6.3
+    - Ensure CMAKE_PREFIX_PATH is set (see Section 22.5)
+    - Or pass: -DOpenCASCADE_DIR=$(brew --prefix ayourk/hobbycad/opencascade@7.6.3)/lib/cmake/opencascade
+
+    If using the Homebrew core formula:
     - Verify: brew list opencascade
     - Set: -DOpenCASCADE_DIR=$(brew --prefix opencascade)/lib/cmake/opencascade
-    - On Apple Silicon, Homebrew prefix is /opt/homebrew
-    - On Intel, Homebrew prefix is /usr/local
+
+    On Apple Silicon, Homebrew prefix is /opt/homebrew
+    On Intel, Homebrew prefix is /usr/local
 
   26.4  CMAKE CAN'T FIND QT 6
   ------------------------------
 
-    - Qt is often "keg-only" in Homebrew (not symlinked)
-    - Set: -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
+    - Qt is "keg-only" in Homebrew (not symlinked)
+    - Ensure CMAKE_PREFIX_PATH includes Qt (see Section 22.5)
+    - Or set: -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
     - Verify: ls $(brew --prefix qt@6)/lib/cmake/Qt6/Qt6Config.cmake
 
   26.5  OPENGL DEPRECATION WARNINGS
@@ -2566,9 +2737,10 @@
     GitHub:       https://github.com/qt/qtbase
     vcpkg:        https://vcpkg.io/en/package/qt
 
-  SolveSpace (constraint solver)
+  SolveSpace (constraint solver) — version 3.2
     Project:      https://solvespace.com/
     GitHub:       https://github.com/solvespace/solvespace
+    Release:      https://github.com/solvespace/solvespace/releases/tag/v3.2-rc1
 
   27.2  PYTHON AND BINDINGS
   ---------------------------
@@ -2653,8 +2825,10 @@
     GitHub:       https://github.com/AcademySoftwareFoundation/openvdb
     vcpkg:        https://vcpkg.io/en/package/openvdb
 
-  OpenMesh
+  OpenMesh — version 11.0.0
     Project:      https://www.graphics.rwth-aachen.de/software/openmesh/
+    Download:     https://www.graphics.rwth-aachen.de/software/openmesh/download/
+    GitLab:       https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
     Docs:         https://www.openmesh.org/media/Documentations/
                   OpenMesh-Doc-Latest/
 
@@ -2663,11 +2837,13 @@
     GitHub:       https://github.com/assimp/assimp
     vcpkg:        https://vcpkg.io/en/package/assimp
 
-  lib3mf
+  lib3mf — version 2.4.1
     GitHub:       https://github.com/3MFConsortium/lib3mf
-    Docs:         https://3mf.io/specification/
+    Releases:     https://github.com/3MFConsortium/lib3mf/releases
+    Windows SDK:  https://github.com/3MFConsortium/lib3mf/releases/download/v2.4.1/lib3mf_sdk_v2.4.1.zip
+    Docs:         https://lib3mf.readthedocs.io/en/release-2.4.1/
 
-  MeshFix
+  MeshFix — version 2.1
     GitHub:       https://github.com/MarcoAttene/MeshFix-V2.1
 
   Eigen
