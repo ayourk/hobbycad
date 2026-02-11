@@ -83,11 +83,11 @@ sudo apt-get update
 
 Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See [`docs/dev_environment_setup.txt` §7–8](docs/dev_environment_setup.txt#L718) for details.
 
-**HobbyCAD vcpkg Registry** — the same four libraries are available for Windows (and macOS) via a custom vcpkg registry. The repository ships `vcpkg.json` and `vcpkg-configuration.json` in the project root — vcpkg resolves the custom registry automatically during the build. See [`docs/dev_environment_setup.txt` §15.2](docs/dev_environment_setup.txt#L1707) for details.
+**HobbyCAD vcpkg Registry** — the same four libraries are available for Windows (and macOS) via a custom vcpkg registry. The repository ships `vcpkg.json` and `vcpkg-configuration.json` in the project root — vcpkg resolves the custom registry automatically during the build. See [`docs/dev_environment_setup.txt` §15.2](docs/dev_environment_setup.txt#L1716) for details.
 
 Registry: https://github.com/ayourk/hobbycad-vcpkg
 
-**HobbyCAD Homebrew Tap** — the same four libraries are available for macOS via a Homebrew tap. See [`docs/dev_environment_setup.txt` §22.6](docs/dev_environment_setup.txt#L2423) for details.
+**HobbyCAD Homebrew Tap** — the same four libraries are available for macOS via a Homebrew tap. See [`docs/dev_environment_setup.txt` §22.6](docs/dev_environment_setup.txt#L2440) for details.
 
 ```
 brew tap ayourk/hobbycad
@@ -115,27 +115,29 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 
 ### Windows (Support Stub)
 
-| Section | Description |
-|---|---|
-| [Overview](docs/dev_environment_setup.txt#L1465) (§13) | Platform status and known limitations |
-| [Prerequisites](docs/dev_environment_setup.txt#L1532) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
-| [vcpkg setup](docs/dev_environment_setup.txt#L1679) (§15) | Package manager and custom registry configuration |
-| [vcpkg dependencies](docs/dev_environment_setup.txt#L1788) (§16) | Installing Phase 0 dependencies |
-| [Custom registry ports](docs/dev_environment_setup.txt#L1930) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| [Building](docs/dev_environment_setup.txt#L1990) (§18) | Build instructions for Windows |
-| [Troubleshooting](docs/dev_environment_setup.txt#L2102) (§19) | Windows-specific issues |
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | [`setup-env.ps1`](tools/windows/setup-env.ps1) | Installs MSYS2, toolchain, vcpkg — run and build in minutes |
+| | [One-line install](docs/dev_environment_setup.txt#L1999) (§18) | Clone, configure, build |
+| **Details** | [Overview](docs/dev_environment_setup.txt#L1465) (§13) | Platform status and known limitations |
+| | [Prerequisites](docs/dev_environment_setup.txt#L1532) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
+| | [vcpkg setup](docs/dev_environment_setup.txt#L1688) (§15) | Package manager and custom registry configuration |
+| | [vcpkg dependencies](docs/dev_environment_setup.txt#L1797) (§16) | Installing Phase 0 dependencies |
+| | [Custom registry ports](docs/dev_environment_setup.txt#L1939) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| | [Troubleshooting](docs/dev_environment_setup.txt#L2110) (§19) | Windows-specific issues |
 
 ### macOS (Support Stub)
 
-| Section | Description |
-|---|---|
-| [Overview](docs/dev_environment_setup.txt#L2177) (§20) | Platform status and OpenGL limitations |
-| [Prerequisites](docs/dev_environment_setup.txt#L2216) (§21) | Xcode and Homebrew requirements |
-| [Homebrew dependencies](docs/dev_environment_setup.txt#L2319) (§22) | Installing dependencies via Homebrew |
-| [Homebrew tap](docs/dev_environment_setup.txt#L2423) (§22.6) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| [Architecture notes](docs/dev_environment_setup.txt#L2485) (§23) | Intel vs. Apple Silicon considerations |
-| [Building](docs/dev_environment_setup.txt#L2570) (§25) | Build instructions for macOS |
-| [Troubleshooting](docs/dev_environment_setup.txt#L2633) (§26) | macOS-specific issues |
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | [`setup-env.sh`](tools/macos/setup-env.sh) | Installs Xcode CLT, Homebrew, dependencies — run and build in minutes |
+| | [One-line install](docs/dev_environment_setup.txt#L2587) (§25) | Clone, configure, build |
+| **Details** | [Overview](docs/dev_environment_setup.txt#L2185) (§20) | Platform status and OpenGL limitations |
+| | [Prerequisites](docs/dev_environment_setup.txt#L2224) (§21) | Xcode and Homebrew requirements |
+| | [Homebrew dependencies](docs/dev_environment_setup.txt#L2336) (§22) | Installing dependencies via Homebrew |
+| | [Homebrew tap](docs/dev_environment_setup.txt#L2440) (§22.6) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| | [Architecture notes](docs/dev_environment_setup.txt#L2502) (§23) | Intel vs. Apple Silicon considerations |
+| | [Troubleshooting](docs/dev_environment_setup.txt#L2650) (§26) | macOS-specific issues |
 
 ### General
 

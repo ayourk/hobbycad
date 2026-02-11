@@ -1532,6 +1532,15 @@
   14. WINDOWS PREREQUISITES
 ================================================================================
 
+  A setup helper script is provided at tools/windows/setup-env.ps1
+  that checks for all required tools and optionally bootstraps vcpkg.
+  Run it from PowerShell:
+
+    powershell -ExecutionPolicy Bypass -File tools\windows\setup-env.ps1
+
+  The script does not silently install anything — it reports what is
+  present, what is missing, and provides download links.
+
   14.1  C++ COMPILER
   ---------------------
 
@@ -2215,6 +2224,15 @@
 ================================================================================
   21. MACOS PREREQUISITES
 ================================================================================
+
+  A setup helper script is provided at tools/macos/setup-env.sh that
+  checks for all required tools and offers to install anything
+  missing.  Run it from Terminal:
+
+    bash tools/macos/setup-env.sh
+
+  The script handles Xcode CLT, Homebrew, build tools, the HobbyCAD
+  tap, pinned dependencies, and CMAKE_PREFIX_PATH configuration.
 
   21.1  XCODE COMMAND LINE TOOLS (COMPILER)
   --------------------------------------------
