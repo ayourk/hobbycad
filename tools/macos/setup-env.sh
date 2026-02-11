@@ -1,6 +1,6 @@
 #!/bin/bash
 # =====================================================================
-#  tools/macos/setup-env.sh — macOS development environment setup
+#  tools/macos/setup-env.sh -- macOS development environment setup
 # =====================================================================
 #
 #  Checks for required tools and offers to install anything missing.
@@ -61,21 +61,205 @@ confirm() {
     esac
 }
 
+# Resolve a tool to its full path.  Checks PATH first, then
+# falls back to a known filesystem path.  Prints the path or
+# returns 1 if not found.
+resolve_exe() {
+    local name="$1"
+    local known="${2:-}"
+    local found
+    found=$(command -v "$name" 2>/dev/null) && {
+        echo "$found"; return 0
+    }
+    if [ -n "$known" ] && [ -x "$known" ]; then
+        echo "$known"; return 0
+    fi
+    return 1
+}
+
+# Locate Homebrew by checking the architecture-appropriate
+# prefix.  Sets BREW to the full path of the brew binary and
+# BREW_PREFIX to the installation root.
+find_brew() {
+    local arch
+    arch=$(uname -m)
+    if [ "$arch" = "arm64" ]; then
+        BREW_PREFIX="/opt/homebrew"
+    else
+        BREW_PREFIX="/usr/local"
+    fi
+    BREW="$BREW_PREFIX/bin/brew"
+
+    # Check PATH first in case user has a non-standard location
+    local found
+    found=$(command -v brew 2>/dev/null) && {
+        BREW="$found"
+        BREW_PREFIX="$("$BREW" --prefix 2>/dev/null || true)"
+        return 0
+    }
+
+    [ -x "$BREW" ] && return 0
+    return 1
+}
+
+# Shell config file for persisting environment variables.
+# Checks the user's actual login shell rather than assuming zsh.
+# Returns the path in SHELL_RC or empty string if not found.
+detect_shell_rc() {
+    SHELL_RC=""
+    local login_shell
+    login_shell=$(basename "${SHELL:-/bin/zsh}")
+
+    case "$login_shell" in
+        zsh)
+            if [ -f "$HOME/.zshrc" ]; then
+                SHELL_RC="$HOME/.zshrc"
+            elif [ -f "$HOME/.zprofile" ]; then
+                SHELL_RC="$HOME/.zprofile"
+            fi
+            ;;
+        bash)
+            if [ -f "$HOME/.bash_profile" ]; then
+                SHELL_RC="$HOME/.bash_profile"
+            elif [ -f "$HOME/.bashrc" ]; then
+                SHELL_RC="$HOME/.bashrc"
+            elif [ -f "$HOME/.profile" ]; then
+                SHELL_RC="$HOME/.profile"
+            fi
+            ;;
+        fish)
+            local fish_conf
+            fish_conf="${XDG_CONFIG_HOME:-$HOME/.config}"
+            fish_conf="$fish_conf/fish/config.fish"
+            if [ -f "$fish_conf" ]; then
+                SHELL_RC="$fish_conf"
+            fi
+            ;;
+        ksh)
+            if [ -f "$HOME/.kshrc" ]; then
+                SHELL_RC="$HOME/.kshrc"
+            elif [ -f "$HOME/.profile" ]; then
+                SHELL_RC="$HOME/.profile"
+            fi
+            ;;
+        *)
+            # Generic fallback
+            if [ -f "$HOME/.profile" ]; then
+                SHELL_RC="$HOME/.profile"
+            fi
+            ;;
+    esac
+}
+
+# Write a comment + export line to $SHELL_RC.
+# Handles fish (set -gx) vs. POSIX (export) syntax.
+#   $1 = comment text (marker for removal)
+#   $2 = variable name
+#   $3 = value
+write_shell_export() {
+    local comment="$1" varname="$2" value="$3"
+    local login_shell
+    login_shell=$(basename "${SHELL:-/bin/zsh}")
+
+    {
+        echo ""
+        echo "# $comment"
+        if [ "$login_shell" = "fish" ]; then
+            echo "set -gx $varname \"$value\""
+        else
+            echo "export $varname=\"$value\""
+        fi
+    } >> "$SHELL_RC"
+}
+
+# Write a multi-line export block to $SHELL_RC.
+# Used for CMAKE_PREFIX_PATH where the value is long.
+#   $1 = comment text (marker for removal)
+#   $2 = variable name
+#   $3 = value
+write_shell_export_block() {
+    local comment="$1" varname="$2" value="$3"
+    local login_shell
+    login_shell=$(basename "${SHELL:-/bin/zsh}")
+
+    {
+        echo ""
+        echo "# $comment"
+        if [ "$login_shell" = "fish" ]; then
+            echo "set -gx $varname \"$value\""
+        else
+            echo "export $varname=\"\\"
+            echo "$value\""
+        fi
+    } >> "$SHELL_RC"
+}
+
+# Remove a comment + export block from $SHELL_RC.
+#   $1 = exact comment text
+#   $2 = variable name
+remove_shell_export() {
+    local comment="$1" varname="$2"
+    local login_shell
+    login_shell=$(basename "${SHELL:-/bin/zsh}")
+
+    local end_pat
+    if [ "$login_shell" = "fish" ]; then
+        end_pat="^set -gx $varname "
+    else
+        end_pat="^export $varname="
+    fi
+    sed -i '' \
+        "/# $comment/,/$end_pat/d" \
+        "$SHELL_RC" 2>/dev/null || true
+}
+
+# Check whether a comment marker exists in $SHELL_RC.
+#   $1 = comment text
+has_shell_block() {
+    [ -n "$SHELL_RC" ] &&
+    grep -q "# $1" "$SHELL_RC" 2>/dev/null
+}
+
+# Read the value of a variable from $SHELL_RC.
+#   $1 = variable name
+# Prints the value (unquoted) or empty string.
+read_shell_var() {
+    local varname="$1"
+    local login_shell
+    login_shell=$(basename "${SHELL:-/bin/zsh}")
+
+    local line
+    if [ "$login_shell" = "fish" ]; then
+        line=$(grep "^set -gx $varname " \
+            "$SHELL_RC" 2>/dev/null | head -1)
+        echo "$line" | sed "s/^set -gx $varname //" |
+            sed 's/^"//' | sed 's/"$//'
+    else
+        line=$(grep "^export $varname=" \
+            "$SHELL_RC" 2>/dev/null | head -1)
+        echo "$line" | sed "s/^export $varname=//" |
+            sed 's/^"//' | sed 's/"$//'
+    fi
+}
+
 # --- Parse arguments ---------------------------------------------------
 
 NON_INTERACTIVE=0
+UNINSTALL=0
 REPO_URL="https://github.com/ayourk/hobbycad.git"
 CLONE_DIR=""
 
 for arg in "$@"; do
     case "$arg" in
         --yes|-y)       NON_INTERACTIVE=1 ;;
+        --uninstall)    UNINSTALL=1 ;;
         --repo-url=*)   REPO_URL="${arg#*=}" ;;
         --clone-dir=*)  CLONE_DIR="${arg#*=}" ;;
         --help|-h)
             echo "Usage: setup-env.sh [OPTIONS]"
             echo ""
             echo "  --yes, -y           Answer yes to all prompts"
+            echo "  --uninstall         Roll back changes"
             echo "  --repo-url=URL      Repository URL"
             echo "  --clone-dir=DIR     Clone target (parent dir)"
             echo "  --help, -h          Show this help"
@@ -112,24 +296,176 @@ echo ""
 echo -e "${WHITE}  HobbyCAD macOS Environment Setup${NC}"
 echo -e "  ----------------------------------"
 
+# Detect Homebrew location
+if find_brew; then
+    info "Homebrew:      $BREW"
+else
+    info "Homebrew:      not found"
+fi
+
 # Detect architecture
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
-    BREW_PREFIX="/opt/homebrew"
-    info "Architecture: Apple Silicon (arm64)"
+    info "Architecture:  Apple Silicon (arm64)"
 else
-    BREW_PREFIX="/usr/local"
-    info "Architecture: Intel (x86_64)"
+    info "Architecture:  Intel (x86_64)"
 fi
 
 if [ "$IS_IN_REPO" = true ]; then
-    info "Repo root:    $REPO_ROOT"
+    info "Repo root:     $REPO_ROOT"
 else
-    info "Mode:         standalone (not inside a clone)"
+    info "Mode:          standalone (not inside a clone)"
 fi
 echo ""
 
 ALL_OK=true
+
+# ===================================================================
+#  UNINSTALL MODE
+# ===================================================================
+#
+# Rolls back changes this script can make:
+#   1. Removes CMAKE_PREFIX_PATH from shell config
+#   2. Removes HOBBYCAD_CLONE from shell config
+#   3. Offers to delete the HobbyCAD clone directory
+#   4. Offers to remove HobbyCAD Homebrew tap + formulas
+#   5. Offers to remove build tools
+
+if [ "$UNINSTALL" = "1" ]; then
+    header "Uninstall -- rolling back changes"
+
+    CHANGED=false
+    detect_shell_rc
+
+    # --- CMAKE_PREFIX_PATH ---------------------------------------------
+
+    echo ""
+    info "Checking CMAKE_PREFIX_PATH in shell config..."
+
+    if has_shell_block "HobbyCAD -- keg-only formula paths"; then
+        warn "Found HobbyCAD CMAKE_PREFIX_PATH block in $SHELL_RC"
+
+        if confirm "Remove it?"; then
+            remove_shell_export \
+                "HobbyCAD -- keg-only formula paths" \
+                "CMAKE_PREFIX_PATH"
+            ok "Removed from $SHELL_RC"
+            CHANGED=true
+        else
+            info "Skipped."
+        fi
+    else
+        ok "No HobbyCAD CMAKE_PREFIX_PATH block found."
+    fi
+
+    # --- HOBBYCAD_CLONE ------------------------------------------------
+
+    echo ""
+    info "Checking HOBBYCAD_CLONE in shell config..."
+
+    if has_shell_block "HobbyCAD -- clone path"; then
+        SAVED_CLONE=$(read_shell_var "HOBBYCAD_CLONE")
+
+        warn "Found HOBBYCAD_CLONE in $SHELL_RC"
+
+        if [ -n "$SAVED_CLONE" ] && [ -d "$SAVED_CLONE" ]; then
+            if confirm "Delete $SAVED_CLONE?"; then
+                rm -rf "$SAVED_CLONE"
+                if [ ! -d "$SAVED_CLONE" ]; then
+                    ok "Deleted $SAVED_CLONE"
+                    CHANGED=true
+                else
+                    fail "Could not fully remove."
+                    info "Delete manually."
+                fi
+            else
+                info "Skipped folder deletion."
+            fi
+        elif [ -n "$SAVED_CLONE" ]; then
+            info "Directory already gone."
+        fi
+
+        if confirm "Remove HOBBYCAD_CLONE from $SHELL_RC?"; then
+            remove_shell_export \
+                "HobbyCAD -- clone path" \
+                "HOBBYCAD_CLONE"
+            ok "Removed from $SHELL_RC"
+            CHANGED=true
+        else
+            info "Skipped."
+        fi
+    else
+        ok "No HOBBYCAD_CLONE block found."
+    fi
+
+    # --- Homebrew tap + formulas ---------------------------------------
+
+    echo ""
+    info "Checking for HobbyCAD Homebrew tap..."
+
+    if [ -x "$BREW" ]; then
+        if "$BREW" tap 2>/dev/null |
+           grep -q "^ayourk/hobbycad$"; then
+            warn "Tap ayourk/hobbycad is installed."
+
+            if confirm "Uninstall tap formulas and remove tap?"; then
+                info "Removing tap formulas..."
+                "$BREW" uninstall --force \
+                    ayourk/hobbycad/opencascade@7.6.3 \
+                    ayourk/hobbycad/libzip@1.7.3 \
+                    ayourk/hobbycad/libgit2@1.7.2 \
+                    2>/dev/null || true
+                "$BREW" untap ayourk/hobbycad 2>/dev/null || true
+                ok "Tap and formulas removed."
+                CHANGED=true
+            else
+                info "Skipped."
+            fi
+        else
+            ok "Tap ayourk/hobbycad not found."
+        fi
+
+        # Core formulas
+        echo ""
+        info "Checking HobbyCAD core formulas..."
+
+        CORE_INSTALLED=()
+        for f in qt@6 pybind11 libpng jpeg-turbo; do
+            if "$BREW" list "$f" &>/dev/null 2>&1; then
+                CORE_INSTALLED+=("$f")
+            fi
+        done
+
+        if [ ${#CORE_INSTALLED[@]} -gt 0 ]; then
+            LIST=$(IFS=', '; echo "${CORE_INSTALLED[*]}")
+            warn "Installed: $LIST"
+
+            if confirm "Uninstall these formulas?"; then
+                "$BREW" uninstall --force "${CORE_INSTALLED[@]}"
+                ok "Core formulas removed."
+                CHANGED=true
+            else
+                info "Skipped."
+            fi
+        else
+            ok "No HobbyCAD core formulas installed."
+        fi
+    else
+        ok "Homebrew not found -- nothing to do."
+    fi
+
+    # --- Summary -------------------------------------------------------
+
+    echo ""
+    if [ "$CHANGED" = true ]; then
+        ok "Uninstall complete."
+        info "Open a new terminal for changes to take effect."
+    else
+        info "No changes were made."
+    fi
+    echo ""
+    exit 0
+fi
 
 # ===================================================================
 #  1. XCODE COMMAND LINE TOOLS
@@ -146,7 +482,7 @@ else
 
     if confirm "Install Xcode Command Line Tools?"; then
         info "Running xcode-select --install..."
-        info "(A dialog will appear — click 'Install'.)"
+        info "(A dialog will appear -- click 'Install'.)"
         xcode-select --install 2>/dev/null || true
 
         # Wait for installation to complete
@@ -167,10 +503,10 @@ fi
 
 header "2/7  Homebrew"
 
-if command -v brew &>/dev/null; then
-    ok "Homebrew found: $(brew --version | head -1)"
+if [ -x "$BREW" ]; then
+    ok "Homebrew found: $("$BREW" --version | head -1)"
     # Verify prefix matches architecture
-    ACTUAL_PREFIX="$(brew --prefix)"
+    ACTUAL_PREFIX="$("$BREW" --prefix)"
     if [ "$ACTUAL_PREFIX" != "$BREW_PREFIX" ]; then
         warn "Homebrew at $ACTUAL_PREFIX (expected $BREW_PREFIX)."
         info "Rosetta Homebrew? This may work but is untested."
@@ -186,11 +522,12 @@ else
 install/HEAD/install.sh)"
 
         # Activate for this session
-        if [ -x "$BREW_PREFIX/bin/brew" ]; then
-            eval "$("$BREW_PREFIX/bin/brew" shellenv)"
+        BREW="$BREW_PREFIX/bin/brew"
+        if [ -x "$BREW" ]; then
+            eval "$("$BREW" shellenv)"
             ok "Homebrew installed."
         else
-            fail "Homebrew install did not create $BREW_PREFIX/bin/brew."
+            fail "Homebrew install did not create $BREW."
             info "Install manually: https://brew.sh/"
             ALL_OK=false
         fi
@@ -206,33 +543,48 @@ fi
 
 header "3/7  Build tools"
 
-if command -v brew &>/dev/null; then
+if [ -x "$BREW" ]; then
     TOOLS_MISSING=()
 
-    if ! command -v cmake &>/dev/null; then
+    CMAKE_EXE=$(resolve_exe "cmake" \
+        "$BREW_PREFIX/bin/cmake") || true
+    NINJA_EXE=$(resolve_exe "ninja" \
+        "$BREW_PREFIX/bin/ninja") || true
+    GIT_EXE=$(resolve_exe "git" "/usr/bin/git") || true
+
+    if [ -z "$CMAKE_EXE" ]; then
         TOOLS_MISSING+=("cmake")
     fi
-    if ! command -v ninja &>/dev/null; then
+    if [ -z "$NINJA_EXE" ]; then
         TOOLS_MISSING+=("ninja")
     fi
     # python3 ships with macOS 12.3+ but Homebrew version preferred
-    if ! brew list python &>/dev/null 2>&1; then
+    if ! "$BREW" list python &>/dev/null 2>&1; then
         TOOLS_MISSING+=("python")
     fi
 
     if [ ${#TOOLS_MISSING[@]} -eq 0 ]; then
         ok "Build tools installed."
-        info "  cmake : $(cmake --version | head -1)"
-        info "  ninja : $(ninja --version)"
-        info "  python: $(python3 --version)"
+        info "  cmake : $("$CMAKE_EXE" --version | head -1)"
+        info "  ninja : $("$NINJA_EXE" --version)"
+        PYTHON_EXE=$(resolve_exe "python3" \
+            "$BREW_PREFIX/bin/python3") || true
+        if [ -n "$PYTHON_EXE" ]; then
+            info "  python: $("$PYTHON_EXE" --version)"
+        fi
     else
         LIST=$(IFS=', '; echo "${TOOLS_MISSING[*]}")
         warn "Missing: $LIST"
 
         if confirm "Install missing build tools via Homebrew?"; then
             info "Running: brew install ${TOOLS_MISSING[*]}"
-            brew install "${TOOLS_MISSING[@]}"
+            "$BREW" install "${TOOLS_MISSING[@]}"
             ok "Build tools installed."
+            # Re-resolve after install
+            CMAKE_EXE=$(resolve_exe "cmake" \
+                "$BREW_PREFIX/bin/cmake") || true
+            NINJA_EXE=$(resolve_exe "ninja" \
+                "$BREW_PREFIX/bin/ninja") || true
         else
             info "Install manually:"
             info "  brew install ${TOOLS_MISSING[*]}"
@@ -241,8 +593,8 @@ if command -v brew &>/dev/null; then
     fi
 
     # cmake minimum version check
-    if command -v cmake &>/dev/null; then
-        CMAKE_VER=$(cmake --version | head -1 |
+    if [ -n "$CMAKE_EXE" ]; then
+        CMAKE_VER=$("$CMAKE_EXE" --version | head -1 |
             grep -oE '[0-9]+\.[0-9]+')
         CMAKE_MAJOR=$(echo "$CMAKE_VER" | cut -d. -f1)
         CMAKE_MINOR=$(echo "$CMAKE_VER" | cut -d. -f2)
@@ -255,7 +607,7 @@ if command -v brew &>/dev/null; then
         fi
     fi
 else
-    info "Homebrew not available — skipping build tools."
+    info "Homebrew not available -- skipping build tools."
     ALL_OK=false
 fi
 
@@ -265,15 +617,15 @@ fi
 
 header "4/7  HobbyCAD dependencies"
 
-if command -v brew &>/dev/null; then
+if [ -x "$BREW" ]; then
 
     # Tap
-    if brew tap | grep -q "^ayourk/hobbycad$"; then
+    if "$BREW" tap | grep -q "^ayourk/hobbycad$"; then
         ok "Tap ayourk/hobbycad already added."
     else
         if confirm "Add the HobbyCAD Homebrew tap?"; then
             info "Running: brew tap ayourk/hobbycad"
-            brew tap ayourk/hobbycad
+            "$BREW" tap ayourk/hobbycad
             ok "Tap added."
         else
             info "Add manually: brew tap ayourk/hobbycad"
@@ -299,7 +651,7 @@ if command -v brew &>/dev/null; then
     PINNED_MISSING=()
     for formula in "${PINNED_FORMULAS[@]}"; do
         short=$(echo "$formula" | sed 's|.*/||')
-        if ! brew list "$formula" &>/dev/null 2>&1; then
+        if ! "$BREW" list "$formula" &>/dev/null 2>&1; then
             PINNED_MISSING+=("$formula")
         else
             ok "$short installed."
@@ -308,7 +660,7 @@ if command -v brew &>/dev/null; then
 
     CORE_MISSING=()
     for formula in "${CORE_FORMULAS[@]}"; do
-        if ! brew list "$formula" &>/dev/null 2>&1; then
+        if ! "$BREW" list "$formula" &>/dev/null 2>&1; then
             CORE_MISSING+=("$formula")
         else
             ok "$formula installed."
@@ -321,7 +673,7 @@ if command -v brew &>/dev/null; then
 
         if confirm "Install pinned formulas?"; then
             info "Installing pinned formulas..."
-            brew install "${PINNED_MISSING[@]}"
+            "$BREW" install "${PINNED_MISSING[@]}"
             ok "Pinned formulas installed."
         else
             info "Install manually:"
@@ -338,7 +690,7 @@ if command -v brew &>/dev/null; then
 
         if confirm "Install core formulas?"; then
             info "Installing core formulas..."
-            brew install "${CORE_MISSING[@]}"
+            "$BREW" install "${CORE_MISSING[@]}"
             ok "Core formulas installed."
         else
             info "Install manually:"
@@ -355,7 +707,7 @@ if command -v brew &>/dev/null; then
     fi
 
 else
-    info "Homebrew not available — skipping dependencies."
+    info "Homebrew not available -- skipping dependencies."
     ALL_OK=false
 fi
 
@@ -371,7 +723,12 @@ if [ "$IS_IN_REPO" = true ]; then
 else
     info "Script is running standalone (not inside a clone)."
 
-    if command -v git &>/dev/null; then
+    # Re-resolve git in case step 3 installed it
+    if [ -z "$GIT_EXE" ]; then
+        GIT_EXE=$(resolve_exe "git" "/usr/bin/git") || true
+    fi
+
+    if [ -n "$GIT_EXE" ]; then
         if confirm "Clone the HobbyCAD repository?"; then
             # Determine target directory
             if [ -n "$CLONE_DIR" ]; then
@@ -396,7 +753,7 @@ else
                 CLONE_PATH="$TARGET_DIR"
             else
                 info "Cloning to $TARGET_DIR..."
-                if git clone "$REPO_URL" "$TARGET_DIR"; then
+                if "$GIT_EXE" clone "$REPO_URL" "$TARGET_DIR"; then
                     ok "Cloned to $TARGET_DIR"
                     CLONE_PATH="$TARGET_DIR"
                 else
@@ -406,12 +763,29 @@ else
                     ALL_OK=false
                 fi
             fi
+
+            # Persist the clone path so --uninstall can find it
+            if [ -n "$CLONE_PATH" ]; then
+                detect_shell_rc
+                if [ -n "$SHELL_RC" ]; then
+                    remove_shell_export \
+                        "HobbyCAD -- clone path" \
+                        "HOBBYCAD_CLONE"
+                    write_shell_export \
+                        "HobbyCAD -- clone path" \
+                        "HOBBYCAD_CLONE" \
+                        "$CLONE_PATH"
+                    export HOBBYCAD_CLONE="$CLONE_PATH"
+                    info "Saved clone path to $SHELL_RC"
+                    info "(\$HOBBYCAD_CLONE=$CLONE_PATH)"
+                fi
+            fi
         else
             info "Clone manually when ready:"
             info "  git clone $REPO_URL"
         fi
     else
-        warn "Git not available yet — cannot clone."
+        warn "Git not available yet -- cannot clone."
         info "Install Xcode CLT first (step 1), then re-run."
         ALL_OK=false
     fi
@@ -423,15 +797,15 @@ fi
 
 header "6/7  CMAKE_PREFIX_PATH"
 
-if command -v brew &>/dev/null; then
+if [ -x "$BREW" ]; then
     # Build the expected value
-    OCCT_PFX="$(brew --prefix \
+    OCCT_PFX="$("$BREW" --prefix \
         ayourk/hobbycad/opencascade@7.6.3 2>/dev/null || true)"
-    LZIP_PFX="$(brew --prefix \
+    LZIP_PFX="$("$BREW" --prefix \
         ayourk/hobbycad/libzip@1.7.3 2>/dev/null || true)"
-    LGIT_PFX="$(brew --prefix \
+    LGIT_PFX="$("$BREW" --prefix \
         ayourk/hobbycad/libgit2@1.7.2 2>/dev/null || true)"
-    QT6_PFX="$(brew --prefix qt@6 2>/dev/null || true)"
+    QT6_PFX="$("$BREW" --prefix qt@6 2>/dev/null || true)"
 
     EXPECTED_PATH=""
     for pfx in "$OCCT_PFX" "$LZIP_PFX" "$LGIT_PFX" "$QT6_PFX"; do
@@ -469,47 +843,44 @@ if command -v brew &>/dev/null; then
         warn "CMAKE_PREFIX_PATH is not set."
         info "The pinned keg-only formulas require it."
         info ""
-        info "Add to ~/.zshrc (or ~/.zprofile):"
-        info ""
-        info "  export CMAKE_PREFIX_PATH=\"\\"
-        for pfx in "$OCCT_PFX" "$LZIP_PFX" "$LGIT_PFX"; do
-            if [ -n "$pfx" ] && [ -d "$pfx" ]; then
-                info "  $pfx:\\"
-            fi
-        done
-        if [ -n "$QT6_PFX" ] && [ -d "$QT6_PFX" ]; then
-            info "  $QT6_PFX\""
-        fi
-        info ""
 
         # Detect shell config file
-        SHELL_RC=""
-        if [ -f "$HOME/.zshrc" ]; then
-            SHELL_RC="$HOME/.zshrc"
-        elif [ -f "$HOME/.zprofile" ]; then
-            SHELL_RC="$HOME/.zprofile"
+        detect_shell_rc
+        LOGIN_SHELL=$(basename "${SHELL:-/bin/zsh}")
+
+        if [ -n "$SHELL_RC" ]; then
+            info "Add to $SHELL_RC:"
+        else
+            info "Add to your shell config:"
         fi
+        info ""
+        if [ "$LOGIN_SHELL" = "fish" ]; then
+            info "  set -gx CMAKE_PREFIX_PATH \\"
+            info "    \"$EXPECTED_PATH\""
+        else
+            info "  export CMAKE_PREFIX_PATH=\"\\"
+            info "  $EXPECTED_PATH\""
+        fi
+        info ""
 
         if [ -n "$SHELL_RC" ] &&
            confirm "Append CMAKE_PREFIX_PATH to $SHELL_RC?"; then
-            {
-                echo ""
-                echo "# HobbyCAD — keg-only formula paths"
-                echo "export CMAKE_PREFIX_PATH=\"\\"
-                echo "$EXPECTED_PATH\""
-            } >> "$SHELL_RC"
+            write_shell_export_block \
+                "HobbyCAD -- keg-only formula paths" \
+                "CMAKE_PREFIX_PATH" \
+                "$EXPECTED_PATH"
             export CMAKE_PREFIX_PATH="$EXPECTED_PATH"
             ok "Appended to $SHELL_RC and set for this session."
             info "New terminal windows will inherit this."
         else
             if [ -z "$SHELL_RC" ]; then
-                info "No ~/.zshrc or ~/.zprofile found."
+                info "No shell config file found."
                 info "Create one and add the export line above."
             fi
         fi
     fi
 else
-    info "Homebrew not available — skipping CMAKE_PREFIX_PATH."
+    info "Homebrew not available -- skipping CMAKE_PREFIX_PATH."
     ALL_OK=false
 fi
 
@@ -519,21 +890,24 @@ fi
 
 header "7/7  Summary"
 
-# Final tool verification
-if command -v clang++ &>/dev/null; then
-    ok "clang++ : $(clang++ --version 2>&1 | head -1)"
+# Final tool verification using resolved paths
+CLANGXX_EXE=$(resolve_exe "clang++" "/usr/bin/clang++") || true
+if [ -n "$CLANGXX_EXE" ]; then
+    ok "clang++ : $("$CLANGXX_EXE" --version 2>&1 | head -1)"
 fi
-if command -v cmake &>/dev/null; then
-    ok "cmake   : $(cmake --version | head -1)"
+if [ -n "$CMAKE_EXE" ]; then
+    ok "cmake   : $("$CMAKE_EXE" --version | head -1)"
 fi
-if command -v ninja &>/dev/null; then
-    ok "ninja   : $(ninja --version)"
+if [ -n "$NINJA_EXE" ]; then
+    ok "ninja   : $("$NINJA_EXE" --version)"
 fi
-if command -v git &>/dev/null; then
-    ok "git     : $(git --version)"
+if [ -n "$GIT_EXE" ]; then
+    ok "git     : $("$GIT_EXE" --version)"
 fi
-if command -v python3 &>/dev/null; then
-    ok "python  : $(python3 --version)"
+PYTHON_EXE=$(resolve_exe "python3" \
+    "$BREW_PREFIX/bin/python3") || true
+if [ -n "$PYTHON_EXE" ]; then
+    ok "python  : $("$PYTHON_EXE" --version)"
 fi
 
 echo ""
@@ -585,7 +959,7 @@ if [ "$ALL_OK" = true ]; then
     info "  $STEP. Run:"
     info "       ./build/src/hobbycad/hobbycad"
 else
-    fail "Some items need attention — see above."
+    fail "Some items need attention -- see above."
     echo ""
     info "Fix the issues, then run this script again."
 fi

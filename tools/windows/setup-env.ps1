@@ -1,5 +1,5 @@
 # =====================================================================
-#  tools/windows/setup-env.ps1 — Windows development environment setup
+#  tools/windows/setup-env.ps1 -- Windows development environment setup
 # =====================================================================
 #
 #  Checks for required tools and offers to install anything missing.
@@ -50,6 +50,13 @@
 .PARAMETER SkipVcpkg
     Skip vcpkg setup entirely.
 
+.PARAMETER Uninstall
+    Roll back changes made by this script:
+    removes the UCRT64 bin directory from the user PATH,
+    deletes the VCPKG_ROOT and HOBBYCAD_CLONE user environment
+    variables, runs the MSYS2 uninstaller if found, and offers
+    to delete the vcpkg and HobbyCAD clone directories.
+
 .PARAMETER NonInteractive
     Answer yes to all prompts (unattended install).
 #>
@@ -61,6 +68,7 @@ param(
         "https://github.com/ayourk/hobbycad.git",
     [string]$CloneDir = "",
     [switch]$SkipVcpkg,
+    [switch]$Uninstall,
     [switch]$NonInteractive,
     [switch]$Help
 )
@@ -98,6 +106,8 @@ function Test-Command($cmd) {
     return $?
 }
 
+# Returns version string from --version output.  Accepts a bare
+# command name (looked up via PATH) or a full path to an exe.
 function Get-CommandVersion($cmd) {
     try {
         $out = & $cmd --version 2>&1 |
@@ -106,6 +116,18 @@ function Get-CommandVersion($cmd) {
     } catch {
         return $null
     }
+}
+
+# Returns the full path to a tool.  Checks PATH first, then
+# falls back to a known filesystem path.  Returns $null if
+# neither works.
+function Resolve-Exe($name, $knownPath) {
+    $found = Get-Command $name -ErrorAction SilentlyContinue
+    if ($found) { return $found.Source }
+    if ($knownPath -and (Test-Path $knownPath)) {
+        return $knownPath
+    }
+    return $null
 }
 
 function Confirm-Action($prompt) {
@@ -135,19 +157,23 @@ function Get-TempDownload($url, $filename) {
 
 # Adds a directory to the persistent user PATH (registry) and
 # updates the current session so tools are available immediately.
+# Uses Set-ItemProperty to preserve the REG_EXPAND_SZ value kind
+# so that %USERPROFILE% and similar variables are not expanded.
 function Add-ToUserPath($dir) {
-    $currentPath = [Environment]::GetEnvironmentVariable(
-        "Path", "User"
+    $regKey = 'HKCU:\Environment'
+    $rawPath = (Get-Item $regKey).GetValue(
+        'Path', '', 'DoNotExpandEnvironmentNames'
     )
-    $entries = $currentPath -split ";"
+    $entries = $rawPath -split ";" |
+        Where-Object { $_ -ne "" }
     if ($entries | Where-Object { $_ -eq $dir }) {
         Write-Info "$dir is already in user PATH."
         return
     }
-    Write-Info "Writing to: HKCU\Environment\Path"
-    [Environment]::SetEnvironmentVariable(
-        "Path", "$currentPath;$dir", "User"
-    )
+    $newPath = ($rawPath.TrimEnd(";") + ";$dir;")
+    Set-ItemProperty -Path $regKey -Name 'Path' `
+        -Value $newPath `
+        -Type ExpandString
     # Update the running session so subsequent checks see it
     $env:Path = "$env:Path;$dir"
     Write-Ok "Added $dir to user PATH (registry + session)."
@@ -208,6 +234,44 @@ function Get-Msys2InstallerUrl {
     }
 }
 
+# Searches the Add/Remove Programs registry keys for an MSYS2
+# installation.  Returns a hashtable with:
+#   Path      - install directory (or $null)
+#   UninstCmd - uninstall command string (or $null)
+#   RegKey    - the registry key object (or $null)
+function Find-Msys2Install {
+    $regPaths = @(
+        'HKCU:\Software\Microsoft\Windows\' +
+            'CurrentVersion\Uninstall\MSYS2*',
+        'HKLM:\Software\Microsoft\Windows\' +
+            'CurrentVersion\Uninstall\MSYS2*',
+        'HKLM:\Software\WOW6432Node\Microsoft\' +
+            'Windows\CurrentVersion\Uninstall\MSYS2*'
+    )
+    foreach ($rp in $regPaths) {
+        $key = Get-Item $rp -ErrorAction SilentlyContinue
+        if (-not $key) { continue }
+
+        $cmd = $key.GetValue('UninstallString', $null)
+        $loc = $key.GetValue('InstallLocation', $null)
+
+        # Fall back: extract dir from UninstallString
+        # e.g. "C:\msys64\uninstall.exe" -> "C:\msys64"
+        if (-not $loc -and $cmd) {
+            if ($cmd -match '^"?(.+)\\[^\\]+$') {
+                $loc = $Matches[1].TrimStart('"')
+            }
+        }
+
+        return @{
+            Path      = $loc
+            UninstCmd = $cmd
+            RegKey    = $key
+        }
+    }
+    return @{ Path = $null; UninstCmd = $null; RegKey = $null }
+}
+
 # --- Detect standalone vs. in-repo ------------------------------------
 #
 # If this script lives at tools/windows/setup-env.ps1 inside a
@@ -264,12 +328,298 @@ $needPath  = $false
 $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
 
 # ===================================================================
+#  UNINSTALL MODE
+# ===================================================================
+#
+# Rolls back changes this script can make:
+#   1. Removes MSYS2 ucrt64\bin from HKCU\Environment\Path
+#   2. Removes HKCU\Environment\VCPKG_ROOT
+#   3. Removes HKCU\Environment\HOBBYCAD_CLONE
+#   4. Runs the MSYS2 uninstaller (if found)
+#   5. Offers to delete vcpkg and HobbyCAD clone directories
+
+if ($Uninstall) {
+    Write-Header "Uninstall -- rolling back changes"
+
+    $changed = $false
+
+    # --- Discover MSYS2 location ---------------------------------------
+    # If the user installed MSYS2 somewhere other than $Msys2Root,
+    # check the Add/Remove Programs registry keys for the actual
+    # install path and update our variables accordingly.
+
+    $msys2Info = Find-Msys2Install
+
+    if ($msys2Info.Path -and (Test-Path $msys2Info.Path)) {
+        if ($msys2Info.Path -ne $Msys2Root) {
+            Write-Info ("MSYS2 install found at: " +
+                $msys2Info.Path + " (via registry)")
+            $Msys2Root = $msys2Info.Path
+            $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
+        }
+    }
+
+    # --- PATH ----------------------------------------------------------
+
+    Write-Host ""
+    Write-Info "Checking HKCU\Environment\Path..."
+
+    $rawPath = (Get-Item 'HKCU:\Environment').GetValue(
+        'Path', '', 'DoNotExpandEnvironmentNames'
+    )
+    # Build a list of MSYS2 ucrt64 paths to remove:
+    #   - the $ucrt64Bin derived from -Msys2Root / discovery
+    #   - any entry matching the common *msys*\ucrt64\bin pattern
+    # This catches entries from non-default install locations
+    # even if the registry lookup did not find them.
+    $entries = $rawPath -split ";" |
+        Where-Object { $_ -ne "" }
+    $msysEntries = $entries | Where-Object {
+        ($_ -eq $ucrt64Bin) -or
+        ($_ -like '*msys*\ucrt64\bin') -or
+        ($_ -like '*msys*ucrt64*bin*')
+    }
+    $filtered = $entries | Where-Object {
+        $_ -notin $msysEntries
+    }
+
+    if ($msysEntries) {
+        # Rejoin with trailing semicolon
+        $newPath = ($filtered -join ";")
+        if ($newPath -ne "" -and -not $newPath.EndsWith(";")) {
+            $newPath += ";"
+        }
+        $label = ($msysEntries -join ", ")
+        Write-Warn "Found MSYS2 in user PATH: $label"
+        Write-Info "Only MSYS2 entries will be removed."
+        Write-Info "Old value:"
+        Write-Info "  $rawPath"
+        Write-Info "New value:"
+        Write-Info "  $newPath"
+        Write-Host ""
+
+        if (Confirm-Action "Remove MSYS2 entries from PATH?") {
+            Set-ItemProperty `
+                -Path 'HKCU:\Environment' `
+                -Name 'Path' `
+                -Value $newPath `
+                -Type ExpandString
+            Write-Ok "Removed from user PATH."
+            $changed = $true
+        } else {
+            Write-Info "Skipped."
+        }
+    } else {
+        Write-Ok "No MSYS2 entries in user PATH. Nothing to do."
+    }
+
+    # --- VCPKG_ROOT ----------------------------------------------------
+
+    Write-Host ""
+    Write-Info "Checking HKCU\Environment\VCPKG_ROOT..."
+
+    $envRoot = [Environment]::GetEnvironmentVariable(
+        "VCPKG_ROOT", "User"
+    )
+    if ($envRoot) {
+        Write-Warn "VCPKG_ROOT is set: $envRoot"
+        Write-Info "Old value: $envRoot"
+        Write-Info "New value: (removed)"
+        Write-Host ""
+
+        if (Confirm-Action "Remove VCPKG_ROOT?") {
+            [Environment]::SetEnvironmentVariable(
+                "VCPKG_ROOT", $null, "User"
+            )
+            Write-Ok "VCPKG_ROOT removed."
+            $changed = $true
+        } else {
+            Write-Info "Skipped."
+        }
+    } else {
+        Write-Ok "VCPKG_ROOT is not set. Nothing to do."
+    }
+
+    # --- HOBBYCAD_CLONE ------------------------------------------------
+
+    Write-Host ""
+    Write-Info "Checking HKCU\Environment\HOBBYCAD_CLONE..."
+
+    $savedClone = [Environment]::GetEnvironmentVariable(
+        "HOBBYCAD_CLONE", "User"
+    )
+
+    if ($savedClone) {
+        Write-Warn "HOBBYCAD_CLONE is set: $savedClone"
+
+        if (Test-Path $savedClone) {
+            if (Confirm-Action "Delete $savedClone?") {
+                Remove-Item -Recurse -Force $savedClone `
+                    -ErrorAction SilentlyContinue
+                if (-not (Test-Path $savedClone)) {
+                    Write-Ok "Deleted $savedClone"
+                    $changed = $true
+                } else {
+                    Write-Fail "Could not fully remove."
+                    Write-Info "Delete manually."
+                }
+            } else {
+                Write-Info "Skipped folder deletion."
+            }
+        } else {
+            Write-Info "Directory already gone."
+        }
+
+        # Remove the registry entry
+        if (Confirm-Action "Remove HOBBYCAD_CLONE from registry?") {
+            [Environment]::SetEnvironmentVariable(
+                "HOBBYCAD_CLONE", $null, "User"
+            )
+            Write-Ok "HOBBYCAD_CLONE removed."
+            $changed = $true
+        } else {
+            Write-Info "Skipped."
+        }
+    } else {
+        Write-Ok "HOBBYCAD_CLONE is not set. Nothing to do."
+    }
+
+    # --- MSYS2 ---------------------------------------------------------
+
+    Write-Host ""
+    Write-Info "Checking for MSYS2..."
+
+    if (Test-Path $Msys2Root) {
+        $uninstExe = Join-Path $Msys2Root "uninstall.exe"
+
+        # Run whichever uninstaller we found
+        if ($msys2Info.UninstCmd) {
+            Write-Warn "MSYS2 found at $Msys2Root"
+            Write-Info ("Uninstall command (from registry):")
+            Write-Info ("  " + $msys2Info.UninstCmd)
+            Write-Host ""
+            if (Confirm-Action "Run MSYS2 uninstaller?") {
+                Write-Info "Launching MSYS2 uninstaller..."
+                $cmd = $msys2Info.UninstCmd
+                Start-Process -FilePath cmd.exe `
+                    -ArgumentList "/c `"$cmd`"" `
+                    -Wait
+                Write-Ok "MSYS2 uninstaller finished."
+                $changed = $true
+            } else {
+                Write-Info "Skipped."
+            }
+        } elseif (Test-Path $uninstExe) {
+            Write-Warn "MSYS2 found at $Msys2Root"
+            Write-Info "Uninstaller: $uninstExe"
+            Write-Host ""
+            if (Confirm-Action "Run MSYS2 uninstaller?") {
+                Write-Info "Launching MSYS2 uninstaller..."
+                Start-Process -FilePath $uninstExe -Wait
+                Write-Ok "MSYS2 uninstaller finished."
+                $changed = $true
+            } else {
+                Write-Info "Skipped."
+            }
+        } else {
+            Write-Warn "MSYS2 found at $Msys2Root"
+            Write-Info "No uninstaller found."
+        }
+
+        # Check if the directory still exists after uninstaller
+        if (Test-Path $Msys2Root) {
+            # Re-check registry -- if the uninstall entry is still
+            # there, the user likely canceled the uninstaller, so
+            # we should not offer to delete the folder.
+            $recheck = Find-Msys2Install
+
+            if ($recheck.RegKey) {
+                Write-Warn "$Msys2Root still exists."
+                Write-Info "MSYS2 is still registered in Add/Remove"
+                Write-Info "Programs (uninstaller may have been"
+                Write-Info "canceled). Skipping folder deletion."
+            } else {
+                Write-Warn "$Msys2Root still exists (leftover files)."
+                if (Confirm-Action "Delete $Msys2Root?") {
+                    Remove-Item -Recurse -Force $Msys2Root `
+                        -ErrorAction SilentlyContinue
+                    if (-not (Test-Path $Msys2Root)) {
+                        Write-Ok "Deleted $Msys2Root"
+                        $changed = $true
+                    } else {
+                        Write-Fail "Could not fully remove."
+                        Write-Info "Some files may be locked."
+                        Write-Info "Close any MSYS2 terminals"
+                        Write-Info "and retry, or delete manually."
+                    }
+                } else {
+                    Write-Info "Skipped."
+                }
+            }
+        }
+    } else {
+        Write-Ok "MSYS2 not found at $Msys2Root. Nothing to do."
+    }
+
+    # --- vcpkg ---------------------------------------------------------
+
+    Write-Host ""
+    Write-Info "Checking for vcpkg..."
+
+    if (Test-Path $VcpkgRoot) {
+        Write-Warn "vcpkg found at $VcpkgRoot"
+        if (Confirm-Action "Delete $VcpkgRoot?") {
+            Remove-Item -Recurse -Force $VcpkgRoot `
+                -ErrorAction SilentlyContinue
+            if (-not (Test-Path $VcpkgRoot)) {
+                Write-Ok "Deleted $VcpkgRoot"
+                $changed = $true
+            } else {
+                Write-Fail "Could not fully remove $VcpkgRoot."
+                Write-Info "Some files may be locked. Close any"
+                Write-Info "terminals using vcpkg and retry, or"
+                Write-Info "delete manually."
+            }
+        } else {
+            Write-Info "Skipped."
+        }
+    } else {
+        Write-Ok "vcpkg not found at $VcpkgRoot. Nothing to do."
+    }
+
+    # --- Summary -------------------------------------------------------
+
+    Write-Host ""
+    if ($changed) {
+        Write-Ok "Uninstall complete."
+        Write-Info "Open a new terminal for changes to take effect."
+    } else {
+        Write-Info "No changes were made."
+    }
+    Write-Host ""
+    exit 0
+}
+
+# ===================================================================
 #  1. MSYS2 BASE INSTALL
 # ===================================================================
 
 Write-Header "1/7  MSYS2"
 
 $msys2Exe = Join-Path $Msys2Root "msys2.exe"
+
+# If MSYS2 is not at the default location, check the
+# registry in case it was installed elsewhere.
+if (-not (Test-Path $msys2Exe)) {
+    $detected = Find-Msys2Install
+    if ($detected.Path -and (Test-Path $detected.Path)) {
+        Write-Info ("MSYS2 found at: " +
+            $detected.Path + " (via registry)")
+        $Msys2Root = $detected.Path
+        $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
+        $msys2Exe  = Join-Path $Msys2Root "msys2.exe"
+    }
+}
 
 if (Test-Path $msys2Exe) {
     Write-Ok "MSYS2 found at $Msys2Root"
@@ -286,20 +636,42 @@ if (Test-Path $msys2Exe) {
             $installerInfo.Url $installerInfo.Name
         if ($installer) {
             Write-Info "Running MSYS2 installer..."
-            Write-Info "Install to: $Msys2Root (the default)"
+            Write-Info "Default location: $Msys2Root"
+            Write-Info ("You may choose a different folder " +
+                "in the installer.")
             Start-Process -FilePath $installer -Wait
+
+            # Check default location first
             $testExe = Join-Path $Msys2Root "msys2.exe"
+            if (-not (Test-Path $testExe)) {
+                # Not at default -- check registry for where
+                # the user actually installed it
+                $detected = Find-Msys2Install
+                if ($detected.Path -and
+                    (Test-Path $detected.Path)) {
+                    Write-Info ("MSYS2 installed to: " +
+                        $detected.Path +
+                        " (non-default)")
+                    $Msys2Root = $detected.Path
+                    $ucrt64Bin = Join-Path $Msys2Root `
+                        "ucrt64\bin"
+                    $testExe = Join-Path $Msys2Root `
+                        "msys2.exe"
+                }
+            }
+
             if (Test-Path $testExe) {
                 Write-Ok "MSYS2 installed."
                 Write-Info "Running initial system update..."
-                Write-Info "(Window may close once — normal.)"
+                Write-Info "(Window may close once -- normal.)"
                 $cmd = "pacman -Syu --noconfirm"
                 Invoke-Msys2Command $Msys2Root $cmd
                 # Second pass for held-back core packages
                 Invoke-Msys2Command $Msys2Root $cmd
                 Write-Ok "MSYS2 base system updated."
             } else {
-                Write-Fail "Installer did not create $Msys2Root."
+                Write-Fail "MSYS2 not found after installer."
+                Write-Info "Expected at $Msys2Root or via registry."
                 Write-Info "Install manually: https://www.msys2.org/"
                 $allOk = $false
             }
@@ -385,7 +757,7 @@ if ($msys2Present) {
         }
     }
 } else {
-    Write-Info "MSYS2 not installed — skipping package check."
+    Write-Info "MSYS2 not installed -- skipping package check."
     $allOk = $false
 }
 
@@ -393,27 +765,61 @@ if ($msys2Present) {
 #  3. PATH
 # ===================================================================
 
-Write-Header "3/7  PATH — UCRT64 binaries"
+Write-Header "3/7  PATH -- UCRT64 binaries"
 
-$gppPath = Join-Path $ucrt64Bin "g++.exe"
+# Re-check in case MSYS2 location was updated by step 1
+# or the user already has it at a non-default path.
+if (-not (Test-Path $ucrt64Bin)) {
+    $detected = Find-Msys2Install
+    if ($detected.Path -and
+        (Test-Path (Join-Path $detected.Path "ucrt64\bin"))) {
+        $Msys2Root = $detected.Path
+        $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
+    }
+}
 
-if (Test-Command "g++") {
-    Write-Ok "g++ is already in PATH."
-} elseif (Test-Path $gppPath) {
-    Write-Warn "$ucrt64Bin is not in your PATH."
+# Read the raw (unexpanded) user PATH from the registry and
+# check whether any MSYS2 ucrt64 entry is already present.
+$rawUserPath = (Get-Item 'HKCU:\Environment').GetValue(
+    'Path', '', 'DoNotExpandEnvironmentNames'
+)
+$pathEntries = $rawUserPath -split ";" |
+    Where-Object { $_ -ne "" }
+$msysInPath = $pathEntries | Where-Object {
+    ($_ -eq $ucrt64Bin) -or
+    ($_ -like '*msys*ucrt64*bin*')
+} | Select-Object -First 1
+
+if ($msysInPath) {
+    Write-Ok "MSYS2 ucrt64 already in PATH: $msysInPath"
+} elseif (Test-Path $ucrt64Bin) {
+    Write-Warn "$ucrt64Bin is not in your user PATH."
     Write-Info "Required so CMake, Ninja, and GCC are available"
     Write-Info "from any terminal (PowerShell, cmd, etc.)."
     Write-Host ""
-    $prompt = "Add $ucrt64Bin to user PATH? (writes to registry)"
+    Write-Info "This modifies your per-user PATH environment"
+    Write-Info "variable stored in the Windows registry at"
+    Write-Info "HKCU\Environment\Path.  It does NOT change the"
+    Write-Info "system-wide PATH (HKLM).  The new value takes"
+    Write-Info "effect in any terminal opened after the change."
+    Write-Info "To undo later, run this script with -Uninstall."
+    Write-Host ""
+    Write-Info "Registry key: HKCU\Environment\Path"
+    Write-Info "Old value:"
+    Write-Info "  $rawUserPath"
+    Write-Info "New value:"
+    Write-Info "  $rawUserPath;$ucrt64Bin;"
+    Write-Host ""
+    $prompt = "Add $ucrt64Bin to user PATH?"
     if (Confirm-Action $prompt) {
         Add-ToUserPath $ucrt64Bin
     } else {
         Write-Info "To add manually:"
-        Write-Info "  Settings > System > About >"
-        Write-Info "    Advanced system settings >"
-        Write-Info "    Environment Variables >"
-        Write-Info "    User variables > Path > Edit >"
-        Write-Info "    New > $ucrt64Bin"
+        Write-Info '  Settings > System > About >'
+        Write-Info '    Advanced system settings >'
+        Write-Info '    Environment Variables >'
+        Write-Info '    User variables > Path > Edit >'
+        Write-Info ("    New > " + $ucrt64Bin)
         $needPath = $true
     }
 } else {
@@ -427,29 +833,40 @@ if (Test-Command "g++") {
 
 Write-Header "4/7  Tool Verification"
 
-$gitPath = Join-Path $Msys2Root "usr\bin\git.exe"
+$gitKnown = Join-Path $Msys2Root "usr\bin\git.exe"
 
 $verifyTools = @(
-    @{ Name = "g++";    Path = (Join-Path $ucrt64Bin "g++.exe")
+    @{ Name = "g++";    Known = (Join-Path $ucrt64Bin "g++.exe")
        Required = $true },
-    @{ Name = "cmake";  Path = (Join-Path $ucrt64Bin "cmake.exe")
+    @{ Name = "cmake";  Known = (Join-Path $ucrt64Bin "cmake.exe")
        Required = $true },
-    @{ Name = "ninja";  Path = (Join-Path $ucrt64Bin "ninja.exe")
+    @{ Name = "ninja";  Known = (Join-Path $ucrt64Bin "ninja.exe")
        Required = $false },
-    @{ Name = "git";    Path = $gitPath
+    @{ Name = "git";    Known = $gitKnown
        Required = $true },
-    @{ Name = "python"; Path = (Join-Path $ucrt64Bin "python.exe")
+    @{ Name = "python"; Known = (Join-Path $ucrt64Bin "python.exe")
        Required = $false }
 )
 
+# Resolved full paths -- used by later steps so they work
+# even if MSYS2 is not in the session PATH.
+$gitExe   = $null
+$cmakeExe = $null
+
 foreach ($tool in $verifyTools) {
-    if (Test-Command $tool.Name) {
-        $ver = Get-CommandVersion $tool.Name
-        Write-Ok "$($tool.Name) : $ver"
-    } elseif (Test-Path $tool.Path) {
-        $name = $tool.Name
-        Write-Warn "$name at $($tool.Path) but not in PATH."
-        Write-Info "(Open new terminal after PATH changes.)"
+    $exe = Resolve-Exe $tool.Name $tool.Known
+    if ($exe) {
+        $ver = Get-CommandVersion $exe
+        $inPath = Test-Command $tool.Name
+        if ($inPath) {
+            Write-Ok "$($tool.Name) : $ver"
+        } else {
+            Write-Ok "$($tool.Name) : $ver (via $exe)"
+            Write-Info "(Not in PATH -- using full path.)"
+        }
+        # Store for later steps
+        if ($tool.Name -eq "git")   { $gitExe   = $exe }
+        if ($tool.Name -eq "cmake") { $cmakeExe = $exe }
     } else {
         if ($tool.Required) {
             Write-Fail "$($tool.Name) not found."
@@ -461,17 +878,20 @@ foreach ($tool in $verifyTools) {
 }
 
 # CMake minimum version check
-if (Test-Command "cmake") {
-    $cmakeVer = Get-CommandVersion "cmake"
-    $verMatch = [regex]::Match($cmakeVer, '(\d+)\.(\d+)')
-    if ($verMatch.Success) {
-        $major = [int]$verMatch.Groups[1].Value
-        $minor = [int]$verMatch.Groups[2].Value
-        if ($major -lt 3 -or
-            ($major -eq 3 -and $minor -lt 22)) {
-            Write-Warn "CMake 3.22+ required (found $major.$minor)."
-            Write-Info "Update MSYS2: pacman -Syu"
-            $allOk = $false
+if ($cmakeExe) {
+    $cmakeVer = Get-CommandVersion $cmakeExe
+    if ($cmakeVer) {
+        $verMatch = [regex]::Match($cmakeVer, '(\d+)\.(\d+)')
+        if ($verMatch.Success) {
+            $major = [int]$verMatch.Groups[1].Value
+            $minor = [int]$verMatch.Groups[2].Value
+            if ($major -lt 3 -or
+                ($major -eq 3 -and $minor -lt 22)) {
+                Write-Warn ("CMake 3.22+ required" +
+                    " (found $major.$minor).")
+                Write-Info "Update MSYS2: pacman -Syu"
+                $allOk = $false
+            }
         }
     }
 }
@@ -488,13 +908,7 @@ if ($isInRepo) {
 } else {
     Write-Info "Script is running standalone (not inside a clone)."
 
-    $canGit = Test-Command "git"
-    if (-not $canGit) {
-        $msys2Git = Join-Path $Msys2Root "usr\bin\git.exe"
-        $canGit = Test-Path $msys2Git
-    }
-
-    if ($canGit) {
+    if ($gitExe) {
         if (Confirm-Action "Clone the HobbyCAD repository?") {
             # Determine target directory
             if ($CloneDir -ne "") {
@@ -520,7 +934,7 @@ if ($isInRepo) {
                 $clonePath = $targetDir
             } else {
                 Write-Info "Cloning to $targetDir..."
-                git clone $RepoUrl $targetDir
+                & $gitExe clone $RepoUrl $targetDir
                 if ($LASTEXITCODE -eq 0) {
                     Write-Ok "Cloned to $targetDir"
                     $clonePath = $targetDir
@@ -531,12 +945,22 @@ if ($isInRepo) {
                     $allOk = $false
                 }
             }
+
+            # Persist the clone path so -Uninstall can find it
+            if ($clonePath -ne "") {
+                [Environment]::SetEnvironmentVariable(
+                    "HOBBYCAD_CLONE", $clonePath, "User"
+                )
+                $env:HOBBYCAD_CLONE = $clonePath
+                Write-Info ("Saved clone path to " +
+                    "HKCU\Environment\HOBBYCAD_CLONE")
+            }
         } else {
             Write-Info "Clone manually when ready:"
             Write-Info "  git clone $RepoUrl"
         }
     } else {
-        Write-Warn "Git not available yet — cannot clone."
+        Write-Warn "Git not available yet -- cannot clone."
         Write-Info "Install MSYS2 and packages (steps 1-2),"
         Write-Info "then re-run this script."
         $allOk = $false
@@ -567,9 +991,13 @@ if ($SkipVcpkg) {
         Write-Ok "VCPKG_ROOT is set: $envRoot"
     } else {
         Write-Warn "VCPKG_ROOT environment variable is not set."
-        $prompt = "Set VCPKG_ROOT=$VcpkgRoot? (writes to registry)"
+        Write-Host ""
+        Write-Info "Registry key: HKCU\Environment\VCPKG_ROOT"
+        Write-Info "Old value:    (not set)"
+        Write-Info "New value:    $VcpkgRoot"
+        Write-Host ""
+        $prompt = "Set VCPKG_ROOT=$VcpkgRoot?"
         if (Confirm-Action $prompt) {
-            Write-Info "Writing to: HKCU\Environment\VCPKG_ROOT"
             [Environment]::SetEnvironmentVariable(
                 "VCPKG_ROOT", $VcpkgRoot, "User"
             )
@@ -585,17 +1013,12 @@ if ($SkipVcpkg) {
 } else {
     Write-Warn "vcpkg not found at $VcpkgRoot"
 
-    $canGit = Test-Command "git"
-    if (-not $canGit) {
-        $msys2Git = Join-Path $Msys2Root "usr\bin\git.exe"
-        $canGit = Test-Path $msys2Git
-    }
-
-    if ($canGit) {
+    if ($gitExe) {
         $prompt = "Clone and bootstrap vcpkg to ${VcpkgRoot}?"
         if (Confirm-Action $prompt) {
             Write-Info "Cloning vcpkg..."
-            git clone https://github.com/microsoft/vcpkg.git `
+            & $gitExe clone `
+                https://github.com/microsoft/vcpkg.git `
                 $VcpkgRoot
             if ($LASTEXITCODE -eq 0) {
                 Write-Info "Bootstrapping vcpkg..."
@@ -696,7 +1119,7 @@ if ($allOk) {
     Write-Info "  $step. Run:"
     Write-Info "       .\build\hobbycad.exe"
 } else {
-    Write-Fail "Some items need attention — see above."
+    Write-Fail "Some items need attention -- see above."
     Write-Host ""
     Write-Info "Fix the issues, then run this script again."
 }
