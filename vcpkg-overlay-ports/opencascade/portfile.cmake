@@ -2,10 +2,11 @@
 #
 # Overlay port for OpenCASCADE 7.6.2 with MSVC compilation fix.
 #
-# This overlay port adds a single patch (fix-msvc-unsigned-char.patch)
-# to fix a compilation error with MSVC 14.44+ where an implicit
-# unsigned char* -> const char* conversion in StdPrs_BRepFont.cxx
-# is rejected.  The fix comes from upstream commit 7236e83dcc1e.
+# This overlay port applies a source fix for a compilation error
+# with MSVC 14.44+ where an implicit unsigned char* -> const char*
+# conversion in StdPrs_BRepFont.cxx is rejected.  The fix uses
+# vcpkg_replace_string() instead of a patch file for robustness
+# across platforms.  Based on upstream commit 7236e83dcc1e.
 #
 # SETUP:
 #   1. Compute the SHA512 of the OCCT V7_6_2 source tarball:
@@ -25,8 +26,14 @@ vcpkg_from_github(
     REF V7_6_2
     SHA512 1339889bb721ff43af00ba0048f0ca41fd5e424339ca6ff147436f67629ce360cfb0a623896608554872a1cfab67e8bcb8df066f4d1458da914aef70ffed0960
     HEAD_REF master
-    PATCHES
-        fix-msvc-unsigned-char.patch
+)
+
+# Fix MSVC compilation error: implicit unsigned char* -> const char*
+# conversion in StdPrs_BRepFont.cxx rejected by MSVC 14.44+.
+# Upstream fix: commit 7236e83dcc1e.
+vcpkg_replace_string("${SOURCE_PATH}/src/StdPrs/StdPrs_BRepFont.cxx"
+    "const char* aTags      = &anOutline->tags[aStartIndex];"
+    "const auto* aTags      = &anOutline->tags[aStartIndex];"
 )
 
 vcpkg_cmake_configure(

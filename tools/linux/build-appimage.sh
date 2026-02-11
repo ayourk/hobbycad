@@ -132,18 +132,11 @@ log ""
 log "--- Configure (cmake) ---"
 log ""
 
-GENERATOR="Ninja"
-if ! command -v ninja &>/dev/null; then
-    GENERATOR="Unix Makefiles"
-fi
-
 STEP_HINT="Configure failed. Run devtest to check dependencies:
            cd devtest && cmake -B build && cmake --build build && ./build/depcheck
            See dev_environment_setup.txt Section 12 for troubleshooting."
 
-run cmake -B "${BUILD_DIR}" -G "${GENERATOR}" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr
+run cmake --preset linux-appimage
 
 log "  Configure complete"
 log ""
@@ -160,7 +153,7 @@ STEP_HINT="Build failed. Check compiler errors in ${LOG}.
            cd devtest && cmake -B build && cmake --build build && ./build/depcheck
            See dev_environment_setup.txt Section 12 for troubleshooting."
 
-run cmake --build "${BUILD_DIR}" -j"${NPROC}"
+run cmake --build --preset linux-appimage -j"${NPROC}"
 
 log "  Build complete"
 log ""
