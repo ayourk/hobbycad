@@ -51,6 +51,7 @@ if ! command -v cmake &>/dev/null; then
     echo "         sudo apt install cmake ninja-build"
     exit 1
 fi
+
 # ---- Parse arguments -------------------------------------------------
 
 BUILD_TYPE="Debug"
