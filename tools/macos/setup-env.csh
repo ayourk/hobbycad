@@ -217,21 +217,21 @@ if ($DO_UNINSTALL) then
         ok "No shell config file found."
     endif
 
-    # --- HOBBYCAD_CLONE ------------------------------------------------
+    # --- HOBBYCAD_REPO ------------------------------------------------
 
     echo ""
-    info_msg "Checking HOBBYCAD_CLONE in shell config..."
+    info_msg "Checking HOBBYCAD_REPO in shell config..."
 
     if ("$SHELL_RC" != "") then
         grep -q "# HobbyCAD -- clone path" \
             "$SHELL_RC" >& /dev/null
         if ($status == 0) then
-            set SAVED_CLONE = `grep '^setenv HOBBYCAD_CLONE' \
+            set SAVED_CLONE = `grep '^setenv HOBBYCAD_REPO' \
                 "$SHELL_RC" | head -1 | \
-                sed 's/^setenv HOBBYCAD_CLONE //' | \
+                sed 's/^setenv HOBBYCAD_REPO //' | \
                 sed 's/^"//' | sed 's/"$//'`
 
-            warn_msg "Found HOBBYCAD_CLONE in $SHELL_RC"
+            warn_msg "Found HOBBYCAD_REPO in $SHELL_RC"
 
             if ("$SAVED_CLONE" != "" && -d "$SAVED_CLONE") then
                 if ($NON_INTERACTIVE) then
@@ -260,14 +260,14 @@ if ($DO_UNINSTALL) then
             if ($NON_INTERACTIVE) then
                 set answer = "y"
             else
-                printf "  Remove HOBBYCAD_CLONE from %s? (Y/n) " \
+                printf "  Remove HOBBYCAD_REPO from %s? (Y/n) " \
                     "$SHELL_RC"
                 set answer = "$<"
             endif
             if ("$answer" == "" || "$answer" == "y" || \
                 "$answer" == "Y") then
                 sed -i '' \
-                    '/# HobbyCAD -- clone path/,/^setenv HOBBYCAD_CLONE/d' \
+                    '/# HobbyCAD -- clone path/,/^setenv HOBBYCAD_REPO/d' \
                     "$SHELL_RC"
                 ok "Removed from $SHELL_RC"
                 set CHANGED = 1
@@ -275,7 +275,7 @@ if ($DO_UNINSTALL) then
                 info_msg "Skipped."
             endif
         else
-            ok "No HOBBYCAD_CLONE block found."
+            ok "No HOBBYCAD_REPO block found."
         endif
     else
         ok "No shell config file found."
@@ -319,7 +319,7 @@ if ($DO_UNINSTALL) then
         info_msg "Checking HobbyCAD core formulas..."
 
         set CORE_INSTALLED = ""
-        foreach f (qt@6 pybind11 libpng jpeg-turbo)
+        foreach f (qt@6 librsvg)
             "$BREW" list "$f" >& /dev/null
             if ($status == 0) then
                 if ("$CORE_INSTALLED" == "") then
@@ -566,8 +566,8 @@ if ("$BREW" != "" && -x "$BREW") then
         set CMAKE_MAJOR = `echo "$CMAKE_VER" | cut -d. -f1`
         set CMAKE_MINOR = `echo "$CMAKE_VER" | cut -d. -f2`
         if ($CMAKE_MAJOR < 3 || \
-            ($CMAKE_MAJOR == 3 && $CMAKE_MINOR < 22)) then
-            warn_msg "CMake 3.22+ required (found $CMAKE_VER)."
+            ($CMAKE_MAJOR == 3 && $CMAKE_MINOR < 20)) then
+            warn_msg "CMake 3.20+ required (found $CMAKE_VER)."
             info_msg "  brew upgrade cmake"
             set ALL_OK = 0
         endif
@@ -632,7 +632,7 @@ if ("$BREW" != "" && -x "$BREW") then
     # Core formulas
     set CORE_MISSING = ""
 
-    foreach formula (qt@6 pybind11 libpng jpeg-turbo)
+    foreach formula (qt@6 librsvg)
         "$BREW" list "$formula" >& /dev/null
         if ($status != 0) then
             if ("$CORE_MISSING" == "") then
@@ -750,7 +750,34 @@ else
 
             set TARGET_DIR = "$TARGET_PARENT/hobbycad"
 
-            if (-d "$TARGET_DIR/.git") then
+            # Verify the parent directory exists; offer to
+            # create it (and any missing intermediate dirs).
+            if (! -d "$TARGET_PARENT") then
+                if ($NON_INTERACTIVE) then
+                    set answer = "y"
+                else
+                    printf "  %s does not exist. Create it? (Y/n) " \
+                        "$TARGET_PARENT"
+                    set answer = "$<"
+                endif
+                if ("$answer" == "" || "$answer" == "y" || \
+                    "$answer" == "Y") then
+                    mkdir -p "$TARGET_PARENT"
+                    if (-d "$TARGET_PARENT") then
+                        ok "Created $TARGET_PARENT"
+                    else
+                        fail_msg "Could not create $TARGET_PARENT"
+                        set ALL_OK = 0
+                    endif
+                else
+                    info_msg "Skipped clone."
+                    set ALL_OK = 0
+                endif
+            endif
+
+            if (! -d "$TARGET_PARENT") then
+                # Creation failed or was skipped -- skip clone
+            else if (-d "$TARGET_DIR/.git") then
                 ok "Repository already exists at $TARGET_DIR"
                 set CLONE_PATH = "$TARGET_DIR"
             else
@@ -771,15 +798,15 @@ else
             if ("$CLONE_PATH" != "" && "$SHELL_RC" != "") then
                 # Remove any existing block first
                 sed -i '' \
-                    '/# HobbyCAD -- clone path/,/^setenv HOBBYCAD_CLONE/d' \
+                    '/# HobbyCAD -- clone path/,/^setenv HOBBYCAD_REPO/d' \
                     "$SHELL_RC" >& /dev/null
                 echo "" >> "$SHELL_RC"
                 echo "# HobbyCAD -- clone path" >> "$SHELL_RC"
-                echo "setenv HOBBYCAD_CLONE $CLONE_PATH" \
+                echo "setenv HOBBYCAD_REPO $CLONE_PATH" \
                     >> "$SHELL_RC"
-                setenv HOBBYCAD_CLONE "$CLONE_PATH"
+                setenv HOBBYCAD_REPO "$CLONE_PATH"
                 info_msg "Saved clone path to $SHELL_RC"
-                info_msg '($HOBBYCAD_CLONE='"$CLONE_PATH"')'
+                info_msg '($HOBBYCAD_REPO='"$CLONE_PATH"')'
             endif
         else
             info_msg "Clone manually when ready:"
@@ -977,9 +1004,11 @@ if ($ALL_OK) then
     else
         info_msg "       cd .."
     endif
-    info_msg '       cmake -B build -G Ninja \'
-    info_msg "         -DCMAKE_BUILD_TYPE=Debug"
-    info_msg "       cmake --build build -j$NCPU"
+    info_msg "       cmake --preset macos-debug"
+    info_msg "       cmake --build --preset macos-debug -j$NCPU"
+    echo ""
+    info_msg "     Or use the build script:"
+    info_msg "       ./tools/macos/build-dev.sh"
     @ STEP++
 
     echo ""

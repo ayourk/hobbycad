@@ -28,10 +28,9 @@
 #
 #  Prerequisites:
 #    - Xcode Command Line Tools (xcode-select --install)
-#    - CMake (brew install cmake)
-#    - Ninja (brew install ninja) — recommended, falls back to Make
-#    - Qt 6 (brew install qt@6)
-#    - OCCT (brew install opencascade)
+#    - Homebrew with cmake, ninja, qt@6, opencascade installed
+#      (auto-detected from /opt/homebrew or /usr/local)
+#    - Can be run from any directory (repo root, tools/macos, etc.)
 #
 #  SPDX-License-Identifier: GPL-3.0-only
 #
@@ -50,6 +49,28 @@ DEVTEST_LOG="${DEVTEST_DIR}/devtest.log"
 
 # Track overall status (0 = ok, non-zero = failure)
 EXIT_CODE=0
+
+# ---- Locate Homebrew tools -------------------------------------------
+#
+#  If cmake isn't already on PATH, look for Homebrew in the standard
+#  locations and prepend its bin/ so the build works from any shell.
+
+if ! command -v cmake &>/dev/null; then
+    BREW_BIN=""
+    for dir in /opt/homebrew/bin /usr/local/bin; do
+        if [ -x "${dir}/cmake" ]; then
+            BREW_BIN="${dir}"
+            break
+        fi
+    done
+    if [ -n "${BREW_BIN}" ]; then
+        echo "  [INFO] Adding ${BREW_BIN} to PATH"
+        export PATH="${BREW_BIN}:${PATH}"
+    else
+        echo "  [FAIL] cmake not found.  Install via: brew install cmake"
+        exit 1
+    fi
+fi
 
 # ---- Parse arguments -------------------------------------------------
 

@@ -35,7 +35,7 @@
       Registry changes (HKCU\Environment):
         - PATH            Adds MSYS2 ucrt64/bin and usr/bin
         - VCPKG_ROOT      Points to the vcpkg installation
-        - HOBBYCAD_CLONE  Points to the cloned repository (if cloned)
+        - HOBBYCAD_REPO  Points to the cloned repository (if cloned)
 
       All registry values use REG_EXPAND_SZ to preserve
       references like %USERPROFILE%.

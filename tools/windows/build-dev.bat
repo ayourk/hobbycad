@@ -27,11 +27,9 @@ REM    - If either is missing: devtest check, build, then launch
 REM    - "clean" before "run" forces a full rebuild
 REM
 REM  Prerequisites:
-REM    - CMake on PATH
-REM    - Ninja on PATH (recommended) or Visual Studio generator
-REM    - Qt 6 installed, CMAKE_PREFIX_PATH or Qt6_DIR set
-REM    - OCCT installed, OpenCASCADE_DIR set
-REM    - Run from a Developer Command Prompt or ensure cl.exe is on PATH
+REM    - MSYS2 UCRT64 installed (cmake/ninja auto-detected), or
+REM      CMake + Ninja already on PATH (e.g. MSVC Developer Prompt)
+REM    - Can be run from any directory (repo root, tools\windows, etc.)
 REM
 REM  SPDX-License-Identifier: GPL-3.0-only
 REM
@@ -52,6 +50,38 @@ set "LOG=%PROJECT_ROOT%\build-hobbycad.log"
 set "DEVTEST_DIR=%PROJECT_ROOT%\devtest"
 set "DEVTEST_LOG=%DEVTEST_DIR%\devtest.log"
 
+REM ---- Locate MSYS2 UCRT64 tools ------------------------------------
+REM
+REM  If cmake/ninja aren't already on PATH, look for them under the
+REM  default MSYS2 install and prepend ucrt64\bin so the build works
+REM  from a plain cmd.exe window.
+
+where cmake >nul 2>&1
+if %errorlevel% neq 0 (
+    set "MSYS2_UCRT64="
+    REM Check env var first, then common install locations
+    if defined MSYS2_ROOT (
+        if exist "!MSYS2_ROOT!\ucrt64\bin\cmake.exe" (
+            set "MSYS2_UCRT64=!MSYS2_ROOT!\ucrt64\bin"
+        )
+    )
+    if not defined MSYS2_UCRT64 (
+        for %%D in (C:\msys64 D:\msys64 C:\msys2 D:\msys2) do (
+            if exist "%%D\ucrt64\bin\cmake.exe" (
+                if not defined MSYS2_UCRT64 set "MSYS2_UCRT64=%%D\ucrt64\bin"
+            )
+        )
+    )
+    if defined MSYS2_UCRT64 (
+        echo   [INFO] Adding !MSYS2_UCRT64! to PATH
+        set "PATH=!MSYS2_UCRT64!;!PATH!"
+    ) else (
+        echo   [FAIL] cmake not found.  Run from an MSYS2 UCRT64 shell
+        echo          or ensure cmake is on PATH.
+        exit /b 1
+    )
+)
+
 REM ---- Detect generator -----------------------------------------------
 
 where ninja >nul 2>&1
@@ -59,14 +89,6 @@ if %errorlevel%==0 (
     set "GENERATOR=Ninja"
 ) else (
     set "GENERATOR=Visual Studio 17 2022"
-)
-
-REM ---- Detect binary path (depends on generator) ----------------------
-
-if "!GENERATOR!"=="Ninja" (
-    set "BINARY=%BUILD_DIR%\src\hobbycad\hobbycad.exe"
-) else (
-    set "BINARY=%BUILD_DIR%\src\hobbycad\%BUILD_TYPE%\hobbycad.exe"
 )
 
 REM ---- Parse arguments (collect actions in order) ---------------------
@@ -106,6 +128,14 @@ REM Default action: build
 if %ACTION_COUNT%==0 (
     set "ACTION_COUNT=1"
     set "ACTION_1=build"
+)
+
+REM ---- Detect binary path (depends on generator + build type) --------
+
+if "!GENERATOR!"=="Ninja" (
+    set "BINARY=%BUILD_DIR%\src\hobbycad\hobbycad.exe"
+) else (
+    set "BINARY=%BUILD_DIR%\src\hobbycad\!BUILD_TYPE!\hobbycad.exe"
 )
 
 REM ---- Clear log file -------------------------------------------------

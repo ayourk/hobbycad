@@ -41,7 +41,7 @@
 
       Shell environment changes:
         CMAKE_PREFIX_PATH   Set in shell rc file (~/.zshrc, etc.)
-        HOBBYCAD_CLONE      Points to the cloned repository
+        HOBBYCAD_REPO      Points to the cloned repository
 
       The setup-env.sh script auto-detects the active shell
       (bash, zsh, fish, ksh) and writes exports to the correct

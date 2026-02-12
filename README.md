@@ -12,6 +12,7 @@
   <img src="https://img.shields.io/badge/PPA-ayourk%2Fhobbycad-purple.svg" alt="PPA">
   <br>
   <a href="https://github.com/ayourk/hobbycad/actions/workflows/windows-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad/windows-build.yml?label=Windows%20Build" alt="Windows Build"></a>
+  <a href="https://github.com/ayourk/hobbycad/actions/workflows/macos-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad/macos-build.yml?label=macOS%20Build" alt="macOS Build"></a>
   <a href="https://github.com/ayourk/hobbycad-vcpkg/actions/workflows/build-ports.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad-vcpkg/build-ports.yml?label=vcpkg%20ports" alt="vcpkg ports"></a>
 </p>
 
@@ -31,7 +32,7 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 
 - **Offline-first** — No cloud dependency, no account, no telemetry. Your data stays on your machine.
 - **Version control is our cloud** — All collaboration and sharing flows through git and GitHub/GitLab, not a proprietary backend.
-- **Linux-first, cross-platform ready** -- Developed and optimized for Linux. Windows CI builds with both MSYS2/GCC and MSVC toolchains. macOS build stubs maintained for future community contributions.
+- **Linux-first, cross-platform ready** -- Developed and optimized for Linux. Windows CI builds with both MSYS2/GCC and MSVC toolchains. macOS CI builds with Homebrew/Clang.
 - **Depth over breadth** — Core mechanical CAD done exceptionally well, rather than a sprawling, half-finished feature set.
 - **Open standards** — BREP native format (open, documented), STEP/STL/OBJ interchange. No vendor lock-in.
 
@@ -132,7 +133,7 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 
 **CI:** The [Windows Build](.github/workflows/windows-build.yml) workflow runs two parallel jobs -- "HobbyCAD via MSYS" (MSYS2 UCRT64 / GCC, matching the local developer setup) and "HobbyCAD via MSVC" (Visual Studio / vcpkg manifest mode).
 
-### macOS (Support Stub)
+### macOS
 
 | | Section | Description |
 |---|---|---|
@@ -145,6 +146,8 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 | | [Architecture notes](docs/dev_environment_setup.txt#L2573) (§23) | Intel vs. Apple Silicon considerations |
 | | [Building](docs/dev_environment_setup.txt#L2658) (§25) | Build instructions for macOS |
 | | [Troubleshooting](docs/dev_environment_setup.txt#L2749) (§26) | macOS-specific issues |
+
+**CI:** The [macOS Build](.github/workflows/macos-build.yml) workflow builds with Homebrew/Clang on Apple Silicon, matching the local developer setup from `setup-env.sh`.
 
 ### General
 

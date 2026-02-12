@@ -1,0 +1,92 @@
+# .github/workflows/macos-build.yml
+#
+# Build HobbyCAD on macOS using Homebrew dependencies.
+#
+# Matches the local developer setup from tools/macos/setup-env.sh.
+# Uses the HobbyCAD Homebrew tap for pinned keg-only formulas
+# (opencascade@7.6.3, libzip@1.7.3, libgit2@1.7.2) and standard
+# Homebrew for qt@6, ninja, and librsvg.
+#
+# macOS runners are free for public repositories.
+
+name: macOS Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  macOS / Homebrew / Clang
+  # ================================================================
+  #
+  #  Matches the local developer environment.  Pinned dependencies
+  #  come from the HobbyCAD Homebrew tap (keg-only); everything
+  #  else from standard Homebrew.
+
+  macos:
+    name: HobbyCAD via Homebrew
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          # Tap for pinned keg-only formulas
+          brew tap ayourk/hobbycad
+
+          # Pinned formulas (keg-only — need CMAKE_PREFIX_PATH)
+          brew install ayourk/hobbycad/opencascade@7.6.3
+          brew install ayourk/hobbycad/libzip@1.7.3
+          brew install ayourk/hobbycad/libgit2@1.7.2
+
+          # Core formulas
+          brew install qt@6 ninja librsvg
+
+      - name: Set CMAKE_PREFIX_PATH
+        run: |
+          # Keg-only formulas are not linked into the Homebrew
+          # prefix, so CMake needs explicit paths to find them.
+          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.6.3)
+          LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
+          LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
+          QT6_PFX=$(brew --prefix qt@6)
+
+          PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${QT6_PFX}"
+          echo "CMAKE_PREFIX_PATH=${PREFIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Configure CMake
+        run: cmake --preset macos-release
+
+      - name: Build
+        run: cmake --build --preset macos-release
+
+      - name: Package build
+        run: |
+          cmake --install build --prefix build/install
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-macos-arm64
+          path: build/install/
+          retention-days: 14
+          if-no-files-found: error

@@ -53,7 +53,7 @@
 .PARAMETER Uninstall
     Roll back changes made by this script:
     removes the UCRT64 bin directory from the user PATH,
-    deletes the VCPKG_ROOT and HOBBYCAD_CLONE user environment
+    deletes the VCPKG_ROOT and HOBBYCAD_REPO user environment
     variables, runs the MSYS2 uninstaller if found, and offers
     to delete the vcpkg and HobbyCAD clone directories.
 
@@ -334,7 +334,7 @@ $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
 # Rolls back changes this script can make:
 #   1. Removes MSYS2 ucrt64\bin from HKCU\Environment\Path
 #   2. Removes HKCU\Environment\VCPKG_ROOT
-#   3. Removes HKCU\Environment\HOBBYCAD_CLONE
+#   3. Removes HKCU\Environment\HOBBYCAD_REPO
 #   4. Runs the MSYS2 uninstaller (if found)
 #   5. Offers to delete vcpkg and HobbyCAD clone directories
 
@@ -440,17 +440,30 @@ if ($Uninstall) {
         Write-Ok "VCPKG_ROOT is not set. Nothing to do."
     }
 
-    # --- HOBBYCAD_CLONE ------------------------------------------------
+    # --- HOBBYCAD_REPO ------------------------------------------------
+    #  Also clean up the old HOBBYCAD_CLONE name if present.
 
     Write-Host ""
-    Write-Info "Checking HKCU\Environment\HOBBYCAD_CLONE..."
+    Write-Info "Checking HKCU\Environment\HOBBYCAD_REPO..."
+
+    # Migrate old name silently during uninstall
+    $oldClone = [Environment]::GetEnvironmentVariable(
+        "HOBBYCAD_CLONE", "User"
+    )
+    if ($oldClone) {
+        [Environment]::SetEnvironmentVariable(
+            "HOBBYCAD_CLONE", $null, "User"
+        )
+        Write-Info "Removed old HOBBYCAD_CLONE entry."
+        $changed = $true
+    }
 
     $savedClone = [Environment]::GetEnvironmentVariable(
-        "HOBBYCAD_CLONE", "User"
+        "HOBBYCAD_REPO", "User"
     )
 
     if ($savedClone) {
-        Write-Warn "HOBBYCAD_CLONE is set: $savedClone"
+        Write-Warn "HOBBYCAD_REPO is set: $savedClone"
 
         if (Test-Path $savedClone) {
             if (Confirm-Action "Delete $savedClone?") {
@@ -471,17 +484,17 @@ if ($Uninstall) {
         }
 
         # Remove the registry entry
-        if (Confirm-Action "Remove HOBBYCAD_CLONE from registry?") {
+        if (Confirm-Action "Remove HOBBYCAD_REPO from registry?") {
             [Environment]::SetEnvironmentVariable(
-                "HOBBYCAD_CLONE", $null, "User"
+                "HOBBYCAD_REPO", $null, "User"
             )
-            Write-Ok "HOBBYCAD_CLONE removed."
+            Write-Ok "HOBBYCAD_REPO removed."
             $changed = $true
         } else {
             Write-Info "Skipped."
         }
     } else {
-        Write-Ok "HOBBYCAD_CLONE is not set. Nothing to do."
+        Write-Ok "HOBBYCAD_REPO is not set. Nothing to do."
     }
 
     # --- MSYS2 ---------------------------------------------------------
@@ -490,10 +503,37 @@ if ($Uninstall) {
     Write-Info "Checking for MSYS2..."
 
     if (Test-Path $Msys2Root) {
+        # Remove the base MSYS2 git package if present.
+        $baseGit = Join-Path $Msys2Root "usr\bin\git.exe"
+        if (Test-Path $baseGit) {
+            Write-Info "Removing base MSYS2 git package..."
+            $rmCmd = "pacman -Rns --noconfirm git"
+            Invoke-Msys2Command $Msys2Root $rmCmd
+            if (-not (Test-Path $baseGit)) {
+                Write-Ok "Base git package removed."
+            }
+        }
+
         $uninstExe = Join-Path $Msys2Root "uninstall.exe"
 
-        # Run whichever uninstaller we found
-        if ($msys2Info.UninstCmd) {
+        # Qt Installer Framework CLI uninstall:
+        #   uninstall.exe pr --confirm-command
+        # Falls back to registry command or GUI if needed.
+        if (Test-Path $uninstExe) {
+            Write-Warn "MSYS2 found at $Msys2Root"
+            Write-Info "Uninstaller: $uninstExe"
+            Write-Host ""
+            if (Confirm-Action "Run MSYS2 uninstaller?") {
+                Write-Info "Uninstalling MSYS2 (CLI mode)..."
+                Start-Process -FilePath $uninstExe `
+                    -ArgumentList "pr", "--confirm-command" `
+                    -Wait
+                Write-Ok "MSYS2 uninstaller finished."
+                $changed = $true
+            } else {
+                Write-Info "Skipped."
+            }
+        } elseif ($msys2Info.UninstCmd) {
             Write-Warn "MSYS2 found at $Msys2Root"
             Write-Info ("Uninstall command (from registry):")
             Write-Info ("  " + $msys2Info.UninstCmd)
@@ -504,18 +544,6 @@ if ($Uninstall) {
                 Start-Process -FilePath cmd.exe `
                     -ArgumentList "/c `"$cmd`"" `
                     -Wait
-                Write-Ok "MSYS2 uninstaller finished."
-                $changed = $true
-            } else {
-                Write-Info "Skipped."
-            }
-        } elseif (Test-Path $uninstExe) {
-            Write-Warn "MSYS2 found at $Msys2Root"
-            Write-Info "Uninstaller: $uninstExe"
-            Write-Host ""
-            if (Confirm-Action "Run MSYS2 uninstaller?") {
-                Write-Info "Launching MSYS2 uninstaller..."
-                Start-Process -FilePath $uninstExe -Wait
                 Write-Ok "MSYS2 uninstaller finished."
                 $changed = $true
             } else {
@@ -601,6 +629,29 @@ if ($Uninstall) {
 }
 
 # ===================================================================
+#  MIGRATE: HOBBYCAD_CLONE -> HOBBYCAD_REPO
+# ===================================================================
+#  Older versions of this script used HOBBYCAD_CLONE.  Detect and
+#  migrate to HOBBYCAD_REPO automatically.
+
+$oldCloneVal = [Environment]::GetEnvironmentVariable(
+    "HOBBYCAD_CLONE", "User"
+)
+if ($oldCloneVal) {
+    Write-Info ("Migrating HOBBYCAD_CLONE -> HOBBYCAD_REPO" +
+        " ($oldCloneVal)")
+    [Environment]::SetEnvironmentVariable(
+        "HOBBYCAD_REPO", $oldCloneVal, "User"
+    )
+    [Environment]::SetEnvironmentVariable(
+        "HOBBYCAD_CLONE", $null, "User"
+    )
+    $env:HOBBYCAD_REPO  = $oldCloneVal
+    $env:HOBBYCAD_CLONE = $null
+    Write-Ok "Migrated HOBBYCAD_CLONE to HOBBYCAD_REPO."
+}
+
+# ===================================================================
 #  1. MSYS2 BASE INSTALL
 # ===================================================================
 
@@ -635,23 +686,32 @@ if (Test-Path $msys2Exe) {
         $installer = Get-TempDownload `
             $installerInfo.Url $installerInfo.Name
         if ($installer) {
-            Write-Info "Running MSYS2 installer..."
-            Write-Info "Default location: $Msys2Root"
-            Write-Info ("You may choose a different folder " +
-                "in the installer.")
-            Start-Process -FilePath $installer -Wait
+            # The MSYS2 installer uses Qt Installer Framework.
+            # CLI mode: installs without launching a shell at the
+            # end (no "Run MSYS2" checkbox on finish page).
+            # We run pacman -Syu ourselves after install anyway.
+            $rootForward = $Msys2Root -replace '\\', '/'
+            Write-Info "Installing MSYS2 to $Msys2Root ..."
+            $installerArgs = @(
+                "in",
+                "--confirm-command",
+                "--accept-messages",
+                "--root", $rootForward
+            )
+            Start-Process -FilePath $installer `
+                -ArgumentList $installerArgs -Wait
 
-            # Check default location first
+            # Verify installation at the specified root
             $testExe = Join-Path $Msys2Root "msys2.exe"
             if (-not (Test-Path $testExe)) {
-                # Not at default -- check registry for where
-                # the user actually installed it
+                # Fallback -- check registry in case --root
+                # was ignored or the installer placed it elsewhere
                 $detected = Find-Msys2Install
                 if ($detected.Path -and
                     (Test-Path $detected.Path)) {
                     Write-Info ("MSYS2 installed to: " +
                         $detected.Path +
-                        " (non-default)")
+                        " (different from requested)")
                     $Msys2Root = $detected.Path
                     $ucrt64Bin = Join-Path $Msys2Root `
                         "ucrt64\bin"
@@ -663,15 +723,14 @@ if (Test-Path $msys2Exe) {
             if (Test-Path $testExe) {
                 Write-Ok "MSYS2 installed."
                 Write-Info "Running initial system update..."
-                Write-Info "(Window may close once -- normal.)"
                 $cmd = "pacman -Syu --noconfirm"
                 Invoke-Msys2Command $Msys2Root $cmd
                 # Second pass for held-back core packages
                 Invoke-Msys2Command $Msys2Root $cmd
                 Write-Ok "MSYS2 base system updated."
             } else {
-                Write-Fail "MSYS2 not found after installer."
-                Write-Info "Expected at $Msys2Root or via registry."
+                Write-Fail "MSYS2 not found after install."
+                Write-Info "Expected at $Msys2Root"
                 Write-Info "Install manually: https://www.msys2.org/"
                 $allOk = $false
             }
@@ -692,6 +751,7 @@ Write-Header "2/7  MSYS2 Packages (UCRT64 toolchain)"
 
 $msys2Packages = @(
     "base-devel",
+    "mingw-w64-ucrt-x86_64-git",
     "mingw-w64-ucrt-x86_64-toolchain",
     "mingw-w64-ucrt-x86_64-cmake",
     "mingw-w64-ucrt-x86_64-ninja",
@@ -706,12 +766,14 @@ if ($msys2Present) {
     $cmkPath = Join-Path $ucrt64Bin "cmake.exe"
     $ninPath = Join-Path $ucrt64Bin "ninja.exe"
     $pyPath  = Join-Path $ucrt64Bin "python.exe"
+    $gitPath = Join-Path $ucrt64Bin "git.exe"
 
     $missing = @()
     if (-not (Test-Path $gppPath)) { $missing += "g++" }
     if (-not (Test-Path $cmkPath)) { $missing += "cmake" }
     if (-not (Test-Path $ninPath)) { $missing += "ninja" }
     if (-not (Test-Path $pyPath))  { $missing += "python" }
+    if (-not (Test-Path $gitPath)) { $missing += "git" }
 
     if ($missing.Count -eq 0) {
         Write-Ok "Toolchain packages installed."
@@ -728,6 +790,22 @@ if ($msys2Present) {
             $cmd = "pacman -S --needed --noconfirm $pkgList"
             Invoke-Msys2Command $Msys2Root $cmd
 
+            # Remove the base MSYS2 git package if present.
+            # It lacks working HTTPS support; the UCRT64 git
+            # package (just installed above) replaces it.
+            $baseGit = Join-Path $Msys2Root "usr\bin\git.exe"
+            if (Test-Path $baseGit) {
+                Write-Info "Removing base MSYS2 git package..."
+                $rmCmd = "pacman -Rns --noconfirm git"
+                Invoke-Msys2Command $Msys2Root $rmCmd
+                if (Test-Path $baseGit) {
+                    Write-Warn "Base git still present (may be" +
+                        " a dependency). Not critical."
+                } else {
+                    Write-Ok "Base git package removed."
+                }
+            }
+
             # Re-check
             $stillMissing = @()
             if (-not (Test-Path $gppPath)) {
@@ -738,6 +816,9 @@ if ($msys2Present) {
             }
             if (-not (Test-Path $ninPath)) {
                 $stillMissing += "ninja"
+            }
+            if (-not (Test-Path $gitPath)) {
+                $stillMissing += "git"
             }
 
             if ($stillMissing.Count -eq 0) {
@@ -833,7 +914,7 @@ if ($msysInPath) {
 
 Write-Header "4/7  Tool Verification"
 
-$gitKnown = Join-Path $Msys2Root "usr\bin\git.exe"
+$gitKnown = Join-Path $ucrt64Bin "git.exe"
 
 $verifyTools = @(
     @{ Name = "g++";    Known = (Join-Path $ucrt64Bin "g++.exe")
@@ -886,8 +967,8 @@ if ($cmakeExe) {
             $major = [int]$verMatch.Groups[1].Value
             $minor = [int]$verMatch.Groups[2].Value
             if ($major -lt 3 -or
-                ($major -eq 3 -and $minor -lt 22)) {
-                Write-Warn ("CMake 3.22+ required" +
+                ($major -eq 3 -and $minor -lt 20)) {
+                Write-Warn ("CMake 3.20+ required" +
                     " (found $major.$minor).")
                 Write-Info "Update MSYS2: pacman -Syu"
                 $allOk = $false
@@ -929,7 +1010,28 @@ if ($isInRepo) {
 
             $targetDir = Join-Path $targetParent "hobbycad"
 
-            if (Test-Path (Join-Path $targetDir ".git")) {
+            # Verify the parent directory exists; offer to
+            # create it (and any missing intermediate dirs).
+            if (-not (Test-Path $targetParent)) {
+                if (Confirm-Action (
+                    "$targetParent does not exist. Create it?")) {
+                    New-Item -ItemType Directory -Force `
+                        -Path $targetParent | Out-Null
+                    if (Test-Path $targetParent) {
+                        Write-Ok "Created $targetParent"
+                    } else {
+                        Write-Fail "Could not create $targetParent"
+                        $allOk = $false
+                    }
+                } else {
+                    Write-Info "Skipped clone."
+                    $allOk = $false
+                }
+            }
+
+            if (-not (Test-Path $targetParent)) {
+                # Creation failed or was skipped -- skip clone
+            } elseif (Test-Path (Join-Path $targetDir ".git")) {
                 Write-Ok "Repository already exists at $targetDir"
                 $clonePath = $targetDir
             } else {
@@ -949,11 +1051,11 @@ if ($isInRepo) {
             # Persist the clone path so -Uninstall can find it
             if ($clonePath -ne "") {
                 [Environment]::SetEnvironmentVariable(
-                    "HOBBYCAD_CLONE", $clonePath, "User"
+                    "HOBBYCAD_REPO", $clonePath, "User"
                 )
-                $env:HOBBYCAD_CLONE = $clonePath
+                $env:HOBBYCAD_REPO = $clonePath
                 Write-Info ("Saved clone path to " +
-                    "HKCU\Environment\HOBBYCAD_CLONE")
+                    "HKCU\Environment\HOBBYCAD_REPO")
             }
         } else {
             Write-Info "Clone manually when ready:"
@@ -1108,16 +1210,16 @@ if ($allOk) {
     } else {
         Write-Info "       cd .."
     }
-    Write-Info "       cmake -B build -G Ninja \"
-    Write-Info "         -DCMAKE_TOOLCHAIN_FILE=$tcf \"
-    Write-Info "         -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic \"
-    Write-Info "         -DCMAKE_BUILD_TYPE=Debug"
-    Write-Info "       cmake --build build"
+    Write-Info "       cmake --preset msys2-debug"
+    Write-Info "       cmake --build --preset msys2-debug"
+    Write-Info ""
+    Write-Info "     Or use the build script:"
+    Write-Info "       .\tools\windows\build-dev.bat"
     $step++
 
     Write-Info ""
     Write-Info "  $step. Run:"
-    Write-Info "       .\build\hobbycad.exe"
+    Write-Info "       .\build\src\hobbycad\hobbycad.exe"
 } else {
     Write-Fail "Some items need attention -- see above."
     Write-Host ""

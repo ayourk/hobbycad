@@ -326,7 +326,7 @@ ALL_OK=true
 #
 # Rolls back changes this script can make:
 #   1. Removes CMAKE_PREFIX_PATH from shell config
-#   2. Removes HOBBYCAD_CLONE from shell config
+#   2. Removes HOBBYCAD_REPO from shell config
 #   3. Offers to delete the HobbyCAD clone directory
 #   4. Offers to remove HobbyCAD Homebrew tap + formulas
 #   5. Offers to remove build tools
@@ -358,15 +358,15 @@ if [ "$UNINSTALL" = "1" ]; then
         ok "No HobbyCAD CMAKE_PREFIX_PATH block found."
     fi
 
-    # --- HOBBYCAD_CLONE ------------------------------------------------
+    # --- HOBBYCAD_REPO ------------------------------------------------
 
     echo ""
-    info "Checking HOBBYCAD_CLONE in shell config..."
+    info "Checking HOBBYCAD_REPO in shell config..."
 
     if has_shell_block "HobbyCAD -- clone path"; then
-        SAVED_CLONE=$(read_shell_var "HOBBYCAD_CLONE")
+        SAVED_CLONE=$(read_shell_var "HOBBYCAD_REPO")
 
-        warn "Found HOBBYCAD_CLONE in $SHELL_RC"
+        warn "Found HOBBYCAD_REPO in $SHELL_RC"
 
         if [ -n "$SAVED_CLONE" ] && [ -d "$SAVED_CLONE" ]; then
             if confirm "Delete $SAVED_CLONE?"; then
@@ -385,17 +385,17 @@ if [ "$UNINSTALL" = "1" ]; then
             info "Directory already gone."
         fi
 
-        if confirm "Remove HOBBYCAD_CLONE from $SHELL_RC?"; then
+        if confirm "Remove HOBBYCAD_REPO from $SHELL_RC?"; then
             remove_shell_export \
                 "HobbyCAD -- clone path" \
-                "HOBBYCAD_CLONE"
+                "HOBBYCAD_REPO"
             ok "Removed from $SHELL_RC"
             CHANGED=true
         else
             info "Skipped."
         fi
     else
-        ok "No HOBBYCAD_CLONE block found."
+        ok "No HOBBYCAD_REPO block found."
     fi
 
     # --- Homebrew tap + formulas ---------------------------------------
@@ -430,7 +430,7 @@ if [ "$UNINSTALL" = "1" ]; then
         info "Checking HobbyCAD core formulas..."
 
         CORE_INSTALLED=()
-        for f in qt@6 pybind11 libpng jpeg-turbo; do
+        for f in qt@6 librsvg; do
             if "$BREW" list "$f" &>/dev/null 2>&1; then
                 CORE_INSTALLED+=("$f")
             fi
@@ -600,8 +600,8 @@ if [ -x "$BREW" ]; then
         CMAKE_MINOR=$(echo "$CMAKE_VER" | cut -d. -f2)
         if [ "$CMAKE_MAJOR" -lt 3 ] ||
            { [ "$CMAKE_MAJOR" -eq 3 ] &&
-             [ "$CMAKE_MINOR" -lt 22 ]; }; then
-            warn "CMake 3.22+ required (found $CMAKE_VER)."
+             [ "$CMAKE_MINOR" -lt 20 ]; }; then
+            warn "CMake 3.20+ required (found $CMAKE_VER)."
             info "  brew upgrade cmake"
             ALL_OK=false
         fi
@@ -643,9 +643,7 @@ if [ -x "$BREW" ]; then
     # Core formulas
     CORE_FORMULAS=(
         "qt@6"
-        "pybind11"
-        "libpng"
-        "jpeg-turbo"
+        "librsvg"
     )
 
     PINNED_MISSING=()
@@ -748,7 +746,26 @@ else
 
             TARGET_DIR="$TARGET_PARENT/hobbycad"
 
-            if [ -d "$TARGET_DIR/.git" ]; then
+            # Verify the parent directory exists; offer to
+            # create it (and any missing intermediate dirs).
+            if [ ! -d "$TARGET_PARENT" ]; then
+                if confirm "$TARGET_PARENT does not exist. Create it?"; then
+                    mkdir -p "$TARGET_PARENT"
+                    if [ -d "$TARGET_PARENT" ]; then
+                        ok "Created $TARGET_PARENT"
+                    else
+                        fail "Could not create $TARGET_PARENT"
+                        ALL_OK=false
+                    fi
+                else
+                    info "Skipped clone."
+                    ALL_OK=false
+                fi
+            fi
+
+            if [ ! -d "$TARGET_PARENT" ]; then
+                : # Creation failed or was skipped -- skip clone
+            elif [ -d "$TARGET_DIR/.git" ]; then
                 ok "Repository already exists at $TARGET_DIR"
                 CLONE_PATH="$TARGET_DIR"
             else
@@ -770,14 +787,14 @@ else
                 if [ -n "$SHELL_RC" ]; then
                     remove_shell_export \
                         "HobbyCAD -- clone path" \
-                        "HOBBYCAD_CLONE"
+                        "HOBBYCAD_REPO"
                     write_shell_export \
                         "HobbyCAD -- clone path" \
-                        "HOBBYCAD_CLONE" \
+                        "HOBBYCAD_REPO" \
                         "$CLONE_PATH"
-                    export HOBBYCAD_CLONE="$CLONE_PATH"
+                    export HOBBYCAD_REPO="$CLONE_PATH"
                     info "Saved clone path to $SHELL_RC"
-                    info "(\$HOBBYCAD_CLONE=$CLONE_PATH)"
+                    info "(\$HOBBYCAD_REPO=$CLONE_PATH)"
                 fi
             fi
         else
@@ -950,9 +967,11 @@ if [ "$ALL_OK" = true ]; then
     else
         info "       cd .."
     fi
-    info "       cmake -B build -G Ninja \\"
-    info "         -DCMAKE_BUILD_TYPE=Debug"
-    info "       cmake --build build -j$NCPU"
+    info "       cmake --preset macos-debug"
+    info "       cmake --build --preset macos-debug -j$NCPU"
+    info ""
+    info "     Or use the build script:"
+    info "       ./tools/macos/build-dev.sh"
     STEP=$((STEP + 1))
 
     info ""
