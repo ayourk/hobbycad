@@ -16,6 +16,8 @@
 
 #include "viewportwidget.h"
 #include "scalebarwidget.h"
+#include "navorbitring.h"
+#include "navhomebutton.h"
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Line.hxx>
@@ -40,9 +42,10 @@
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QResizeEvent>
-#include <QPushButton>
 
 #include <gp_Trsf.hxx>
+
+#include <cmath>
 
 namespace hobbycad {
 
@@ -67,9 +70,6 @@ ViewportWidget::ViewportWidget(QWidget* parent)
 
     // Minimum size so the viewport isn't zero-sized at startup
     setMinimumSize(200, 200);
-
-    // Scale bar overlay (child widget, bottom-left)
-    m_scaleBar = new ScaleBarWidget(this);
 
     // Accept keyboard focus for PgUp/PgDn rotation
     setFocusPolicy(Qt::StrongFocus);
@@ -178,14 +178,9 @@ void ViewportWidget::resizeEvent(QResizeEvent* event)
         m_view->Invalidate();
     }
 
-    // Position scale bar at bottom-left (width is auto-sized)
-    if (m_scaleBar) {
+    // Position and size are handled by TMF_2d persistence.
+    if (!m_scaleBar.IsNull())
         updateScaleBar();
-        m_scaleBar->move(0, height() - m_scaleBar->height());
-    }
-
-    // Reposition rotation arrows around the ViewCube
-    positionRotationArrows();
 }
 
 // ---- Viewer initialization ------------------------------------------
@@ -250,8 +245,10 @@ void ViewportWidget::initViewer()
     m_view->FitAll(0.5, false);
     m_view->SetAt(0.0, 0.0, 30.0);
 
-    // Initialize scale bar
+    // Initialize scale bar (AIS overlay, bottom-left)
+    m_scaleBar = new ScaleBarWidget();
     m_scaleBar->setView(m_view);
+    m_context->Display(m_scaleBar, false);
     updateScaleBar();
 }
 
@@ -364,8 +361,8 @@ void ViewportWidget::setupViewCube()
 
     m_context->Display(m_viewCube, false);
 
-    // Set up the rotation arrow buttons around the cube
-    setupRotationArrows();
+    // Set up the AIS navigation controls (arrows + home) around the cube
+    setupNavControls();
 }
 
 // ---- Mouse interaction ----------------------------------------------
@@ -444,6 +441,9 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* event)
             }
         }
         m_draggingViewCube = false;
+    } else if (event->button() == Qt::LeftButton) {
+        // Not on the ViewCube — check for navigation control clicks
+        handleNavControlClick(event->pos().x(), event->pos().y());
     } else if (event->button() == Qt::RightButton) {
         m_rotating = false;
     } else if (event->button() == Qt::MiddleButton) {
@@ -528,16 +528,12 @@ void ViewportWidget::keyPressEvent(QKeyEvent* event)
             return;
 
         case Qt::Key_Left:
-            m_snapStepRad = -(m_snapStepDeg * M_PI / 180.0);
-            m_snapRemaining = 90 / m_snapStepDeg;
-            m_snapTimer.start();
+            startSnapRotation(m_rotationAxis, -1);
             event->accept();
             return;
 
         case Qt::Key_Right:
-            m_snapStepRad = (m_snapStepDeg * M_PI / 180.0);
-            m_snapRemaining = 90 / m_snapStepDeg;
-            m_snapTimer.start();
+            startSnapRotation(m_rotationAxis, +1);
             event->accept();
             return;
 
@@ -652,24 +648,91 @@ void ViewportWidget::setSnapParams(int stepDeg, int intervalMs)
     m_snapTimer.setInterval(qBound(1, intervalMs, 100));
 }
 
-// ---- Rotation arrow buttons around the ViewCube ---------------------
-//
-// Note: QPushButton overlay widgets cannot render on top of a
-// WA_PaintOnScreen surface (OCCT owns the GL context).  Navigation
-// controls are provided via the View menu instead:
-//   View > Reset View (Home key)
-//   ViewCube face/edge clicks for standard views
-//   Right-click drag for free rotation
+// ---- AIS navigation controls (arrows + home around ViewCube) --------
 
-void ViewportWidget::setupRotationArrows()
+void ViewportWidget::setupNavControls()
 {
-    // Intentionally empty — buttons can't overlay WA_PaintOnScreen.
-    // Navigation is handled via ViewCube clicks and View menu.
+    if (m_context.IsNull()) return;
+
+    // Orbit ring radius (adjustable via Preferences, 50–100, default 55).
+    constexpr double kRadius = 55.0;
+
+    // Three arc sections of 100° each with 20° gaps between them.
+    // Angles are CCW from east (3-o'clock position).
+    //   Z (blue)  :  30° to 130°  (top)
+    //   Y (green) : 150° to 250°  (left)
+    //   X (red)   : 270° to 370°  (bottom-right)
+
+    Quantity_Color red  (1.0, 0.2, 0.2, Quantity_TOC_RGB);
+    Quantity_Color green(0.2, 1.0, 0.2, Quantity_TOC_RGB);
+    Quantity_Color blue (0.3, 0.5, 1.0, Quantity_TOC_RGB);
+
+    m_ringZ = new NavOrbitRing( 30.0, 100.0,
+                                NavCtrl_ZMinus, NavCtrl_ZPlus,
+                                blue, kRadius);
+    m_context->Display(m_ringZ, false);
+
+    m_ringY = new NavOrbitRing(150.0, 100.0,
+                                NavCtrl_YMinus, NavCtrl_YPlus,
+                                green, kRadius);
+    m_context->Display(m_ringY, false);
+
+    m_ringX = new NavOrbitRing(270.0, 100.0,
+                                NavCtrl_XMinus, NavCtrl_XPlus,
+                                red, kRadius);
+    m_context->Display(m_ringX, false);
+
+    // Home button — lower-left of the cube area.
+    m_navHome = new NavHomeButton();
+    m_context->Display(m_navHome, false);
 }
 
-void ViewportWidget::positionRotationArrows()
+bool ViewportWidget::handleNavControlClick(int theX, int theY)
 {
-    // Intentionally empty — see setupRotationArrows().
+    if (m_context.IsNull() || m_view.IsNull())
+        return false;
+
+    m_context->MoveTo(theX, theY, m_view, false);
+
+    if (!m_context->HasDetected())
+        return false;
+
+    Handle(SelectMgr_EntityOwner) owner = m_context->DetectedOwner();
+    Handle(NavControlOwner) navOwner =
+        Handle(NavControlOwner)::DownCast(owner);
+
+    if (navOwner.IsNull())
+        return false;
+
+    switch (navOwner->ControlId()) {
+        case NavCtrl_XPlus:   startSnapRotation(AxisX, +1); break;
+        case NavCtrl_XMinus:  startSnapRotation(AxisX, -1); break;
+        case NavCtrl_YPlus:   startSnapRotation(AxisY, +1); break;
+        case NavCtrl_YMinus:  startSnapRotation(AxisY, -1); break;
+        case NavCtrl_ZPlus:   startSnapRotation(AxisZ, +1); break;
+        case NavCtrl_ZMinus:  startSnapRotation(AxisZ, -1); break;
+        case NavCtrl_Home:    resetCamera();                 break;
+        default:              return false;
+    }
+
+    return true;
+}
+
+void ViewportWidget::startSnapRotation(RotationAxis axis, int direction)
+{
+    // Save and set the axis so rotateCameraAxis() uses the right one
+    RotationAxis prevAxis = m_rotationAxis;
+    setRotationAxis(axis);
+
+    // Configure and start the animated 90-degree snap
+    m_snapStepRad   = direction * (m_snapStepDeg * M_PI / 180.0);
+    m_snapRemaining = 90 / m_snapStepDeg;
+    m_snapTimer.start();
+
+    // Note: we intentionally leave the rotation axis set to the new
+    // value so subsequent PgUp/PgDn and arrow key rotations continue
+    // on the same axis the user just clicked.
+    (void)prevAxis;
 }
 
 void ViewportWidget::rotateCamera90(int axisDir)
@@ -727,9 +790,9 @@ void ViewportWidget::resetCamera()
 
 void ViewportWidget::updateScaleBar()
 {
-    if (m_scaleBar) {
+    if (!m_scaleBar.IsNull() && !m_context.IsNull()) {
         m_scaleBar->updateScale();
-        m_scaleBar->move(0, height() - m_scaleBar->height());
+        m_context->Redisplay(m_scaleBar, false);
     }
 }
 

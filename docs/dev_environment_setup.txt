@@ -1558,11 +1558,22 @@
 
       tools\windows\setup-env.ps1
 
-  Run it in an elevated (or non-elevated) PowerShell prompt.  It
-  installs MSYS2, UCRT64 toolchain packages, configures PATH and
+  Run it from a PowerShell prompt (elevated or non-elevated):
+
+      powershell -ExecutionPolicy Bypass -File tools\windows\setup-env.ps1
+
+  Or if already in a PowerShell session:
+
+      Set-ExecutionPolicy -Scope Process Bypass
+      .\tools\windows\setup-env.ps1
+
+  To roll back all changes made by the script:
+
+      powershell -ExecutionPolicy Bypass -File tools\windows\setup-env.ps1 -Uninstall
+
+  It installs MSYS2, UCRT64 toolchain packages, configures PATH and
   environment variables, offers to clone the repository, and
-  bootstraps vcpkg.  Pass -Uninstall to roll back changes.
-  See the script header for full usage details.
+  bootstraps vcpkg.  See the script header for full parameter details.
 
   CONTINUOUS INTEGRATION: The project's Windows CI workflow
   (.github/workflows/windows-build.yml) runs two parallel jobs:
@@ -2294,11 +2305,22 @@
       tools/macos/setup-env.sh       (bash / zsh)
       tools/macos/setup-env.csh      (tcsh / csh)
 
-  Run the script matching your shell.  It installs Xcode Command
-  Line Tools, Homebrew, build tools, pinned dependency formulas
-  from the HobbyCAD tap, offers to clone the repository, and
-  configures CMAKE_PREFIX_PATH.  Pass --uninstall to roll back.
-  See the script header for full usage details.
+  Run the script matching your shell from a Terminal prompt:
+
+      bash tools/macos/setup-env.sh
+
+  Or for tcsh/csh users:
+
+      source tools/macos/setup-env.csh
+
+  To roll back all changes made by the script:
+
+      bash tools/macos/setup-env.sh --uninstall
+
+  It installs Xcode Command Line Tools, Homebrew, build tools,
+  pinned dependency formulas from the HobbyCAD tap, offers to
+  clone the repository, and configures CMAKE_PREFIX_PATH.
+  See the script header for full parameter details.
 
 ================================================================================
   21. MACOS PREREQUISITES
