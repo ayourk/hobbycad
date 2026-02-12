@@ -11,7 +11,8 @@
 #  Requires: rsvg-convert (from librsvg2-bin on Ubuntu)
 #  Optional: icotool (from icoutils, for .ico generation)
 #            iconutil (macOS only, ships with Xcode)
-#            ImageMagick convert (fallback for .ico)
+#            ImageMagick magick (fallback for .ico; avoid "convert"
+#            which collides with Windows system utility)
 #
 #  Usage in CMakeLists.txt:
 #    include(cmake/GenerateIcons.cmake)
@@ -26,7 +27,19 @@
 find_program(RSVG_CONVERT rsvg-convert)
 find_program(ICOTOOL icotool)
 find_program(ICONUTIL iconutil)
-find_program(CONVERT convert)
+
+# ImageMagick 7+ uses "magick" as the primary command.
+# Avoid find_program(CONVERT convert) — on Windows this finds
+# C:\Windows\System32\convert.exe (disk partition utility).
+find_program(MAGICK magick)
+if(NOT MAGICK)
+    # ImageMagick 6 fallback — only search in typical install paths,
+    # never in C:\Windows\System32.
+    find_program(MAGICK convert
+        PATHS /usr/bin /usr/local/bin /opt/homebrew/bin
+        NO_DEFAULT_PATH
+    )
+endif()
 
 function(generate_icons)
     cmake_parse_arguments(ICON "" "SVG;OUTPUT;NAME" "" ${ARGN})
@@ -92,8 +105,8 @@ function(generate_icons)
             COMMENT "Generating ${ICON_NAME}.ico (icotool)"
         )
         set(ICON_ICO_FILE ${_ico})
-    elseif(CONVERT)
-        # Fallback: ImageMagick convert
+    elseif(MAGICK)
+        # Fallback: ImageMagick (magick or convert)
         set(_ico "${ICON_OUTPUT}/${ICON_NAME}.ico")
         set(_ico_pngs "")
         foreach(_size ${ICO_SIZES})
@@ -101,7 +114,7 @@ function(generate_icons)
         endforeach()
         add_custom_command(
             OUTPUT  ${_ico}
-            COMMAND ${CONVERT} ${_ico_pngs} ${_ico}
+            COMMAND ${MAGICK} ${_ico_pngs} ${_ico}
             DEPENDS ${_ico_pngs}
             COMMENT "Generating ${ICON_NAME}.ico (ImageMagick)"
         )

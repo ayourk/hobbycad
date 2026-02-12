@@ -72,19 +72,16 @@ jobs:
             mingw-w64-ucrt-x86_64-opencascade
             mingw-w64-ucrt-x86_64-qt6-base
             mingw-w64-ucrt-x86_64-qt6-svg
-            mingw-w64-ucrt-x86_64-libzip
-            mingw-w64-ucrt-x86_64-libpng
-            mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-qt6-tools
             mingw-w64-ucrt-x86_64-libgit2
+            mingw-w64-ucrt-x86_64-librsvg
             mingw-w64-ucrt-x86_64-ntldd
 
       - name: Configure CMake
-        run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+        run: cmake --preset msys2-release
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build --preset msys2-release
 
       - name: Package build
         run: |

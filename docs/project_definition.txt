@@ -190,13 +190,13 @@
 
   Cross-platform support is achieved through Qt 6's portability.
   Platform-specific code is isolated behind abstraction layers with
-  support stubs for other platforms:
+  CI-verified builds for all platforms:
 
     Linux/Unix:   Primary platform, fully supported
-    Windows:      Support stub maintained (build target, basic
-                  functionality verified periodically)
-    macOS:        Support stub maintained (build target, basic
-                  functionality verified periodically)
+    Windows:      CI builds (MSYS2/GCC + MSVC/vcpkg), basic
+                  functionality verified on every push
+    macOS:        CI builds (Homebrew/Clang, Apple Silicon), basic
+                  functionality verified on every push
 
   The stubs ensure that platform-specific code paths exist and
   compile on Windows and macOS even if they are not fully tested

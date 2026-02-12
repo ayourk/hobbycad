@@ -44,6 +44,13 @@ DEVTEST_LOG="${DEVTEST_DIR}/devtest.log"
 # Track overall status (0 = ok, non-zero = failure)
 EXIT_CODE=0
 
+# ---- Verify cmake is available ---------------------------------------
+
+if ! command -v cmake &>/dev/null; then
+    echo "  [FAIL] cmake not found.  Install via:"
+    echo "         sudo apt install cmake ninja-build"
+    exit 1
+fi
 # ---- Parse arguments -------------------------------------------------
 
 BUILD_TYPE="Debug"
