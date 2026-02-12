@@ -118,31 +118,33 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 
 ### Windows
 
-| Section | Description |
-|---|---|
-| **Setup Script** | `tools\windows\setup-env.ps1` -- automated MSYS2, toolchain, and vcpkg install |
-| [Overview](docs/dev_environment_setup.txt#L1490) (§13) | Platform status and known limitations |
-| [Prerequisites](docs/dev_environment_setup.txt#L1580) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
-| [vcpkg setup](docs/dev_environment_setup.txt#L1727) (§15) | Package manager and custom registry configuration |
-| [vcpkg dependencies](docs/dev_environment_setup.txt#L1836) (§16) | Installing Phase 0 dependencies |
-| [Custom registry ports](docs/dev_environment_setup.txt#L1978) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| [Building](docs/dev_environment_setup.txt#L2038) (§18) | Build instructions for Windows |
-| [Troubleshooting](docs/dev_environment_setup.txt#L2178) (§19) | Windows-specific issues |
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | Run [`tools\windows\setup-env.ps1`](tools/windows/setup-env.ps1) | Installs MSYS2, toolchain, vcpkg, and all dependencies |
+| **Build** | `cmake --preset msys2-debug` | Or `msvc-debug` for MSVC; also [`tools\windows\build-dev.bat`](tools/windows/build-dev.bat) |
+| | [Overview](docs/dev_environment_setup.txt#L1490) (§13) | Platform status and known limitations |
+| | [Prerequisites](docs/dev_environment_setup.txt#L1580) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
+| | [vcpkg setup](docs/dev_environment_setup.txt#L1727) (§15) | Package manager and custom registry configuration |
+| | [vcpkg dependencies](docs/dev_environment_setup.txt#L1836) (§16) | Installing Phase 0 dependencies |
+| | [Custom registry ports](docs/dev_environment_setup.txt#L1978) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| | [Building](docs/dev_environment_setup.txt#L2038) (§18) | Build instructions for Windows |
+| | [Troubleshooting](docs/dev_environment_setup.txt#L2178) (§19) | Windows-specific issues |
 
 **CI:** The [Windows Build](.github/workflows/windows-build.yml) workflow runs two parallel jobs -- "HobbyCAD via MSYS" (MSYS2 UCRT64 / GCC, matching the local developer setup) and "HobbyCAD via MSVC" (Visual Studio / vcpkg manifest mode).
 
 ### macOS (Support Stub)
 
-| Section | Description |
-|---|---|
-| **Setup Scripts** | `tools/macos/setup-env.sh` (bash/zsh) or `tools/macos/setup-env.csh` (tcsh/csh) |
-| [Overview](docs/dev_environment_setup.txt#L2253) (§20) | Platform status and OpenGL limitations |
-| [Prerequisites](docs/dev_environment_setup.txt#L2304) (§21) | Xcode and Homebrew requirements |
-| [Homebrew dependencies](docs/dev_environment_setup.txt#L2407) (§22) | Installing dependencies via Homebrew |
-| [Homebrew tap](docs/dev_environment_setup.txt#L2511) (§22.6) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| [Architecture notes](docs/dev_environment_setup.txt#L2573) (§23) | Intel vs. Apple Silicon considerations |
-| [Building](docs/dev_environment_setup.txt#L2658) (§25) | Build instructions for macOS |
-| [Troubleshooting](docs/dev_environment_setup.txt#L2749) (§26) | macOS-specific issues |
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | Run [`tools/macos/setup-env.sh`](tools/macos/setup-env.sh) | Installs Xcode CLT, Homebrew, all dependencies, and configures paths |
+| **Build** | `cmake --preset macos-debug` | Also [`./tools/macos/build-dev.sh`](tools/macos/build-dev.sh) |
+| | [Overview](docs/dev_environment_setup.txt#L2253) (§20) | Platform status and OpenGL limitations |
+| | [Prerequisites](docs/dev_environment_setup.txt#L2304) (§21) | Xcode and Homebrew requirements |
+| | [Homebrew dependencies](docs/dev_environment_setup.txt#L2407) (§22) | Installing dependencies via Homebrew |
+| | [Homebrew tap](docs/dev_environment_setup.txt#L2511) (§22.6) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| | [Architecture notes](docs/dev_environment_setup.txt#L2573) (§23) | Intel vs. Apple Silicon considerations |
+| | [Building](docs/dev_environment_setup.txt#L2658) (§25) | Build instructions for macOS |
+| | [Troubleshooting](docs/dev_environment_setup.txt#L2749) (§26) | macOS-specific issues |
 
 ### General
 
