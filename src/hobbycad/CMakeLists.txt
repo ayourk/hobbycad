@@ -30,9 +30,6 @@ set(APP_SOURCES
     gui/full/viewportwidget.cpp
     gui/full/fullmodewindow.cpp
     gui/full/scalebarwidget.cpp
-    gui/full/aiscanvas2d.cpp
-    gui/full/navorbitring.cpp
-    gui/full/navhomebutton.cpp
 
     # Reduced mode (no OpenGL)
     gui/reduced/reducedviewport.cpp
@@ -55,10 +52,6 @@ set(APP_HEADERS
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h
     gui/full/scalebarwidget.h
-    gui/full/aiscanvas2d.h
-    gui/full/navcontrols.h
-    gui/full/navorbitring.h
-    gui/full/navhomebutton.h
     gui/reduced/reducedviewport.h
     gui/reduced/diagnosticdialog.h
     gui/reduced/reducedmodewindow.h

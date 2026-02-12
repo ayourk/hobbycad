@@ -68,6 +68,14 @@ if(APPLE)
     add_definitions(-DGL_SILENCE_DEPRECATION)
 endif()
 
+# ---- Platform: expose POSIX math constants on Windows ---------------
+#  OCCT headers use M_PI / M_PI_2 which are POSIX extensions, not
+#  defined by default under strict C++ on MSVC or MinGW.
+
+if(WIN32)
+    add_compile_definitions(_USE_MATH_DEFINES)
+endif()
+
 # ---- Subdirectories -------------------------------------------------
 
 add_subdirectory(src/libhobbycad)

@@ -81,6 +81,8 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/share/opencascade/samples"
 )
 
-file(INSTALL "${SOURCE_PATH}/COPYING.md"
+# OCCT 7.6.2 ships LICENSE_LGPL_21.txt (not COPYING.md which
+# was added in a later version).
+file(INSTALL "${SOURCE_PATH}/LICENSE_LGPL_21.txt"
      DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
      RENAME copyright)
