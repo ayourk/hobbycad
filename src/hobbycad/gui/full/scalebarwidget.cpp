@@ -1,38 +1,47 @@
 // =====================================================================
 //  src/hobbycad/gui/full/scalebarwidget.cpp — 2D scale bar overlay
 // =====================================================================
+//
+//  Renders a horizontal scale bar with ticks and labels at the
+//  bottom-left of the viewport using AIS_Canvas2D primitives.
+//
+//  SPDX-License-Identifier: GPL-3.0-only
+//
+// =====================================================================
 
 #include "scalebarwidget.h"
 
-#include <QPainter>
-#include <QPaintEvent>
-#include <QPalette>
-
 #include <cmath>
+#include <cstdio>
+
+namespace {
+    // Layout constants (in pixel units).
+    constexpr double kFontHeight = 18.0;
+    constexpr double kTickH      = 12.0;   // end tick total height
+    constexpr double kLineWidth  =  2.0;
+    constexpr double kTextGap    =  6.0;   // gap between text and tick
+    constexpr int    kMaxBarPx   = 180;     // max bar pixel length
+    constexpr int    kTargetPx   =  75;     // target bar pixel length
+
+    // Colors.
+    Quantity_Color barColor() {
+        return Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+    }
+    Quantity_Color shadowColor() {
+        return Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+    }
+}
 
 namespace hobbycad {
 
-ScaleBarWidget::ScaleBarWidget(QWidget* parent)
-    : QWidget(parent)
+// ---- Constructor ----------------------------------------------------
+
+ScaleBarWidget::ScaleBarWidget()
+    : AIS_Canvas2D(Aspect_TOTP_LEFT_LOWER, 20, 20)
 {
-    setObjectName(QStringLiteral("ScaleBar"));
-
-    // Receive mouse events but don't consume them
-    setAttribute(Qt::WA_TransparentForMouseEvents, true);
-
-    // Dark background — transparency doesn't work over WA_PaintOnScreen
-    setAutoFillBackground(true);
-    QPalette pal = palette();
-    pal.setColor(QPalette::Window, QColor(30, 34, 40));
-    setPalette(pal);
-
-    setFixedHeight(36);
 }
 
-void ScaleBarWidget::setView(const Handle(V3d_View)& view)
-{
-    m_view = view;
-}
+// ---- updateScale ----------------------------------------------------
 
 void ScaleBarWidget::updateScale()
 {
@@ -41,68 +50,102 @@ void ScaleBarWidget::updateScale()
     double worldPerPixel = m_view->Convert(1);  // mm per pixel
     if (worldPerPixel <= 0.0) return;
 
-    // Maximum bar pixel width — leave room for "0", label, margins
-    QFontMetrics fm(font());
-    int zeroW   = fm.horizontalAdvance(QStringLiteral("0"));
-    int margin  = 10;
-    int gap     = 4;
-    int maxBarPx = 120;  // hard cap on bar pixel length
+    double rawWorld = worldPerPixel * kTargetPx;
 
-    // Target bar width: roughly 50 pixels
-    int targetPx = 50;
-    double rawWorld = worldPerPixel * targetPx;
-
-    // Snap to a "nice" round number
+    // Snap to a "nice" round number.
     m_worldLength = niceNumber(rawWorld);
-    m_pixelLength = static_cast<int>(m_worldLength / worldPerPixel);
+    m_pixelLength = m_worldLength / worldPerPixel;
 
-    // If the bar would be too wide, step down to smaller nice numbers
-    // until it fits.  Iterate through 5, 2, 1 within the same decade,
-    // then drop a decade.
-    while (m_pixelLength > maxBarPx && m_worldLength > 0.001) {
+    // If bar would be too wide, step down.
+    while (m_pixelLength > kMaxBarPx && m_worldLength > 0.001) {
         m_worldLength = niceNumberBelow(m_worldLength);
-        m_pixelLength = static_cast<int>(m_worldLength / worldPerPixel);
+        m_pixelLength = m_worldLength / worldPerPixel;
     }
 
-    // Floor at minimum visible size
-    if (m_pixelLength < 20) m_pixelLength = 20;
+    // Floor at minimum visible size.
+    if (m_pixelLength < 20.0) m_pixelLength = 20.0;
 
-    // Build label with appropriate unit
+    buildLabel();
+}
+
+// ---- buildLabel -----------------------------------------------------
+
+void ScaleBarWidget::buildLabel()
+{
+    char buf[64];
+
     if (m_worldLength >= 1000.0) {
         double meters = m_worldLength / 1000.0;
         if (meters == std::floor(meters))
-            m_label = QString::number(static_cast<int>(meters)) +
-                      QStringLiteral(" m");
+            std::snprintf(buf, sizeof(buf), "%d m",
+                          static_cast<int>(meters));
         else
-            m_label = QString::number(meters, 'g', 3) +
-                      QStringLiteral(" m");
+            std::snprintf(buf, sizeof(buf), "%.3g m", meters);
     } else if (m_worldLength >= 10.0) {
         if (m_worldLength == std::floor(m_worldLength))
-            m_label = QString::number(static_cast<int>(m_worldLength)) +
-                      QStringLiteral(" mm");
+            std::snprintf(buf, sizeof(buf), "%d mm",
+                          static_cast<int>(m_worldLength));
         else
-            m_label = QString::number(m_worldLength, 'g', 4) +
-                      QStringLiteral(" mm");
+            std::snprintf(buf, sizeof(buf), "%.4g mm", m_worldLength);
     } else if (m_worldLength >= 1.0) {
-        m_label = QString::number(m_worldLength, 'g', 3) +
-                  QStringLiteral(" mm");
+        std::snprintf(buf, sizeof(buf), "%.3g mm", m_worldLength);
     } else {
         double um = m_worldLength * 1000.0;
-        m_label = QString::number(um, 'g', 3) +
-                  QStringLiteral(" µm");
+        std::snprintf(buf, sizeof(buf), "%.3g um", um);
     }
 
-    // Resize widget width to fit: margin + "0" + gap + bar + gap + label + margin
-    int labelW = fm.horizontalAdvance(m_label);
-    int totalW = margin + zeroW + gap + m_pixelLength + gap + labelW + margin;
-    setFixedWidth(totalW);
-
-    update();
+    m_label = buf;
 }
+
+// ---- onPaint --------------------------------------------------------
+//
+// Layout (left to right):
+//
+//     "0"  [gap]  |---bar---|  [gap]  "label"
+//
+// Origin (0,0) is the anchor point.  The bar is drawn to the right
+// of the "0" label.  Y = 0 is the bar center line.
+
+void ScaleBarWidget::onPaint()
+{
+    Quantity_Color bar = barColor();
+
+    double zeroW = estimateTextWidth("0", kFontHeight);
+
+    // Bar horizontal extents.
+    double x0 = zeroW + kTextGap;             // bar left edge
+    double x1 = x0 + m_pixelLength;           // bar right edge
+    double xMid = (x0 + x1) / 2.0;
+
+    double barY = 0.0;
+
+    // ---- Horizontal bar ----
+    drawLine(x0, barY, x1, barY, bar, kLineWidth);
+
+    // ---- End ticks ----
+    drawLine(x0, barY - kTickH / 2.0, x0, barY + kTickH / 2.0,
+             bar, kLineWidth);
+    drawLine(x1, barY - kTickH / 2.0, x1, barY + kTickH / 2.0,
+             bar, kLineWidth);
+
+    // ---- Midpoint tick (shorter) ----
+    drawLine(xMid, barY - kTickH / 4.0, xMid, barY + kTickH / 4.0,
+             bar, kLineWidth);
+
+    // ---- "0" label (left of bar) ----
+    // OCCT renders text with Y as the baseline.  Position so the
+    // glyph center aligns with the bar.  Baseline ≈ center − 0.35×h.
+    double textY = barY - kFontHeight * 0.35;
+    drawText(0, textY, "0", bar, kFontHeight);
+
+    // ---- Value label (right of bar) ----
+    drawText(x1 + kTextGap, textY, m_label.c_str(), bar, kFontHeight);
+}
+
+// ---- niceNumber -----------------------------------------------------
 
 double ScaleBarWidget::niceNumber(double value) const
 {
-    // Round to a "nice" number: 1, 2, 5, 10, 20, 50, 100, ...
     double exponent = std::floor(std::log10(value));
     double fraction = value / std::pow(10.0, exponent);
 
@@ -119,10 +162,10 @@ double ScaleBarWidget::niceNumber(double value) const
     return nice * std::pow(10.0, exponent);
 }
 
+// ---- niceNumberBelow ------------------------------------------------
+
 double ScaleBarWidget::niceNumberBelow(double value) const
 {
-    // Step down to the next smaller nice number in the 1-2-5 sequence.
-    // E.g. 100 → 50, 50 → 20, 20 → 10, 10 → 5, ...
     double exponent = std::floor(std::log10(value));
     double fraction = value / std::pow(10.0, exponent);
 
@@ -134,81 +177,11 @@ double ScaleBarWidget::niceNumberBelow(double value) const
     else if (fraction > 1.5)
         nice = 1.0;
     else {
-        // Drop a decade: 1 → 0.5
         nice = 5.0;
         exponent -= 1.0;
     }
 
     return nice * std::pow(10.0, exponent);
-}
-
-void ScaleBarWidget::paintEvent(QPaintEvent* /*event*/)
-{
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing, true);
-
-    // Font setup
-    QFont font = p.font();
-    font.setPixelSize(12);
-    p.setFont(font);
-    QFontMetrics fm(font);
-
-    const int margin  = 10;
-    const int tickH   = 8;     // end tick height (total, extends above+below)
-
-    // Measure text widths
-    int zeroW = fm.horizontalAdvance(QStringLiteral("0"));
-    int labelW = fm.horizontalAdvance(m_label);
-    int textGap = 4;  // gap between text and tick
-
-    // Layout:  "0" [gap] |---bar---| [gap] "label"
-    // The bar line runs horizontally, centered vertically in widget.
-    // "0" is left of the bar, "label" is right of the bar.
-
-    int barY = height() / 2;  // center line — splits text in half
-
-    int x0 = margin + zeroW + textGap;         // bar left edge
-    int x1 = x0 + m_pixelLength;               // bar right edge
-
-    // Colors
-    QColor barColor(220, 220, 220);
-    QColor textColor(220, 220, 220);
-    QColor shadow(0, 0, 0, 140);
-
-    QPen barPen(barColor, 1.5);
-    QPen shadowPen(shadow, 2.5);
-
-    // ---- Shadow pass (offset +1,+1 for contrast) ----
-    p.setPen(shadowPen);
-    p.drawLine(x0 + 1, barY + 1, x1 + 1, barY + 1);
-    p.drawLine(x0 + 1, barY - tickH / 2 + 1, x0 + 1, barY + tickH / 2 + 1);
-    p.drawLine(x1 + 1, barY - tickH / 2 + 1, x1 + 1, barY + tickH / 2 + 1);
-
-    // ---- Main bar ----
-    p.setPen(barPen);
-    // Horizontal bar
-    p.drawLine(x0, barY, x1, barY);
-    // Left end tick
-    p.drawLine(x0, barY - tickH / 2, x0, barY + tickH / 2);
-    // Right end tick
-    p.drawLine(x1, barY - tickH / 2, x1, barY + tickH / 2);
-    // Midpoint tick (shorter)
-    int xMid = (x0 + x1) / 2;
-    p.drawLine(xMid, barY - tickH / 4, xMid, barY + tickH / 4);
-
-    // ---- "0" label, left of bar, vertically centered on bar line ----
-    int textY = barY + fm.ascent() / 2 - 1;
-
-    p.setPen(shadow);
-    p.drawText(margin + 1, textY + 1, QStringLiteral("0"));
-    p.setPen(textColor);
-    p.drawText(margin, textY, QStringLiteral("0"));
-
-    // ---- Value label, right of bar, vertically centered on bar line ----
-    p.setPen(shadow);
-    p.drawText(x1 + textGap + 1, textY + 1, m_label);
-    p.setPen(textColor);
-    p.drawText(x1 + textGap, textY, m_label);
 }
 
 }  // namespace hobbycad

@@ -2,9 +2,9 @@
 //  src/hobbycad/gui/full/scalebarwidget.h — 2D scale bar overlay
 // =====================================================================
 //
-//  A transparent overlay widget that draws a horizontal scale bar with
-//  tick marks and a unit label in the bottom-left corner of the
-//  viewport.  Updates automatically when the camera zoom changes.
+//  A screen-fixed scale bar rendered via AIS_Canvas2D in the bottom-
+//  left corner of the viewport.  Shows a horizontal bar with ticks
+//  and unit labels that update with camera zoom.
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //
@@ -13,26 +13,29 @@
 #ifndef HOBBYCAD_SCALEBARWIDGET_H
 #define HOBBYCAD_SCALEBARWIDGET_H
 
-#include <QWidget>
+#include "aiscanvas2d.h"
 
 #include <V3d_View.hxx>
 
+#include <string>
+
 namespace hobbycad {
 
-class ScaleBarWidget : public QWidget {
-    Q_OBJECT
+class ScaleBarWidget : public AIS_Canvas2D {
+    DEFINE_STANDARD_RTTI_INLINE(ScaleBarWidget, AIS_Canvas2D)
 
 public:
-    explicit ScaleBarWidget(QWidget* parent = nullptr);
+    ScaleBarWidget();
 
     /// Set the V3d_View used to compute world-space scale.
-    void setView(const Handle(V3d_View)& view);
+    void setView(const Handle(V3d_View)& view) { m_view = view; }
 
-    /// Call after zoom/pan/resize to recalculate the scale bar.
+    /// Recompute the scale bar dimensions from current zoom level.
+    /// Call this after zoom/pan/resize, then Redisplay the object.
     void updateScale();
 
 protected:
-    void paintEvent(QPaintEvent* event) override;
+    void onPaint() override;
 
 private:
     /// Choose a "nice" round number for the scale bar length.
@@ -41,10 +44,13 @@ private:
     /// Step down to the next smaller nice number (1-2-5 sequence).
     double niceNumberBelow(double value) const;
 
+    /// Build the unit label string from m_worldLength.
+    void buildLabel();
+
     Handle(V3d_View) m_view;
-    double m_worldLength = 100.0;   // world-space length of bar (mm)
-    int    m_pixelLength = 100;     // screen-space length of bar (px)
-    QString m_label;                // e.g. "100 mm"
+    double      m_worldLength = 100.0;   // world-space length (mm)
+    double      m_pixelLength = 100.0;   // screen-space length (px)
+    std::string m_label;                 // e.g. "100 mm"
 };
 
 }  // namespace hobbycad

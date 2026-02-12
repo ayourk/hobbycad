@@ -29,7 +29,6 @@
 class QMouseEvent;
 class QWheelEvent;
 class QKeyEvent;
-class QPushButton;
 
 class AIS_Trihedron;
 class AIS_InteractiveObject;
@@ -37,6 +36,8 @@ class AIS_InteractiveObject;
 namespace hobbycad {
 
 class ScaleBarWidget;
+class NavOrbitRing;
+class NavHomeButton;
 
 class ViewportWidget : public QWidget, protected AIS_ViewController {
     Q_OBJECT
@@ -89,6 +90,11 @@ public:
     /// Set arrow key snap step size in degrees and interval in ms.
     void setSnapParams(int stepDeg, int intervalMs);
 
+    /// Start an animated 90-degree snap rotation around the given axis.
+    /// @param axis  Which world axis to rotate around.
+    /// @param direction  +1 = positive rotation, -1 = negative.
+    void startSnapRotation(RotationAxis axis, int direction);
+
     /// QPaintEngine must return nullptr for WA_PaintOnScreen widgets.
     QPaintEngine* paintEngine() const override { return nullptr; }
 
@@ -115,25 +121,24 @@ private:
     void setupAxisTrihedron();
     void setupGrid();
     void setupViewCube();
-    void setupRotationArrows();
-    void positionRotationArrows();
+    void setupNavControls();
     void updateScaleBar();
+
+    /// Handle a click on a NavControlOwner in the AIS context.
+    /// Returns true if a nav control was clicked and handled.
+    bool handleNavControlClick(int theX, int theY);
 
     Handle(V3d_Viewer)             m_viewer;
     Handle(V3d_View)               m_view;
     Handle(AIS_InteractiveContext)  m_context;
     Handle(AIS_ViewCube)           m_viewCube;
+    Handle(NavOrbitRing)           m_ringX;
+    Handle(NavOrbitRing)           m_ringY;
+    Handle(NavOrbitRing)           m_ringZ;
+    Handle(NavHomeButton)          m_navHome;
+    Handle(ScaleBarWidget)         m_scaleBar;
     bool                           m_initialized = false;
     bool                           m_gridVisible = true;
-
-    ScaleBarWidget* m_scaleBar = nullptr;
-
-    // Navigation buttons around the ViewCube (unused — WA_PaintOnScreen)
-    QPushButton* m_arrowXPlus  = nullptr;
-    QPushButton* m_arrowXMinus = nullptr;
-    QPushButton* m_arrowZPlus  = nullptr;
-    QPushButton* m_arrowZMinus = nullptr;
-    QPushButton* m_homeButton  = nullptr;
 
     // Mouse tracking
     QPoint m_lastMousePos;
