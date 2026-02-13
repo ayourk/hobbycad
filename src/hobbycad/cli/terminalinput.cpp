@@ -4,6 +4,7 @@
 
 #include "terminalinput.h"
 #include "clihistory.h"
+#include "cliengine.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -95,6 +96,11 @@ bool TerminalInput::isInteractive() const
 void TerminalInput::setCommands(const QStringList& commands)
 {
     m_commands = commands;
+}
+
+void TerminalInput::setEngine(CliEngine* engine)
+{
+    m_engine = engine;
 }
 
 // =====================================================================
@@ -573,18 +579,26 @@ void TerminalInput::handleTab()
 
     QStringList completions;
     QString prefix;
+    bool isArgumentCompletion = false;
 
     if (tokens.isEmpty() || (beforeCursor.endsWith(' ') && !tokens.isEmpty())) {
         // Completing a new token at the start of the next word
-        // After a command, complete filenames
         if (beforeCursor.trimmed().isEmpty()) {
             // Complete commands
             prefix = QString();
             completions = completeCommands(prefix);
         } else {
-            // Complete filenames (empty prefix = current dir)
+            // After a command, try argument completion first
             prefix = QString();
-            completions = completeFilenames(prefix);
+            isArgumentCompletion = true;
+            if (m_engine) {
+                completions = m_engine->completeArguments(tokens, prefix);
+            }
+            // If no argument completions, try filenames
+            if (completions.isEmpty()) {
+                completions = completeFilenames(prefix);
+                isArgumentCompletion = false;
+            }
         }
     } else if (tokens.size() == 1 && !beforeCursor.endsWith(' ')) {
         // First token, not finished: complete commands
@@ -594,9 +608,31 @@ void TerminalInput::handleTab()
         completions += completeFilenames(prefix);
         completions.removeDuplicates();
     } else {
-        // Subsequent token: complete filenames
+        // Subsequent token: try argument completion first
         prefix = tokens.last();
-        completions = completeFilenames(prefix);
+        isArgumentCompletion = true;
+        if (m_engine) {
+            // Pass all but the last token (the prefix being completed)
+            QStringList prevTokens = tokens.mid(0, tokens.size() - 1);
+            completions = m_engine->completeArguments(prevTokens, prefix);
+        }
+        // If no argument completions, try filenames
+        if (completions.isEmpty()) {
+            completions = completeFilenames(prefix);
+            isArgumentCompletion = false;
+        }
+    }
+
+    // Check if we got a hint message (starts with '?')
+    if (completions.size() == 1 && completions.first().startsWith('?')) {
+        // Display the hint message Cisco-style
+        QString hint = completions.first().mid(1);  // Remove the '?' prefix
+        std::string display = "\r\n  ";
+        display += hint.toStdString();
+        display += "\r\n";
+        ::write(STDOUT_FD, display.c_str(), display.size());
+        // Prompt and line will be redrawn by refreshLine
+        return;
     }
 
     if (completions.isEmpty()) {
@@ -967,8 +1003,14 @@ QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
         default:
             // Printable character
             if (ch >= 32 && ch < 127) {
-                insertChar(QChar(ch));
-                refreshLine();
+                // '?' at end of line triggers help (like Tab)
+                if (ch == '?' && m_cursor == m_line.length()) {
+                    handleTab();
+                    refreshLine();
+                } else {
+                    insertChar(QChar(ch));
+                    refreshLine();
+                }
             }
             // TODO: UTF-8 multi-byte handling for characters > 127
             break;

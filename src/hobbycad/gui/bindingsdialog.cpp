@@ -56,14 +56,39 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "file.quit", tr("Quit"), tr("File"),
         QKeySequence(QKeySequence::Quit).toString()));
 
+    // Edit menu actions
+    defaults.insert("edit.cut", ActionBinding(
+        "edit.cut", tr("Cut"), tr("Edit"),
+        QKeySequence(QKeySequence::Cut).toString()));
+
+    defaults.insert("edit.copy", ActionBinding(
+        "edit.copy", tr("Copy"), tr("Edit"),
+        QKeySequence(QKeySequence::Copy).toString()));
+
+    defaults.insert("edit.paste", ActionBinding(
+        "edit.paste", tr("Paste"), tr("Edit"),
+        QKeySequence(QKeySequence::Paste).toString()));
+
+    defaults.insert("edit.delete", ActionBinding(
+        "edit.delete", tr("Delete"), tr("Edit"),
+        QKeySequence(QKeySequence::Delete).toString()));
+
+    defaults.insert("edit.selectAll", ActionBinding(
+        "edit.selectAll", tr("Select All"), tr("Edit"),
+        QKeySequence(QKeySequence::SelectAll).toString()));
+
     // View menu actions
     defaults.insert("view.terminal", ActionBinding(
         "view.terminal", tr("Toggle Terminal"), tr("View"),
         QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft).toString()));
 
-    defaults.insert("view.featureTree", ActionBinding(
-        "view.featureTree", tr("Toggle Feature Tree"), tr("View"),
-        QKeySequence(Qt::CTRL | Qt::Key_F).toString()));
+    defaults.insert("view.project", ActionBinding(
+        "view.project", tr("Toggle Project"), tr("View"),
+        QKeySequence(Qt::CTRL | Qt::Key_R).toString()));
+
+    defaults.insert("view.properties", ActionBinding(
+        "view.properties", tr("Toggle Properties"), tr("View"),
+        QKeySequence(Qt::CTRL | Qt::Key_P).toString()));
 
     defaults.insert("view.resetView", ActionBinding(
         "view.resetView", tr("Reset View"), tr("View"),
@@ -308,8 +333,11 @@ void BindingsDialog::populateActions()
         // File
         "file.new", "file.open", "file.save", "file.saveAs",
         "file.close", "file.quit",
+        // Edit
+        "edit.cut", "edit.copy", "edit.paste", "edit.delete",
+        "edit.selectAll",
         // View
-        "view.terminal", "view.featureTree", "view.resetView",
+        "view.terminal", "view.project", "view.properties", "view.resetView",
         "view.rotateLeft", "view.rotateRight", "view.preferences",
         // Navigation - Continuous rotation
         "nav.rotateUp", "nav.rotateDown",

@@ -1,0 +1,153 @@
+================================================================================
+HobbyCAD Changelog
+================================================================================
+
+================================================================================
+2026-02-08
+================================================================================
+
+Added
+-----
+- Initial commit: project documentation
+- PPA created for Debian/Ubuntu packaging
+- Initial release (Phase 0 -- Foundation)
+- BREP file open, display, and save
+- Qt 6 GUI with OCCT AIS 3D viewport
+- Tiered startup: Full Mode, Reduced Mode, Command-Line Mode
+- Feature tree panel (placeholder)
+- Embedded terminal with command history
+- Preferences dialog
+- About dialog with OpenGL diagnostics
+- Dark mode and custom theme support
+
+================================================================================
+2026-02-09
+================================================================================
+
+Added
+-----
+- First working skeleton build
+- CAD viewport working with OCCT AIS viewer
+- CAD viewport navigation (orbit, pan, zoom)
+
+================================================================================
+2026-02-10
+================================================================================
+
+Added
+-----
+- CAD viewport animations (smooth transitions)
+- Screenshot to README
+- LICENSE file (GPL-3.0-only)
+- vcpkg registry baseline for version pinning
+- Windows and macOS environment setup scripts
+- Repository detection and clone to setup scripts
+- Cross-platform version pinning documentation (vcpkg + Homebrew)
+
+Fixed
+-----
+- Source tarball URLs for vcpkg: replace ~ with . for GitHub Release asset names
+
+================================================================================
+2026-02-11
+================================================================================
+
+Added
+-----
+- Cross-platform build infrastructure:
+  - Windows: MSYS2/UCRT64 + MSVC/vcpkg dual-toolchain support
+  - macOS: Homebrew tap integration
+  - vcpkg overlay port for OpenCASCADE with MSVC unsigned char fix
+- CI workflows:
+  - Windows build (MSYS2/GCC + MSVC/vcpkg jobs)
+  - DCO (Signed-off-by) enforcement on PRs
+- Debian packaging (changelog, compat, copyright, rules)
+- Desktop file (resources/hobbycad.desktop)
+- CMakePresets.json for consistent build configuration
+- Viewport navigation controls using AIS_Canvas2D overlay system:
+  - NavOrbitRing: three per-axis orbit ring arcs with arrow indicators
+  - NavHomeButton: house icon for view reset
+  - ScaleBarWidget: rewritten from QWidget to AIS_Canvas2D
+- AIS_Canvas2D base class for screen-fixed 2D overlays
+- libhobbycad core.h header with version/init/shutdown stubs
+- Translations file (hobbycad_en.ts) with 93 strings
+
+Changed
+-------
+- tools/ scripts: PATH-independent operation, --uninstall, shell detection
+
+Fixed
+-----
+- MSVC overlay port for OpenCASCADE
+- Manifest mode for vcpkg
+- MSYS2 job configuration
+
+================================================================================
+2026-02-12
+================================================================================
+
+Added
+-----
+- ViewCube for quick orientation changes
+- Orbit rings (AIS_Canvas2D) for constrained rotation
+- Scale bar with unit display
+- Home button to reset view
+- Bindings dialog for customizing keyboard/mouse shortcuts:
+  - Accessible from Preferences > Bindings
+  - Support for up to 3 bindings per action
+  - Expandable tree showing actions with current bindings
+  - Real-time binding editor with modifier checkboxes
+  - Conflict detection for duplicate bindings
+  - Bindings persist to QSettings and apply immediately
+- Edit menu with Cut/Copy/Paste/Delete/Select All
+- Properties panel (right-side dock)
+- Viewport toolbar with icon-above-label buttons and dropdowns
+- View > Workspace submenu (Design, Render, Animation, Simulation)
+- macOS CI workflow
+- Linux CI workflow
+
+Changed
+-------
+- Reconciled setup scripts across platforms
+
+Fixed
+-----
+- Windows CI: OpenCASCADE include path in vcpkg overlay port
+- Windows CI: MSYS2 build script error handling
+
+================================================================================
+2026-02-13
+================================================================================
+
+Added
+-----
+- CLI `select <type> <name>` command for selecting objects
+- CLI `create sketch [name]` command for creating sketches
+- Context-aware CLI prompt shows sketch name (e.g., "Sketch Sketch1>")
+- Tab completion with contextual argument hints
+- Press ? at end of line as alternative to Tab for hints
+- CLI commands reference documentation (docs/cli_commands.txt)
+- Sketch geometry commands with natural English syntax:
+  - `point [at] <x>,<y>`
+  - `line [from] <x1>,<y1> to <x2>,<y2>`
+  - `circle [at] <x>,<y> radius|diameter <value>`
+  - `rectangle [from] <x1>,<y1> to <x2>,<y2>`
+  - `arc [at] <x>,<y> radius <r> [angle] <start> to <end>`
+- Optional keywords in sketch commands (both forms work for scripting)
+- Expression support in numeric values using parentheses
+- Parameter name completion in numeric fields
+- Parameter validation in CLI and GUI:
+  - Names must start with letter or underscore
+  - Reserved words (sin, cos, tan, sqrt, pi, etc.) rejected
+- Parameters dialog: invalid names turn field red, disable OK/Apply
+- Auto-prefix underscore for parameter names starting with digit on load
+- This changelog (docs/changelog.txt)
+
+Changed
+-------
+- Sketch arc command uses `angle` keyword instead of `from`
+
+Fixed
+-----
+- Windows MSVC CI: OpenCASCADE include path calculation (port-version 4)
+

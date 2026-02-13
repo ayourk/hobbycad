@@ -686,6 +686,15 @@ void ViewportWidget::setSnapParams(int stepDeg, int intervalMs)
     m_snapTimer.setInterval(qBound(1, intervalMs, 100));
 }
 
+void ViewportWidget::setUnitSystem(int units)
+{
+    if (m_scaleBar.IsNull()) return;
+    m_scaleBar->setUnitSystem(static_cast<UnitSystem>(units));
+    m_scaleBar->updateScale();
+    if (!m_context.IsNull())
+        m_context->Redisplay(m_scaleBar, true);
+}
+
 // ---- AIS navigation controls (arrows + home around ViewCube) --------
 
 void ViewportWidget::setupNavControls()

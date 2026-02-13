@@ -21,6 +21,15 @@
 
 namespace hobbycad {
 
+/// Unit systems for display
+enum class UnitSystem {
+    Millimeters,  // mm (default)
+    Centimeters,  // cm
+    Meters,       // m
+    Inches,       // in
+    Feet          // ft
+};
+
 class ScaleBarWidget : public AIS_Canvas2D {
     DEFINE_STANDARD_RTTI_INLINE(ScaleBarWidget, AIS_Canvas2D)
 
@@ -29,6 +38,12 @@ public:
 
     /// Set the V3d_View used to compute world-space scale.
     void setView(const Handle(V3d_View)& view) { m_view = view; }
+
+    /// Set the display unit system.
+    void setUnitSystem(UnitSystem units);
+
+    /// Get the current unit system.
+    UnitSystem unitSystem() const { return m_unitSystem; }
 
     /// Recompute the scale bar dimensions from current zoom level.
     /// Call this after zoom/pan/resize, then Redisplay the object.
@@ -48,9 +63,10 @@ private:
     void buildLabel();
 
     Handle(V3d_View) m_view;
-    double      m_worldLength = 100.0;   // world-space length (mm)
+    double      m_worldLength = 100.0;   // world-space length (in base units)
     double      m_pixelLength = 100.0;   // screen-space length (px)
     std::string m_label;                 // e.g. "100 mm"
+    UnitSystem  m_unitSystem = UnitSystem::Millimeters;
 };
 
 }  // namespace hobbycad

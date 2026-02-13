@@ -1,0 +1,256 @@
+================================================================================
+HobbyCAD CLI Commands Reference
+================================================================================
+
+This document lists all available CLI commands with their syntax and argument
+completion hints (shown when pressing Tab after a command).
+
+================================================================================
+GENERAL COMMANDS
+================================================================================
+
+help
+    Show available commands and usage information.
+
+version
+    Show HobbyCAD version string.
+
+info
+    Show current document information and supported formats.
+
+exit
+quit
+    Exit HobbyCAD.
+
+================================================================================
+FILE COMMANDS
+================================================================================
+
+open <file>
+    Open a BREP file.
+
+    Arguments:
+      <file>    BREP file to open (.brep)
+
+    Notes:
+      - Extension .brep is added automatically if not specified
+      - Supports .brep and .brp extensions
+
+save <file>
+    Save to a BREP file.
+
+    Arguments:
+      <file>    BREP file to save (.brep)
+
+    Notes:
+      - Extension .brep is added automatically if not specified
+
+new
+    Create a new document with a test solid.
+
+================================================================================
+DIRECTORY COMMANDS
+================================================================================
+
+cd [dir]
+    Change working directory.
+
+    Arguments:
+      [dir]     Directory to change to (default: home)
+
+    Notes:
+      - Supports ~ expansion on Unix systems
+      - No argument changes to home directory
+
+pwd
+    Print current working directory.
+
+================================================================================
+HISTORY COMMANDS
+================================================================================
+
+history
+    Show command history.
+
+history clear
+    Clear command history.
+
+history max <n>
+    Set maximum number of history lines.
+
+    Arguments:
+      <n>       Maximum number of history lines
+
+================================================================================
+SELECTION & CREATION COMMANDS
+================================================================================
+
+select <type> <name>
+    Select an object by type and name.
+
+    Arguments:
+      <type>    Object type (sketch, body, face, edge, vertex)
+      <name>    Name of the object to select
+
+    Examples:
+      select sketch Sketch1
+      select body Body1
+      select face Face1
+
+create <type> [name]
+    Create a new object.
+
+    Supported types:
+      sketch    Create a new 2D sketch
+
+    Arguments:
+      <type>    Object type to create (sketch)
+      [name]    Optional name (default: auto-named Sketch1, Sketch2, etc.)
+
+    Examples:
+      create sketch              Creates "Sketch1" (or next available)
+      create sketch MySketch     Creates "MySketch"
+
+    Notes:
+      - Entering sketch mode changes the prompt to show the sketch context
+      - Use 'finish' or 'discard' to exit sketch mode
+
+================================================================================
+SKETCH MODE COMMANDS
+================================================================================
+
+These commands are only available when in sketch editing mode (after running
+'create sketch'). The prompt changes to indicate sketch mode:
+
+    Sketch Sketch1>
+
+--------------------------------------------------------------------------------
+Geometry Commands
+--------------------------------------------------------------------------------
+
+Keywords in [brackets] are optional. Both forms work identically in
+interactive use and scripting.
+
+Numeric values can be:
+  - Plain numbers: 10, 25.5, -3.14
+  - Parameter names: width, myRadius, size
+  - Expressions in parentheses: (width/2), (radius*2+offset)
+
+Parameter naming rules:
+  - Must start with a letter or underscore
+  - Cannot start with a digit
+  - Can contain letters, numbers, and underscores
+  - Cannot use reserved words (sin, cos, tan, sqrt, pi, etc.)
+  - When loading projects, names starting with a digit are auto-prefixed with _
+
+point [at] <x>,<y>
+    Create a point at the specified coordinates.
+
+    Examples:
+      point at 10,20
+      point 10,20
+
+line [from] <x1>,<y1> to <x2>,<y2>
+    Create a line between two points.
+
+    Examples:
+      line from 0,0 to 100,50
+      line 0,0 to 100,50
+
+circle [at] <x>,<y> radius|diameter <value>
+    Create a circle at the specified center point.
+
+    Examples:
+      circle at 50,50 radius 25
+      circle 50,50 radius 25
+      circle 100,100 diameter 60
+      circle (width/2),(height/2) radius (size*0.5)
+
+rectangle [from] <x1>,<y1> to <x2>,<y2>
+    Create a rectangle defined by two opposite corners.
+
+    Examples:
+      rectangle from 0,0 to 100,50
+      rectangle 0,0 to 100,50
+
+arc [at] <x>,<y> radius <r> [angle] <start> to <end>
+    Create an arc (portion of a circle) at the specified center.
+
+    Examples:
+      arc at 50,50 radius 30 angle 0 to 90
+      arc 50,50 radius 30 0 to 90
+
+--------------------------------------------------------------------------------
+Exit Commands
+--------------------------------------------------------------------------------
+
+finish
+    Save the current sketch and exit sketch mode.
+
+discard
+    Discard changes to the current sketch and exit sketch mode.
+
+    Notes:
+      - If the sketch was auto-named, the counter is decremented
+
+================================================================================
+TAB COMPLETION
+================================================================================
+
+HobbyCAD supports intelligent tab completion with contextual hints:
+
+1. Command completion:
+   - Type partial command + Tab to complete
+   - Example: "sel" + Tab -> "select "
+
+2. Argument hints:
+   - Press Tab after a command to see what arguments are expected
+   - Example: "select " + Tab shows:
+       <type>  Object type (sketch, body, face, edge, vertex)
+
+3. Argument completion:
+   - Type partial argument + Tab to complete
+   - Example: "select sk" + Tab -> "select sketch "
+
+4. File completion:
+   - Tab completes filenames for file-related commands
+   - Example: "open my" + Tab -> "open myfile.brep"
+
+Hint format:
+  <arg>     Required argument
+  [arg]     Optional argument
+
+================================================================================
+KEYBOARD SHORTCUTS (Interactive Mode)
+================================================================================
+
+Line Editing:
+  Ctrl+A        Move to start of line
+  Ctrl+E        Move to end of line
+  Ctrl+B        Move cursor left
+  Ctrl+F        Move cursor right
+  Alt+B         Move word backward
+  Alt+F         Move word forward
+  Ctrl+K        Kill to end of line
+  Ctrl+U        Kill to start of line
+  Ctrl+W        Kill word backward
+  Alt+D         Kill word forward
+  Ctrl+Y        Yank (paste) killed text
+  Ctrl+T        Transpose characters
+
+History:
+  Up / Ctrl+P   Previous history entry
+  Down / Ctrl+N Next history entry
+  Ctrl+R        Incremental reverse search
+  !!            Repeat last command
+  !<prefix>     Most recent command starting with prefix
+  !<n>          Command at history index n
+
+Other:
+  Tab           Complete command/argument or show hints
+  ?             Show hints (same as Tab, at end of line)
+  Ctrl+L        Clear screen
+  Ctrl+C        Cancel current line
+  Ctrl+D        Delete character or exit (on empty line)
+
+================================================================================

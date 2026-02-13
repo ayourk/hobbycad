@@ -1,0 +1,7 @@
+opencascade provides CMake targets:
+
+    find_package(OpenCASCADE REQUIRED)
+    target_link_libraries(main PRIVATE TKernel TKMath ...)
+    target_include_directories(main PRIVATE ${OpenCASCADE_INCLUDE_DIR})
+
+Note: OpenCASCADE_INCLUDE_DIR should point to the include/opencascade directory.

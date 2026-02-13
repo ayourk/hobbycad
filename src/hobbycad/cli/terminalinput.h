@@ -56,6 +56,7 @@
 namespace hobbycad {
 
 class CliHistory;
+class CliEngine;
 
 class TerminalInput {
 public:
@@ -64,6 +65,9 @@ public:
 
     /// Set the list of known commands for tab completion.
     void setCommands(const QStringList& commands);
+
+    /// Set the CLI engine for argument completion hints.
+    void setEngine(CliEngine* engine);
 
     /// Read one line from the terminal with editing and history.
     /// Returns the entered text, or a null QString on EOF (Ctrl+D
@@ -118,6 +122,7 @@ private:
 
     // ---- State ------------------------------------------------------
     CliHistory&  m_history;
+    CliEngine*   m_engine = nullptr;
     QStringList  m_commands;
 
     QString      m_line;             // Current edit buffer

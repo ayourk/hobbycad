@@ -24,6 +24,7 @@ CliMode::CliMode()
 {
     m_history.load();
     m_terminal.setCommands(m_engine.commandNames());
+    m_terminal.setEngine(&m_engine);
 }
 
 CliMode::~CliMode()
@@ -127,6 +128,9 @@ int CliMode::runInteractive()
         m_history.append(cmd);
 
         CliResult result = m_engine.execute(cmd);
+
+        // Update available commands (may change with context, e.g., sketch mode)
+        m_terminal.setCommands(m_engine.commandNames());
 
         if (!result.output.isEmpty()) {
             std::cout << result.output.toStdString() << std::endl;

@@ -41,6 +41,13 @@ ScaleBarWidget::ScaleBarWidget()
 {
 }
 
+// ---- setUnitSystem --------------------------------------------------
+
+void ScaleBarWidget::setUnitSystem(UnitSystem units)
+{
+    m_unitSystem = units;
+}
+
 // ---- updateScale ----------------------------------------------------
 
 void ScaleBarWidget::updateScale()
@@ -74,25 +81,61 @@ void ScaleBarWidget::buildLabel()
 {
     char buf[64];
 
-    if (m_worldLength >= 1000.0) {
-        double meters = m_worldLength / 1000.0;
-        if (meters == std::floor(meters))
-            std::snprintf(buf, sizeof(buf), "%d m",
-                          static_cast<int>(meters));
-        else
-            std::snprintf(buf, sizeof(buf), "%.3g m", meters);
-    } else if (m_worldLength >= 10.0) {
-        if (m_worldLength == std::floor(m_worldLength))
-            std::snprintf(buf, sizeof(buf), "%d mm",
-                          static_cast<int>(m_worldLength));
-        else
-            std::snprintf(buf, sizeof(buf), "%.4g mm", m_worldLength);
-    } else if (m_worldLength >= 1.0) {
-        std::snprintf(buf, sizeof(buf), "%.3g mm", m_worldLength);
-    } else {
-        double um = m_worldLength * 1000.0;
-        std::snprintf(buf, sizeof(buf), "%.3g um", um);
+    // Convert internal mm to display units and format
+    double value = m_worldLength;
+    const char* unitStr = "mm";
+
+    switch (m_unitSystem) {
+    case UnitSystem::Millimeters:
+        // Already in mm, but show m for large values
+        if (value >= 1000.0) {
+            value /= 1000.0;
+            unitStr = "m";
+        } else if (value < 1.0) {
+            value *= 1000.0;
+            unitStr = "um";
+        }
+        break;
+    case UnitSystem::Centimeters:
+        value /= 10.0;  // mm to cm
+        unitStr = "cm";
+        if (value >= 100.0) {
+            value /= 100.0;
+            unitStr = "m";
+        }
+        break;
+    case UnitSystem::Meters:
+        value /= 1000.0;  // mm to m
+        unitStr = "m";
+        if (value < 0.01) {
+            value *= 100.0;
+            unitStr = "cm";
+        }
+        break;
+    case UnitSystem::Inches:
+        value /= 25.4;  // mm to inches
+        unitStr = "in";
+        if (value >= 12.0) {
+            value /= 12.0;
+            unitStr = "ft";
+        }
+        break;
+    case UnitSystem::Feet:
+        value /= 304.8;  // mm to feet
+        unitStr = "ft";
+        if (value < 1.0) {
+            value *= 12.0;
+            unitStr = "in";
+        }
+        break;
     }
+
+    // Format the value
+    if (value == std::floor(value) && value < 10000.0)
+        std::snprintf(buf, sizeof(buf), "%d %s",
+                      static_cast<int>(value), unitStr);
+    else
+        std::snprintf(buf, sizeof(buf), "%.3g %s", value, unitStr);
 
     m_label = buf;
 }

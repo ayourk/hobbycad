@@ -72,21 +72,22 @@ vcpkg_cmake_install()
 vcpkg_cmake_config_fixup(CONFIG_PATH share/opencascade)
 vcpkg_copy_pdbs()
 
-# Fix OpenCASCADE_INCLUDE_DIR and OpenCASCADE_INSTALL_PREFIX in the CMake config.
-# The installed OpenCASCADEConfig.cmake uses CMAKE_CURRENT_LIST_DIR which
-# is share/opencascade, but vcpkg_cmake_config_fixup moves the config to
-# share/opencascade. The prefix calculation needs to go up TWO directories
-# (../../) to reach the vcpkg installed root, not one.
+# Fix OpenCASCADE_INSTALL_PREFIX path calculation in the CMake config.
+# The OpenCASCADEConfig.cmake calculates the install prefix using multiple
+# get_filename_component calls to go up the directory tree. However, vcpkg
+# puts the config in share/opencascade, which requires going up TWO directories
+# to reach the vcpkg installed root, not the default number of levels.
 #
-# Before: CMAKE_CURRENT_LIST_DIR = <prefix>/share/opencascade
-#         Going up one level = <prefix>/share (WRONG)
-# After:  Going up two levels = <prefix> (CORRECT)
+# The original config ends up at share/ instead of the vcpkg root.
+# We append an unconditional get_filename_component call to go up one more level.
 file(READ "${CURRENT_PACKAGES_DIR}/share/opencascade/OpenCASCADEConfig.cmake" _config_contents)
 
-# Replace the prefix calculation to go up 2 directories instead of 1
+# Append an extra directory traversal at the end of the prefix calculation block.
+# Find the line that sets OpenCASCADE_INCLUDE_DIR and insert our fix before it.
 string(REPLACE
-    [[get_filename_component(OpenCASCADE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}" PATH)]]
-    [[get_filename_component(OpenCASCADE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)]]
+    [[set (OpenCASCADE_INCLUDE_DIR "${OpenCASCADE_INSTALL_PREFIX}/include/opencascade")]]
+    [[get_filename_component (OpenCASCADE_INSTALL_PREFIX "${OpenCASCADE_INSTALL_PREFIX}" PATH)
+set (OpenCASCADE_INCLUDE_DIR "${OpenCASCADE_INSTALL_PREFIX}/include/opencascade")]]
     _config_contents "${_config_contents}"
 )
 
