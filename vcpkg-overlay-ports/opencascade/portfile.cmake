@@ -73,25 +73,20 @@ vcpkg_cmake_config_fixup(CONFIG_PATH share/opencascade)
 vcpkg_copy_pdbs()
 
 # Fix OpenCASCADE_INSTALL_PREFIX path calculation in the CMake config.
-# The OpenCASCADEConfig.cmake calculates the install prefix using multiple
-# get_filename_component calls to go up the directory tree. However, vcpkg
-# puts the config in share/opencascade, which requires going up TWO directories
-# to reach the vcpkg installed root, not the default number of levels.
-#
-# The original config ends up at share/ instead of the vcpkg root.
-# We append an unconditional get_filename_component call to go up one more level.
-file(READ "${CURRENT_PACKAGES_DIR}/share/opencascade/OpenCASCADEConfig.cmake" _config_contents)
+# The OpenCASCADEConfig.cmake calculates the install prefix but ends up at
+# share/ instead of the vcpkg root. We append code to the config file that
+# recalculates the correct paths after it runs.
+file(APPEND "${CURRENT_PACKAGES_DIR}/share/opencascade/OpenCASCADEConfig.cmake" [[
 
-# Append an extra directory traversal at the end of the prefix calculation block.
-# Find the line that sets OpenCASCADE_INCLUDE_DIR and insert our fix before it.
-string(REPLACE
-    [[set (OpenCASCADE_INCLUDE_DIR "${OpenCASCADE_INSTALL_PREFIX}/include/opencascade")]]
-    [[get_filename_component (OpenCASCADE_INSTALL_PREFIX "${OpenCASCADE_INSTALL_PREFIX}" PATH)
-set (OpenCASCADE_INCLUDE_DIR "${OpenCASCADE_INSTALL_PREFIX}/include/opencascade")]]
-    _config_contents "${_config_contents}"
-)
-
-file(WRITE "${CURRENT_PACKAGES_DIR}/share/opencascade/OpenCASCADEConfig.cmake" "${_config_contents}")
+# vcpkg overlay port fix: recalculate paths to point to vcpkg root
+# The original config ends up with OpenCASCADE_INSTALL_PREFIX pointing to share/
+# which causes include paths to be wrong. Fix by going up one more level.
+get_filename_component(_VCPKG_OCCT_ROOT "${CMAKE_CURRENT_LIST_DIR}" PATH)
+get_filename_component(_VCPKG_OCCT_ROOT "${_VCPKG_OCCT_ROOT}" PATH)
+set(OpenCASCADE_INSTALL_PREFIX "${_VCPKG_OCCT_ROOT}")
+set(OpenCASCADE_INCLUDE_DIR "${_VCPKG_OCCT_ROOT}/include/opencascade")
+unset(_VCPKG_OCCT_ROOT)
+]])
 
 # Remove empty directories and debug includes
 file(REMOVE_RECURSE
