@@ -27,6 +27,18 @@ set(APP_SOURCES
     gui/bindingsdialog.cpp
     gui/bindingeditrow.cpp
     gui/themevalidator.cpp
+    gui/toolbarbutton.cpp
+    gui/toolbardropdown.cpp
+    gui/viewporttoolbar.cpp
+    gui/timelinewidget.cpp
+    gui/formulaedit.cpp
+    gui/formuladialog.cpp
+    gui/formulafield.cpp
+    gui/parametersdialog.cpp
+    gui/sketchtoolbar.cpp
+    gui/sketchcanvas.cpp
+    gui/sketchactionbar.cpp
+    gui/sketchmodecontroller.cpp
 
     # Full mode (OpenGL viewport)
     gui/full/viewportwidget.cpp
@@ -56,6 +68,18 @@ set(APP_HEADERS
     gui/bindingsdialog.h
     gui/bindingeditrow.h
     gui/themevalidator.h
+    gui/toolbarbutton.h
+    gui/toolbardropdown.h
+    gui/viewporttoolbar.h
+    gui/timelinewidget.h
+    gui/formulaedit.h
+    gui/formuladialog.h
+    gui/formulafield.h
+    gui/parametersdialog.h
+    gui/sketchtoolbar.h
+    gui/sketchcanvas.h
+    gui/sketchactionbar.h
+    gui/sketchmodecontroller.h
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h
     gui/full/scalebarwidget.h

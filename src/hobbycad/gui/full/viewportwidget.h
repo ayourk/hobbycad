@@ -90,6 +90,9 @@ public:
     /// Set arrow key snap step size in degrees and interval in ms.
     void setSnapParams(int stepDeg, int intervalMs);
 
+    /// Set the display unit system for the scale bar.
+    void setUnitSystem(int units);
+
     /// Start an animated 90-degree snap rotation around the given axis.
     /// @param axis  Which world axis to rotate around.
     /// @param direction  +1 = positive rotation, -1 = negative.

@@ -7,11 +7,14 @@
 #include "bindingsdialog.h"
 #include "clipanel.h"
 #include "preferencesdialog.h"
+#include "sketchactionbar.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QKeySequence>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QLabel>
@@ -20,8 +23,12 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QShortcut>
 #include <QStatusBar>
+#include <QTabWidget>
+#include <QTimer>
 #include <QTreeWidget>
+#include <QVBoxLayout>
 
 namespace hobbycad {
 
@@ -94,6 +101,41 @@ QAction* MainWindow::rotateLeftAction() const
 QAction* MainWindow::rotateRightAction() const
 {
     return m_actionRotateRight;
+}
+
+QAction* MainWindow::toolbarToggleAction() const
+{
+    return m_actionToggleToolbar;
+}
+
+QTreeWidget* MainWindow::propertiesTree() const
+{
+    return m_propertiesTree;
+}
+
+SketchActionBar* MainWindow::sketchActionBar() const
+{
+    return m_sketchActionBar;
+}
+
+void MainWindow::setSketchActionBarVisible(bool visible)
+{
+    if (m_sketchActionBar) {
+        m_sketchActionBar->setVisible(visible);
+    }
+}
+
+int MainWindow::currentUnits() const
+{
+    return m_currentUnits;
+}
+
+QString MainWindow::unitSuffix() const
+{
+    static const char* suffixes[] = {"mm", "cm", "m", "in", "ft"};
+    if (m_currentUnits >= 0 && m_currentUnits < 5)
+        return QString::fromLatin1(suffixes[m_currentUnits]);
+    return QStringLiteral("mm");
 }
 
 void MainWindow::hideDockTerminal()
@@ -176,13 +218,38 @@ void MainWindow::createMenus()
     m_actionQuit = fileMenu->addAction(tr("&Quit"),
         QKeySequence::Quit, this, &MainWindow::onFileQuit);
 
+    // Edit menu
+    auto* editMenu = menuBar()->addMenu(tr("&Edit"));
+
+    m_actionCut = editMenu->addAction(tr("Cu&t"),
+        QKeySequence::Cut);
+    m_actionCut->setEnabled(false);  // Enabled when selection exists
+
+    m_actionCopy = editMenu->addAction(tr("&Copy"),
+        QKeySequence::Copy);
+    m_actionCopy->setEnabled(false);  // Enabled when selection exists
+
+    m_actionPaste = editMenu->addAction(tr("&Paste"),
+        QKeySequence::Paste);
+    m_actionPaste->setEnabled(false);  // Enabled when clipboard has compatible data
+
+    m_actionDelete = editMenu->addAction(tr("&Delete"),
+        QKeySequence::Delete);
+    m_actionDelete->setEnabled(false);  // Enabled when selection exists
+
+    editMenu->addSeparator();
+
+    m_actionSelectAll = editMenu->addAction(tr("Select &All"),
+        QKeySequence::SelectAll);
+    m_actionSelectAll->setEnabled(false);  // Enabled when document has selectable items
+
     // Help menu
     auto* helpMenu = menuBar()->addMenu(tr("&Help"));
 
     m_actionAbout = helpMenu->addAction(tr("&About HobbyCAD..."),
         this, &MainWindow::onHelpAbout);
 
-    // View menu (inserted between File and Help)
+    // View menu (inserted between Edit and Help)
     auto* viewMenu = new QMenu(tr("&View"), this);
     menuBar()->insertMenu(helpMenu->menuAction(), viewMenu);
 
@@ -191,10 +258,55 @@ void MainWindow::createMenus()
     m_actionToggleTerminal->setCheckable(true);
     m_actionToggleTerminal->setChecked(false);
 
-    m_actionToggleFeatureTree = viewMenu->addAction(tr("&Feature Tree"),
-        QKeySequence(Qt::CTRL | Qt::Key_F));
+    m_actionToggleFeatureTree = viewMenu->addAction(tr("P&roject"),
+        QKeySequence(Qt::CTRL | Qt::Key_R));
     m_actionToggleFeatureTree->setCheckable(true);
     m_actionToggleFeatureTree->setChecked(true);
+
+    m_actionToggleProperties = viewMenu->addAction(tr("&Properties"),
+        QKeySequence(Qt::CTRL | Qt::Key_P));
+    m_actionToggleProperties->setCheckable(true);
+    m_actionToggleProperties->setChecked(true);
+
+    m_actionToggleToolbar = viewMenu->addAction(tr("Tool&bar"));
+    m_actionToggleToolbar->setCheckable(true);
+    m_actionToggleToolbar->setChecked(true);
+
+    viewMenu->addSeparator();
+
+    // Workspace submenu
+    auto* workspaceMenu = viewMenu->addMenu(tr("&Workspace"));
+    auto* workspaceGroup = new QActionGroup(this);
+    workspaceGroup->setExclusive(true);
+
+    auto* designAction = workspaceMenu->addAction(tr("&Design"));
+    designAction->setCheckable(true);
+    designAction->setChecked(true);
+    workspaceGroup->addAction(designAction);
+    connect(designAction, &QAction::triggered, this, [this]() {
+        emit workspaceChanged(Workspace::Design);
+    });
+
+    auto* renderAction = workspaceMenu->addAction(tr("&Render"));
+    renderAction->setCheckable(true);
+    workspaceGroup->addAction(renderAction);
+    connect(renderAction, &QAction::triggered, this, [this]() {
+        emit workspaceChanged(Workspace::Render);
+    });
+
+    auto* animationAction = workspaceMenu->addAction(tr("&Animation"));
+    animationAction->setCheckable(true);
+    workspaceGroup->addAction(animationAction);
+    connect(animationAction, &QAction::triggered, this, [this]() {
+        emit workspaceChanged(Workspace::Animation);
+    });
+
+    auto* simulationAction = workspaceMenu->addAction(tr("&Simulation"));
+    simulationAction->setCheckable(true);
+    workspaceGroup->addAction(simulationAction);
+    connect(simulationAction, &QAction::triggered, this, [this]() {
+        emit workspaceChanged(Workspace::Simulation);
+    });
 
     viewMenu->addSeparator();
 
@@ -248,25 +360,193 @@ void MainWindow::createStatusBar()
 
 void MainWindow::createDockPanels()
 {
-    // Feature tree (empty placeholder for Phase 0)
-    m_featureTreeDock = new QDockWidget(tr("Feature Tree"), this);
-    m_featureTreeDock->setObjectName(QStringLiteral("FeatureTreeDock"));
+    // Project panel with File and Objects tabs
+    m_featureTreeDock = new QDockWidget(tr("Project"), this);
+    m_featureTreeDock->setObjectName(QStringLiteral("ProjectDock"));
     m_featureTreeDock->setAllowedAreas(
         Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
-    auto* tree = new QTreeWidget();
-    tree->setObjectName(QStringLiteral("FeatureTree"));
-    tree->setHeaderLabel(tr("Features"));
-    tree->setRootIsDecorated(true);
-    m_featureTreeDock->setWidget(tree);
+    auto* projectTabs = new QTabWidget();
+    projectTabs->setObjectName(QStringLiteral("ProjectTabs"));
+
+    // File tab - shows project file structure
+    auto* fileTree = new QTreeWidget();
+    fileTree->setObjectName(QStringLiteral("FileTree"));
+    fileTree->setHeaderHidden(true);
+    fileTree->setRootIsDecorated(true);
+    projectTabs->addTab(fileTree, tr("File"));
+
+    // Objects tab - shows model objects/features (default)
+    auto* objectsTree = new QTreeWidget();
+    objectsTree->setObjectName(QStringLiteral("ObjectsTree"));
+    objectsTree->setHeaderHidden(true);
+    objectsTree->setRootIsDecorated(true);
+
+    // Document Settings section
+    auto* docSettings = new QTreeWidgetItem(objectsTree);
+    docSettings->setText(0, tr("Document Settings"));
+    docSettings->setExpanded(true);
+
+    auto* unitsItem = new QTreeWidgetItem(docSettings);
+    unitsItem->setText(0, tr("Units: mm"));
+    unitsItem->setData(0, Qt::UserRole, QStringLiteral("units"));
+
+    // Double-click on units shows a combobox dropdown
+    connect(objectsTree, &QTreeWidget::itemDoubleClicked,
+            this, [this, objectsTree](QTreeWidgetItem* item, int column) {
+        Q_UNUSED(column);
+        if (item->data(0, Qt::UserRole).toString() != QStringLiteral("units"))
+            return;
+
+        auto* combo = new QComboBox(objectsTree);
+        combo->addItems({tr("mm"), tr("cm"), tr("m"), tr("in"), tr("ft")});
+
+        // Select current unit
+        QString currentText = item->text(0);
+        int colonPos = currentText.indexOf(':');
+        if (colonPos >= 0) {
+            QString currentUnit = currentText.mid(colonPos + 2).trimmed();
+            int idx = combo->findText(currentUnit);
+            if (idx >= 0) combo->setCurrentIndex(idx);
+        }
+
+        objectsTree->setItemWidget(item, 0, combo);
+        combo->showPopup();
+
+        // When user selects an item, update and remove the widget
+        connect(combo, &QComboBox::activated, this,
+                [this, item, combo, objectsTree](int index) {
+            item->setText(0, tr("Units: %1").arg(combo->currentText()));
+            m_currentUnits = index;
+            // Defer widget removal to avoid deleting during signal
+            QTimer::singleShot(0, this, [objectsTree, item, index, this]() {
+                objectsTree->setItemWidget(item, 0, nullptr);
+                emit unitsChanged(index);
+            });
+        });
+    });
+
+    // Origin section
+    auto* origin = new QTreeWidgetItem(objectsTree);
+    origin->setText(0, tr("Origin"));
+    origin->setExpanded(false);
+
+    auto* originXY = new QTreeWidgetItem(origin);
+    originXY->setText(0, tr("XY Plane"));
+    auto* originXZ = new QTreeWidgetItem(origin);
+    originXZ->setText(0, tr("XZ Plane"));
+    auto* originYZ = new QTreeWidgetItem(origin);
+    originYZ->setText(0, tr("YZ Plane"));
+    auto* originX = new QTreeWidgetItem(origin);
+    originX->setText(0, tr("X Axis"));
+    auto* originY = new QTreeWidgetItem(origin);
+    originY->setText(0, tr("Y Axis"));
+    auto* originZ = new QTreeWidgetItem(origin);
+    originZ->setText(0, tr("Z Axis"));
+    auto* originPt = new QTreeWidgetItem(origin);
+    originPt->setText(0, tr("Origin Point"));
+
+    // Bodies section
+    auto* bodies = new QTreeWidgetItem(objectsTree);
+    bodies->setText(0, tr("Bodies"));
+    bodies->setData(0, Qt::UserRole, QStringLiteral("container.bodies"));
+    bodies->setExpanded(true);
+
+    // Sketches section
+    auto* sketches = new QTreeWidgetItem(objectsTree);
+    sketches->setText(0, tr("Sketches"));
+    sketches->setData(0, Qt::UserRole, QStringLiteral("container.sketches"));
+    sketches->setExpanded(true);
+
+    // Construction section
+    auto* construction = new QTreeWidgetItem(objectsTree);
+    construction->setText(0, tr("Construction"));
+    construction->setData(0, Qt::UserRole, QStringLiteral("container.construction"));
+    construction->setExpanded(false);
+
+    // Example items to demonstrate renaming (remove when real objects exist)
+    auto* exampleBody = new QTreeWidgetItem(bodies);
+    exampleBody->setText(0, tr("Body1"));
+    exampleBody->setFlags(exampleBody->flags() | Qt::ItemIsEditable);
+    exampleBody->setData(0, Qt::UserRole, QStringLiteral("object"));
+
+    auto* exampleSketch = new QTreeWidgetItem(sketches);
+    exampleSketch->setText(0, tr("Sketch1"));
+    exampleSketch->setFlags(exampleSketch->flags() | Qt::ItemIsEditable);
+    exampleSketch->setData(0, Qt::UserRole, QStringLiteral("object"));
+
+    // Example sub-item under Body1
+    auto* exampleFeature = new QTreeWidgetItem(exampleBody);
+    exampleFeature->setText(0, tr("Extrude1"));
+    exampleFeature->setFlags(exampleFeature->flags() | Qt::ItemIsEditable);
+    exampleFeature->setData(0, Qt::UserRole, QStringLiteral("feature"));
+
+    projectTabs->addTab(objectsTree, tr("Objects"));
+
+    // Select Objects tab by default
+    projectTabs->setCurrentIndex(1);
+
+    // F2 to edit selected item in objects tree
+    auto* objectsF2 = new QShortcut(QKeySequence(Qt::Key_F2), objectsTree);
+    connect(objectsF2, &QShortcut::activated, this, [objectsTree]() {
+        QTreeWidgetItem* item = objectsTree->currentItem();
+        if (item && (item->flags() & Qt::ItemIsEditable)) {
+            objectsTree->editItem(item, 0);
+        }
+    });
+
+    m_featureTreeDock->setWidget(projectTabs);
 
     addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
 
-    // Connect View > Feature Tree toggle to dock visibility
+    // Connect View > Project toggle to dock visibility
     connect(m_actionToggleFeatureTree, &QAction::toggled,
             m_featureTreeDock, &QDockWidget::setVisible);
     connect(m_featureTreeDock, &QDockWidget::visibilityChanged,
             m_actionToggleFeatureTree, &QAction::setChecked);
+
+    // Properties panel (shows properties of selected timeline/tree item)
+    m_propertiesDock = new QDockWidget(tr("Properties"), this);
+    m_propertiesDock->setObjectName(QStringLiteral("PropertiesDock"));
+    m_propertiesDock->setAllowedAreas(
+        Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
+    // Container widget with tree and action bar
+    auto* propsContainer = new QWidget();
+    auto* propsLayout = new QVBoxLayout(propsContainer);
+    propsLayout->setContentsMargins(0, 0, 0, 0);
+    propsLayout->setSpacing(0);
+
+    m_propertiesTree = new QTreeWidget();
+    m_propertiesTree->setObjectName(QStringLiteral("PropertiesTree"));
+    m_propertiesTree->setColumnCount(2);
+    m_propertiesTree->setHeaderLabels({tr("Property"), tr("Value")});
+    m_propertiesTree->setRootIsDecorated(true);
+    propsLayout->addWidget(m_propertiesTree, 1);  // stretch factor 1
+
+    // Sketch action bar (Save/Cancel) - hidden by default
+    m_sketchActionBar = new SketchActionBar(propsContainer);
+    m_sketchActionBar->setVisible(false);
+    propsLayout->addWidget(m_sketchActionBar);
+
+    m_propertiesDock->setWidget(propsContainer);
+
+    // F2 to edit selected item in properties tree (column 1 = value)
+    auto* propsF2 = new QShortcut(QKeySequence(Qt::Key_F2), m_propertiesTree);
+    connect(propsF2, &QShortcut::activated, this, [this]() {
+        QTreeWidgetItem* item = m_propertiesTree->currentItem();
+        if (item && (item->flags() & Qt::ItemIsEditable)) {
+            m_propertiesTree->editItem(item, 1);  // Edit value column
+        }
+    });
+
+    addDockWidget(Qt::RightDockWidgetArea, m_propertiesDock);
+
+    // Connect View > Properties toggle to dock visibility
+    connect(m_actionToggleProperties, &QAction::toggled,
+            m_propertiesDock, &QDockWidget::setVisible);
+    connect(m_propertiesDock, &QDockWidget::visibilityChanged,
+            m_actionToggleProperties, &QAction::setChecked);
 
     // Embedded terminal panel
     m_terminalDock = new QDockWidget(tr("Terminal"), this);
@@ -522,8 +802,14 @@ void MainWindow::applyBindings()
     actionMap.insert(QStringLiteral("file.saveAs"), m_actionSaveAs);
     actionMap.insert(QStringLiteral("file.close"), m_actionClose);
     actionMap.insert(QStringLiteral("file.quit"), m_actionQuit);
+    actionMap.insert(QStringLiteral("edit.cut"), m_actionCut);
+    actionMap.insert(QStringLiteral("edit.copy"), m_actionCopy);
+    actionMap.insert(QStringLiteral("edit.paste"), m_actionPaste);
+    actionMap.insert(QStringLiteral("edit.delete"), m_actionDelete);
+    actionMap.insert(QStringLiteral("edit.selectAll"), m_actionSelectAll);
     actionMap.insert(QStringLiteral("view.terminal"), m_actionToggleTerminal);
-    actionMap.insert(QStringLiteral("view.featureTree"), m_actionToggleFeatureTree);
+    actionMap.insert(QStringLiteral("view.project"), m_actionToggleFeatureTree);
+    actionMap.insert(QStringLiteral("view.properties"), m_actionToggleProperties);
     actionMap.insert(QStringLiteral("view.resetView"), m_actionResetView);
     actionMap.insert(QStringLiteral("view.rotateLeft"), m_actionRotateLeft);
     actionMap.insert(QStringLiteral("view.rotateRight"), m_actionRotateRight);

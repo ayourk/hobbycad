@@ -23,10 +23,12 @@
 class QAction;
 class QLabel;
 class QDockWidget;
+class QTreeWidget;
 
 namespace hobbycad {
 
 class CliPanel;
+class SketchActionBar;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -68,6 +70,41 @@ protected:
     QAction* rotateLeftAction() const;
     QAction* rotateRightAction() const;
 
+    /// Access the View > Toolbar toggle action.
+    QAction* toolbarToggleAction() const;
+
+    /// Access the properties tree widget for displaying selected item properties.
+    QTreeWidget* propertiesTree() const;
+
+    /// Access the sketch action bar (Save/Cancel buttons)
+    SketchActionBar* sketchActionBar() const;
+
+    /// Show or hide the sketch action bar
+    void setSketchActionBarVisible(bool visible);
+
+    /// Get the current unit system index (0=mm, 1=cm, 2=m, 3=in, 4=ft).
+    int currentUnits() const;
+
+    /// Get the current unit suffix string (e.g., "mm", "in").
+    QString unitSuffix() const;
+
+    /// Workspace types for the toolbar.
+    enum class Workspace {
+        Design,
+        Render,
+        Animation,
+        Simulation
+    };
+
+signals:
+    /// Emitted when the user changes the workspace.
+    void workspaceChanged(Workspace workspace);
+
+    /// Emitted when the user changes the display units.
+    /// @param units  0=mm, 1=cm, 2=m, 3=in, 4=ft
+    void unitsChanged(int units);
+
+protected:
     /// Hide the dock-based terminal (used by Reduced Mode which
     /// has its own central CLI panel instead).
     void hideDockTerminal();
@@ -105,10 +142,17 @@ private:
     QAction* m_actionSaveAs = nullptr;
     QAction* m_actionClose  = nullptr;
     QAction* m_actionQuit   = nullptr;
+    QAction* m_actionCut    = nullptr;
+    QAction* m_actionCopy   = nullptr;
+    QAction* m_actionPaste  = nullptr;
+    QAction* m_actionDelete = nullptr;
+    QAction* m_actionSelectAll = nullptr;
     QAction* m_actionAbout  = nullptr;
     QAction* m_actionPreferences = nullptr;
     QAction* m_actionToggleTerminal = nullptr;
     QAction* m_actionToggleFeatureTree = nullptr;
+    QAction* m_actionToggleProperties = nullptr;
+    QAction* m_actionToggleToolbar = nullptr;
     QAction* m_actionResetView = nullptr;
     QAction* m_actionRotateLeft = nullptr;
     QAction* m_actionRotateRight = nullptr;
@@ -119,8 +163,14 @@ private:
 
     // Dock panels
     QDockWidget* m_featureTreeDock = nullptr;
+    QDockWidget* m_propertiesDock  = nullptr;
     QDockWidget* m_terminalDock    = nullptr;
     CliPanel*    m_cliPanel        = nullptr;
+    QTreeWidget* m_propertiesTree  = nullptr;
+    SketchActionBar* m_sketchActionBar = nullptr;
+
+    // Current unit system (0=mm, 1=cm, 2=m, 3=in, 4=ft)
+    int m_currentUnits = 0;
 };
 
 }  // namespace hobbycad

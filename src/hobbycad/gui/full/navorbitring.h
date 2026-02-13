@@ -2,8 +2,8 @@
 //  src/hobbycad/gui/full/navorbitring.h — single-axis orbit ring
 // =====================================================================
 //
-//  A Fusion 360-style orbit arc for one axis.  Three instances (X, Y,
-//  Z) form the complete orbit ring around the ViewCube.
+//  An orbit arc for one axis.  Three instances (X, Y, Z) form the
+//  complete orbit ring around the ViewCube.
 //
 //  Each instance draws a colored arc section split into two sub-arcs
 //  with a gap, and two inward-pointing arrow triangles at the gap.
