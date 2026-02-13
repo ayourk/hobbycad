@@ -59,24 +59,59 @@ target_compile_options(hobbycad-lib PRIVATE
 
 # OCCT libraries needed by the core (no visualization)
 #
-# Note: OCCT 7.6.x uses TKXDESTEP / TKXDEIGES (all-caps suffix).
-# OCCT 7.8+ renamed these to TKXDEStep / TKXDEIGES.  We try the
-# 7.6 names first and fall back if needed.
+# OCCT 7.8+ reorganized data exchange libraries under the TKDE prefix:
+#   TKSTEP    → TKDESTEP       TKXDESTEP → merged into TKDESTEP
+#   TKIGES    → TKDEIGES       TKXDEIGES → merged into TKDEIGES
+#   TKSTL     → TKDESTL        TKXSBase  → removed
+#   TKXCAF    → TKDEXCAF
 #
-if(TARGET TKXDESTEP)
-    set(_OCCT_XDE_STEP TKXDESTEP)
-elseif(TARGET TKXDEStep)
-    set(_OCCT_XDE_STEP TKXDEStep)
-else()
-    # Bare library name fallback — let the linker figure it out
-    set(_OCCT_XDE_STEP TKXDESTEP)
+# We use OpenCASCADE_DataExchange_LIBRARIES (set by find_package) to
+# detect which libraries are available.  This is more reliable than
+# checking CMake targets, which may not be defined on all platforms.
+#
+macro(occt_pick_lib VAR OLD NEW)
+    if(OLD IN_LIST OpenCASCADE_DataExchange_LIBRARIES)
+        set(${VAR} ${OLD})
+    elseif(NEW IN_LIST OpenCASCADE_DataExchange_LIBRARIES)
+        set(${VAR} ${NEW})
+    elseif(TARGET ${OLD})
+        set(${VAR} ${OLD})
+    elseif(TARGET ${NEW})
+        set(${VAR} ${NEW})
+    else()
+        # Last resort: assume 7.8+ naming
+        set(${VAR} ${NEW})
+    endif()
+endmacro()
+
+occt_pick_lib(_OCCT_STEP     TKSTEP     TKDESTEP)
+occt_pick_lib(_OCCT_IGES     TKIGES     TKDEIGES)
+occt_pick_lib(_OCCT_STL      TKSTL      TKDESTL)
+occt_pick_lib(_OCCT_XCAF     TKXCAF     TKDEXCAF)
+
+# TKXDESTEP/TKXDEIGES were merged into TKDESTEP/TKDEIGES in 7.8+.
+# Only link them if they exist as separate libraries.
+set(_OCCT_XDESTEP "")
+set(_OCCT_XDEIGES "")
+if("TKXDESTEP" IN_LIST OpenCASCADE_DataExchange_LIBRARIES OR TARGET TKXDESTEP)
+    set(_OCCT_XDESTEP TKXDESTEP)
+endif()
+if("TKXDEIGES" IN_LIST OpenCASCADE_DataExchange_LIBRARIES OR TARGET TKXDEIGES)
+    set(_OCCT_XDEIGES TKXDEIGES)
+endif()
+
+# TKXSBase was removed in 7.8+; only link if present.
+set(_OCCT_XSBASE "")
+if("TKXSBase" IN_LIST OpenCASCADE_DataExchange_LIBRARIES OR TARGET TKXSBase)
+    set(_OCCT_XSBASE TKXSBase)
 endif()
 
 set(HOBBYCAD_OCCT_LIBS
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo
     TKBRep TKTopAlgo TKPrim TKShHealing TKBO TKFillet
-    TKSTEP TKSTL TKIGES TKXSBase TKXCAF TKLCAF TKCAF
-    ${_OCCT_XDE_STEP} TKXDEIGES
+    ${_OCCT_STEP} ${_OCCT_STL} ${_OCCT_IGES}
+    ${_OCCT_XSBASE} ${_OCCT_XCAF} TKLCAF TKCAF
+    ${_OCCT_XDESTEP} ${_OCCT_XDEIGES}
 )
 
 target_link_libraries(hobbycad-lib
