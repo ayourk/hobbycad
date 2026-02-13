@@ -24,6 +24,8 @@ set(APP_SOURCES
     gui/aboutdialog.cpp
     gui/clipanel.cpp
     gui/preferencesdialog.cpp
+    gui/bindingsdialog.cpp
+    gui/bindingeditrow.cpp
     gui/themevalidator.cpp
 
     # Full mode (OpenGL viewport)
@@ -51,6 +53,8 @@ set(APP_HEADERS
     gui/aboutdialog.h
     gui/clipanel.h
     gui/preferencesdialog.h
+    gui/bindingsdialog.h
+    gui/bindingeditrow.h
     gui/themevalidator.h
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h

@@ -3,6 +3,7 @@
 // =====================================================================
 
 #include "preferencesdialog.h"
+#include "bindingsdialog.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -69,6 +70,10 @@ void PreferencesDialog::createPages()
     // Navigation page
     m_pageList->addItem(tr("Navigation"));
     m_pageStack->addWidget(createNavigationPage());
+
+    // Bindings page
+    m_pageList->addItem(tr("Bindings"));
+    m_pageStack->addWidget(createBindingsPage());
 
     // General page
     m_pageList->addItem(tr("General"));
@@ -162,6 +167,38 @@ QWidget* PreferencesDialog::createNavigationPage()
     layout->addStretch();
 
     return page;
+}
+
+QWidget* PreferencesDialog::createBindingsPage()
+{
+    auto* page = new QWidget;
+    auto* layout = new QVBoxLayout(page);
+
+    auto* descLabel = new QLabel(
+        tr("Customize keyboard shortcuts and mouse bindings for all actions. "
+           "Each action can have up to three bindings."));
+    descLabel->setWordWrap(true);
+    layout->addWidget(descLabel);
+
+    layout->addSpacing(20);
+
+    auto* openBtn = new QPushButton(tr("Open Bindings Editor..."));
+    openBtn->setMinimumHeight(40);
+    connect(openBtn, &QPushButton::clicked,
+            this, &PreferencesDialog::openBindingsDialog);
+    layout->addWidget(openBtn);
+
+    layout->addStretch();
+
+    return page;
+}
+
+void PreferencesDialog::openBindingsDialog()
+{
+    BindingsDialog dlg(this);
+    connect(&dlg, &BindingsDialog::bindingsChanged,
+            this, &PreferencesDialog::bindingsChanged);
+    dlg.exec();
 }
 
 QWidget* PreferencesDialog::createGeneralPage()

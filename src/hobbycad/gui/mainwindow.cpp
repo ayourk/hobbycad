@@ -4,10 +4,12 @@
 
 #include "mainwindow.h"
 #include "aboutdialog.h"
+#include "bindingsdialog.h"
 #include "clipanel.h"
 #include "preferencesdialog.h"
 
 #include <QAction>
+#include <QKeySequence>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDockWidget>
@@ -136,6 +138,9 @@ void MainWindow::finalizeLayout()
         m_actionToggleFeatureTree->setChecked(!m_featureTreeDock->isHidden());
     if (m_actionToggleTerminal && m_terminalDock)
         m_actionToggleTerminal->setChecked(!m_terminalDock->isHidden());
+
+    // Apply keyboard bindings from settings
+    applyBindings();
 
     updateTitle();
 }
@@ -489,6 +494,8 @@ void MainWindow::onHelpAbout()
 void MainWindow::onEditPreferences()
 {
     PreferencesDialog dlg(this);
+    connect(&dlg, &PreferencesDialog::bindingsChanged,
+            this, &MainWindow::applyBindings);
     if (dlg.exec() == QDialog::Accepted) {
         applyPreferences();
     }
@@ -497,9 +504,63 @@ void MainWindow::onEditPreferences()
 void MainWindow::applyPreferences()
 {
     // Subclasses override to apply settings to the viewport, etc.
+    applyBindings();
 }
 
 // ---- Helpers --------------------------------------------------------
+
+void MainWindow::applyBindings()
+{
+    // Load bindings from settings and apply to actions
+    auto bindings = BindingsDialog::loadBindings();
+
+    // Map action IDs to QAction pointers
+    QHash<QString, QAction*> actionMap;
+    actionMap.insert(QStringLiteral("file.new"), m_actionNew);
+    actionMap.insert(QStringLiteral("file.open"), m_actionOpen);
+    actionMap.insert(QStringLiteral("file.save"), m_actionSave);
+    actionMap.insert(QStringLiteral("file.saveAs"), m_actionSaveAs);
+    actionMap.insert(QStringLiteral("file.close"), m_actionClose);
+    actionMap.insert(QStringLiteral("file.quit"), m_actionQuit);
+    actionMap.insert(QStringLiteral("view.terminal"), m_actionToggleTerminal);
+    actionMap.insert(QStringLiteral("view.featureTree"), m_actionToggleFeatureTree);
+    actionMap.insert(QStringLiteral("view.resetView"), m_actionResetView);
+    actionMap.insert(QStringLiteral("view.rotateLeft"), m_actionRotateLeft);
+    actionMap.insert(QStringLiteral("view.rotateRight"), m_actionRotateRight);
+    actionMap.insert(QStringLiteral("view.preferences"), m_actionPreferences);
+
+    // Apply keyboard bindings to each action
+    for (auto it = bindings.constBegin(); it != bindings.constEnd(); ++it) {
+        QAction* action = actionMap.value(it.key());
+        if (!action) continue;
+
+        const ActionBinding& ab = it.value();
+
+        // Collect all keyboard bindings (skip mouse bindings)
+        QList<QKeySequence> shortcuts;
+
+        auto addIfKeyboard = [&shortcuts](const QString& binding) {
+            if (binding.isEmpty()) return;
+            // Skip mouse bindings
+            if (binding.contains(QStringLiteral("Button"), Qt::CaseInsensitive) ||
+                binding.contains(QStringLiteral("Wheel"), Qt::CaseInsensitive) ||
+                binding.contains(QStringLiteral("Drag"), Qt::CaseInsensitive) ||
+                binding.contains(QStringLiteral("Click"), Qt::CaseInsensitive)) {
+                return;
+            }
+            QKeySequence seq(binding);
+            if (!seq.isEmpty()) {
+                shortcuts.append(seq);
+            }
+        };
+
+        addIfKeyboard(ab.binding1);
+        addIfKeyboard(ab.binding2);
+        addIfKeyboard(ab.binding3);
+
+        action->setShortcuts(shortcuts);
+    }
+}
 
 void MainWindow::updateTitle()
 {
