@@ -1,0 +1,81 @@
+# .github/workflows/linux-build.yml
+#
+# Build HobbyCAD on Ubuntu 24.04 using apt packages.
+#
+# Matches the local developer setup from docs/dev_environment_setup.txt §4.
+# All Phase 0 dependencies come from the Ubuntu 24.04 repositories.
+# Ubuntu runners are free for public repositories.
+
+name: Linux Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  Ubuntu 24.04 / GCC / apt
+  # ================================================================
+  #
+  #  Matches the primary development platform.  All dependencies
+  #  come from the Ubuntu 24.04 repositories (fast).
+
+  linux:
+    name: HobbyCAD via apt
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libocct-data-exchange-dev libocct-draw-dev \
+            libocct-foundation-dev libocct-modeling-algorithms-dev \
+            libocct-modeling-data-dev libocct-ocaf-dev \
+            libocct-visualization-dev occt-misc libtbb-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
+            qt6-tools-dev-tools libqt6opengl6-dev \
+            libqt6openglwidgets6 libqt6svg6-dev qmake6 \
+            libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
+            libpng-dev libjpeg-dev \
+            libzip-dev libminizip-dev \
+            libgit2-dev \
+            librsvg2-bin
+
+      - name: Configure CMake
+        run: cmake --preset linux-release
+
+      - name: Build
+        run: cmake --build --preset linux-release
+
+      - name: Package build
+        run: |
+          cmake --install build --prefix build/install
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-linux-x64
+          path: build/install/
+          retention-days: 14
+          if-no-files-found: error

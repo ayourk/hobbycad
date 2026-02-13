@@ -28,6 +28,7 @@
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_NeutralWindow.hxx>
 #include <Aspect_Grid.hxx>
+#include <Bnd_Box.hxx>
 #include <Geom_Axis2Placement.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_TransformPers.hxx>
@@ -246,8 +247,14 @@ void ViewportWidget::initViewer()
     m_view->SetEye(1.0, -1.0, 1.0);
     m_view->SetUp(0.0, 0.0, 1.0);
     m_view->SetAt(0.0, 0.0, 0.0);
-    m_view->FitAll(0.5, false);
-    m_view->SetAt(0.0, 0.0, 30.0);
+
+    // Frame the grid, not the axis lines.  Build a bounding box
+    // matching the grid extent and let FitAll compute the proper
+    // camera center and size from that.
+    Bnd_Box gridBox;
+    gridBox.Update(-100.0, -1.0, -100.0);  // grid is 100 mm in each
+    gridBox.Update( 100.0,  1.0,  100.0);  // direction on XZ plane
+    m_view->FitAll(gridBox, 0.01);
 
     // Initialize scale bar (AIS overlay, bottom-left)
     m_scaleBar = new ScaleBarWidget();
@@ -288,9 +295,9 @@ void ViewportWidget::setupAxisTrihedron()
     m_context->Display(trihedron, false);
     m_context->Deactivate(trihedron);
 
-    // Extend the Y axis into the -Y direction at the same length.
-    // AIS_Trihedron only draws the positive direction, so we add a
-    // separate green line from origin to (0, -300, 0).
+    // Extend axes into the negative direction at the same length.
+    // AIS_Trihedron only draws the positive direction, so we add
+    // separate lines from origin into -X, -Y, and -Z.
     {
         Handle(Geom_CartesianPoint) p1 = new Geom_CartesianPoint(
             gp_Pnt(0.0, 0.0, 0.0));
@@ -301,6 +308,32 @@ void ViewportWidget::setupAxisTrihedron()
         negY->SetWidth(1.0);
         m_context->Display(negY, false);
         m_context->Deactivate(negY);
+    }
+
+    // Extend the X axis into the -X direction.
+    {
+        Handle(Geom_CartesianPoint) p1 = new Geom_CartesianPoint(
+            gp_Pnt(0.0, 0.0, 0.0));
+        Handle(Geom_CartesianPoint) p2 = new Geom_CartesianPoint(
+            gp_Pnt(-300.0, 0.0, 0.0));
+        Handle(AIS_Line) negX = new AIS_Line(p1, p2);
+        negX->SetColor(Quantity_Color(Quantity_NOC_RED));
+        negX->SetWidth(1.0);
+        m_context->Display(negX, false);
+        m_context->Deactivate(negX);
+    }
+
+    // Extend the Z axis into the -Z direction.
+    {
+        Handle(Geom_CartesianPoint) p1 = new Geom_CartesianPoint(
+            gp_Pnt(0.0, 0.0, 0.0));
+        Handle(Geom_CartesianPoint) p2 = new Geom_CartesianPoint(
+            gp_Pnt(0.0, 0.0, -300.0));
+        Handle(AIS_Line) negZ = new AIS_Line(p1, p2);
+        negZ->SetColor(Quantity_Color(Quantity_NOC_BLUE1));
+        negZ->SetWidth(1.0);
+        m_context->Display(negZ, false);
+        m_context->Deactivate(negZ);
     }
 }
 
@@ -355,6 +388,7 @@ void ViewportWidget::setupViewCube()
     // Behaviour
     m_viewCube->SetFixedAnimationLoop(false);
     m_viewCube->SetDrawAxes(false);  // we have our own trihedron
+    m_viewCube->SetYup(Standard_False);  // Z-up coordinate system
 
     // Position in the top-right corner of the viewport
     m_viewCube->SetTransformPersistence(
@@ -782,8 +816,11 @@ void ViewportWidget::resetCamera()
     m_view->SetEye(1.0, -1.0, 1.0);
     m_view->SetUp(0.0, 0.0, 1.0);
     m_view->SetAt(0.0, 0.0, 0.0);
-    m_view->FitAll(0.5, false);
-    m_view->SetAt(0.0, 0.0, 30.0);
+
+    Bnd_Box gridBox;
+    gridBox.Update(-100.0, -1.0, -100.0);
+    gridBox.Update( 100.0,  1.0,  100.0);
+    m_view->FitAll(gridBox, 0.01);
 
     m_view->Redraw();
     updateScaleBar();

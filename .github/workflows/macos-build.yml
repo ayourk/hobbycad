@@ -61,6 +61,15 @@ jobs:
           # Core formulas
           brew install qt@6 ninja librsvg
 
+      - name: Dump Homebrew logs on failure
+        if: failure()
+        run: |
+          for f in ~/Library/Logs/Homebrew/*/*; do
+            echo "::group::$(basename "$f")"
+            cat "$f"
+            echo "::endgroup::"
+          done
+
       - name: Set CMAKE_PREFIX_PATH
         run: |
           # Keg-only formulas are not linked into the Homebrew
