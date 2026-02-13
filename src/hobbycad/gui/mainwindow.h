@@ -90,6 +90,7 @@ private:
     void createStatusBar();
     void createDockPanels();
     void updateTitle();
+    void applyBindings();
 
     /// If the document has unsaved changes, show a dialog offering
     /// "Close Without Saving", "Save and Close", or "Cancel".

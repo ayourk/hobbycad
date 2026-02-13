@@ -8,6 +8,7 @@
 //
 //  Currently implemented pages:
 //    - Navigation   (mouse bindings, rotation defaults, animation)
+//    - Bindings     (keyboard shortcuts and mouse bindings)
 //    - General      (grid, startup behavior — placeholder)
 //
 //  SPDX-License-Identifier: GPL-3.0-only
@@ -25,6 +26,7 @@ class QComboBox;
 class QSpinBox;
 class QDoubleSpinBox;
 class QCheckBox;
+class QPushButton;
 
 namespace hobbycad {
 
@@ -34,13 +36,19 @@ class PreferencesDialog : public QDialog {
 public:
     explicit PreferencesDialog(QWidget* parent = nullptr);
 
+signals:
+    /// Emitted when bindings are changed (forwarded from BindingsDialog).
+    void bindingsChanged();
+
 private slots:
     void apply();
     void accept() override;
+    void openBindingsDialog();
 
 private:
     void createPages();
     QWidget* createNavigationPage();
+    QWidget* createBindingsPage();
     QWidget* createGeneralPage();
 
     void loadSettings();

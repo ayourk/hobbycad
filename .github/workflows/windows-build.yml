@@ -96,7 +96,7 @@ jobs:
                   awk '{print $3}' | \
                   while read dll; do
                       cp -n "$dll" "$BINDIR/" 2>/dev/null || true
-                  done
+                  done || true
 
               # Qt plugins
               QT_PLUGIN_DIR="/ucrt64/share/qt6/plugins"

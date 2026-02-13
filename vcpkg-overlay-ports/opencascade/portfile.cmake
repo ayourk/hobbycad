@@ -72,6 +72,26 @@ vcpkg_cmake_install()
 vcpkg_cmake_config_fixup(CONFIG_PATH share/opencascade)
 vcpkg_copy_pdbs()
 
+# Fix OpenCASCADE_INCLUDE_DIR and OpenCASCADE_INSTALL_PREFIX in the CMake config.
+# The installed OpenCASCADEConfig.cmake uses CMAKE_CURRENT_LIST_DIR which
+# is share/opencascade, but vcpkg_cmake_config_fixup moves the config to
+# share/opencascade. The prefix calculation needs to go up TWO directories
+# (../../) to reach the vcpkg installed root, not one.
+#
+# Before: CMAKE_CURRENT_LIST_DIR = <prefix>/share/opencascade
+#         Going up one level = <prefix>/share (WRONG)
+# After:  Going up two levels = <prefix> (CORRECT)
+file(READ "${CURRENT_PACKAGES_DIR}/share/opencascade/OpenCASCADEConfig.cmake" _config_contents)
+
+# Replace the prefix calculation to go up 2 directories instead of 1
+string(REPLACE
+    [[get_filename_component(OpenCASCADE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}" PATH)]]
+    [[get_filename_component(OpenCASCADE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)]]
+    _config_contents "${_config_contents}"
+)
+
+file(WRITE "${CURRENT_PACKAGES_DIR}/share/opencascade/OpenCASCADEConfig.cmake" "${_config_contents}")
+
 # Remove empty directories and debug includes
 file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/include"
