@@ -1,6 +1,6 @@
 #!/bin/bash
 # =====================================================================
-#  tools/linux/build-dev.sh — HobbyCAD Developer Build Script
+#  HobbyCAD — tools/linux/build-dev.sh — Developer Build Script
 # =====================================================================
 #
 #  Configures and builds HobbyCAD for day-to-day development.
@@ -106,20 +106,28 @@ echo ""
 
 do_devtest() {
     local devtest_needed=true
+    local devtest_cmake="${DEVTEST_DIR}/CMakeLists.txt"
 
     if [ -f "${DEVTEST_LOG}" ]; then
-        local result_line
-        result_line="$(grep "^DEVTEST_RESULT:.*\[PASS\]" "${DEVTEST_LOG}" | tail -1 || true)"
-        if [ -n "${result_line}" ]; then
-            local display
-            display="$(echo "${result_line}" | sed 's/^DEVTEST_RESULT: //')"
-            echo "--- Devtest: ${display} (skipping) ---"
-            echo "  Log: ${DEVTEST_LOG}"
+        # Check if CMakeLists.txt is newer than the log (dependencies changed)
+        if [ -f "${devtest_cmake}" ] && [ "${devtest_cmake}" -nt "${DEVTEST_LOG}" ]; then
+            echo "--- Devtest: CMakeLists.txt modified — rerunning ---"
             echo ""
-            devtest_needed=false
+            rm -rf "${DEVTEST_DIR}/build"
         else
-            echo "--- Devtest: result line missing or failed — rerunning ---"
-            echo ""
+            local result_line
+            result_line="$(grep "^DEVTEST_RESULT:.*\[PASS\]" "${DEVTEST_LOG}" | tail -1 || true)"
+            if [ -n "${result_line}" ]; then
+                local display
+                display="$(echo "${result_line}" | sed 's/^DEVTEST_RESULT: //')"
+                echo "--- Devtest: ${display} (skipping) ---"
+                echo "  Log: ${DEVTEST_LOG}"
+                echo ""
+                devtest_needed=false
+            else
+                echo "--- Devtest: result line missing or failed — rerunning ---"
+                echo ""
+            fi
         fi
     fi
 

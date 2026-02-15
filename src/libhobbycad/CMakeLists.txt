@@ -1,5 +1,5 @@
 # =====================================================================
-#  src/libhobbycad/CMakeLists.txt — HobbyCAD Core Library
+#  HobbyCAD — src/libhobbycad/CMakeLists.txt — Core Library
 # =====================================================================
 #
 #  Reusable library providing geometry operations, file I/O, and

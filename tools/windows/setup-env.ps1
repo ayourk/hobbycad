@@ -1,5 +1,5 @@
 # =====================================================================
-#  tools/windows/setup-env.ps1 -- Windows development environment setup
+#  HobbyCAD — tools/windows/setup-env.ps1 — Windows Environment Setup
 # =====================================================================
 #
 #  Checks for required tools and offers to install anything missing.

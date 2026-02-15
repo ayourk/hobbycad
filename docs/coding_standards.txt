@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/coding_standards.txt
-  Document Version : 0.0.3
-  Date             : 2026-02-11
+  Document Version : 0.0.4
+  Date             : 2026-02-14
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -32,6 +32,7 @@
     5. Object Naming (setObjectName) Convention
     6. License Headers
        6.4  Developer Certificate of Origin (DCO)
+       6.5  GPG Commit Signing (Verified Commits)
     7. Include Order
     8. General C++ Style
 
@@ -684,6 +685,66 @@
     .github/workflows/dco.yml runs on every pull request and
     rejects any commit missing a valid Signed-off-by trailer.
     The check is required to pass before merging.
+
+  6.5  GPG Commit Signing (Verified Commits)
+  -------------------------------------------
+
+  All commits to HobbyCAD repositories must be GPG-signed.  GitHub
+  displays a "Verified" badge on signed commits, confirming the
+  commit was made by the account holder.
+
+  Setup:
+
+    1. Generate a GPG key (if you don't have one):
+
+         gpg --full-generate-key
+
+       Choose RSA 4096-bit, set expiration as desired, and use
+       the same email address as your GitHub account.
+
+    2. Get your key ID:
+
+         gpg --list-secret-keys --keyid-format=long
+
+       The key ID is the hex string after "sec rsa4096/" (e.g.,
+       3CE8B9D148CBBD08EA680D8201844DAF2500B0AC).
+
+    3. Configure git to use the key:
+
+         git config --global user.signingkey YOUR_KEY_ID
+         git config --global commit.gpgsign true
+
+    4. Add the public key to GitHub:
+
+         gpg --armor --export YOUR_KEY_ID
+
+       Copy the output (including BEGIN/END lines) and paste it
+       into GitHub → Settings → SSH and GPG keys → New GPG key.
+
+    5. Ensure the email in your GPG key matches a verified email
+       on your GitHub account (Settings → Emails).
+
+  Verification:
+
+    Check if a commit is signed:
+
+      git log --show-signature -1
+
+    The output should show "Good signature from ...".
+
+  Troubleshooting:
+
+    - "Unverified" on GitHub: The GPG key email must match a
+      verified email on your GitHub account.
+
+    - Commits with Co-Authored-By trailers referencing emails
+      not associated with verified GitHub accounts will show as
+      "Unverified".  Avoid Co-Authored-By lines with external
+      or bot email addresses.
+
+    - If gpg-agent isn't caching your passphrase, add to ~/.bashrc:
+
+        export GPG_TTY=$(tty)
 
 ================================================================================
   7. INCLUDE ORDER
