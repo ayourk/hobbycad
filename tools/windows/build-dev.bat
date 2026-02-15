@@ -93,20 +93,12 @@ if "!IN_MSYS2_SHELL!"=="false" (
     set "PROJECT_MSYS=!PROJECT_ROOT:\=/!"
     set "PROJECT_MSYS=/!PROJECT_MSYS::=!"
 
-    REM Build the bash command with all arguments
-    set "BASH_ARGS="
-    :collect_args
-    if "%~1"=="" goto done_args
-    set "BASH_ARGS=!BASH_ARGS! %~1"
-    shift
-    goto collect_args
-    :done_args
-
-    REM Determine build type
+    REM Parse arguments passed to this script
     set "BUILD_TYPE=debug"
     set "DO_CLEAN="
     set "DO_RUN="
-    for %%A in (%*) do (
+    set "SAVED_ARGS=%*"
+    for %%A in (!SAVED_ARGS!) do (
         if /i "%%A"=="release" set "BUILD_TYPE=release"
         if /i "%%A"=="clean" set "DO_CLEAN=1"
         if /i "%%A"=="run" set "DO_RUN=1"
@@ -114,9 +106,7 @@ if "!IN_MSYS2_SHELL!"=="false" (
 
     REM Build the bash commands
     set "BASH_CMD="
-    if defined DO_CLEAN (
-        set "BASH_CMD=rm -rf build && "
-    )
+    if defined DO_CLEAN set "BASH_CMD=rm -rf build && "
     set "BASH_CMD=!BASH_CMD!cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
 
     REM Execute through MSYS2 UCRT64 bash
@@ -125,7 +115,7 @@ if "!IN_MSYS2_SHELL!"=="false" (
     "!MSYS2_ROOT!\ucrt64.exe" bash -l -c "cd '!PROJECT_MSYS!' && !BASH_CMD!"
     set "BUILD_RESULT=!errorlevel!"
 
-    REM If build succeeded and 'run' was requested, launch from Windows
+    REM Check result and optionally launch
     if !BUILD_RESULT!==0 (
         if defined DO_RUN (
             if exist "!BINARY!" (
