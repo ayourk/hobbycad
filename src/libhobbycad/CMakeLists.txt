@@ -16,9 +16,12 @@ find_package(OpenCASCADE REQUIRED)
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui OpenGL)
 
 # Required: libslvs for constraint solving (Phase 1)
+# Try pkg-config first, then CMake config, then manual detection.
 include(FindPkgConfig OPTIONAL)
 set(HAVE_SLVS FALSE)
 set(SLVS_TARGET "")
+
+# Method 1: pkg-config
 if(PKG_CONFIG_FOUND)
     pkg_check_modules(SLVS IMPORTED_TARGET slvs)
     if(SLVS_FOUND)
@@ -27,6 +30,8 @@ if(PKG_CONFIG_FOUND)
         message(STATUS "libhobbycad: Found libslvs via pkg-config")
     endif()
 endif()
+
+# Method 2: CMake config
 if(NOT HAVE_SLVS)
     find_package(slvs CONFIG QUIET)
     if(slvs_FOUND)
@@ -37,6 +42,24 @@ if(NOT HAVE_SLVS)
         message(STATUS "libhobbycad: Found libslvs via CMake config")
     endif()
 endif()
+
+# Method 3: Manual detection (header + library)
+if(NOT HAVE_SLVS)
+    find_path(SLVS_INCLUDE_DIR slvs.h
+        HINTS /usr/include /usr/local/include)
+    find_library(SLVS_LIBRARY slvs
+        HINTS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
+    if(SLVS_INCLUDE_DIR AND SLVS_LIBRARY)
+        set(HAVE_SLVS TRUE)
+        add_library(slvs_manual UNKNOWN IMPORTED)
+        set_target_properties(slvs_manual PROPERTIES
+            IMPORTED_LOCATION "${SLVS_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${SLVS_INCLUDE_DIR}")
+        set(SLVS_TARGET slvs_manual)
+        message(STATUS "libhobbycad: Found libslvs: ${SLVS_LIBRARY}")
+    endif()
+endif()
+
 if(NOT HAVE_SLVS)
     message(FATAL_ERROR
         "libslvs not found (required for Phase 1 constraint solving).\n"
