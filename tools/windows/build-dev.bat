@@ -116,10 +116,10 @@ if "!IN_MSYS2_SHELL!"=="false" (
         )
     )
 
-    REM Build the bash commands
+    REM Build the bash commands - set CMAKE_PREFIX_PATH explicitly for MSYS2 packages
     set "BASH_CMD="
     if defined DO_CLEAN set "BASH_CMD=rm -rf build && "
-    set "BASH_CMD=!BASH_CMD!cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
+    set "BASH_CMD=!BASH_CMD!CMAKE_PREFIX_PATH=/ucrt64 cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
 
     REM Execute through MSYS2 UCRT64 bash and capture exit code
     echo   [INFO] Running: !BASH_CMD!
