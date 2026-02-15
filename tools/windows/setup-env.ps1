@@ -756,7 +756,10 @@ $msys2Packages = @(
     "mingw-w64-ucrt-x86_64-cmake",
     "mingw-w64-ucrt-x86_64-ninja",
     "mingw-w64-ucrt-x86_64-python",
-    "mingw-w64-ucrt-x86_64-python-pip"
+    "mingw-w64-ucrt-x86_64-python-pip",
+    "mingw-w64-ucrt-x86_64-qt6-base",
+    "mingw-w64-ucrt-x86_64-qt6-tools",
+    "mingw-w64-ucrt-x86_64-opencascade"
 )
 
 $msys2Present = Test-Path (Join-Path $Msys2Root "msys2.exe")
@@ -767,6 +770,8 @@ if ($msys2Present) {
     $ninPath = Join-Path $ucrt64Bin "ninja.exe"
     $pyPath  = Join-Path $ucrt64Bin "python.exe"
     $gitPath = Join-Path $ucrt64Bin "git.exe"
+    $qt6Path = Join-Path $Msys2Root "ucrt64\lib\cmake\Qt6\Qt6Config.cmake"
+    $occtPath = Join-Path $Msys2Root "ucrt64\lib\cmake\opencascade\OpenCASCADEConfig.cmake"
 
     $missing = @()
     if (-not (Test-Path $gppPath)) { $missing += "g++" }
@@ -774,6 +779,8 @@ if ($msys2Present) {
     if (-not (Test-Path $ninPath)) { $missing += "ninja" }
     if (-not (Test-Path $pyPath))  { $missing += "python" }
     if (-not (Test-Path $gitPath)) { $missing += "git" }
+    if (-not (Test-Path $qt6Path)) { $missing += "qt6" }
+    if (-not (Test-Path $occtPath)) { $missing += "opencascade" }
 
     if ($missing.Count -eq 0) {
         Write-Ok "Toolchain packages installed."
@@ -819,6 +826,12 @@ if ($msys2Present) {
             }
             if (-not (Test-Path $gitPath)) {
                 $stillMissing += "git"
+            }
+            if (-not (Test-Path $qt6Path)) {
+                $stillMissing += "qt6"
+            }
+            if (-not (Test-Path $occtPath)) {
+                $stillMissing += "opencascade"
             }
 
             if ($stillMissing.Count -eq 0) {
