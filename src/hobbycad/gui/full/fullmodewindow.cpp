@@ -4,6 +4,7 @@
 
 #include "fullmodewindow.h"
 #include "viewportwidget.h"
+#include "gui/clipanel.h"
 #include "gui/viewporttoolbar.h"
 #include "gui/toolbarbutton.h"
 #include "gui/toolbardropdown.h"
@@ -12,6 +13,8 @@
 #include "gui/sketchtoolbar.h"
 #include "gui/sketchcanvas.h"
 #include "gui/sketchactionbar.h"
+#include "gui/sketchplanedialog.h"
+#include "gui/constructionplanedialog.h"
 
 #include <QComboBox>
 #include <QLabel>
@@ -26,10 +29,21 @@
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ListOfInteractive.hxx>
 #include <AIS_Shape.hxx>
+#include <BRep_Builder.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <GC_MakeArcOfCircle.hxx>
+#include <gp_Ax1.hxx>
+#include <gp_Circ.hxx>
+#include <gp_Pnt.hxx>
+#include <gp_Trsf.hxx>
 #include <Prs3d_Drawer.hxx>
 #include <Prs3d_LineAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Type.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Shape.hxx>
 
 namespace hobbycad {
 
@@ -76,10 +90,34 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
             this, &FullModeWindow::onSketchSelectionChanged);
     connect(m_sketchCanvas, &SketchCanvas::entityCreated,
             this, &FullModeWindow::onSketchEntityCreated);
+    connect(m_sketchCanvas, &SketchCanvas::entityModified,
+            this, &FullModeWindow::onSketchEntityModified);
+    connect(m_sketchCanvas, &SketchCanvas::entityDragging,
+            this, &FullModeWindow::onSketchEntityModified);  // Same handler for real-time updates
+    connect(m_sketchCanvas, &SketchCanvas::toolChangeRequested,
+            this, [this](SketchTool tool) {
+        // Update toolbar to reflect tool change from canvas (e.g., Escape key)
+        m_sketchToolbar->setActiveTool(tool);
+        onSketchToolSelected(tool);
+    });
     connect(m_sketchCanvas, &SketchCanvas::mousePositionChanged,
             this, [this](const QPointF& pos) {
         statusBar()->showMessage(
             tr("X: %1  Y: %2").arg(pos.x(), 0, 'f', 2).arg(pos.y(), 0, 'f', 2));
+    });
+    connect(m_sketchCanvas, &SketchCanvas::sketchDeselected,
+            this, [this]() {
+        // Sketch deselected - clear properties panel
+        if (QTreeWidget* propsTree = propertiesTree()) {
+            propsTree->clear();
+        }
+    });
+    connect(m_sketchCanvas, &SketchCanvas::exitRequested,
+            this, [this]() {
+        // Escape pressed with sketch deselected - show Save/Discard and flash
+        if (sketchActionBar()) {
+            sketchActionBar()->showAndFlash();
+        }
     });
 
     // Connect sketch action bar (Save/Cancel buttons in properties panel)
@@ -125,9 +163,62 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
                 m_toolbarStack, &QWidget::setVisible);
     }
 
+    // Connect View > Show Grid toggle
+    if (showGridAction()) {
+        connect(showGridAction(), &QAction::toggled,
+                m_sketchCanvas, &SketchCanvas::setGridVisible);
+    }
+
+    // Connect View > Snap to Grid toggle
+    if (snapToGridAction()) {
+        connect(snapToGridAction(), &QAction::toggled,
+                m_sketchCanvas, &SketchCanvas::setSnapToGrid);
+    }
+
+    // Connect View > Z-Up Orientation toggle
+    if (zUpAction()) {
+        connect(zUpAction(), &QAction::toggled,
+                m_viewport, &ViewportWidget::setZUpOrientation);
+    }
+
+    // Connect View > Orbit Selected Object toggle
+    if (orbitSelectedAction()) {
+        connect(orbitSelectedAction(), &QAction::toggled,
+                m_viewport, &ViewportWidget::setOrbitSelectedObject);
+    }
+
     // Connect units change to viewport scale bar
     connect(this, &MainWindow::unitsChanged,
             m_viewport, &ViewportWidget::setUnitSystem);
+
+    // Connect CLI panel viewport commands (only work in full mode)
+    if (cliPanel()) {
+        connect(cliPanel(), &CliPanel::zoomRequested,
+                m_viewport, &ViewportWidget::setZoomPercent);
+        connect(cliPanel(), &CliPanel::zoomHomeRequested,
+                m_viewport, &ViewportWidget::fitAll);
+        connect(cliPanel(), &CliPanel::panToRequested,
+                m_viewport, &ViewportWidget::panTo);
+        connect(cliPanel(), &CliPanel::panHomeRequested,
+                this, [this]() { m_viewport->panTo(0.0, 0.0, 0.0); });
+        connect(cliPanel(), &CliPanel::rotateRequested,
+                m_viewport, &ViewportWidget::rotateOnAxis);
+        connect(cliPanel(), &CliPanel::rotateHomeRequested,
+                m_viewport, &ViewportWidget::resetCamera);
+
+        // Mark viewport as connected so CLI knows commands will work
+        cliPanel()->setViewportConnected(true);
+    }
+
+    // Connect Construct > New Construction Plane
+    if (newConstructionPlaneAction()) {
+        connect(newConstructionPlaneAction(), &QAction::triggered,
+                this, &FullModeWindow::onNewConstructionPlane);
+    }
+
+    // Connect construction plane selection from feature tree
+    connect(this, &MainWindow::constructionPlaneSelected,
+            this, &FullModeWindow::onConstructionPlaneSelected);
 
     finalizeLayout();
 
@@ -152,7 +243,13 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
 
 void FullModeWindow::onDocumentLoaded()
 {
+    // Display geometry in 3D viewport
     displayShapes();
+
+    // If we have a project loaded, populate the UI with project data
+    if (!m_project.isNew()) {
+        loadProjectData();
+    }
 }
 
 void FullModeWindow::onDocumentClosed()
@@ -198,11 +295,29 @@ void FullModeWindow::applyPreferences()
     bool showGrid = s.value(QStringLiteral("showGrid"), true).toBool();
     m_viewport->setGridVisible(showGrid);
 
+    // Coordinate system and orbit behavior
+    bool zUp = s.value(QStringLiteral("zUpOrientation"), true).toBool();
+    m_viewport->setZUpOrientation(zUp);
+    if (zUpAction()) {
+        zUpAction()->setChecked(zUp);
+    }
+
+    bool orbitSelected = s.value(QStringLiteral("orbitSelected"), false).toBool();
+    m_viewport->setOrbitSelectedObject(orbitSelected);
+    if (orbitSelectedAction()) {
+        orbitSelectedAction()->setChecked(orbitSelected);
+    }
+
     s.endGroup();
 
     // Update axis label
     static const char* names[] = { "X", "Y", "Z" };
     m_axisLabel->setText(tr("Axis: %1").arg(names[m_viewport->rotationAxis()]));
+
+    // Reload sketch canvas key bindings
+    if (m_sketchCanvas) {
+        m_sketchCanvas->reloadBindings();
+    }
 }
 
 void FullModeWindow::createToolbar()
@@ -210,20 +325,20 @@ void FullModeWindow::createToolbar()
     // Buttons with icons above labels
     // Using standard freedesktop icons as placeholders
 
-    // Create Sketch - start a 2D sketch on a plane or face
+    // Create - start a 2D sketch or create construction geometry
     auto* sketchBtn = m_toolbar->addButton(
         QIcon::fromTheme(QStringLiteral("draw-freehand"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Create\nSketch"));
+        tr("Create"));
     auto* sketchDrop = sketchBtn->dropdown();
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-freehand"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("New Sketch"));
+        tr("Sketch"));
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-rectangle"),
                          style()->standardIcon(QStyle::SP_FileDialogListView)),
-        tr("Sketch on\nPlane"));
+        tr("Construction\nPlane"));
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-polygon"),
                          style()->standardIcon(QStyle::SP_FileDialogContentsView)),
@@ -360,7 +475,7 @@ void FullModeWindow::createToolbar()
 
     m_toolbar->addSeparator();
 
-    // Parameters - manage model parameters/variables
+    // Parameters - manage object parameters/variables
     auto* paramsBtn = m_toolbar->addButton(
         QIcon::fromTheme(QStringLiteral("document-properties"),
                          style()->standardIcon(QStyle::SP_FileDialogInfoView)),
@@ -376,7 +491,7 @@ void FullModeWindow::createToolbar()
     connect(paramsBtn, &ToolbarButton::clicked,
             this, &FullModeWindow::showParametersDialog);
 
-    // Connect Create Sketch button - 2D sketching works!
+    // Connect Create button - enters sketch mode
     connect(sketchBtn, &ToolbarButton::clicked,
             this, &FullModeWindow::onCreateSketchClicked);
 
@@ -394,18 +509,8 @@ void FullModeWindow::createToolbar()
 
 void FullModeWindow::createTimeline()
 {
-    // Add example timeline items to demonstrate scrolling behavior
-    // These will be replaced with actual feature history
+    // Start with just the Origin item - other items added as features are created
     m_timeline->addItem(TimelineFeature::Origin, tr("Origin"));
-    m_timeline->addItem(TimelineFeature::Sketch, tr("Sketch1"));
-    m_timeline->addItem(TimelineFeature::Extrude, tr("Extrude1"));
-    m_timeline->addItem(TimelineFeature::Sketch, tr("Sketch2"));
-    m_timeline->addItem(TimelineFeature::Extrude, tr("Extrude2"));
-    m_timeline->addItem(TimelineFeature::Fillet, tr("Fillet1"));
-    m_timeline->addItem(TimelineFeature::Hole, tr("Hole1"));
-    m_timeline->addItem(TimelineFeature::Mirror, tr("Mirror1"));
-    m_timeline->addItem(TimelineFeature::Chamfer, tr("Chamfer1"));
-    m_timeline->addItem(TimelineFeature::Pattern, tr("Pattern1"));
 
     // Connect timeline item selection to properties panel
     connect(m_timeline, &TimelineWidget::itemClicked,
@@ -419,6 +524,9 @@ void FullModeWindow::showFeatureProperties(int index)
         return;
 
     propsTree->clear();
+
+    // Hide any existing plane visualization
+    hideSketchPlane();
 
     if (index < 0 || index >= m_timeline->itemCount())
         return;
@@ -542,13 +650,62 @@ void FullModeWindow::showFeatureProperties(int index)
 
     case TimelineFeature::Sketch:
         {
+            // Find which sketch this timeline item corresponds to
+            // by counting Sketch items before this index
+            int sketchIdx = -1;
+            int sketchCount = 0;
+            for (int i = 0; i <= index; ++i) {
+                if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+                    if (i == index) {
+                        sketchIdx = sketchCount;
+                        break;
+                    }
+                    ++sketchCount;
+                }
+            }
+
+            // Get real sketch data if available
+            int planeIdx = 0;
+            int entityCount = 0;
+            SketchPlane sketchPlane = SketchPlane::XY;
+            double sketchOffset = 0.0;
+            PlaneRotationAxis rotAxis = PlaneRotationAxis::X;
+            double rotAngle = 0.0;
+
+            if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
+                const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+                sketchPlane = sketch.plane;
+                sketchOffset = sketch.planeOffset;
+                rotAxis = sketch.rotationAxis;
+                rotAngle = sketch.rotationAngle;
+
+                switch (sketch.plane) {
+                case SketchPlane::XY: planeIdx = 0; break;
+                case SketchPlane::XZ: planeIdx = 1; break;
+                case SketchPlane::YZ: planeIdx = 2; break;
+                case SketchPlane::Custom: planeIdx = 3; break;
+                }
+                entityCount = sketch.entities.size();
+
+                // Show the sketch plane visualization in 3D viewport
+                showSketchPlane(sketchPlane, sketchOffset, rotAxis, rotAngle);
+            }
+
             auto* planeItem = new QTreeWidgetItem(propsHeader);
-            setDropdownProperty(planeItem, tr("Plane"),
-                {tr("XY"), tr("XZ"), tr("YZ")}, 0);
+            QStringList planeOptions = {tr("XY"), tr("XZ"), tr("YZ"), tr("Custom")};
+            setDropdownProperty(planeItem, tr("Plane"), planeOptions, planeIdx);
+
+            // Show offset if non-zero
+            if (!qFuzzyIsNull(sketchOffset)) {
+                auto* offsetItem = new QTreeWidgetItem(propsHeader);
+                setProperty(offsetItem, tr("Offset"),
+                    QStringLiteral("%1 %2").arg(sketchOffset, 0, 'g', 6).arg(units));
+            }
+
             auto* entitiesItem = new QTreeWidgetItem(propsHeader);
-            setProperty(entitiesItem, tr("Entities"), tr("5"));  // Read-only count
+            setProperty(entitiesItem, tr("Entities"), QString::number(entityCount));
             auto* constraintsItem = new QTreeWidgetItem(propsHeader);
-            setProperty(constraintsItem, tr("Constraints"), tr("8"));  // Read-only count
+            setProperty(constraintsItem, tr("Constraints"), tr("0"));  // No constraints yet
         }
         break;
 
@@ -797,7 +954,7 @@ void FullModeWindow::initDefaultParameters()
     angle.isUserParam = true;
     m_parameters.append(angle);
 
-    // Example model parameters (from features - read-only)
+    // Example object parameters (from features - read-only)
     Parameter extrude1Dist;
     extrude1Dist.name = QStringLiteral("Extrude1_Distance");
     extrude1Dist.expression = QStringLiteral("10");
@@ -851,8 +1008,206 @@ void FullModeWindow::onParametersChanged(const QList<Parameter>& params)
 
 void FullModeWindow::onCreateSketchClicked()
 {
-    // Default to XY plane - user can change in properties
-    enterSketchMode(SketchPlane::XY);
+    // Show plane selection dialog
+    SketchPlaneDialog dialog(this);
+
+    // Provide available construction planes
+    dialog.setAvailableConstructionPlanes(m_project.constructionPlanes());
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;  // User cancelled
+    }
+
+    SketchPlane plane = dialog.selectedPlane();
+    double offset = dialog.offset();
+    int constructionPlaneId = dialog.constructionPlaneId();
+
+    // Store parameters for use in 3D wireframe generation
+    m_pendingSketchOffset = offset;
+    m_pendingRotationAxis = dialog.rotationAxis();
+    m_pendingRotationAngle = dialog.rotationAngle();
+
+    // If using a construction plane, get its parameters
+    if (constructionPlaneId >= 0) {
+        const ConstructionPlaneData* cpData = m_project.constructionPlaneById(constructionPlaneId);
+        if (cpData) {
+            // Set plane to Custom and use the construction plane's parameters
+            plane = SketchPlane::Custom;
+            m_pendingSketchOffset = offset + cpData->offset;
+            m_pendingRotationAxis = cpData->primaryAxis;
+            m_pendingRotationAngle = cpData->primaryAngle;
+            // TODO: Support secondary axis rotation
+        }
+    }
+
+    enterSketchMode(plane);
+}
+
+void FullModeWindow::onNewConstructionPlane()
+{
+    ConstructionPlaneDialog dialog(this);
+    dialog.setEditMode(false);
+
+    // Provide existing construction planes for "offset from plane" option
+    dialog.setAvailablePlanes(m_project.constructionPlanes());
+
+    // Generate default name
+    int planeCount = m_project.constructionPlanes().size();
+    QString defaultName = tr("Plane %1").arg(planeCount + 1);
+
+    // Pre-fill placeholder text
+    ConstructionPlaneData defaultData;
+    defaultData.name = defaultName;
+    dialog.setPlaneData(defaultData);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;  // User cancelled
+    }
+
+    ConstructionPlaneData planeData = dialog.planeData();
+    planeData.id = m_project.nextConstructionPlaneId();
+
+    // Add to project
+    m_project.addConstructionPlane(planeData);
+
+    // Add to feature tree
+    addConstructionPlaneToTree(planeData.name, planeData.id);
+
+    // Display in viewport if visible
+    if (planeData.visible) {
+        displayConstructionPlane(planeData.id);
+    }
+
+    // Select in tree
+    selectConstructionPlaneInTree(planeData.id);
+
+    statusBar()->showMessage(
+        tr("Construction plane '%1' created").arg(planeData.name),
+        3000);
+}
+
+void FullModeWindow::onConstructionPlaneSelected(int planeId)
+{
+    const ConstructionPlaneData* planeData = m_project.constructionPlaneById(planeId);
+    if (!planeData) return;
+
+    // Show plane properties in the properties panel
+    QTreeWidget* props = propertiesTree();
+    if (!props) return;
+
+    props->clear();
+
+    // Name
+    auto* nameItem = new QTreeWidgetItem(props);
+    nameItem->setText(0, tr("Name"));
+    nameItem->setText(1, planeData->name);
+    nameItem->setFlags(nameItem->flags() | Qt::ItemIsEditable);
+
+    // Type
+    auto* typeItem = new QTreeWidgetItem(props);
+    typeItem->setText(0, tr("Type"));
+    QString typeName;
+    switch (planeData->type) {
+    case ConstructionPlaneType::OffsetFromOrigin:
+        typeName = tr("Offset from Origin");
+        break;
+    case ConstructionPlaneType::OffsetFromPlane:
+        typeName = tr("Offset from Plane");
+        break;
+    case ConstructionPlaneType::Angled:
+        typeName = tr("Angled");
+        break;
+    }
+    typeItem->setText(1, typeName);
+
+    // Base plane (for offset from origin)
+    if (planeData->type == ConstructionPlaneType::OffsetFromOrigin) {
+        auto* basePlaneItem = new QTreeWidgetItem(props);
+        basePlaneItem->setText(0, tr("Base Plane"));
+        QString planeName;
+        switch (planeData->basePlane) {
+        case SketchPlane::XY: planeName = tr("XY"); break;
+        case SketchPlane::XZ: planeName = tr("XZ"); break;
+        case SketchPlane::YZ: planeName = tr("YZ"); break;
+        default: planeName = tr("Custom"); break;
+        }
+        basePlaneItem->setText(1, planeName);
+    }
+
+    // Reference plane (for offset from plane)
+    if (planeData->type == ConstructionPlaneType::OffsetFromPlane) {
+        auto* refPlaneItem = new QTreeWidgetItem(props);
+        refPlaneItem->setText(0, tr("Reference Plane"));
+        const ConstructionPlaneData* refPlane = m_project.constructionPlaneById(planeData->basePlaneId);
+        refPlaneItem->setText(1, refPlane ? refPlane->name : tr("(none)"));
+    }
+
+    // Offset
+    auto* offsetItem = new QTreeWidgetItem(props);
+    offsetItem->setText(0, tr("Offset"));
+    offsetItem->setText(1, tr("%1 mm").arg(planeData->offset, 0, 'g', 6));
+    offsetItem->setFlags(offsetItem->flags() | Qt::ItemIsEditable);
+
+    // Rotation (for angled planes)
+    if (planeData->type == ConstructionPlaneType::Angled) {
+        auto* primaryItem = new QTreeWidgetItem(props);
+        primaryItem->setText(0, tr("Primary Rotation"));
+        QString axisName;
+        switch (planeData->primaryAxis) {
+        case PlaneRotationAxis::X: axisName = tr("X"); break;
+        case PlaneRotationAxis::Y: axisName = tr("Y"); break;
+        case PlaneRotationAxis::Z: axisName = tr("Z"); break;
+        }
+        primaryItem->setText(1, tr("%1° around %2")
+                             .arg(planeData->primaryAngle, 0, 'g', 4)
+                             .arg(axisName));
+
+        if (!qFuzzyIsNull(planeData->secondaryAngle)) {
+            auto* secondaryItem = new QTreeWidgetItem(props);
+            secondaryItem->setText(0, tr("Secondary Rotation"));
+            switch (planeData->secondaryAxis) {
+            case PlaneRotationAxis::X: axisName = tr("X"); break;
+            case PlaneRotationAxis::Y: axisName = tr("Y"); break;
+            case PlaneRotationAxis::Z: axisName = tr("Z"); break;
+            }
+            secondaryItem->setText(1, tr("%1° around %2")
+                                   .arg(planeData->secondaryAngle, 0, 'g', 4)
+                                   .arg(axisName));
+        }
+    }
+
+    // Roll angle
+    if (!qFuzzyIsNull(planeData->rollAngle)) {
+        auto* rollItem = new QTreeWidgetItem(props);
+        rollItem->setText(0, tr("Roll"));
+        rollItem->setText(1, tr("%1°").arg(planeData->rollAngle, 0, 'g', 4));
+        rollItem->setFlags(rollItem->flags() | Qt::ItemIsEditable);
+    }
+
+    // Origin point (plane center in absolute coordinates)
+    if (planeData->hasCustomOrigin()) {
+        auto* originItem = new QTreeWidgetItem(props);
+        originItem->setText(0, tr("Center (Absolute)"));
+        originItem->setText(1, tr("(%1, %2, %3) mm")
+                            .arg(planeData->originX, 0, 'g', 6)
+                            .arg(planeData->originY, 0, 'g', 6)
+                            .arg(planeData->originZ, 0, 'g', 6));
+        originItem->setFlags(originItem->flags() | Qt::ItemIsEditable);
+    }
+
+    // Visibility
+    auto* visibleItem = new QTreeWidgetItem(props);
+    visibleItem->setText(0, tr("Visible"));
+    visibleItem->setText(1, planeData->visible ? tr("Yes") : tr("No"));
+    visibleItem->setFlags(visibleItem->flags() | Qt::ItemIsEditable);
+
+    // Expand all to show properties
+    props->expandAll();
+    props->resizeColumnToContents(0);
+
+    // Show the sketch plane in 3D view
+    showSketchPlane(planeData->basePlane, planeData->offset,
+                    planeData->primaryAxis, planeData->primaryAngle);
 }
 
 void FullModeWindow::enterSketchMode(SketchPlane plane)
@@ -861,13 +1216,21 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
 
     m_inSketchMode = true;
 
-    // Switch to sketch toolbar
+    // Notify CLI panel that viewport commands won't work in sketch mode
+    if (cliPanel()) {
+        cliPanel()->setSketchModeActive(true);
+    }
+
+    // Switch to sketch toolbar and set to Select mode (object select)
     m_toolbarStack->setCurrentWidget(m_sketchToolbar);
+    m_sketchToolbar->setActiveTool(SketchTool::Select);
 
     // Switch to sketch canvas
     m_sketchCanvas->setSketchPlane(plane);
     m_sketchCanvas->clear();
     m_sketchCanvas->resetView();
+    m_sketchCanvas->setActiveTool(SketchTool::Select);
+    m_sketchCanvas->setSketchSelected(true);  // Sketch starts selected
     m_viewportStack->setCurrentWidget(m_sketchCanvas);
 
     // Show the action bar in properties panel and reset its state
@@ -876,17 +1239,32 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
     }
     setSketchActionBarVisible(true);
 
-    // Add new sketch to timeline
-    int sketchCount = 0;
-    for (int i = 0; i < m_timeline->itemCount(); ++i) {
-        if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-            ++sketchCount;
-        }
-    }
-    QString sketchName = tr("Sketch%1").arg(sketchCount + 1);
-    m_timeline->addItem(TimelineFeature::Sketch, sketchName);
+    // Determine if we're creating a new sketch or editing existing
+    // m_currentSketchIndex will be set to -1 for new, or >= 0 for edit
+    // (set before calling this function when editing)
+    bool isNewSketch = (m_currentSketchIndex < 0);
 
-    // Select the new sketch in timeline
+    QString sketchName;
+    if (isNewSketch) {
+        // Add new sketch to timeline
+        int sketchCount = 0;
+        for (int i = 0; i < m_timeline->itemCount(); ++i) {
+            if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+                ++sketchCount;
+            }
+        }
+        sketchName = tr("Sketch%1").arg(sketchCount + 1);
+        m_timeline->addItem(TimelineFeature::Sketch, sketchName);
+
+        // Also add to feature tree - use the pending index (will be added on save)
+        int pendingIndex = m_completedSketches.size();
+        addSketchToTree(sketchName, pendingIndex);
+    } else {
+        // Editing existing sketch - get its name
+        sketchName = m_completedSketches[m_currentSketchIndex].name;
+    }
+
+    // Select the sketch in timeline
     m_timeline->setSelectedIndex(m_timeline->itemCount() - 1);
 
     // Update properties to show sketch settings
@@ -910,30 +1288,10 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
         planeItem->setData(1, Qt::UserRole + 1, planes);
         planeItem->setData(1, Qt::UserRole + 2, planeIdx);
 
-        // Grid settings
-        auto* gridHeader = new QTreeWidgetItem(propsTree);
-        gridHeader->setText(0, tr("Grid"));
-
-        auto* showGridItem = new QTreeWidgetItem(gridHeader);
-        showGridItem->setText(0, tr("Show Grid"));
-        showGridItem->setText(1, m_sketchCanvas->isGridVisible() ? tr("Yes") : tr("No"));
-        showGridItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-        showGridItem->setData(1, Qt::UserRole + 1, QStringList{tr("Yes"), tr("No")});
-        showGridItem->setData(1, Qt::UserRole + 2, m_sketchCanvas->isGridVisible() ? 0 : 1);
-
-        auto* snapItem = new QTreeWidgetItem(gridHeader);
-        snapItem->setText(0, tr("Snap to Grid"));
-        snapItem->setText(1, m_sketchCanvas->snapToGrid() ? tr("Yes") : tr("No"));
-        snapItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-        snapItem->setData(1, Qt::UserRole + 1, QStringList{tr("Yes"), tr("No")});
-        snapItem->setData(1, Qt::UserRole + 2, m_sketchCanvas->snapToGrid() ? 0 : 1);
-
-        auto* spacingItem = new QTreeWidgetItem(gridHeader);
-        spacingItem->setText(0, tr("Grid Spacing"));
-        spacingItem->setText(1, QStringLiteral("%1 %2")
-                             .arg(m_sketchCanvas->gridSpacing())
-                             .arg(unitSuffix()));
-        spacingItem->setFlags(spacingItem->flags() | Qt::ItemIsEditable);
+        // Plane offset
+        auto* offsetItem = new QTreeWidgetItem(propsTree);
+        offsetItem->setText(0, tr("Offset"));
+        offsetItem->setText(1, tr("%1 mm").arg(m_pendingSketchOffset, 0, 'g', 6));
 
         // Entities count
         auto* entitiesItem = new QTreeWidgetItem(propsTree);
@@ -955,6 +1313,11 @@ void FullModeWindow::exitSketchMode()
     if (!m_inSketchMode) return;
 
     m_inSketchMode = false;
+
+    // Notify CLI panel that viewport commands are available again
+    if (cliPanel()) {
+        cliPanel()->setSketchModeActive(false);
+    }
 
     // Switch back to normal toolbar
     m_toolbarStack->setCurrentWidget(m_toolbar);
@@ -1017,14 +1380,14 @@ void FullModeWindow::onSketchToolSelected(SketchTool tool)
 void FullModeWindow::onSketchSelectionChanged(int entityId)
 {
     if (entityId < 0) {
-        // Deselected - show sketch properties
-        if (m_inSketchMode) {
-            enterSketchMode(m_sketchCanvas->sketchPlane());
-        }
+        // Entity deselected - show sketch properties (re-select sketch)
+        m_sketchCanvas->setSketchSelected(true);
+        showSketchProperties();
         return;
     }
 
-    // Show entity properties
+    // Show entity properties (sketch remains selected)
+    m_sketchCanvas->setSketchSelected(true);
     showSketchEntityProperties(entityId);
 }
 
@@ -1042,6 +1405,12 @@ void FullModeWindow::onSketchEntityCreated(int entityId)
     }
 
     // Select the new entity
+    showSketchEntityProperties(entityId);
+}
+
+void FullModeWindow::onSketchEntityModified(int entityId)
+{
+    // Refresh the properties panel to show updated values
     showSketchEntityProperties(entityId);
 }
 
@@ -1218,45 +1587,633 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
     propsTree->expandAll();
 }
 
-void FullModeWindow::saveCurrentSketch()
+void FullModeWindow::showSketchProperties()
 {
-    // Save the sketch entities to the document
-    if (m_timeline->itemCount() > 0) {
-        int lastIdx = m_timeline->itemCount() - 1;
-        if (m_timeline->featureAt(lastIdx) == TimelineFeature::Sketch) {
-            // The sketch is already in the timeline - entities are stored
-            // TODO: Persist sketch entities to the document
-            statusBar()->showMessage(
-                tr("Sketch '%1' saved with %2 entities")
-                    .arg(m_timeline->nameAt(lastIdx))
-                    .arg(m_sketchCanvas->entities().size()),
-                3000);
+    QTreeWidget* propsTree = propertiesTree();
+    if (!propsTree) return;
+
+    propsTree->clear();
+
+    // Determine sketch name
+    QString sketchName;
+    if (m_currentSketchIndex >= 0 && m_currentSketchIndex < m_completedSketches.size()) {
+        sketchName = m_completedSketches[m_currentSketchIndex].name;
+    } else {
+        // New sketch - find name from timeline
+        int sketchCount = 0;
+        for (int i = 0; i < m_timeline->itemCount(); ++i) {
+            if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+                ++sketchCount;
+            }
+        }
+        sketchName = tr("Sketch%1").arg(sketchCount);
+    }
+
+    // Sketch name
+    auto* nameItem = new QTreeWidgetItem(propsTree);
+    nameItem->setText(0, tr("Name"));
+    nameItem->setText(1, sketchName);
+    nameItem->setFlags(nameItem->flags() | Qt::ItemIsEditable);
+
+    // Plane selection
+    auto* planeItem = new QTreeWidgetItem(propsTree);
+    planeItem->setText(0, tr("Plane"));
+    QStringList planes = {tr("XY"), tr("XZ"), tr("YZ")};
+    int planeIdx = static_cast<int>(m_sketchCanvas->sketchPlane());
+    planeItem->setText(1, planes.value(planeIdx));
+    planeItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
+    planeItem->setData(1, Qt::UserRole + 1, planes);
+    planeItem->setData(1, Qt::UserRole + 2, planeIdx);
+
+    // Entities count
+    auto* entitiesItem = new QTreeWidgetItem(propsTree);
+    entitiesItem->setText(0, tr("Entities"));
+    entitiesItem->setText(1, QString::number(m_sketchCanvas->entities().size()));
+
+    propsTree->expandAll();
+}
+
+Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& sketch)
+{
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+
+    // Build transformation for custom angled plane
+    // For standard planes, we just apply offset
+    // For custom planes, we rotate around the specified axis then apply offset
+    double off = sketch.planeOffset;
+    gp_Trsf customTransform;
+    bool useCustomTransform = (sketch.plane == SketchPlane::Custom);
+
+    if (useCustomTransform) {
+        // Start with XY plane, then rotate around the specified axis
+        gp_Ax1 rotAxis;
+        switch (sketch.rotationAxis) {
+        case PlaneRotationAxis::X:
+            rotAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0));
+            break;
+        case PlaneRotationAxis::Y:
+            rotAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 1, 0));
+            break;
+        case PlaneRotationAxis::Z:
+            rotAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+            break;
+        }
+        double angleRad = sketch.rotationAngle * M_PI / 180.0;
+        customTransform.SetRotation(rotAxis, angleRad);
+    }
+
+    // Transform 2D point to 3D based on sketch plane and offset
+    // Offset is applied along the plane's normal axis
+    auto to3D = [&sketch, off, useCustomTransform, &customTransform](const QPointF& p) -> gp_Pnt {
+        gp_Pnt pt;
+        switch (sketch.plane) {
+        case SketchPlane::XY:
+            pt = gp_Pnt(p.x(), p.y(), off);  // Z offset
+            break;
+        case SketchPlane::XZ:
+            pt = gp_Pnt(p.x(), off, p.y());  // Y offset
+            break;
+        case SketchPlane::YZ:
+            pt = gp_Pnt(off, p.x(), p.y());  // X offset
+            break;
+        case SketchPlane::Custom:
+            // Start on XY plane at Z=0, then transform
+            pt = gp_Pnt(p.x(), p.y(), 0);
+            pt.Transform(customTransform);
+            // Apply offset along transformed normal (Z after rotation)
+            if (!qFuzzyIsNull(off)) {
+                gp_Dir normal(0, 0, 1);
+                normal.Transform(customTransform);
+                pt.SetX(pt.X() + normal.X() * off);
+                pt.SetY(pt.Y() + normal.Y() * off);
+                pt.SetZ(pt.Z() + normal.Z() * off);
+            }
+            break;
+        default:
+            pt = gp_Pnt(p.x(), p.y(), off);
+            break;
+        }
+        return pt;
+    };
+
+    // Get the plane normal and axes for circles/arcs
+    // Note: plane normal direction determines which way positive offset goes
+    gp_Dir planeNormal, planeXDir;
+    switch (sketch.plane) {
+    case SketchPlane::XY:
+        planeNormal = gp_Dir(0, 0, 1);  // +Z normal
+        planeXDir = gp_Dir(1, 0, 0);
+        break;
+    case SketchPlane::XZ:
+        planeNormal = gp_Dir(0, 1, 0);  // +Y normal
+        planeXDir = gp_Dir(1, 0, 0);
+        break;
+    case SketchPlane::YZ:
+        planeNormal = gp_Dir(1, 0, 0);  // +X normal
+        planeXDir = gp_Dir(0, 1, 0);
+        break;
+    case SketchPlane::Custom:
+        // Start with XY plane orientation, then rotate
+        planeNormal = gp_Dir(0, 0, 1);
+        planeXDir = gp_Dir(1, 0, 0);
+        planeNormal.Transform(customTransform);
+        planeXDir.Transform(customTransform);
+        break;
+    default:
+        planeNormal = gp_Dir(0, 0, 1);
+        planeXDir = gp_Dir(1, 0, 0);
+        break;
+    }
+
+    for (const SketchEntity& entity : sketch.entities) {
+        switch (entity.type) {
+        case SketchEntityType::Point:
+            if (!entity.points.isEmpty()) {
+                gp_Pnt pt = to3D(entity.points[0]);
+                BRepBuilderAPI_MakeVertex mv(pt);
+                if (mv.IsDone()) {
+                    builder.Add(compound, mv.Vertex());
+                }
+            }
+            break;
+
+        case SketchEntityType::Line:
+            if (entity.points.size() >= 2) {
+                gp_Pnt p1 = to3D(entity.points[0]);
+                gp_Pnt p2 = to3D(entity.points[1]);
+                if (p1.Distance(p2) > 1e-6) {
+                    BRepBuilderAPI_MakeEdge me(p1, p2);
+                    if (me.IsDone()) {
+                        TopoDS_Shape edge = me.Edge();
+                        builder.Add(compound, edge);
+                    }
+                }
+            }
+            break;
+
+        case SketchEntityType::Rectangle:
+            if (entity.points.size() >= 2) {
+                gp_Pnt p1 = to3D(entity.points[0]);
+                gp_Pnt p2 = to3D(QPointF(entity.points[1].x(), entity.points[0].y()));
+                gp_Pnt p3 = to3D(entity.points[1]);
+                gp_Pnt p4 = to3D(QPointF(entity.points[0].x(), entity.points[1].y()));
+
+                auto addEdge = [&](const gp_Pnt& a, const gp_Pnt& b) {
+                    if (a.Distance(b) > 1e-6) {
+                        BRepBuilderAPI_MakeEdge me(a, b);
+                        if (me.IsDone()) {
+                            TopoDS_Shape edge = me.Edge();
+                            builder.Add(compound, edge);
+                        }
+                    }
+                };
+                addEdge(p1, p2);
+                addEdge(p2, p3);
+                addEdge(p3, p4);
+                addEdge(p4, p1);
+            }
+            break;
+
+        case SketchEntityType::Circle:
+            if (!entity.points.isEmpty() && entity.radius > 1e-6) {
+                gp_Pnt center = to3D(entity.points[0]);
+                gp_Ax2 axis(center, planeNormal, planeXDir);
+                gp_Circ circle(axis, entity.radius);
+                BRepBuilderAPI_MakeEdge me(circle);
+                if (me.IsDone()) {
+                    TopoDS_Shape edge = me.Edge();
+                    builder.Add(compound, edge);
+                }
+            }
+            break;
+
+        case SketchEntityType::Arc:
+            if (!entity.points.isEmpty() && entity.radius > 1e-6 &&
+                std::abs(entity.sweepAngle) > 1e-6) {
+                gp_Pnt center = to3D(entity.points[0]);
+                gp_Ax2 axis(center, planeNormal, planeXDir);
+                gp_Circ circle(axis, entity.radius);
+
+                // Convert angles to radians
+                double startRad = entity.startAngle * M_PI / 180.0;
+                double endRad = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
+
+                BRepBuilderAPI_MakeEdge me(circle, startRad, endRad);
+                if (me.IsDone()) {
+                    TopoDS_Shape edge = me.Edge();
+                    builder.Add(compound, edge);
+                }
+            }
+            break;
+
+        default:
+            // TODO: Handle splines, text, dimensions
+            break;
         }
     }
+
+    Handle(AIS_Shape) aisShape = new AIS_Shape(compound);
+
+    // Set wireframe display mode with a distinct color
+    aisShape->SetDisplayMode(AIS_WireFrame);
+    Handle(Prs3d_Drawer) drawer = aisShape->Attributes();
+    drawer->SetLineAspect(new Prs3d_LineAspect(
+        Quantity_Color(0.2, 0.6, 1.0, Quantity_TOC_RGB),  // Light blue
+        Aspect_TOL_SOLID, 2.0));
+
+    return aisShape;
+}
+
+void FullModeWindow::showSketchPlane(SketchPlane plane, double offset,
+                                      PlaneRotationAxis rotAxis, double rotAngle)
+{
+    if (!m_viewport) return;
+
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+    if (ctx.IsNull()) return;
+
+    // Remove existing plane visualization if any
+    hideSketchPlane();
+
+    // Create new plane visualization
+    m_sketchPlaneVis = new AisSketchPlane(200.0);  // 200mm square plane
+
+    if (plane == SketchPlane::Custom) {
+        m_sketchPlaneVis->setCustomPlane(rotAxis, rotAngle, offset);
+    } else {
+        m_sketchPlaneVis->setPlane(plane, offset);
+    }
+
+    // Set transparency
+    m_sketchPlaneVis->SetTransparency(0.7);
+
+    // Display the plane
+    ctx->Display(m_sketchPlaneVis, Standard_True);
+}
+
+void FullModeWindow::hideSketchPlane()
+{
+    if (m_sketchPlaneVis.IsNull()) return;
+    if (!m_viewport) return;
+
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+    if (ctx.IsNull()) return;
+
+    ctx->Remove(m_sketchPlaneVis, Standard_True);
+    m_sketchPlaneVis.Nullify();
+}
+
+void FullModeWindow::saveCurrentSketch()
+{
+    // Get the sketch name from the timeline
+    if (m_timeline->itemCount() == 0)
+        return;
+
+    int lastIdx = m_timeline->itemCount() - 1;
+    if (m_timeline->featureAt(lastIdx) != TimelineFeature::Sketch)
+        return;
+
+    QString sketchName = m_timeline->nameAt(lastIdx);
+    bool isNewSketch = (m_currentSketchIndex < 0);
+
+    // Create the completed sketch structure
+    CompletedSketch sketch;
+    sketch.name = sketchName;
+    sketch.plane = m_sketchCanvas->sketchPlane();
+    sketch.planeOffset = m_pendingSketchOffset;
+    sketch.rotationAxis = m_pendingRotationAxis;
+    sketch.rotationAngle = m_pendingRotationAngle;
+    sketch.entities = m_sketchCanvas->entities();
+
+    // Create and display the 3D wireframe
+    sketch.aisShape = createSketchWireframe(sketch);
+    if (!sketch.aisShape.IsNull() && m_viewport) {
+        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+        if (!ctx.IsNull()) {
+            ctx->Display(sketch.aisShape, Standard_True);
+        }
+    }
+
+    int sketchIndex;
+    if (isNewSketch) {
+        // New sketch - add to completed sketches
+        // Tree item was already added in enterSketchMode()
+        sketchIndex = m_completedSketches.size();
+        m_completedSketches.append(sketch);
+    } else {
+        // Editing existing sketch - remove old wireframe, update in place
+        sketchIndex = m_currentSketchIndex;
+        CompletedSketch& existing = m_completedSketches[sketchIndex];
+        if (!existing.aisShape.IsNull() && m_viewport) {
+            Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+            if (!ctx.IsNull()) {
+                ctx->Remove(existing.aisShape, Standard_False);
+            }
+        }
+        existing = sketch;
+    }
+
+    selectSketchInTree(sketchIndex);
+
+    // Select the sketch in the timeline
+    m_timeline->setSelectedIndex(lastIdx);
+
+    // Reset editing index
+    m_currentSketchIndex = -1;
+
+    statusBar()->showMessage(
+        tr("Sketch '%1' saved with %2 entities")
+            .arg(sketchName)
+            .arg(sketch.entities.size()),
+        3000);
 }
 
 void FullModeWindow::discardCurrentSketch()
 {
-    // Discard the sketch - remove from timeline if it was newly created
-    if (m_timeline->itemCount() > 0) {
-        int lastIdx = m_timeline->itemCount() - 1;
-        if (m_timeline->featureAt(lastIdx) == TimelineFeature::Sketch) {
-            // Check if sketch has any entities
-            if (m_sketchCanvas->entities().isEmpty()) {
-                // Empty sketch - remove it from timeline
+    bool isNewSketch = (m_currentSketchIndex < 0);
+    int entityCount = m_sketchCanvas->entities().size();
+
+    if (isNewSketch) {
+        // New sketch being discarded - remove from both timeline and feature tree
+        if (m_timeline->itemCount() > 0) {
+            int lastIdx = m_timeline->itemCount() - 1;
+            if (m_timeline->featureAt(lastIdx) == TimelineFeature::Sketch) {
                 m_timeline->removeItem(lastIdx);
-                statusBar()->showMessage(tr("Empty sketch discarded"), 3000);
-            } else {
-                // Has entities but user cancelled - ask what to do
-                // For now, just warn and keep the sketch
-                statusBar()->showMessage(
-                    tr("Sketch changes discarded (%1 entities)")
-                        .arg(m_sketchCanvas->entities().size()),
-                    3000);
-                // TODO: Restore original sketch state if editing existing sketch
             }
         }
+
+        // Remove from feature tree - the pending sketch was added at m_completedSketches.size()
+        // So we need to remove the last sketch item in the tree
+        clearSketchesInTree();
+        // Re-add existing sketches
+        for (int i = 0; i < m_completedSketches.size(); ++i) {
+            addSketchToTree(m_completedSketches[i].name, i);
+        }
+
+        if (entityCount == 0) {
+            statusBar()->showMessage(tr("Empty sketch discarded"), 3000);
+        } else {
+            statusBar()->showMessage(
+                tr("Sketch discarded (%1 entities)").arg(entityCount),
+                3000);
+        }
+    } else {
+        // Editing existing sketch - just discard changes, keep original
+        statusBar()->showMessage(
+            tr("Changes to '%1' discarded").arg(m_completedSketches[m_currentSketchIndex].name),
+            3000);
     }
+
+    // Reset the editing index
+    m_currentSketchIndex = -1;
+}
+
+// ---- Project Loading ------------------------------------------------
+
+void FullModeWindow::loadProjectData()
+{
+    // Clear existing data first
+    clearProjectData();
+
+    // Load project units
+    setUnitsFromString(m_project.units());
+
+    // Load parameters
+    loadParametersFromProject();
+
+    // Load sketches
+    loadSketchesFromProject();
+
+    // Load construction planes
+    loadConstructionPlanesFromProject();
+
+    // Populate UI elements
+    populateFeatureTree();
+    populateTimeline();
+}
+
+void FullModeWindow::clearProjectData()
+{
+    // Clear sketches
+    m_completedSketches.clear();
+    clearSketchesInTree();
+
+    // Clear bodies in tree
+    clearBodiesInTree();
+
+    // Clear construction planes in tree
+    clearConstructionPlanesInTree();
+
+    // Clear timeline (except Origin)
+    while (m_timeline->itemCount() > 1) {
+        m_timeline->removeItem(m_timeline->itemCount() - 1);
+    }
+
+    // Reset parameters to defaults
+    initDefaultParameters();
+}
+
+void FullModeWindow::populateFeatureTree()
+{
+    // Add bodies to tree
+    const auto& shapes = m_project.shapes();
+    for (int i = 0; i < shapes.size(); ++i) {
+        QString name = QStringLiteral("Body%1").arg(i + 1);
+        addBodyToTree(name, i);
+    }
+
+    // Add sketches to tree
+    for (int i = 0; i < m_completedSketches.size(); ++i) {
+        addSketchToTree(m_completedSketches[i].name, i);
+    }
+}
+
+void FullModeWindow::populateTimeline()
+{
+    // Add features from project to timeline
+    const auto& features = m_project.features();
+
+    for (const auto& feature : features) {
+        // Skip Origin (already in timeline)
+        if (feature.type == FeatureType::Origin)
+            continue;
+
+        TimelineFeature tlFeature;
+        switch (feature.type) {
+        case FeatureType::Sketch:
+            tlFeature = TimelineFeature::Sketch;
+            break;
+        case FeatureType::Extrude:
+            tlFeature = TimelineFeature::Extrude;
+            break;
+        case FeatureType::Revolve:
+            tlFeature = TimelineFeature::Revolve;
+            break;
+        case FeatureType::Fillet:
+            tlFeature = TimelineFeature::Fillet;
+            break;
+        case FeatureType::Chamfer:
+            tlFeature = TimelineFeature::Chamfer;
+            break;
+        case FeatureType::Hole:
+            tlFeature = TimelineFeature::Hole;
+            break;
+        case FeatureType::Mirror:
+            tlFeature = TimelineFeature::Mirror;
+            break;
+        case FeatureType::Pattern:
+            tlFeature = TimelineFeature::Pattern;
+            break;
+        case FeatureType::Box:
+            tlFeature = TimelineFeature::Box;
+            break;
+        case FeatureType::Cylinder:
+            tlFeature = TimelineFeature::Cylinder;
+            break;
+        case FeatureType::Sphere:
+            tlFeature = TimelineFeature::Sphere;
+            break;
+        case FeatureType::Move:
+            tlFeature = TimelineFeature::Move;
+            break;
+        case FeatureType::Join:
+            tlFeature = TimelineFeature::Join;
+            break;
+        case FeatureType::Cut:
+            tlFeature = TimelineFeature::Cut;
+            break;
+        case FeatureType::Intersect:
+            tlFeature = TimelineFeature::Intersect;
+            break;
+        default:
+            continue;  // Skip unknown types
+        }
+
+        m_timeline->addItem(tlFeature, feature.name);
+    }
+}
+
+void FullModeWindow::loadSketchesFromProject()
+{
+    const auto& projectSketches = m_project.sketches();
+
+    for (const auto& sketchData : projectSketches) {
+        CompletedSketch sketch;
+        sketch.name = sketchData.name;
+        sketch.plane = sketchData.plane;
+        sketch.planeOffset = sketchData.planeOffset;
+        sketch.rotationAxis = sketchData.rotationAxis;
+        sketch.rotationAngle = sketchData.rotationAngle;
+
+        // Convert SketchEntityData to SketchEntity
+        for (const auto& entityData : sketchData.entities) {
+            SketchEntity entity;
+            entity.id = entityData.id;
+            entity.type = entityData.type;
+            entity.points = entityData.points;
+            entity.radius = entityData.radius;
+            entity.startAngle = entityData.startAngle;
+            entity.sweepAngle = entityData.sweepAngle;
+            entity.text = entityData.text;
+            entity.constrained = entityData.constrained;
+            entity.selected = false;
+
+            sketch.entities.append(entity);
+        }
+
+        // Create the 3D wireframe representation
+        sketch.aisShape = createSketchWireframe(sketch);
+
+        m_completedSketches.append(sketch);
+    }
+}
+
+void FullModeWindow::loadParametersFromProject()
+{
+    const auto& projectParams = m_project.parameters();
+
+    m_parameters.clear();
+
+    for (const auto& paramData : projectParams) {
+        Parameter param;
+        param.name = paramData.name;
+        param.expression = paramData.expression;
+        param.value = paramData.value;
+        param.unit = paramData.unit;
+        param.comment = paramData.comment;
+        m_parameters.append(param);
+    }
+
+    // If no parameters loaded, use defaults
+    if (m_parameters.isEmpty()) {
+        initDefaultParameters();
+    }
+}
+
+void FullModeWindow::loadConstructionPlanesFromProject()
+{
+    const auto& planes = m_project.constructionPlanes();
+
+    for (const auto& planeData : planes) {
+        // Add to feature tree
+        addConstructionPlaneToTree(planeData.name, planeData.id);
+
+        // Display in viewport if visible
+        if (planeData.visible) {
+            displayConstructionPlane(planeData.id);
+        }
+    }
+}
+
+void FullModeWindow::displayConstructionPlane(int planeId)
+{
+    const ConstructionPlaneData* planeData = m_project.constructionPlaneById(planeId);
+    if (!planeData) return;
+    if (!m_viewport) return;
+
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+    if (ctx.IsNull()) return;
+
+    // Create AisSketchPlane to visualize this construction plane
+    Handle(AisSketchPlane) planeVis = new AisSketchPlane(200.0);
+
+    switch (planeData->type) {
+    case ConstructionPlaneType::OffsetFromOrigin:
+        planeVis->setPlane(planeData->basePlane, planeData->offset);
+        break;
+
+    case ConstructionPlaneType::OffsetFromPlane:
+        // For offset from another plane, we need to compute the combined transform
+        // For now, just use the offset value (simplified)
+        // TODO: Properly chain transforms from reference plane
+        planeVis->setPlane(SketchPlane::XY, planeData->offset);
+        break;
+
+    case ConstructionPlaneType::Angled:
+        // Angled plane - use custom transform
+        // For now, use primary axis rotation only
+        // TODO: Support two-axis rotation
+        planeVis->setCustomPlane(planeData->primaryAxis, planeData->primaryAngle, planeData->offset);
+        break;
+    }
+
+    // Set construction plane appearance (different from sketch plane)
+    planeVis->setFillColor(Quantity_Color(0.3, 0.8, 0.3, Quantity_TOC_RGB));  // Green tint
+    planeVis->setBorderColor(Quantity_Color(0.2, 0.6, 0.2, Quantity_TOC_RGB));
+    planeVis->SetTransparency(0.8);
+
+    // Store reference to plane visualization for later removal
+    // For now, just display it - proper management would track by ID
+    ctx->Display(planeVis, Standard_True);
+}
+
+void FullModeWindow::hideConstructionPlane(int planeId)
+{
+    Q_UNUSED(planeId);
+    // TODO: Track plane visualizations by ID and remove specific one
+    // For now, this is a placeholder
 }
 
 }  // namespace hobbycad

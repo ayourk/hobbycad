@@ -17,6 +17,7 @@
 
 #include <hobbycad/document.h>
 #include <hobbycad/opengl_info.h>
+#include <hobbycad/project.h>
 
 #include <QMainWindow>
 
@@ -24,6 +25,7 @@ class QAction;
 class QLabel;
 class QDockWidget;
 class QTreeWidget;
+class QTreeWidgetItem;
 
 namespace hobbycad {
 
@@ -38,8 +40,11 @@ public:
                         QWidget* parent = nullptr);
     ~MainWindow() override;
 
-    /// Access the current document.
+    /// Access the current document (legacy BREP-only mode).
     Document& document();
+
+    /// Access the current project.
+    Project& project();
 
     /// Access the embedded CLI panel (may be nullptr if not created).
     CliPanel* cliPanel() const;
@@ -70,8 +75,23 @@ protected:
     QAction* rotateLeftAction() const;
     QAction* rotateRightAction() const;
 
+    /// Access the View > Show Grid action.
+    QAction* showGridAction() const;
+
+    /// Access the View > Snap to Grid action.
+    QAction* snapToGridAction() const;
+
+    /// Access the View > Z-Up Orientation action.
+    QAction* zUpAction() const;
+
+    /// Access the View > Orbit Selected Object action.
+    QAction* orbitSelectedAction() const;
+
     /// Access the View > Toolbar toggle action.
     QAction* toolbarToggleAction() const;
+
+    /// Access the Construct > New Construction Plane action.
+    QAction* newConstructionPlaneAction() const;
 
     /// Access the properties tree widget for displaying selected item properties.
     QTreeWidget* propertiesTree() const;
@@ -81,6 +101,33 @@ protected:
 
     /// Show or hide the sketch action bar
     void setSketchActionBarVisible(bool visible);
+
+    /// Add a sketch to the feature tree
+    void addSketchToTree(const QString& name, int index);
+
+    /// Select a sketch in the feature tree
+    void selectSketchInTree(int index);
+
+    /// Clear all sketches from the feature tree
+    void clearSketchesInTree();
+
+    /// Add a body to the feature tree
+    void addBodyToTree(const QString& name, int index);
+
+    /// Clear all bodies from the feature tree
+    void clearBodiesInTree();
+
+    /// Add a construction plane to the feature tree
+    void addConstructionPlaneToTree(const QString& name, int id);
+
+    /// Select a construction plane in the feature tree
+    void selectConstructionPlaneInTree(int id);
+
+    /// Clear all construction planes from the feature tree
+    void clearConstructionPlanesInTree();
+
+    /// Set document units from project
+    void setUnitsFromString(const QString& units);
 
     /// Get the current unit system index (0=mm, 1=cm, 2=m, 3=in, 4=ft).
     int currentUnits() const;
@@ -104,6 +151,12 @@ signals:
     /// @param units  0=mm, 1=cm, 2=m, 3=in, 4=ft
     void unitsChanged(int units);
 
+    /// Emitted when a construction plane is selected in the feature tree.
+    void constructionPlaneSelected(int planeId);
+
+    /// Emitted when a sketch is selected in the feature tree.
+    void sketchSelectedInTree(int sketchIndex);
+
 protected:
     /// Hide the dock-based terminal (used by Reduced Mode which
     /// has its own central CLI panel instead).
@@ -111,6 +164,7 @@ protected:
 
     OpenGLInfo m_glInfo;
     Document   m_document;
+    Project    m_project;
 
 private slots:
     void onFileNew();
@@ -156,6 +210,13 @@ private:
     QAction* m_actionResetView = nullptr;
     QAction* m_actionRotateLeft = nullptr;
     QAction* m_actionRotateRight = nullptr;
+    QAction* m_actionShowGrid = nullptr;
+    QAction* m_actionSnapToGrid = nullptr;
+    QAction* m_actionZUp = nullptr;
+    QAction* m_actionOrbitSelected = nullptr;
+
+    // Construct menu
+    QAction* m_actionNewConstructionPlane = nullptr;
 
     // Status bar
     QLabel* m_statusLabel   = nullptr;
@@ -168,6 +229,11 @@ private:
     CliPanel*    m_cliPanel        = nullptr;
     QTreeWidget* m_propertiesTree  = nullptr;
     SketchActionBar* m_sketchActionBar = nullptr;
+
+    // Feature tree container items
+    QTreeWidgetItem* m_sketchesTreeItem = nullptr;
+    QTreeWidgetItem* m_bodiesTreeItem = nullptr;
+    QTreeWidgetItem* m_constructionTreeItem = nullptr;
 
     // Current unit system (0=mm, 1=cm, 2=m, 3=in, 4=ft)
     int m_currentUnits = 0;

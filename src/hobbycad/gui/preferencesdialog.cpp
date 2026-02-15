@@ -216,6 +216,30 @@ QWidget* PreferencesDialog::createGeneralPage()
     startupForm->addRow(m_restoreSession);
 
     layout->addWidget(startupGroup);
+
+    // Coordinate system group
+    auto* coordGroup = new QGroupBox(tr("Coordinate System"));
+    auto* coordForm = new QFormLayout(coordGroup);
+
+    m_zUpOrientation = new QCheckBox(tr("Z-Up orientation (CAD convention)"));
+    m_zUpOrientation->setToolTip(
+        tr("When checked, Z axis points up (CAD/engineering).\n"
+           "When unchecked, Y axis points up (game engine/3D graphics)."));
+    coordForm->addRow(m_zUpOrientation);
+
+    layout->addWidget(coordGroup);
+
+    // Orbit behavior group
+    auto* orbitGroup = new QGroupBox(tr("Orbit Behavior"));
+    auto* orbitForm = new QFormLayout(orbitGroup);
+
+    m_orbitSelected = new QCheckBox(tr("Orbit around selected object"));
+    m_orbitSelected->setToolTip(
+        tr("When checked, ViewCube rotations orbit around the\n"
+           "center of selected objects instead of the pan position."));
+    orbitForm->addRow(m_orbitSelected);
+
+    layout->addWidget(orbitGroup);
     layout->addStretch();
 
     return page;
@@ -247,6 +271,10 @@ void PreferencesDialog::loadSettings()
         s.value(QStringLiteral("showGrid"), true).toBool());
     m_restoreSession->setChecked(
         s.value(QStringLiteral("restoreSession"), true).toBool());
+    m_zUpOrientation->setChecked(
+        s.value(QStringLiteral("zUpOrientation"), true).toBool());
+    m_orbitSelected->setChecked(
+        s.value(QStringLiteral("orbitSelected"), false).toBool());
 
     s.endGroup();
 }
@@ -268,6 +296,10 @@ void PreferencesDialog::saveSettings()
     s.setValue(QStringLiteral("showGrid"), m_showGridOnStart->isChecked());
     s.setValue(QStringLiteral("restoreSession"),
               m_restoreSession->isChecked());
+    s.setValue(QStringLiteral("zUpOrientation"),
+              m_zUpOrientation->isChecked());
+    s.setValue(QStringLiteral("orbitSelected"),
+              m_orbitSelected->isChecked());
 
     s.endGroup();
     s.sync();

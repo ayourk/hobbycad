@@ -67,7 +67,18 @@ void SketchModeController::setTimeline(TimelineWidget* timeline)
 
 void SketchModeController::setPropertiesTree(QTreeWidget* tree)
 {
+    // Disconnect from old tree
+    if (m_propsTree) {
+        disconnect(m_propsTree, nullptr, this, nullptr);
+    }
+
     m_propsTree = tree;
+
+    // Connect to handle checkbox changes
+    if (m_propsTree) {
+        connect(m_propsTree, &QTreeWidget::itemChanged,
+                this, &SketchModeController::onPropertyItemChanged);
+    }
 }
 
 void SketchModeController::setSketchActionBar(SketchActionBar* actionBar)
@@ -365,6 +376,13 @@ void SketchModeController::showEntityProperties(int entityId)
 {
     if (!m_propsTree || !m_canvas) return;
 
+    // Check for multi-selection
+    QSet<int> selectedIds = m_canvas->selectedEntityIds();
+    if (selectedIds.size() > 1) {
+        showMultiSelectionProperties(selectedIds);
+        return;
+    }
+
     const SketchEntity* entity = nullptr;
     for (const auto& e : m_canvas->entities()) {
         if (e.id == entityId) {
@@ -529,6 +547,13 @@ void SketchModeController::showEntityProperties(int entityId)
     constraintItem->setText(0, tr("Constrained"));
     constraintItem->setText(1, entity->constrained ? tr("Yes") : tr("No"));
 
+    // Construction geometry (with checkbox)
+    auto* constructionItem = new QTreeWidgetItem(m_propsTree);
+    constructionItem->setText(0, tr("Construction"));
+    constructionItem->setCheckState(1, entity->isConstruction ? Qt::Checked : Qt::Unchecked);
+    constructionItem->setData(0, Qt::UserRole, entityId);  // Store entity ID for callback
+    constructionItem->setData(0, Qt::UserRole + 1, QStringLiteral("construction"));  // Property name
+
     m_propsTree->expandAll();
 }
 
@@ -541,6 +566,167 @@ void SketchModeController::updateEntityCount()
         if (item && item->text(0) == tr("Entities")) {
             item->setText(1, QString::number(m_canvas->entities().size()));
             break;
+        }
+    }
+}
+
+void SketchModeController::showMultiSelectionProperties(const QSet<int>& selectedIds)
+{
+    if (!m_propsTree || !m_canvas) return;
+
+    m_propsTree->clear();
+
+    // Gather information about selected entities
+    QVector<const SketchEntity*> selectedEntities;
+    for (const auto& e : m_canvas->entities()) {
+        if (selectedIds.contains(e.id)) {
+            selectedEntities.append(&e);
+        }
+    }
+
+    if (selectedEntities.isEmpty()) return;
+
+    // Selection count
+    auto* countItem = new QTreeWidgetItem(m_propsTree);
+    countItem->setText(0, tr("Selected"));
+    countItem->setText(1, tr("%1 entities").arg(selectedEntities.size()));
+
+    // Gather type statistics
+    QMap<SketchEntityType, int> typeCounts;
+    int constructionCount = 0;
+    int normalCount = 0;
+
+    for (const SketchEntity* entity : selectedEntities) {
+        typeCounts[entity->type]++;
+        if (entity->isConstruction) {
+            constructionCount++;
+        } else {
+            normalCount++;
+        }
+    }
+
+    // Types breakdown
+    auto* typesHeader = new QTreeWidgetItem(m_propsTree);
+    typesHeader->setText(0, tr("Types"));
+
+    for (auto it = typeCounts.constBegin(); it != typeCounts.constEnd(); ++it) {
+        QString typeName;
+        switch (it.key()) {
+        case SketchEntityType::Point:     typeName = tr("Points"); break;
+        case SketchEntityType::Line:      typeName = tr("Lines"); break;
+        case SketchEntityType::Rectangle: typeName = tr("Rectangles"); break;
+        case SketchEntityType::Circle:    typeName = tr("Circles"); break;
+        case SketchEntityType::Arc:       typeName = tr("Arcs"); break;
+        case SketchEntityType::Spline:    typeName = tr("Splines"); break;
+        case SketchEntityType::Text:      typeName = tr("Text"); break;
+        default:                          typeName = tr("Other"); break;
+        }
+        auto* typeItem = new QTreeWidgetItem(typesHeader);
+        typeItem->setText(0, typeName);
+        typeItem->setText(1, QString::number(it.value()));
+    }
+
+    // Common properties section
+    auto* commonHeader = new QTreeWidgetItem(m_propsTree);
+    commonHeader->setText(0, tr("Common Properties"));
+
+    // Construction geometry (with checkbox for bulk toggle)
+    auto* constructionItem = new QTreeWidgetItem(commonHeader);
+    constructionItem->setText(0, tr("Construction"));
+
+    // Determine checkbox state: checked if all construction, unchecked if all normal, partial otherwise
+    if (constructionCount == selectedEntities.size()) {
+        constructionItem->setCheckState(1, Qt::Checked);
+    } else if (normalCount == selectedEntities.size()) {
+        constructionItem->setCheckState(1, Qt::Unchecked);
+    } else {
+        constructionItem->setCheckState(1, Qt::PartiallyChecked);
+    }
+    constructionItem->setData(0, Qt::UserRole, -1);  // -1 indicates multi-selection
+    constructionItem->setData(0, Qt::UserRole + 1, QStringLiteral("construction_multi"));
+
+    // Calculate bounding box for all selected
+    QRectF bounds;
+    bool first = true;
+    for (const SketchEntity* entity : selectedEntities) {
+        for (const QPointF& pt : entity->points) {
+            if (first) {
+                bounds = QRectF(pt, QSizeF(0, 0));
+                first = false;
+            } else {
+                bounds = bounds.united(QRectF(pt, QSizeF(0, 0)));
+            }
+        }
+        // Include radius for circles/arcs
+        if ((entity->type == SketchEntityType::Circle || entity->type == SketchEntityType::Arc) &&
+            !entity->points.isEmpty()) {
+            QPointF c = entity->points[0];
+            bounds = bounds.united(QRectF(c.x() - entity->radius, c.y() - entity->radius,
+                                          entity->radius * 2, entity->radius * 2));
+        }
+    }
+
+    // Bounding box info
+    auto* boundsHeader = new QTreeWidgetItem(m_propsTree);
+    boundsHeader->setText(0, tr("Bounding Box"));
+
+    auto* minItem = new QTreeWidgetItem(boundsHeader);
+    minItem->setText(0, tr("Min"));
+    minItem->setText(1, QStringLiteral("(%1, %2) %3")
+                     .arg(bounds.left(), 0, 'f', 2)
+                     .arg(bounds.bottom(), 0, 'f', 2)
+                     .arg(m_unitSuffix));
+
+    auto* maxItem = new QTreeWidgetItem(boundsHeader);
+    maxItem->setText(0, tr("Max"));
+    maxItem->setText(1, QStringLiteral("(%1, %2) %3")
+                     .arg(bounds.right(), 0, 'f', 2)
+                     .arg(bounds.top(), 0, 'f', 2)
+                     .arg(m_unitSuffix));
+
+    auto* sizeItem = new QTreeWidgetItem(boundsHeader);
+    sizeItem->setText(0, tr("Size"));
+    sizeItem->setText(1, QStringLiteral("%1 x %2 %3")
+                     .arg(bounds.width(), 0, 'f', 2)
+                     .arg(bounds.height(), 0, 'f', 2)
+                     .arg(m_unitSuffix));
+
+    auto* centerItem = new QTreeWidgetItem(boundsHeader);
+    centerItem->setText(0, tr("Center"));
+    centerItem->setText(1, QStringLiteral("(%1, %2) %3")
+                     .arg(bounds.center().x(), 0, 'f', 2)
+                     .arg(bounds.center().y(), 0, 'f', 2)
+                     .arg(m_unitSuffix));
+
+    m_propsTree->expandAll();
+}
+
+void SketchModeController::onPropertyItemChanged(QTreeWidgetItem* item, int column)
+{
+    if (!item || !m_canvas || column != 1) return;
+
+    // Check if this is a property we handle
+    QString propertyName = item->data(0, Qt::UserRole + 1).toString();
+    if (propertyName.isEmpty()) return;
+
+    int entityId = item->data(0, Qt::UserRole).toInt();
+
+    if (propertyName == QStringLiteral("construction")) {
+        // Single entity construction toggle
+        if (entityId <= 0) return;
+        bool isConstruction = (item->checkState(1) == Qt::Checked);
+        m_canvas->setEntityConstruction(entityId, isConstruction);
+    }
+    else if (propertyName == QStringLiteral("construction_multi")) {
+        // Multi-selection construction toggle
+        bool isConstruction = (item->checkState(1) == Qt::Checked);
+        QSet<int> selectedIds = m_canvas->selectedEntityIds();
+        for (int id : selectedIds) {
+            m_canvas->setEntityConstruction(id, isConstruction);
+        }
+        // Refresh the properties panel
+        if (!selectedIds.isEmpty()) {
+            showMultiSelectionProperties(selectedIds);
         }
     }
 }

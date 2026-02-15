@@ -59,10 +59,24 @@ void NavOrbitRing::onPaint()
             m_color, kLineWidth, 24);
 
     // Arrow at arc1 inner end — points CCW (toward gap center)
-    paintArrow(arc1End, +1.0, m_cwCtrl);
-
     // Arrow at arc2 inner end — points CW (toward gap center)
-    paintArrow(arc2Start, -1.0, m_ccwCtrl);
+    // When flipped (camera looking against axis), swap which control each arrow triggers
+    if (m_flipped) {
+        paintArrow(arc1End, +1.0, m_ccwCtrl);
+        paintArrow(arc2Start, -1.0, m_cwCtrl);
+    } else {
+        paintArrow(arc1End, +1.0, m_cwCtrl);
+        paintArrow(arc2Start, -1.0, m_ccwCtrl);
+    }
+}
+
+void NavOrbitRing::setFlipped(bool flipped)
+{
+    if (m_flipped != flipped) {
+        m_flipped = flipped;
+        // Force redraw
+        SetToUpdate();
+    }
 }
 
 // ---- paintArrow -----------------------------------------------------

@@ -283,6 +283,43 @@ void CliPanel::executeCurrentLine()
         return;
     }
 
+    // Handle viewport actions (emit signals for full mode to connect)
+    if (result.viewportAction != ViewportAction::None) {
+        if (m_sketchModeActive) {
+            // In sketch mode, 3D viewport is not visible
+            appendError(tr("Warning: 3D viewport commands are not available in Sketch Mode. "
+                           "Finish or discard the sketch first."));
+        } else if (!m_viewportConnected && m_guiMode) {
+            // Only warn in GUI mode (Reduced Mode) - in pure CLI mode, silently ignore
+            appendError(tr("Warning: No 3D viewport available. "
+                           "3D viewport commands only work in Full Mode."));
+        } else if (m_viewportConnected) {
+            switch (result.viewportAction) {
+                case ViewportAction::ZoomPercent:
+                    emit zoomRequested(result.vpArg1);
+                    break;
+                case ViewportAction::ZoomHome:
+                    emit zoomHomeRequested();
+                    break;
+                case ViewportAction::PanTo:
+                    emit panToRequested(result.vpArg1, result.vpArg2, result.vpArg3);
+                    break;
+                case ViewportAction::PanHome:
+                    emit panHomeRequested();
+                    break;
+                case ViewportAction::RotateAxis:
+                    emit rotateRequested(result.vpAxis, result.vpArg1);
+                    break;
+                case ViewportAction::RotateHome:
+                    emit rotateHomeRequested();
+                    break;
+                case ViewportAction::None:
+                default:
+                    break;
+            }
+        }
+    }
+
     showPrompt();
 }
 
@@ -375,6 +412,21 @@ void CliPanel::setCurrentInput(const QString& text)
     cur.insertText(text);
     setTextCursor(cur);
     ensureCursorVisible();
+}
+
+void CliPanel::setViewportConnected(bool connected)
+{
+    m_viewportConnected = connected;
+}
+
+void CliPanel::setGuiMode(bool guiMode)
+{
+    m_guiMode = guiMode;
+}
+
+void CliPanel::setSketchModeActive(bool active)
+{
+    m_sketchModeActive = active;
 }
 
 }  // namespace hobbycad

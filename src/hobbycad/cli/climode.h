@@ -30,9 +30,11 @@ public:
     /// Returns 0 on success, 1 on failure.
     int runConvert(const QString& input, const QString& output);
 
-    /// Run a Python script and exit.  (Stub for Phase 0.)
+    /// Run a script file and exit.
+    /// @param scriptPath Path to script file, "-" for stdin, or empty for stdin
+    /// @param checkOnly If true, only validate syntax without executing
     /// Returns 0 on success, 1 on failure.
-    int runScript(const QString& scriptPath);
+    int runScript(const QString& scriptPath, bool checkOnly = false);
 
     /// Run the interactive REPL.
     /// Returns 0 on normal exit.

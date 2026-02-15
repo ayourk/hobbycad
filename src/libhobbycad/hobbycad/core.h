@@ -50,6 +50,28 @@ HOBBYCAD_EXPORT bool initialize();
 /// Call once at application exit.
 HOBBYCAD_EXPORT void shutdown();
 
+// =====================================================================
+//  Library Capabilities
+// =====================================================================
+
+/// Check if constraint solving is available.
+/// Returns true if this library was built with libslvs support.
+///
+/// Downstream developers should use this to determine if parametric
+/// constraint solving is available before using sketch::Solver.
+///
+/// Example:
+/// @code
+///     if (hobbycad::hasConstraintSolver()) {
+///         // Enable constraint tools in UI
+///         sketch::Solver solver;
+///         solver.solve(entities, constraints);
+///     } else {
+///         // Disable constraint UI or show warning
+///     }
+/// @endcode
+HOBBYCAD_EXPORT bool hasConstraintSolver();
+
 }  // namespace hobbycad
 
 #endif  // HOBBYCAD_CORE_H

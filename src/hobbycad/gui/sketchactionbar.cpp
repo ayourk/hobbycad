@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QStyle>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace hobbycad {
@@ -126,6 +127,63 @@ void SketchActionBar::setSaveEnabled(bool enabled)
 void SketchActionBar::setModified(bool modified)
 {
     m_modified = modified;
+}
+
+void SketchActionBar::showAndFlash()
+{
+    // Show Save/Discard buttons (same as clicking Finish)
+    m_finishButton->setVisible(false);
+    m_saveDiscardWidget->setVisible(true);
+
+    // Start flash animation
+    m_flashCount = 0;
+
+    // Store original styles
+    m_saveButtonOriginalStyle = m_saveButton->styleSheet();
+    m_discardButtonOriginalStyle = m_discardButton->styleSheet();
+
+    // Create timer if needed
+    if (!m_flashTimer) {
+        m_flashTimer = new QTimer(this);
+        connect(m_flashTimer, &QTimer::timeout, this, &SketchActionBar::doFlashStep);
+    }
+
+    // Flash every 150ms, 10 steps = 5 flashes (on/off pairs)
+    m_flashTimer->start(150);
+}
+
+void SketchActionBar::doFlashStep()
+{
+    m_flashCount++;
+
+    if (m_flashCount > 10) {
+        // Done flashing - restore original styles
+        m_flashTimer->stop();
+        m_saveButton->setStyleSheet(m_saveButtonOriginalStyle);
+        m_discardButton->setStyleSheet(m_discardButtonOriginalStyle);
+        return;
+    }
+
+    // Alternate between highlighted and normal
+    if (m_flashCount % 2 == 1) {
+        // Highlight state - bright yellow/orange background
+        QString highlightStyle = QStringLiteral(
+            "QPushButton {"
+            "  background-color: #FFB900;"
+            "  color: black;"
+            "  border: 2px solid #FF8C00;"
+            "  padding: 6px 16px;"
+            "  border-radius: 3px;"
+            "  font-weight: bold;"
+            "}"
+        );
+        m_saveButton->setStyleSheet(highlightStyle);
+        m_discardButton->setStyleSheet(highlightStyle);
+    } else {
+        // Normal state
+        m_saveButton->setStyleSheet(m_saveButtonOriginalStyle);
+        m_discardButton->setStyleSheet(m_discardButtonOriginalStyle);
+    }
 }
 
 }  // namespace hobbycad

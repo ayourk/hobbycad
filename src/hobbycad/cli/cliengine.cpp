@@ -8,10 +8,13 @@
 #include <hobbycad/core.h>
 #include <hobbycad/brep_io.h>
 #include <hobbycad/document.h>
+#include <hobbycad/sketch/parsing.h>
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QTextStream>
 
 namespace hobbycad {
 
@@ -29,6 +32,8 @@ QStringList CliEngine::commandNames() const
         QStringLiteral("version"),
         QStringLiteral("open"),
         QStringLiteral("save"),
+        QStringLiteral("convert"),
+        QStringLiteral("script"),
         QStringLiteral("info"),
         QStringLiteral("new"),
         QStringLiteral("cd"),
@@ -36,6 +41,9 @@ QStringList CliEngine::commandNames() const
         QStringLiteral("history"),
         QStringLiteral("select"),
         QStringLiteral("create"),
+        QStringLiteral("zoom"),
+        QStringLiteral("panto"),
+        QStringLiteral("rotate"),
         QStringLiteral("exit"),
         QStringLiteral("quit"),
     };
@@ -212,6 +220,41 @@ QStringList CliEngine::completeArguments(const QStringList& tokens,
         return {};
     }
 
+    // ---- convert command ----
+    if (cmd == QLatin1String("convert")) {
+        if (argIndex == 1) {
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?<input>  Input file (.brep, .hcad, or directory)") };
+            }
+            if (prefix == QLatin1String("--")) {
+                return { QStringLiteral("--format"), QStringLiteral("--help") };
+            }
+        }
+        else if (argIndex == 2) {
+            // Check if previous arg was --format
+            if (tokens.size() > 1 && tokens[tokens.size()-1] == QLatin1String("--format")) {
+                return { QStringLiteral("brep"), QStringLiteral("hcad") };
+            }
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?<output>  Output file or directory") };
+            }
+        }
+        return {};
+    }
+
+    // ---- script command ----
+    if (cmd == QLatin1String("script")) {
+        if (argIndex == 1) {
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?<file>  Script file to execute (.txt)") };
+            }
+            if (prefix == QLatin1String("-")) {
+                return { QStringLiteral("--help") };
+            }
+        }
+        return {};
+    }
+
     // ---- cd command ----
     if (cmd == QLatin1String("cd")) {
         if (argIndex == 1 && prefix.isEmpty()) {
@@ -243,6 +286,64 @@ QStringList CliEngine::completeArguments(const QStringList& tokens,
         else if (argIndex == 2 && tokens.size() > 1 &&
                  tokens[1].toLower() == QLatin1String("max")) {
             return { QStringLiteral("?<n>  Maximum number of history lines") };
+        }
+    }
+
+    // ---- Viewport commands (zoom, panto, rotate) ----
+    if (cmd == QLatin1String("zoom")) {
+        if (argIndex == 1) {
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?<percent>|home  Zoom percentage or 'home'") };
+            }
+            if (QStringLiteral("home").startsWith(prefix, Qt::CaseInsensitive)) {
+                return { QStringLiteral("home") };
+            }
+        }
+    }
+
+    if (cmd == QLatin1String("panto")) {
+        if (argIndex == 1) {
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?<x>,<y>,<z>|home  Coordinates or 'home'") };
+            }
+            if (QStringLiteral("home").startsWith(prefix, Qt::CaseInsensitive)) {
+                return { QStringLiteral("home") };
+            }
+        }
+    }
+
+    if (cmd == QLatin1String("rotate")) {
+        if (argIndex == 1) {
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?on <axis> <degrees>|home") };
+            }
+            QStringList matches;
+            if (QStringLiteral("on").startsWith(prefix, Qt::CaseInsensitive)) {
+                matches.append(QStringLiteral("on"));
+            }
+            if (QStringLiteral("home").startsWith(prefix, Qt::CaseInsensitive)) {
+                matches.append(QStringLiteral("home"));
+            }
+            return matches.isEmpty()
+                ? QStringList{ QStringLiteral("?on|home") }
+                : matches;
+        }
+        else if (argIndex == 2 && tokens.size() > 1 &&
+                 tokens[1].toLower() == QLatin1String("on")) {
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?<axis>  x, y, or z") };
+            }
+            QStringList axes = { QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z") };
+            QStringList matches;
+            for (const auto& a : axes) {
+                if (a.startsWith(prefix, Qt::CaseInsensitive)) {
+                    matches.append(a);
+                }
+            }
+            return matches;
+        }
+        else if (argIndex == 3) {
+            return { QStringLiteral("?<degrees>  Rotation angle") };
         }
     }
 
@@ -522,12 +623,19 @@ CliResult CliEngine::execute(const QString& line)
     if (cmd == QLatin1String("new"))     return cmdNew();
     if (cmd == QLatin1String("open"))    return cmdOpen(tokens.mid(1));
     if (cmd == QLatin1String("save"))    return cmdSave(tokens.mid(1));
+    if (cmd == QLatin1String("convert")) return cmdConvert(tokens.mid(1));
+    if (cmd == QLatin1String("script"))  return cmdScript(tokens.mid(1));
     if (cmd == QLatin1String("cd"))      return cmdCd(tokens.mid(1));
     if (cmd == QLatin1String("pwd"))     return cmdPwd();
     if (cmd == QLatin1String("info"))    return cmdInfo();
     if (cmd == QLatin1String("history")) return cmdHistory(tokens.mid(1));
     if (cmd == QLatin1String("select"))  return cmdSelect(tokens.mid(1));
     if (cmd == QLatin1String("create"))  return cmdCreate(tokens.mid(1));
+
+    // Viewport commands (only work in full mode with a viewport)
+    if (cmd == QLatin1String("zoom"))    return cmdZoom(tokens.mid(1));
+    if (cmd == QLatin1String("panto"))   return cmdPanTo(tokens.mid(1));
+    if (cmd == QLatin1String("rotate"))  return cmdRotate(tokens.mid(1));
 
     // Sketch mode commands
     if (cmd == QLatin1String("finish"))  return cmdFinish();
@@ -557,12 +665,19 @@ CliResult CliEngine::cmdHelp() const
     QString helpText = QStringLiteral(
         "Available commands:\n"
         "\n"
-        "  help                    Show this help message\n"
-        "  version                 Show HobbyCAD version\n"
+        "File Operations:\n"
+        "  new                     Create a new document with a test solid\n"
         "  open <file>             Open a BREP file (.brep added if no extension)\n"
         "  save <file>             Save to a BREP file (.brep added if no extension)\n"
+        "  convert <in> <out>      Convert between file formats\n"
+        "  script <file>           Execute a script file\n"
+        "\n"
+        "Information:\n"
+        "  help                    Show this help message\n"
+        "  version                 Show HobbyCAD version\n"
         "  info                    Show current document info\n"
-        "  new                     Create a new document with a test solid\n"
+        "\n"
+        "Navigation:\n"
         "  cd [dir]                Change working directory (no arg = home)\n"
         "  pwd                     Print working directory\n"
         "  history                 Show command history\n"
@@ -571,7 +686,15 @@ CliResult CliEngine::cmdHelp() const
         "\n"
         "Selection & Creation:\n"
         "  select <type> <name>    Select an object (e.g., select sketch Sketch1)\n"
-        "  create sketch [name]    Create a new sketch (auto-named if no name given)\n")
+        "  create sketch [name]    Create a new sketch (auto-named if no name given)\n"
+        "\n"
+        "Viewport (full mode only):\n"
+        "  zoom <percent>          Set zoom level (e.g., zoom 200)\n"
+        "  zoom home               Reset zoom to fit all objects\n"
+        "  panto <x>,<y>,<z>       Pan camera to center on coordinates\n"
+        "  panto home              Pan to origin (0,0,0)\n"
+        "  rotate on <axis> <deg>  Rotate view (e.g., rotate on z 45)\n"
+        "  rotate home             Reset to isometric view\n")
         .arg(m_history.maxLines());
 
     if (m_inSketchMode) {
@@ -682,6 +805,299 @@ CliResult CliEngine::cmdSave(const QStringList& args)
     }
 
     r.output = QStringLiteral("Saved: ") + path;
+    return r;
+}
+
+CliResult CliEngine::cmdConvert(const QStringList& args)
+{
+    CliResult r;
+
+    // Check for help flag
+    if (!args.isEmpty() && (args[0] == QLatin1String("--help") ||
+                            args[0] == QLatin1String("-h"))) {
+        r.output = QStringLiteral(
+            "Usage: convert [options] <input> <output>\n"
+            "\n"
+            "Convert between CAD file formats.\n"
+            "\n"
+            "Arguments:\n"
+            "  <input>                  Input file path\n"
+            "  <output>                 Output file path\n"
+            "\n"
+            "Options:\n"
+            "  -h, --help               Show this help message\n"
+            "  --format <fmt>           Force output format (auto-detected from extension)\n"
+            "\n"
+            "Supported Formats:\n"
+            "  .hcad                    HobbyCAD project\n"
+            "  .brep, .brp              OpenCASCADE BREP\n"
+            "\n"
+            "Examples:\n"
+            "  convert model.brep project/\n"
+            "  convert myproject/ export.brep");
+        return r;
+    }
+
+    // Parse arguments
+    QString inputPath;
+    QString outputPath;
+    QString format;
+
+    for (int i = 0; i < args.size(); ++i) {
+        if (args[i] == QLatin1String("--format") && i + 1 < args.size()) {
+            format = args[++i];
+        } else if (!args[i].startsWith(QLatin1Char('-'))) {
+            if (inputPath.isEmpty()) {
+                inputPath = args[i];
+            } else if (outputPath.isEmpty()) {
+                outputPath = args[i];
+            }
+        }
+    }
+
+    if (inputPath.isEmpty() || outputPath.isEmpty()) {
+        r.exitCode = 1;
+        r.error = QStringLiteral(
+            "Usage: convert <input> <output>\n"
+            "\n"
+            "Run 'convert --help' for more options.");
+        return r;
+    }
+
+    // Check if input exists
+    QFileInfo inputInfo(inputPath);
+    if (!inputInfo.exists()) {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Input file not found: ") + inputPath;
+        return r;
+    }
+
+    // Determine input type
+    bool inputIsProject = inputInfo.isDir() ||
+                          inputPath.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive);
+    bool inputIsBrep = inputPath.endsWith(QStringLiteral(".brep"), Qt::CaseInsensitive) ||
+                       inputPath.endsWith(QStringLiteral(".brp"), Qt::CaseInsensitive);
+
+    // Determine output type (from format flag or extension)
+    bool outputIsProject = false;
+    bool outputIsBrep = false;
+
+    if (!format.isEmpty()) {
+        outputIsProject = format.toLower() == QLatin1String("hcad");
+        outputIsBrep = format.toLower() == QLatin1String("brep");
+    } else {
+        outputIsProject = outputPath.endsWith(QStringLiteral("/")) ||
+                          outputPath.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive);
+        outputIsBrep = outputPath.endsWith(QStringLiteral(".brep"), Qt::CaseInsensitive) ||
+                       outputPath.endsWith(QStringLiteral(".brp"), Qt::CaseInsensitive);
+    }
+
+    // Default to BREP if no format detected
+    if (!outputIsProject && !outputIsBrep) {
+        outputIsBrep = true;
+        if (!outputPath.contains(QLatin1Char('.'))) {
+            outputPath += QStringLiteral(".brep");
+        }
+    }
+
+    // Read input
+    QList<TopoDS_Shape> shapes;
+    QString err;
+
+    if (inputIsBrep) {
+        shapes = brep_io::readBrep(inputPath, &err);
+        if (shapes.isEmpty() && !err.isEmpty()) {
+            r.exitCode = 1;
+            r.error = QStringLiteral("Failed to read input: ") + err;
+            return r;
+        }
+    } else if (inputIsProject) {
+        // TODO: Load from project
+        r.exitCode = 1;
+        r.error = QStringLiteral("Project loading not yet implemented for convert command.");
+        return r;
+    } else {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Unknown input format: ") + inputPath;
+        return r;
+    }
+
+    // Write output
+    if (outputIsBrep) {
+        if (!brep_io::writeBrep(outputPath, shapes, &err)) {
+            r.exitCode = 1;
+            r.error = QStringLiteral("Failed to write output: ") + err;
+            return r;
+        }
+    } else if (outputIsProject) {
+        // TODO: Save to project
+        r.exitCode = 1;
+        r.error = QStringLiteral("Project saving not yet implemented for convert command.");
+        return r;
+    }
+
+    r.output = QStringLiteral("Converted: %1 -> %2 (%3 shape(s))")
+                   .arg(inputPath, outputPath).arg(shapes.size());
+    return r;
+}
+
+CliResult CliEngine::cmdScript(const QStringList& args)
+{
+    CliResult r;
+
+    // Check for help flag
+    if (!args.isEmpty() && (args[0] == QLatin1String("--help") ||
+                            args[0] == QLatin1String("-h"))) {
+        r.output = QStringLiteral(
+            "Usage: script [options] [file]\n"
+            "\n"
+            "Execute a HobbyCAD script file.\n"
+            "\n"
+            "Arguments:\n"
+            "  <file>                   Script file to execute\n"
+            "  -                        Read script from stdin (for piping)\n"
+            "\n"
+            "Options:\n"
+            "  -h, --help               Show this help message\n"
+            "  --dry-run                Check syntax without executing\n"
+            "\n"
+            "Script files contain CLI commands, one per line.\n"
+            "Lines starting with '#' are treated as comments.\n"
+            "\n"
+            "Example script (egg.txt):\n"
+            "  # Create an egg shape from a cube\n"
+            "  new\n"
+            "  box 10 10 10\n"
+            "  fillet 2\n"
+            "  scale 1 1 1.5\n"
+            "  save myegg/\n"
+            "\n"
+            "Run with:\n"
+            "  script egg.txt\n"
+            "  script --dry-run egg.txt   # Validate without running\n"
+            "  cat egg.txt | hobbycad script -");
+        return r;
+    }
+
+    // Parse options
+    bool checkOnly = false;
+    QString scriptPath;
+
+    for (const QString& arg : args) {
+        if (arg == QLatin1String("--check") || arg == QLatin1String("--dry-run")) {
+            checkOnly = true;
+        } else if (!arg.startsWith(QLatin1Char('-'))) {
+            scriptPath = arg;
+        }
+    }
+
+    bool readFromStdin = scriptPath.isEmpty() || scriptPath == QLatin1String("-");
+
+    QFile file;
+    QTextStream in;
+
+    if (readFromStdin) {
+        // Read from stdin
+        if (!file.open(stdin, QIODevice::ReadOnly | QIODevice::Text)) {
+            r.exitCode = 1;
+            r.error = QStringLiteral("Could not open stdin for reading.");
+            return r;
+        }
+        in.setDevice(&file);
+    } else {
+        file.setFileName(scriptPath);
+
+        if (!file.exists()) {
+            r.exitCode = 1;
+            r.error = QStringLiteral("Script file not found: ") + scriptPath;
+            return r;
+        }
+
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            r.exitCode = 1;
+            r.error = QStringLiteral("Could not open script file: ") + file.errorString();
+            return r;
+        }
+        in.setDevice(&file);
+    }
+
+    int lineNum = 0;
+    int commandCount = 0;
+    int errorCount = 0;
+    QString output;
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        lineNum++;
+
+        // Skip empty lines and comments
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) {
+            continue;
+        }
+
+        commandCount++;
+
+        if (checkOnly) {
+            // Syntax check only - validate command name exists
+            QStringList tokens = line.split(QRegularExpression(QStringLiteral("\\s+")),
+                                            Qt::SkipEmptyParts);
+            if (tokens.isEmpty()) continue;
+
+            QString cmd = tokens.first().toLower();
+            QStringList validCmds = commandNames();
+
+            // Also add sketch commands if we might be in sketch mode
+            validCmds << QStringLiteral("point") << QStringLiteral("line")
+                      << QStringLiteral("circle") << QStringLiteral("rectangle")
+                      << QStringLiteral("arc") << QStringLiteral("finish")
+                      << QStringLiteral("discard");
+
+            if (!validCmds.contains(cmd)) {
+                output += QStringLiteral("[%1] ERROR: Unknown command '%2'\n")
+                              .arg(lineNum).arg(cmd);
+                errorCount++;
+            } else {
+                output += QStringLiteral("[%1] OK: %2\n").arg(lineNum).arg(line);
+            }
+        } else {
+            // Execute the command
+            CliResult cmdResult = execute(line);
+
+            if (!cmdResult.output.isEmpty()) {
+                output += QStringLiteral("[%1] %2\n").arg(lineNum).arg(cmdResult.output);
+            }
+
+            if (cmdResult.exitCode != 0) {
+                r.exitCode = 1;
+                r.error = QStringLiteral("Error at line %1: %2").arg(lineNum).arg(cmdResult.error);
+                if (!output.isEmpty()) {
+                    r.output = output;
+                }
+                return r;
+            }
+
+            if (cmdResult.requestExit) {
+                // Script requested exit
+                break;
+            }
+        }
+    }
+
+    if (checkOnly) {
+        if (errorCount > 0) {
+            r.exitCode = 1;
+            r.output = output;
+            r.error = QStringLiteral("Syntax check failed: %1 error(s) in %2 command(s)")
+                          .arg(errorCount).arg(commandCount);
+        } else {
+            r.output = output + QStringLiteral("\nSyntax check passed: %1 command(s) OK")
+                                    .arg(commandCount);
+        }
+    } else {
+        r.output = output + QStringLiteral("\nScript completed: %1 command(s) executed.")
+                                .arg(commandCount);
+    }
+
     return r;
 }
 
@@ -919,90 +1335,16 @@ CliResult CliEngine::cmdDiscard()
     return r;
 }
 
-// Helper to parse a value that may be a number, parameter, or expression
-// Returns the string representation (for later evaluation) and attempts numeric parse
+// Wrappers for library parsing functions (using local static for brevity)
 static bool parseValue(const QString& str, double& value, QString& expr)
 {
-    expr = str.trimmed();
-    if (expr.isEmpty()) return false;
-
-    // If it starts with a digit, minus, or decimal point, try to parse as number
-    QChar first = expr[0];
-    if (first.isDigit() || first == '-' || first == '.') {
-        bool ok = false;
-        value = expr.toDouble(&ok);
-        return ok;  // Must be a valid number if it starts like one
-    }
-
-    // If it's a parenthesized expression, accept it
-    if (first == '(' && expr.endsWith(')')) {
-        value = 0;  // Placeholder - will be evaluated later
-        return true;
-    }
-
-    // Must be a parameter name: starts with letter, contains only letters/digits/underscore
-    if (first.isLetter()) {
-        bool validParam = true;
-        for (const QChar& c : expr) {
-            if (!c.isLetterOrNumber() && c != '_') {
-                validParam = false;
-                break;
-            }
-        }
-        if (validParam) {
-            value = 0;  // Placeholder - will be resolved later
-            return true;
-        }
-    }
-
-    return false;
+    return sketch::parseValue(str, value, expr);
 }
 
-// Helper to split coordinate string respecting parentheses
-// e.g., "(a+b),(c*d)" splits into ["(a+b)", "(c*d)"]
-static QStringList splitCoordinate(const QString& str)
-{
-    QStringList parts;
-    QString current;
-    int parenDepth = 0;
-
-    for (const QChar& c : str) {
-        if (c == '(') {
-            parenDepth++;
-            current += c;
-        } else if (c == ')') {
-            parenDepth--;
-            current += c;
-        } else if (c == ',' && parenDepth == 0) {
-            parts.append(current.trimmed());
-            current.clear();
-        } else {
-            current += c;
-        }
-    }
-
-    if (!current.isEmpty()) {
-        parts.append(current.trimmed());
-    }
-
-    return parts;
-}
-
-// Helper to parse "x,y" coordinate string (supports expressions in parentheses)
 static bool parseCoord(const QString& str, double& x, double& y,
                        QString* xExpr = nullptr, QString* yExpr = nullptr)
 {
-    QStringList parts = splitCoordinate(str);
-    if (parts.size() != 2) return false;
-
-    QString exprX, exprY;
-    bool okX = parseValue(parts[0], x, exprX);
-    bool okY = parseValue(parts[1], y, exprY);
-
-    if (xExpr) *xExpr = exprX;
-    if (yExpr) *yExpr = exprY;
-
-    return okX && okY;
+    return sketch::parseCoordinate(str, x, y, xExpr, yExpr);
 }
 
 CliResult CliEngine::cmdSketchPoint(const QStringList& args)
@@ -1322,6 +1664,166 @@ CliResult CliEngine::cmdSketchArc(const QStringList& args)
     // TODO: Actually create arc in sketch with expression support
     r.output = QStringLiteral("Created arc at (%1, %2) with radius %3 from %4° to %5°")
                    .arg(cx).arg(cy).arg(radiusExpr).arg(startExpr).arg(endExpr);
+    return r;
+}
+
+// ---- Viewport commands (zoom, panto, rotate) -------------------------
+
+CliResult CliEngine::cmdZoom(const QStringList& args)
+{
+    CliResult r;
+
+    if (args.isEmpty()) {
+        r.exitCode = 1;
+        r.error = QStringLiteral(
+            "Usage: zoom <percent> | zoom home\n"
+            "\n"
+            "Examples:\n"
+            "  zoom 100       Set zoom to 100% (fit all)\n"
+            "  zoom 200       Zoom in to 200%\n"
+            "  zoom 50        Zoom out to 50%\n"
+            "  zoom home      Reset zoom to fit all objects");
+        return r;
+    }
+
+    QString arg = args[0].toLower();
+
+    if (arg == QLatin1String("home")) {
+        r.viewportAction = ViewportAction::ZoomHome;
+        r.output = QStringLiteral("Zoom reset to fit all.");
+        return r;
+    }
+
+    // Parse as percentage
+    bool ok = false;
+    double percent = args[0].toDouble(&ok);
+    if (!ok || percent <= 0.0) {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Invalid zoom percentage. Must be a positive number.");
+        return r;
+    }
+
+    r.viewportAction = ViewportAction::ZoomPercent;
+    r.vpArg1 = percent;
+    r.output = QStringLiteral("Zoom set to %1%.").arg(percent);
+    return r;
+}
+
+CliResult CliEngine::cmdPanTo(const QStringList& args)
+{
+    CliResult r;
+
+    if (args.isEmpty()) {
+        r.exitCode = 1;
+        r.error = QStringLiteral(
+            "Usage: panto <x>,<y>,<z> | panto home\n"
+            "\n"
+            "Pan the camera to center on the specified coordinates.\n"
+            "\n"
+            "Examples:\n"
+            "  panto 0,0,0       Center on the origin\n"
+            "  panto 100,50,0    Center on point (100, 50, 0)\n"
+            "  panto home        Center on the origin");
+        return r;
+    }
+
+    QString arg = args[0].toLower();
+
+    if (arg == QLatin1String("home")) {
+        r.viewportAction = ViewportAction::PanHome;
+        r.output = QStringLiteral("Panned to origin.");
+        return r;
+    }
+
+    // Parse as x,y,z coordinates
+    QStringList parts = args[0].split(',');
+    if (parts.size() != 3) {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Invalid coordinates. Use format: x,y,z (e.g., 100,50,0)");
+        return r;
+    }
+
+    bool okX, okY, okZ;
+    double x = parts[0].toDouble(&okX);
+    double y = parts[1].toDouble(&okY);
+    double z = parts[2].toDouble(&okZ);
+
+    if (!okX || !okY || !okZ) {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Invalid coordinates. All values must be numbers.");
+        return r;
+    }
+
+    r.viewportAction = ViewportAction::PanTo;
+    r.vpArg1 = x;
+    r.vpArg2 = y;
+    r.vpArg3 = z;
+    r.output = QStringLiteral("Panned to (%1, %2, %3).").arg(x).arg(y).arg(z);
+    return r;
+}
+
+CliResult CliEngine::cmdRotate(const QStringList& args)
+{
+    CliResult r;
+
+    if (args.isEmpty()) {
+        r.exitCode = 1;
+        r.error = QStringLiteral(
+            "Usage: rotate on <axis> <degrees> | rotate home\n"
+            "\n"
+            "Rotate the camera around a world axis.\n"
+            "\n"
+            "Arguments:\n"
+            "  <axis>      x, y, or z\n"
+            "  <degrees>   Rotation angle (positive = CCW)\n"
+            "\n"
+            "Examples:\n"
+            "  rotate on z 45      Rotate 45° around the Z axis\n"
+            "  rotate on x -90     Rotate -90° around the X axis\n"
+            "  rotate home         Reset to isometric view");
+        return r;
+    }
+
+    QString arg = args[0].toLower();
+
+    if (arg == QLatin1String("home")) {
+        r.viewportAction = ViewportAction::RotateHome;
+        r.output = QStringLiteral("View reset to isometric.");
+        return r;
+    }
+
+    // Expect: "on <axis> <degrees>"
+    if (arg != QLatin1String("on") || args.size() < 3) {
+        r.exitCode = 1;
+        r.error = QStringLiteral(
+            "Usage: rotate on <axis> <degrees>\n"
+            "\n"
+            "Example: rotate on z 45");
+        return r;
+    }
+
+    QString axisStr = args[1].toLower();
+    if (axisStr != QLatin1String("x") &&
+        axisStr != QLatin1String("y") &&
+        axisStr != QLatin1String("z")) {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Invalid axis. Use x, y, or z.");
+        return r;
+    }
+
+    bool ok = false;
+    double degrees = args[2].toDouble(&ok);
+    if (!ok) {
+        r.exitCode = 1;
+        r.error = QStringLiteral("Invalid angle. Must be a number (degrees).");
+        return r;
+    }
+
+    r.viewportAction = ViewportAction::RotateAxis;
+    r.vpAxis = axisStr[0].toLatin1();
+    r.vpArg1 = degrees;
+    r.output = QStringLiteral("Rotated %1° around %2 axis.")
+                   .arg(degrees).arg(axisStr.toUpper());
     return r;
 }
 

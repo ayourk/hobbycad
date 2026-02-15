@@ -32,4 +32,13 @@ void shutdown()
     // Phase 0: nothing to tear down.
 }
 
+bool hasConstraintSolver()
+{
+#ifdef HAVE_SLVS
+    return true;
+#else
+    return false;
+#endif
+}
+
 }  // namespace hobbycad

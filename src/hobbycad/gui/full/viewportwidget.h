@@ -25,6 +25,8 @@
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 #include <AIS_ViewController.hxx>
+#include <gp_Pnt.hxx>
+#include <gp_Dir.hxx>
 
 class QMouseEvent;
 class QWheelEvent;
@@ -35,6 +37,7 @@ class AIS_InteractiveObject;
 
 namespace hobbycad {
 
+class AisGrid;
 class ScaleBarWidget;
 class NavOrbitRing;
 class NavHomeButton;
@@ -93,6 +96,37 @@ public:
     /// Set the display unit system for the scale bar.
     void setUnitSystem(int units);
 
+    /// Set Z-up (true) or Y-up (false) coordinate convention.
+    void setZUpOrientation(bool zUp);
+
+    /// Returns true if using Z-up orientation.
+    bool isZUpOrientation() const;
+
+    /// Set whether to orbit around selected object's center.
+    void setOrbitSelectedObject(bool enabled);
+
+    /// Returns true if orbiting around selected object.
+    bool isOrbitSelectedObject() const;
+
+    // ---- CLI viewport control commands ----
+
+    /// Set zoom level as a percentage (100 = 1:1, 200 = 2x zoom in).
+    void setZoomPercent(double percent);
+
+    /// Get current approximate zoom percentage.
+    double zoomPercent() const;
+
+    /// Pan the camera to center on the specified world coordinates.
+    void panTo(double x, double y, double z);
+
+    /// Get the current camera target (center) point.
+    void cameraTarget(double& x, double& y, double& z) const;
+
+    /// Rotate the camera by specified degrees around a world axis.
+    /// @param axis  'x', 'y', or 'z' (case insensitive)
+    /// @param degrees  Rotation angle in degrees
+    void rotateOnAxis(char axis, double degrees);
+
     /// Start an animated 90-degree snap rotation around the given axis.
     /// @param axis  Which world axis to rotate around.
     /// @param direction  +1 = positive rotation, -1 = negative.
@@ -131,6 +165,10 @@ private:
     /// Returns true if a nav control was clicked and handled.
     bool handleNavControlClick(int theX, int theY);
 
+    /// Update orbit ring arrow directions based on camera orientation.
+    /// When viewing from "behind" an axis, the arrows should flip.
+    void updateOrbitRingFlips();
+
     Handle(V3d_Viewer)             m_viewer;
     Handle(V3d_View)               m_view;
     Handle(AIS_InteractiveContext)  m_context;
@@ -140,8 +178,11 @@ private:
     Handle(NavOrbitRing)           m_ringZ;
     Handle(NavHomeButton)          m_navHome;
     Handle(ScaleBarWidget)         m_scaleBar;
+    Handle(AisGrid)                m_grid;
     bool                           m_initialized = false;
     bool                           m_gridVisible = true;
+    bool                           m_zUpOrientation = true;
+    bool                           m_orbitSelectedObject = false;
 
     // Mouse tracking
     QPoint m_lastMousePos;
@@ -161,6 +202,20 @@ private:
     double  m_snapStepRad = 0.0;   // per-tick step (radians)
     int     m_snapRemaining = 0;   // ticks left
     int     m_snapStepDeg   = 10;  // degrees per frame
+
+    // Orbit center - updated by panning, used by ViewCube and rotations
+    gp_Pnt  m_orbitCenter;
+    gp_Pnt  m_savedOrbitCenter;  // saved when switching to orbit-selected mode
+
+    // ViewCube animation (smooth orbit transition)
+    QTimer  m_viewCubeAnimTimer;
+    gp_Pnt  m_animStartEye;
+    gp_Pnt  m_animEndEye;
+    gp_Dir  m_animStartUp;
+    gp_Dir  m_animEndUp;
+    gp_Pnt  m_animOrbitCenter;
+    int     m_animStep = 0;
+    int     m_animTotalSteps = 15;  // ~250ms at 60fps
 };
 
 }  // namespace hobbycad

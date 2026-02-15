@@ -15,6 +15,30 @@
 find_package(OpenCASCADE REQUIRED)
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui OpenGL)
 
+# Optional: libslvs for constraint solving
+include(FindPkgConfig OPTIONAL)
+set(HAVE_SLVS FALSE)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+    if(SLVS_FOUND)
+        set(HAVE_SLVS TRUE)
+        message(STATUS "libhobbycad: Found libslvs via pkg-config (constraint solving enabled)")
+    endif()
+endif()
+if(NOT HAVE_SLVS)
+    find_package(slvs CONFIG QUIET)
+    if(slvs_FOUND)
+        set(HAVE_SLVS TRUE)
+        message(STATUS "libhobbycad: Found libslvs via CMake config (constraint solving enabled)")
+    endif()
+endif()
+if(NOT HAVE_SLVS)
+    message(STATUS "libhobbycad: libslvs not found - constraint solving disabled")
+endif()
+
+# Export HAVE_SLVS to parent scope so GUI knows if solver is in library
+set(LIBHOBBYCAD_HAVE_SLVS ${HAVE_SLVS} PARENT_SCOPE)
+
 # ---- Source files ----------------------------------------------------
 
 set(LIBHOBBYCAD_SOURCES
@@ -22,6 +46,25 @@ set(LIBHOBBYCAD_SOURCES
     document.cpp
     brep_io.cpp
     opengl_info.cpp
+    project.cpp
+    # Geometry module
+    geometry/types.cpp
+    geometry/intersections.cpp
+    geometry/utils.cpp
+    geometry/algorithms.cpp
+    # Sketch module
+    sketch/entity.cpp
+    sketch/constraint.cpp
+    sketch/operations.cpp
+    sketch/patterns.cpp
+    sketch/profiles.cpp
+    sketch/solver.cpp
+    sketch/queries.cpp
+    sketch/export.cpp
+    sketch/background.cpp
+    sketch/parsing.cpp
+    # BREP module
+    brep/operations.cpp
 )
 
 set(LIBHOBBYCAD_HEADERS
@@ -29,6 +72,24 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/document.h
     hobbycad/brep_io.h
     hobbycad/opengl_info.h
+    hobbycad/project.h
+    # Geometry module
+    hobbycad/geometry/types.h
+    hobbycad/geometry/intersections.h
+    hobbycad/geometry/utils.h
+    hobbycad/geometry/algorithms.h
+    # Sketch module
+    hobbycad/sketch/entity.h
+    hobbycad/sketch/constraint.h
+    hobbycad/sketch/operations.h
+    hobbycad/sketch/patterns.h
+    hobbycad/sketch/profiles.h
+    hobbycad/sketch/solver.h
+    hobbycad/sketch/queries.h
+    hobbycad/sketch/export.h
+    hobbycad/sketch/background.h
+    # BREP module
+    hobbycad/brep/operations.h
 )
 
 # ---- Library target --------------------------------------------------
@@ -108,7 +169,7 @@ endif()
 
 set(HOBBYCAD_OCCT_LIBS
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo
-    TKBRep TKTopAlgo TKPrim TKShHealing TKBO TKFillet
+    TKBRep TKTopAlgo TKPrim TKShHealing TKBO TKFillet TKOffset
     ${_OCCT_STEP} ${_OCCT_STL} ${_OCCT_IGES}
     ${_OCCT_XSBASE} ${_OCCT_XCAF} TKLCAF TKCAF
     ${_OCCT_XDESTEP} ${_OCCT_XDEIGES}
@@ -122,6 +183,16 @@ target_link_libraries(hobbycad-lib
     PRIVATE
         ${HOBBYCAD_OCCT_LIBS}
 )
+
+# Link libslvs if available
+if(HAVE_SLVS)
+    if(TARGET PkgConfig::SLVS)
+        target_link_libraries(hobbycad-lib PRIVATE PkgConfig::SLVS)
+    else()
+        target_link_libraries(hobbycad-lib PRIVATE slvs::slvs)
+    endif()
+    target_compile_definitions(hobbycad-lib PRIVATE HAVE_SLVS)
+endif()
 
 # Shared library: export symbols
 if(HOBBYCAD_CORE_LINKAGE STREQUAL "SHARED")

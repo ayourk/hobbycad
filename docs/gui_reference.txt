@@ -1,0 +1,1153 @@
+================================================================================
+  HobbyCAD — GUI REFERENCE
+================================================================================
+
+  Project          : HobbyCAD
+  Repository       : HobbyCAD (ayourk/hobbycad)
+  File             : docs/gui_reference.txt
+  Document Version : 0.0.3
+  Date             : 2026-02-14
+
+  AI Attribution   : This document was primarily generated with
+                     the assistance of Claude AI (Anthropic).
+                     Human review and editorial direction provided
+                     by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+    1. Overview
+    2. 3D Viewport
+       2.1  Mouse Navigation
+       2.2  Keyboard Navigation
+            2.2.1  Orbit Rings
+       2.3  ViewCube
+       2.4  Grid and Axes
+    3. View Menu
+       3.1  Panel Visibility
+       3.2  Workspace Selection
+       3.3  View Navigation
+       3.4  Grid Options
+       3.5  Coordinate System
+       3.6  Orbit Behavior
+    4. Dock Panels
+       4.1  Project Panel
+       4.2  Properties Panel
+       4.3  Terminal Panel
+    5. Preferences Dialog
+       5.1  Navigation Page
+       5.2  Bindings Page
+       5.3  General Page
+    6. Sketch Mode
+       6.1  Creating a Sketch
+       6.2  Sketch Properties
+       6.3  Finishing a Sketch
+       6.4  Sketch Plane Visualization
+       6.5  Sketch Drawing Tools
+            6.5.1  Editing Entities
+       6.6  Trim, Extend, and Split Tools
+       6.7  Constraints
+       6.8  Driving vs. Driven Dimensions
+       6.9  Grid and Snapping
+            6.9.1  Construction Geometry
+       6.10 Multi-Selection
+       6.11 Multi-Selection Operations
+       6.12 Transform Operations
+       6.13 Alignment Tools
+       6.14 Grouping
+       6.15 Profile Detection
+       6.16 Offset Tool
+       6.17 Fillet Tool
+       6.18 Chamfer Tool
+       6.19 Rectangular Pattern
+       6.20 Circular Pattern
+       6.21 Project Tool
+       6.22 Keyboard Shortcuts Summary
+       6.23 Current Limitations
+
+================================================================================
+  1. OVERVIEW
+================================================================================
+
+    HobbyCAD provides a full 3D viewport with interactive camera controls,
+    a ViewCube for quick orientation changes, and various navigation aids.
+    This document covers the GUI features and their options.
+
+================================================================================
+  2. 3D VIEWPORT
+================================================================================
+
+  2.1  Mouse Navigation
+  ----------------------
+
+    Middle-drag           Pan the view (translate camera)
+    Shift + Middle-drag   Rotate the view (orbit around center)
+    Scroll wheel          Zoom in/out
+
+    The orbit center is updated when panning, so subsequent rotations
+    and ViewCube clicks orbit around the new center point.
+
+
+  2.2  Keyboard Navigation
+  -------------------------
+
+    Home                  Reset to isometric home view (animated)
+    Up/Down arrows        Rotate around current axis (continuous)
+    Left/Right arrows     Snap rotate 90 degrees around current axis
+    PgUp/PgDn             Rotate around current axis (continuous)
+
+    The rotation axis can be changed by clicking the colored orbit
+    rings in the viewport (X=red, Y=green, Z=blue).
+
+
+  2.2.1  Orbit Rings
+  -------------------
+
+    The orbit rings surround the ViewCube and provide quick rotation
+    around each world axis. Each ring has two arrow buttons that
+    rotate the view in opposite directions.
+
+    Colors:
+      Red     X-axis rotation
+      Green   Y-axis rotation
+      Blue    Z-axis rotation
+
+    Arrow Direction Correction:
+      The arrows automatically adjust their behavior based on camera
+      orientation. When viewing from different angles, the arrows
+      swap their rotation direction so that the visual direction
+      (clockwise/counter-clockwise on screen) always matches the
+      actual rotation. This ensures intuitive behavior from any
+      viewing angle (top, bottom, front, back, left, right).
+
+
+  2.3  ViewCube
+  --------------
+
+    The ViewCube is displayed in the upper-right corner of the viewport.
+    Click on faces, edges, or corners to animate to that view orientation.
+
+    Features:
+    - Smooth animated transitions (~250ms)
+    - Orbits around current center point (updated by panning)
+    - Preserves zoom level during rotation
+    - Correct text orientation on all faces
+    - Respects Z-up or Y-up coordinate convention
+
+    Face labels (Z-up convention):
+      TOP       Camera at +Z looking down
+      BOTTOM    Camera at -Z looking up
+      FRONT     Camera at +Y looking toward -Y
+      BACK      Camera at -Y looking toward +Y
+      LEFT      Camera at -X looking toward +X
+      RIGHT     Camera at +X looking toward -X
+
+
+  2.4  Grid and Axes
+  -------------------
+
+    The viewport displays:
+    - A rectangular grid on the XY plane (Z=0)
+    - Axis trihedron at the origin (X=red, Y=green, Z=blue)
+    - Negative axis extensions in matching colors
+
+    The grid and axes are excluded from FitAll bounding box calculations,
+    so they don't affect view framing when fitting to geometry.
+
+    Grid properties:
+      Extent:       100mm in each direction
+      Minor lines:  10mm spacing (thin, gray)
+      Major lines:  100mm spacing (thicker, lighter gray)
+
+================================================================================
+  3. VIEW MENU
+================================================================================
+
+  3.1  Panel Visibility
+  ----------------------
+
+    Terminal (Ctrl+`)     Show/hide the CLI terminal panel
+    Project (Ctrl+R)      Show/hide the project/feature tree panel
+    Properties (Ctrl+P)   Show/hide the properties panel
+    Toolbar               Show/hide the viewport toolbar
+
+
+  3.2  Workspace Selection
+  -------------------------
+
+    Workspace >           Submenu for workspace modes
+      Design              Standard modeling workspace (default)
+      Sketch              2D sketching workspace
+      Simulation          Analysis and simulation workspace
+
+
+  3.3  View Navigation
+  ---------------------
+
+    Reset View (Home)     Animate to isometric home position
+    Rotate Left 90        Rotate view 90 degrees counterclockwise
+    Rotate Right 90       Rotate view 90 degrees clockwise
+
+
+  3.4  Grid Options
+  ------------------
+
+    Show Grid (Ctrl+Shift+G)
+        Toggle grid visibility in the 3D viewport.
+        Default: On
+
+    Snap to Grid (Ctrl+G)
+        Enable grid snapping for geometry creation.
+        Only available when grid is visible.
+        Default: Off
+
+
+  3.5  Coordinate System
+  -----------------------
+
+    Z-Up Orientation
+        Toggle between Z-up and Y-up coordinate conventions.
+        Default: On (Z-up)
+
+        Z-up (checked):
+          Standard CAD/engineering convention.
+          Z axis points up, XY is the ground plane.
+          ViewCube shows TOP/BOTTOM on Z axis.
+
+        Y-up (unchecked):
+          Game engine/3D graphics convention.
+          Y axis points up, XZ is the ground plane.
+          ViewCube shows TOP/BOTTOM on Y axis.
+
+        Changing this setting resets the camera to an appropriate
+        isometric view for the new convention.
+
+
+  3.6  Orbit Behavior
+  --------------------
+
+    Orbit Selected Object
+        Toggle orbit center behavior for ViewCube rotations.
+        Default: Off
+
+        When Off:
+          ViewCube rotates around the current pan position.
+          Pan the view to change the orbit center.
+          Home resets orbit center to origin.
+
+        When On:
+          If objects are selected, ViewCube rotates around
+          the center of their combined bounding box.
+          If nothing is selected, uses current pan position.
+
+        This option is useful when working on a specific part
+        of a complex model — select the part, then use the
+        ViewCube to examine it from different angles.
+
+================================================================================
+  4. DOCK PANELS
+================================================================================
+
+  4.1  Project Panel
+  -------------------
+
+    The Project panel (left side) displays:
+    - Origin (coordinate system reference)
+    - Sketches (2D sketch definitions)
+    - Bodies (3D solid geometry)
+    - Feature tree (parametric history)
+
+
+  4.2  Properties Panel
+  ----------------------
+
+    The Properties panel (right side) displays properties of the
+    currently selected object. Properties vary by object type.
+
+
+  4.3  Terminal Panel
+  --------------------
+
+    The Terminal panel (bottom) provides an interactive CLI for
+    entering commands. See cli_commands.txt for command reference.
+
+    The terminal supports:
+    - Tab completion with contextual hints
+    - Command history (up/down arrows)
+    - Expression evaluation in numeric fields
+    - Parameter name completion
+
+================================================================================
+  5. PREFERENCES DIALOG
+================================================================================
+
+  Access via View > Preferences (or platform-specific shortcut).
+  The dialog has three pages: Navigation, Bindings, and General.
+
+  5.1  Navigation Page
+  ---------------------
+
+    Mouse Bindings:
+      Preset        Select from HobbyCAD, Fusion 360, FreeCAD, or Blender
+                    mouse navigation styles.
+
+    Rotation:
+      Default axis          X, Y, or Z — axis used for keyboard rotation
+      PgUp/PgDn step        Degrees per step (1-45°)
+      PgUp/PgDn interval    Milliseconds between steps
+
+    Arrow Key Animation:
+      Step size             Degrees per animation frame (1-15°)
+      Frame interval        Milliseconds between frames
+      90° duration          Calculated total animation time
+
+
+  5.2  Bindings Page
+  -------------------
+
+    Opens the Bindings Editor where all keyboard shortcuts and mouse
+    bindings can be customized. Each action can have up to three bindings.
+
+    The bindings system is context-aware:
+      - Global bindings are active in all contexts
+      - Always-active contexts (File, Edit, View, Navigation, Viewport)
+        are available regardless of current mode
+      - Mode-specific contexts (Sketch, Design) are mutually exclusive
+      - Same key can have different meanings in different contexts
+        (e.g., E = "Rotate Canvas CW" in Sketch, "Extrude" in Design)
+
+    Categories:
+      Global        Command Search (/)
+      File          New, Open, Save, Save As, Close, Quit
+      Edit          Cut, Copy, Paste, Delete, Select All
+      View          Toggle Terminal/Project/Properties, Reset View,
+                    Rotate Left/Right, Show Grid, Snap to Grid,
+                    Z-Up Orientation, Orbit Selected Object, Preferences
+      Sketch        Select Tool (S), Line (L), Rectangle (R), Circle (C),
+                    Arc (A), Point (P), Dimension (D), Construction (X),
+                    Offset (O), Trim (T), Toggle Grid (G),
+                    Rotate Canvas CCW (Q), Rotate Canvas CW (E),
+                    Reset Canvas Rotation (Ctrl+0)
+      Design        Extrude (E), Move (M), Fillet (F), Chamfer, Hole (H),
+                    Joint (J), Measure (I), Toggle Visibility (V)
+                    (Reserved for future implementation)
+      Navigation    Rotate Up/Down, Set Axis X/Y/Z, Snap Rotate Left/Right
+      Viewport      Rotate View, Pan View, Zoom View
+
+    Default shortcuts follow Fusion 360 conventions where applicable
+    to maintain industry-standard muscle memory.
+
+
+  5.3  General Page
+  ------------------
+
+    Startup:
+      Show grid on startup              Default: On
+      Restore window layout on startup  Default: On
+
+    Coordinate System:
+      Z-Up orientation (CAD convention)
+          When checked, Z axis points up (CAD/engineering).
+          When unchecked, Y axis points up (game engine/3D graphics).
+          Default: On
+
+    Orbit Behavior:
+      Orbit around selected object
+          When checked, ViewCube rotations orbit around the center
+          of selected objects instead of the pan position.
+          Default: Off
+
+================================================================================
+  6. SKETCH MODE
+================================================================================
+
+  6.1  Creating a Sketch
+  -----------------------
+
+    Click the "Create Sketch" button in the toolbar to start a new sketch.
+    A plane selection dialog appears with the following options:
+
+    Sketch Plane:
+      XY Plane (Top/Bottom)   Horizontal plane, default for most designs
+      XZ Plane (Front/Back)   Vertical plane facing front
+      YZ Plane (Left/Right)   Vertical plane facing side
+      Angled Plane            Custom plane at any angle
+
+    Plane Angle (for Angled Plane only):
+      Rotate around           X, Y, or Z axis
+      Angle                   Rotation in degrees (-180° to 180°)
+
+    Offset from Origin:
+      Distance (mm)           Offset along the plane's normal axis
+                              Example: XY plane with offset 10 creates
+                              the sketch at Z = 10
+
+    The preview text shows the resulting plane equation, e.g.:
+      "Sketch on XY plane at Z = 10"
+      "Sketch on plane rotated 45° around X axis"
+
+    Click OK to enter sketch mode on the selected plane, or Cancel
+    to abort.
+
+
+  6.2  Sketch Properties
+  -----------------------
+
+    While in sketch mode, the Properties panel shows:
+      Name        Editable sketch name (default: Sketch1, Sketch2, etc.)
+      Plane       Current plane (XY/XZ/YZ) - can be changed
+      Offset      Distance from origin (read-only, set in creation dialog)
+      Entities    Count of entities in the sketch
+
+    Grid settings:
+      Show Grid      Toggle grid visibility
+      Snap to Grid   Enable snapping to grid intersections
+      Grid Spacing   Distance between grid lines
+
+
+  6.3  Finishing a Sketch
+  ------------------------
+
+    When done sketching, use the action bar at the bottom:
+      Save        Save the sketch and return to 3D view
+      Discard     Discard changes and return to 3D view
+
+    Saved sketches appear as wireframe outlines in the 3D viewport,
+    positioned on their selected plane at the specified offset.
+
+
+  6.4  Sketch Plane Visualization
+  --------------------------------
+
+    When a sketch is selected in the timeline, the 3D viewport displays
+    a visual representation of the sketch plane:
+
+      - Semi-transparent blue rectangle showing plane orientation
+      - Dashed crosshair at the plane center (origin)
+      - Darker blue border outline
+      - Plane positioned at the correct offset
+
+    This visualization helps understand:
+      - Which plane the sketch is on (XY, XZ, YZ, or angled)
+      - The offset distance from origin
+      - How the sketch relates to other geometry
+
+    The plane visualization is automatically hidden when:
+      - A different feature is selected
+      - The timeline selection is cleared
+
+
+  6.5  Sketch Drawing Tools
+  --------------------------
+
+    The sketch toolbar provides the following drawing tools:
+
+    Geometry Tools:
+      Line (L)          Draw straight lines between two points
+      Rectangle (R)     Draw axis-aligned rectangles
+      Circle (C)        Draw circles by center and radius
+      Arc (A)           Draw arcs using 3-point method
+      Spline            Draw smooth spline curves through control points
+      Polygon           Draw regular polygons (default: hexagon, 6 sides)
+      Slot              Draw obround/stadium slots (center line + width)
+      Ellipse           Draw ellipses by center and major axis
+      Point (P)         Place construction points
+
+    Annotation Tools:
+      Dimension (D)     Add dimensional constraints
+      Constraint        Add geometric constraints
+      Text (T)          Add text annotations
+
+    Modification Tools:
+      Trim              Remove segments at intersections
+      Extend            Extend entities to nearest intersection
+      Split             Split entities at intersections or click point
+
+    Tool shortcuts are shown in parentheses. Click a tool button to
+    activate it, or click the same button again to return to Select mode.
+
+    Keyboard Shortcuts:
+      S                 Switch to Select mode
+      Escape            Cancel current operation / deselect / exit sketch
+      Delete/Backspace  Delete selected entities
+      Enter             Finish spline drawing (same as right-click)
+
+    Drawing Tool Details:
+
+      Line:
+        - Click to place start point
+        - Click to place end point (line is created)
+        - Continues chain mode: end point becomes start of next line
+        - Escape or click starting point to end chain
+
+      Rectangle:
+        - Click to place first corner
+        - Click to place opposite corner
+        - Creates axis-aligned rectangle
+
+      Circle:
+        - Click to place center point
+        - Move to define radius (shown as preview)
+        - Click to finalize radius
+        - Future: tangent circle modes (2-point, 3-point tangent)
+
+      Arc:
+        - Click to place start point
+        - Click to place mid-point on arc
+        - Click to place end point
+        - Arc is fitted through all three points
+        - Future: tangent arc mode (arc tangent to existing entity)
+
+      Spline:
+        - Click to add control points (minimum 2)
+        - Points are connected with smooth Catmull-Rom spline
+        - Right-click or press Enter to finish spline
+        - Escape cancels without creating spline
+
+      Polygon:
+        - Click to place center point
+        - Move to define radius (shown as preview)
+        - Click to finalize
+        - Default: 6 sides (hexagon)
+        - Note: Number of sides not yet configurable in UI
+
+      Slot:
+        - Click to place first center point of slot
+        - Click to place second center point
+        - Slot width uses default value (10mm diameter)
+        - Note: Slot width not yet configurable in UI
+
+      Ellipse:
+        - Click to place center point
+        - Move to define major axis endpoint
+        - Click to finalize
+        - Minor axis is automatically set to 50% of major axis
+        - Note: Minor axis not yet configurable in UI
+
+
+  6.5.1  Editing Entities
+  ------------------------
+
+    Selected entities display handles (small squares) at control points.
+    Drag these handles to modify the geometry.
+
+    Handle Types by Entity:
+      Point       Single handle at the point location
+      Line        Handles at start and end points
+      Rectangle   Handles at corner points
+      Circle      Handle at center (drag to move), edge handle for radius
+      Arc         Handles at center and endpoints
+      Polygon     Handle at center
+      Slot        Handles at both center points
+      Ellipse     Handle at center
+      Spline      Handles at each control point
+
+    Modifier Keys While Dragging:
+      Shift           Force snap-to-grid (regardless of global setting)
+      Ctrl + drag     Enable axis constraint mode
+      Ctrl + X key    Constrain movement to X axis only
+      Ctrl + Y key    Constrain movement to Y axis only
+      Shift + Ctrl    Snap to grid AND constrain to axis
+
+    Visual Feedback During Constrained Drag:
+      When Ctrl is held during a drag operation:
+        - A crosshair guide appears showing the constraint axis
+        - An "X" or "Y" label appears indicating the locked axis
+        - Movement is restricted to that axis only
+
+    Constraint Labels:
+      - Click on a dimension label to select the constraint
+      - Selected constraint is highlighted
+      - Drag the label to reposition it for better readability
+      - Double-click to edit the dimension value
+
+    Properties Panel (Single Selection):
+      When a single entity is selected, editable properties appear:
+
+      Line:         Start point (X, Y), End point (X, Y), Length (read-only)
+      Circle:       Center (X, Y), Radius
+      Arc:          Center (X, Y), Radius, Start Angle, Sweep Angle
+      Rectangle:    Corner 1 (X, Y), Corner 2 (X, Y)
+      Point:        Position (X, Y)
+
+      Note: Polygon, Slot, Ellipse, Spline, and Text do not yet show
+      editable properties in the Properties panel.
+
+
+  6.6  Trim, Extend, and Split Tools
+  ------------------------------------
+
+    These tools modify existing geometry at intersection points.
+
+    Trim Tool:
+      1. Activate the Trim tool from the toolbar
+      2. Click on the segment of an entity you want to remove
+      3. The segment between the nearest intersections is deleted
+      4. For circles, trimming converts them to arcs
+
+      Example: Draw two crossing lines. Click on one segment of a line
+      where it crosses the other. That segment is removed, leaving the
+      remaining portions.
+
+    Extend Tool:
+      1. Activate the Extend tool from the toolbar
+      2. Click near the endpoint of a line you want to extend
+      3. The line extends to the nearest intersection with another entity
+      4. Currently supports extending lines to other lines, circles, or arcs
+
+    Split Tool:
+      The Split tool has intelligent behavior based on selection:
+
+      No pre-selection (click to split):
+        1. Activate the Split tool
+        2. Click on an entity
+        3. If intersections exist, the entity splits at ALL intersection points
+        4. If no intersections, the entity splits at the click point
+
+      Two entities pre-selected (targeted split):
+        1. Ctrl+click to select a Point and a Line/Curve
+        2. Activate the Split tool and click
+        3. The line/curve splits at the point's location
+
+        OR:
+
+        1. Ctrl+click to select two intersecting entities
+        2. Activate the Split tool and click
+        3. BOTH entities split at their intersection point
+
+      Splitting a circle converts it to arcs. Splitting a line creates
+      multiple line segments.
+
+
+  6.7  Constraints
+  -----------------
+
+    Constraints define geometric relationships between entities and control
+    sketch dimensions. HobbyCAD uses the libslvs constraint solver.
+
+    Dimensional Constraints:
+      Distance        Distance between two points or point-to-line
+      Radius          Circle or arc radius
+      Diameter        Circle or arc diameter (2 × radius)
+      Angle           Angle between two lines
+
+    Geometric Constraints:
+      Horizontal      Line is horizontal (parallel to X axis)
+      Vertical        Line is vertical (parallel to Y axis)
+      Parallel        Two lines are parallel
+      Perpendicular   Two lines meet at 90°
+      Coincident      Two points share the same location
+      Tangent         Line/arc meets curve tangentially
+      Equal           Two entities have equal length or radius
+      Midpoint        Point lies at the midpoint of a line
+      Symmetric       Two points are symmetric about a line
+
+    Adding Constraints:
+      1. Select the Dimension tool (D) for dimensional constraints
+      2. Click on one or two entities to constrain
+      3. Click to place the dimension label
+      4. Enter the desired value in the dialog
+
+    Constraint Visualization:
+      - Satisfied constraints appear in blue
+      - Unsatisfied constraints appear in red
+      - Dimension labels show the value with units
+      - Driven dimensions show values in parentheses and gray color
+
+
+  6.8  Driving vs. Driven Dimensions
+  ------------------------------------
+
+    Dimensional constraints can be either Driving or Driven:
+
+    Driving Dimensions (default):
+      - Control the geometry
+      - Changing the value moves the associated entities
+      - Displayed normally with units
+
+    Driven Dimensions (reference only):
+      - Display-only, do not control geometry
+      - Value updates automatically when geometry changes
+      - Displayed in parentheses with gray color
+      - Useful for showing calculated values
+
+    Over-Constraint Prevention:
+      When adding a dimension that would over-constrain the sketch,
+      HobbyCAD displays a dialog:
+
+        "This dimension would over-constrain the sketch."
+
+        Options:
+          - Create as Driven: Add as a reference dimension
+          - Cancel: Do not add the dimension
+
+      This prevents the sketch from becoming unsolvable.
+
+    Converting Between Driving and Driven:
+      1. Right-click on a dimension label
+      2. Select "Make Driven (Reference)" or "Make Driving"
+      3. Converting to Driving checks for conflicts first
+      4. If conflicts exist, a warning shows which constraints conflict
+
+
+  6.9  Grid and Snapping
+  ------------------------
+
+    The sketch canvas displays a grid for alignment and provides various
+    snapping behaviors.
+
+    Grid Display:
+      - Grid is shown as light gray lines
+      - Grid spacing adjusts automatically based on zoom level:
+        - Zoomed out: grid lines are spaced further apart
+        - Zoomed in: grid lines become more dense
+      - This ensures the grid is always useful without being too cluttered
+
+    Grid Controls:
+      Show Grid (G)       Toggle grid visibility
+      Snap to Grid        When enabled, points snap to grid intersections
+
+    Snapping Behaviors:
+
+      Grid Snap (when enabled):
+        - Drawing points snap to nearest grid intersection
+        - Applies during entity creation and handle dragging
+
+      Force Snap (Shift key):
+        - Hold Shift while dragging to force grid snap
+        - Works even when global snap setting is off
+        - Useful for occasional precise placement
+
+      Axis Constraint (Ctrl + X/Y key):
+        - Hold Ctrl and press X or Y during a drag
+        - Movement is constrained to that axis only
+        - Visual guide line appears showing the constraint
+        - Release Ctrl to allow free movement again
+
+      Combined Snap + Constraint (Shift + Ctrl):
+        - Hold both Shift and Ctrl during drag
+        - Snaps to grid AND constrains to axis
+        - Creates a crosshair guide at the constrained position
+
+
+  6.9.1  Construction Geometry
+  -----------------------------
+
+    Construction geometry is used for reference and layout but is not
+    included in profiles for extrusion or other operations.
+
+    Visual Appearance:
+      - Dashed line style
+      - Orange/brown color
+      - Same selection and editing behavior as normal geometry
+
+    Creating Construction Geometry:
+      Method 1 - Right-click menu:
+        1. Select an entity
+        2. Right-click and choose "Make Construction Geometry"
+
+      Method 2 - Properties panel:
+        1. Select an entity
+        2. In the Properties panel, check the "Construction" checkbox
+
+      Method 3 - Bulk conversion:
+        1. Ctrl+click to select multiple entities
+        2. Right-click and choose "Make All Construction Geometry"
+
+    Construction geometry is useful for:
+      - Centerlines and reference lines
+      - Layout guides
+      - Symmetry axes
+      - Temporary geometry for constraint targets
+
+
+  6.10  Multi-Selection
+  ----------------------
+
+    Select multiple entities using various methods for bulk operations.
+
+    Selection Methods:
+
+      Click              Select single entity (deselects others)
+      Ctrl+Click         Add entity to selection (or remove if already selected)
+      Double-Click       Select chain of connected entities
+      Click empty space  Clear all selections
+      Escape             Clear selection (in Select mode)
+
+    Window Selection (drag on empty space):
+
+      Left-to-Right drag (Window mode):
+        - Blue rectangle with solid border
+        - Selects only entities FULLY ENCLOSED by the rectangle
+        - Use for precise selection of specific entities
+
+      Right-to-Left drag (Crossing mode):
+        - Green rectangle with dashed border
+        - Selects entities that INTERSECT or are enclosed by the rectangle
+        - Use for quick selection of entities in an area
+
+      Modifier keys:
+        - Hold Ctrl while releasing to ADD to existing selection
+        - Without Ctrl, window selection replaces the current selection
+
+    Chain Selection (Double-Click):
+
+      Double-clicking on an entity selects all connected entities:
+        - Finds entities with coincident endpoints
+        - Recursively selects the entire chain
+        - Useful for selecting a complete outline or profile
+
+    Properties Panel (Multi-Selection):
+
+      When multiple entities are selected, the Properties panel shows:
+        - Selected count (e.g., "5 entities")
+        - Type breakdown (e.g., "3 Lines, 2 Circles")
+        - Common properties only
+        - Construction checkbox (tri-state: all, none, or mixed)
+        - Bounding box (min, max, size, center)
+
+
+  6.11  Multi-Selection Operations
+  ----------------------------------
+
+    Right-click with multiple entities selected to access bulk operations:
+
+    Property Changes:
+      Make All Normal Geometry        Convert all to normal geometry
+      Make All Construction Geometry  Convert all to construction
+
+    Transform Menu:
+      Move...       Move all selected by X/Y offset
+      Copy...       Duplicate all selected with X/Y offset
+      Rotate...     Rotate all around selection center
+      Scale...      Scale all from selection center
+      Mirror...     Mirror horizontally or vertically
+
+    Align Menu:
+      Align Left / Right / Top / Bottom
+      Center Horizontally / Vertically
+      Distribute Horizontally / Vertically
+
+    Other Operations:
+      Group             Create a named group from selected entities
+      Split All at Intersections
+                        Find all intersections between selected entities
+                        and split them at those points
+
+    Delete:
+      Delete All        Delete all selected (with confirmation dialog)
+
+    Keyboard Shortcut:
+      Delete/Backspace  Delete all selected entities
+                        Shows confirmation for multiple entities
+
+
+  6.12  Transform Operations
+  ---------------------------
+
+    Transform operations modify the position, size, or orientation of
+    selected entities.
+
+    Move:
+      1. Select entities with Ctrl+click
+      2. Right-click > Transform > Move
+      3. Enter X offset (mm)
+      4. Enter Y offset (mm)
+      5. All selected entities move by the specified amounts
+
+    Copy:
+      1. Select entities with Ctrl+click
+      2. Right-click > Transform > Copy
+      3. Enter X offset (mm)
+      4. Enter Y offset (mm)
+      5. Duplicates are created at the offset position
+      6. The copies become the new selection
+
+    Rotate:
+      1. Select entities with Ctrl+click
+      2. Right-click > Transform > Rotate
+      3. Enter rotation angle in degrees
+      4. Entities rotate around the center of the selection's bounding box
+      5. Positive angles rotate counter-clockwise
+
+    Scale:
+      1. Select entities with Ctrl+click
+      2. Right-click > Transform > Scale
+      3. Enter scale factor (e.g., 2.0 = double size, 0.5 = half size)
+      4. Entities scale from the center of the selection's bounding box
+
+    Mirror:
+      1. Select entities with Ctrl+click
+      2. Right-click > Transform > Mirror
+      3. Choose axis: "Horizontal (X axis)" or "Vertical (Y axis)"
+      4. Entities are mirrored across the center of the selection
+
+
+  6.13  Alignment Tools
+  ----------------------
+
+    Alignment tools arrange multiple selected entities relative to each other.
+
+    Edge Alignment:
+      Align Left      Move all entities so their left edges align
+      Align Right     Move all entities so their right edges align
+      Align Top       Move all entities so their top edges align
+      Align Bottom    Move all entities so their bottom edges align
+
+    Center Alignment:
+      Center Horizontally   Align horizontal centers
+      Center Vertically     Align vertical centers
+
+    Distribution:
+      Distribute Horizontally   Space entities evenly left-to-right
+      Distribute Vertically     Space entities evenly top-to-bottom
+
+    Distribution maintains the position of the first and last entities
+    (by position) and moves the intermediate entities to create equal
+    spacing. Requires at least 3 entities.
+
+
+  6.14  Grouping
+  ---------------
+
+    Groups organize related entities for easier management.
+
+    Creating a Group:
+      1. Select multiple entities with Ctrl+click
+      2. Right-click > "Group (N entities)"
+      3. A named group is created (e.g., "Group 1")
+
+    Groups are currently stored but do not affect selection behavior.
+    Future versions will support:
+      - Selecting all group members by clicking one
+      - Locking groups to prevent modification
+      - Naming groups for organization
+
+
+  6.15  Profile Detection
+  ------------------------
+
+    Profiles are closed loops of geometry that can be used for extrusion,
+    revolve, and other operations.
+
+    Automatic Detection:
+      HobbyCAD automatically detects closed profiles formed by connected
+      entities. Profiles are visualized with semi-transparent fills.
+
+    Profile Requirements:
+      - Entities must form a closed loop
+      - Endpoints must be coincident (within tolerance)
+      - Construction geometry is excluded from profiles
+
+    Multiple Profiles:
+      A sketch can contain multiple profiles. Nested profiles (holes)
+      are detected automatically based on containment.
+
+    Profile Visualization:
+      - Outer profiles: Semi-transparent blue fill
+      - Inner profiles (holes): Indicated by containment
+      - Profile boundaries highlighted on selection
+
+
+  6.16  Offset Tool
+  ------------------
+
+    The Offset tool creates parallel geometry at a specified distance from
+    existing entities.
+
+    Supported Entities:
+      - Lines: Creates a parallel line at the specified offset distance
+      - Circles: Creates a concentric circle with larger or smaller radius
+      - Arcs: Creates a concentric arc with larger or smaller radius
+
+    Usage:
+      1. Select the Offset tool from the toolbar (O key)
+      2. Click on the entity to offset
+      3. Enter the offset distance in the dialog
+      4. The offset direction is determined by which side of the entity
+         you clicked on
+
+    Notes:
+      - For circles/arcs, clicking outside creates larger radius,
+        clicking inside creates smaller radius
+      - Minimum radius is enforced (0.1mm) to prevent invalid geometry
+
+
+  6.17  Fillet Tool
+  ------------------
+
+    The Fillet tool creates rounded corners at the intersection of two lines.
+
+    Usage:
+      1. Select the Fillet tool from the toolbar (F key)
+      2. Click on a line near the corner you want to round
+      3. Enter the fillet radius in the dialog
+      4. An arc is created at the corner, and the lines are trimmed
+
+    Requirements:
+      - Two lines must share a common endpoint (within tolerance)
+      - The fillet radius must not exceed the length of either line
+
+    Result:
+      - The original lines are shortened to the tangent points
+      - A smooth arc connects the two lines at the corner
+
+
+  6.18  Chamfer Tool
+  -------------------
+
+    The Chamfer tool creates beveled (angled) corners at the intersection
+    of two lines.
+
+    Usage:
+      1. Select the Chamfer tool from the toolbar
+      2. Click on a line near the corner you want to chamfer
+      3. Enter the chamfer distance in the dialog
+      4. A straight line replaces the corner
+
+    Requirements:
+      - Two lines must share a common endpoint (within tolerance)
+      - The chamfer distance must not exceed the length of either line
+
+    Result:
+      - The original lines are shortened by the chamfer distance
+      - A diagonal line connects the two new endpoints
+
+
+  6.19  Rectangular Pattern
+  --------------------------
+
+    Creates copies of selected entities arranged in a rectangular grid.
+
+    Usage:
+      1. Select the RectPattern tool from the toolbar
+      2. Click on an entity to select it (Ctrl+click for multiple)
+      3. Configure the pattern in the dialogs:
+         - Number of copies in X direction
+         - Number of copies in Y direction
+         - Spacing in X direction (mm)
+         - Spacing in Y direction (mm)
+
+    Result:
+      - Creates (X × Y - 1) copies of the selected entities
+      - Original entities remain at their position
+      - New copies are added to the selection
+
+
+  6.20  Circular Pattern
+  -----------------------
+
+    Creates copies of selected entities arranged in a circular pattern
+    around a center point.
+
+    Usage:
+      1. Select the CircPattern tool from the toolbar
+      2. Click on an entity to select it (Ctrl+click for multiple)
+      3. Configure the pattern in the dialogs:
+         - Center X coordinate (mm)
+         - Center Y coordinate (mm)
+         - Total number of copies (including original)
+         - Total angle (degrees, 360 for full circle)
+
+    Result:
+      - Creates (count - 1) copies of the selected entities
+      - Copies are evenly distributed around the center point
+      - Arc start angles are adjusted to maintain proper orientation
+
+
+  6.21  Project Tool
+  -------------------
+
+    The Project tool allows projecting geometry from external sources onto
+    the current sketch plane. This is useful for referencing geometry from
+    other parts of the model.
+
+    Sources for Projection:
+      - Other sketches in the same document
+      - 3D model edges onto the 2D sketch plane
+      - Construction planes and reference geometry
+
+    Current Status:
+      The Project tool infrastructure is in place. Full implementation
+      requires integration with the document model and 3D geometry
+      projection algorithms.
+
+    Future Features:
+      - Project edges from 3D bodies
+      - Project intersection curves
+      - Project sketch geometry from other sketches
+      - Automatic update when source geometry changes
+
+
+  6.22  Keyboard Shortcuts Summary
+  ---------------------------------
+
+    This section provides a complete list of keyboard shortcuts available
+    in Sketch Mode.
+
+    Tool Selection:
+      S             Select mode
+      L             Line tool
+      R             Rectangle tool
+      C             Circle tool
+      A             Arc tool
+      P             Point tool
+      D             Dimension tool
+      T             Trim tool
+      O             Offset tool
+      F             Fillet tool
+
+    Drawing Operations:
+      Escape        Cancel current operation / Deselect / Exit sketch
+      Enter         Finish spline (same as right-click)
+      Right-click   Finish spline / Context menu
+
+    Selection:
+      Click         Select single entity
+      Ctrl+Click    Add/remove from selection
+      Double-click  Select connected chain
+      Delete        Delete selected entities (with confirmation if multiple)
+      Backspace     Delete selected entities (same as Delete)
+
+    View:
+      G             Toggle grid visibility
+      Q             Rotate canvas 90° counter-clockwise
+      E             Rotate canvas 90° clockwise
+      Ctrl+0        Reset canvas rotation
+
+    Entity Modification:
+      X             Toggle construction geometry (selected entities)
+
+    While Dragging (handles or entities):
+      Shift         Force snap-to-grid
+      Ctrl          Enable axis constraint mode
+      Ctrl+X        Lock movement to X axis
+      Ctrl+Y        Lock movement to Y axis
+      Shift+Ctrl    Snap to grid AND constrain to axis
+
+
+  6.23  Current Limitations
+  --------------------------
+
+    The following features are implemented internally but do not yet have
+    full UI support:
+
+    Entity Properties Not Editable in Properties Panel:
+      - Polygon: Number of sides (fixed at 6)
+      - Slot: Width/radius (fixed at 5mm)
+      - Ellipse: Minor axis (fixed at 50% of major axis)
+      - Spline: Control point editing
+      - Text: Font, size, and content editing
+
+    Circle Modes Not Yet Exposed:
+      - Two-point tangent circle (tangent to 2 entities)
+      - Three-point tangent circle (tangent to 3 entities)
+
+    Arc Modes Not Yet Exposed:
+      - Tangent arc (arc starting tangent to existing entity)
+
+    These features will be added in future updates.
+
+
+================================================================================

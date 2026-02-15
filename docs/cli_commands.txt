@@ -2,6 +2,109 @@
 HobbyCAD CLI Commands Reference
 ================================================================================
 
+This document covers both shell invocation (command-line flags and subcommands)
+and interactive CLI mode commands.
+
+================================================================================
+SHELL INVOCATION
+================================================================================
+
+HobbyCAD can be invoked from the shell with various flags and subcommands.
+
+--------------------------------------------------------------------------------
+Help and Version
+--------------------------------------------------------------------------------
+
+hobbycad --help
+hobbycad -h
+    Show help message with all available options and exit.
+
+    Platform-specific aliases:
+      Linux/macOS:  -h, --help
+      Windows:      -h, --help, /h, /?, /help
+
+hobbycad --version
+    Show version information and exit.
+
+    Platform-specific aliases:
+      Linux/macOS:  --version
+      Windows:      --version, /version
+
+    Note: -v and -V are NOT version flags (they typically mean "verbose").
+
+--------------------------------------------------------------------------------
+Startup Options
+--------------------------------------------------------------------------------
+
+hobbycad [options] [file]
+    Start HobbyCAD, optionally opening a file or project.
+
+    Options:
+      --no-gui              Start in interactive command-line mode
+      --theme <file.qss>    Load custom Qt stylesheet theme
+
+    Arguments:
+      [file]                File or project directory to open (.hcad, .brep)
+
+    Examples:
+      hobbycad                         Start GUI (auto-detect mode)
+      hobbycad myproject/              Open project directory
+      hobbycad model.brep              Open BREP file in GUI
+      hobbycad --no-gui                Start interactive CLI
+
+--------------------------------------------------------------------------------
+Subcommand: convert
+--------------------------------------------------------------------------------
+
+hobbycad convert [options] <input> <output>
+    Convert between CAD file formats (non-interactive).
+
+    Arguments:
+      <input>               Input file path
+      <output>              Output file path
+
+    Options:
+      -h, --help            Show convert help message
+      --format <fmt>        Force output format (auto-detected from extension)
+
+    Supported Formats:
+      .hcad                 HobbyCAD project
+      .brep, .brp           OpenCASCADE BREP
+
+    Examples:
+      hobbycad convert model.brep project/
+      hobbycad convert myproject/ export.brep
+
+--------------------------------------------------------------------------------
+Subcommand: script
+--------------------------------------------------------------------------------
+
+hobbycad script [options] [file]
+    Execute a HobbyCAD script file (non-interactive).
+
+    Arguments:
+      <file>                Script file to execute
+      -                     Read script from stdin (for piping)
+
+    Options:
+      -h, --help            Show script help message
+      --dry-run             Check syntax without executing
+
+    Script files contain CLI commands, one per line.
+    Lines starting with '#' are treated as comments.
+
+    Examples:
+      hobbycad script myscript.txt
+      hobbycad script --dry-run myscript.txt    # Validate only
+      cat myscript.txt | hobbycad script -      # Pipe from stdin
+
+================================================================================
+INTERACTIVE CLI MODE
+================================================================================
+
+Start interactive CLI mode with `hobbycad --no-gui` or when no display server
+is available. The following sections document commands available in this mode.
+
 This document lists all available CLI commands with their syntax and argument
 completion hints (shown when pressing Tab after a command).
 
@@ -47,6 +150,44 @@ save <file>
 
 new
     Create a new document with a test solid.
+
+convert <input> <output> [--format <fmt>]
+    Convert between CAD file formats.
+
+    Arguments:
+      <input>     Input file path
+      <output>    Output file path
+
+    Options:
+      --format    Force output format (auto-detected from extension)
+
+    Supported Formats:
+      .hcad       HobbyCAD project
+      .brep       OpenCASCADE BREP
+
+    Examples:
+      convert model.brep project/
+      convert myproject/ export.brep
+
+script [--dry-run] <file>
+    Execute a script file containing CLI commands.
+
+    Arguments:
+      <file>      Script file to execute
+      -           Read script from stdin
+
+    Options:
+      --dry-run   Check syntax without executing
+
+    Notes:
+      - Script files contain one CLI command per line
+      - Lines starting with '#' are treated as comments
+      - Empty lines are ignored
+      - Use --dry-run to validate scripts before running
+
+    Examples:
+      script myscript.txt
+      script --dry-run myscript.txt
 
 ================================================================================
 DIRECTORY COMMANDS
@@ -114,6 +255,69 @@ create <type> [name]
     Notes:
       - Entering sketch mode changes the prompt to show the sketch context
       - Use 'finish' or 'discard' to exit sketch mode
+
+================================================================================
+VIEWPORT COMMANDS (Full Mode Only)
+================================================================================
+
+These commands control the 3D viewport camera and are only available when
+running in Full Mode with an active 3D viewport.
+
+Mode-specific behavior:
+  - Full Mode (3D viewport visible):  Commands work normally
+  - Full Mode (Sketch Mode active):   Warning displayed, command ignored
+  - Reduced Mode (no 3D viewport):    Warning displayed, command ignored
+  - Pure CLI Mode (no GUI):           Commands silently ignored
+
+zoom <percent>
+    Set the zoom level as a percentage.
+
+    Arguments:
+      <percent>   Zoom percentage (e.g., 100 = 1:1, 200 = 2x zoom in)
+
+    Examples:
+      zoom 100       Reset to 100% zoom
+      zoom 200       Zoom in to 200%
+      zoom 50        Zoom out to 50%
+
+zoom home
+    Reset zoom to fit all objects in the viewport.
+
+    Notes:
+      - Equivalent to View > Reset View or pressing Home
+
+panto <x>,<y>,<z>
+    Pan the camera to center on the specified world coordinates.
+
+    Arguments:
+      <x>,<y>,<z>   World coordinates to center on
+
+    Examples:
+      panto 0,0,0       Center on the origin
+      panto 100,50,0    Center on point (100, 50, 0)
+      panto 0,0,100     Center on a point 100 units above origin
+
+panto home
+    Pan the camera to center on the origin (0,0,0).
+
+rotate on <axis> <degrees>
+    Rotate the camera view around a world axis.
+
+    Arguments:
+      <axis>      Rotation axis: x, y, or z
+      <degrees>   Rotation angle in degrees (positive = CCW from axis)
+
+    Examples:
+      rotate on z 45     Rotate 45° around the Z axis
+      rotate on x -90    Rotate -90° around the X axis
+      rotate on y 180    Rotate 180° around the Y axis
+
+rotate home
+    Reset the camera to the default isometric view.
+
+    Notes:
+      - Same as clicking the Home button on the ViewCube
+      - Animated transition to isometric view
 
 ================================================================================
 SKETCH MODE COMMANDS

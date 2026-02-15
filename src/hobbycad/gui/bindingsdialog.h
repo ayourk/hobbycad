@@ -79,10 +79,17 @@ public:
     /// Get the default action definitions (built-in bindings).
     static QHash<QString, ActionBinding> defaultBindings();
 
-    /// Check if a binding conflicts with another action.
+    /// Check if a binding conflicts with another action in the same context.
     /// Returns the conflicting action ID, or empty string if no conflict.
+    /// Context-aware: "Global" conflicts with everything, same-context actions
+    /// conflict with each other, but different contexts (e.g., Sketch vs Design)
+    /// don't conflict since they're mutually exclusive modes.
     QString checkConflict(const QString& actionId,
                           const QString& binding) const;
+
+    /// Get the context for an action (extracted from actionId prefix).
+    /// e.g., "sketch.line" -> "sketch", "design.extrude" -> "design"
+    static QString getActionContext(const QString& actionId);
 
 signals:
     /// Emitted when bindings are saved (Apply or OK clicked).

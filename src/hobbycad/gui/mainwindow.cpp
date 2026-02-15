@@ -32,10 +32,19 @@
 
 namespace hobbycad {
 
-// Standard file dialog filter — BREP first so Qt uses it as default.
-// "All Files" lets the user bypass the auto-extension behavior.
+// Standard file dialog filters
+// Project format (.hcad) is the native format.
+// BREP format is supported for import/export of raw geometry.
+static const char kProjectFilter[] =
+    QT_TR_NOOP("HobbyCAD Projects (*.hcad)");
 static const char kBrepFilter[] =
-    QT_TR_NOOP("BREP Files (*.brep *.brp);;All Files (*)");
+    QT_TR_NOOP("BREP Files (*.brep *.brp)");
+static const char kAllFilesFilter[] =
+    QT_TR_NOOP("All Files (*)");
+static const char kOpenFilter[] =
+    QT_TR_NOOP("HobbyCAD Projects (*.hcad);;BREP Files (*.brep *.brp);;All Files (*)");
+static const char kSaveFilter[] =
+    QT_TR_NOOP("HobbyCAD Projects (*.hcad);;BREP Files (*.brep *.brp)");
 
 // Ensure a save path has the .brep extension when the BREP filter is
 // selected.  When "All Files" is active, the path is left as-is.
@@ -78,6 +87,11 @@ Document& MainWindow::document()
     return m_document;
 }
 
+Project& MainWindow::project()
+{
+    return m_project;
+}
+
 CliPanel* MainWindow::cliPanel() const
 {
     return m_cliPanel;
@@ -103,9 +117,34 @@ QAction* MainWindow::rotateRightAction() const
     return m_actionRotateRight;
 }
 
+QAction* MainWindow::showGridAction() const
+{
+    return m_actionShowGrid;
+}
+
+QAction* MainWindow::snapToGridAction() const
+{
+    return m_actionSnapToGrid;
+}
+
+QAction* MainWindow::zUpAction() const
+{
+    return m_actionZUp;
+}
+
+QAction* MainWindow::orbitSelectedAction() const
+{
+    return m_actionOrbitSelected;
+}
+
 QAction* MainWindow::toolbarToggleAction() const
 {
     return m_actionToggleToolbar;
+}
+
+QAction* MainWindow::newConstructionPlaneAction() const
+{
+    return m_actionNewConstructionPlane;
 }
 
 QTreeWidget* MainWindow::propertiesTree() const
@@ -243,6 +282,13 @@ void MainWindow::createMenus()
         QKeySequence::SelectAll);
     m_actionSelectAll->setEnabled(false);  // Enabled when document has selectable items
 
+    // Construct menu
+    auto* constructMenu = menuBar()->addMenu(tr("&Construct"));
+
+    m_actionNewConstructionPlane = constructMenu->addAction(tr("New Construction &Plane..."));
+    m_actionNewConstructionPlane->setToolTip(tr("Create a new construction plane"));
+    // Connected in FullModeWindow to open dialog
+
     // Help menu
     auto* helpMenu = menuBar()->addMenu(tr("&Help"));
 
@@ -317,6 +363,38 @@ void MainWindow::createMenus()
     m_actionRotateLeft = viewMenu->addAction(tr("Rotate &Left 90°"));
 
     m_actionRotateRight = viewMenu->addAction(tr("Rotate Ri&ght 90°"));
+
+    viewMenu->addSeparator();
+
+    m_actionShowGrid = viewMenu->addAction(tr("Show &Grid"),
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
+    m_actionShowGrid->setCheckable(true);
+    m_actionShowGrid->setChecked(true);  // On by default
+
+    m_actionSnapToGrid = viewMenu->addAction(tr("&Snap to Grid"),
+        QKeySequence(Qt::CTRL | Qt::Key_G));
+    m_actionSnapToGrid->setCheckable(true);
+    m_actionSnapToGrid->setChecked(false);  // Off by default
+
+    // Snap to grid is only available when grid is visible
+    connect(m_actionShowGrid, &QAction::toggled, this, [this](bool visible) {
+        m_actionSnapToGrid->setEnabled(visible);
+        if (!visible) {
+            m_actionSnapToGrid->setChecked(false);
+        }
+    });
+
+    viewMenu->addSeparator();
+
+    m_actionZUp = viewMenu->addAction(tr("&Z-Up Orientation"));
+    m_actionZUp->setCheckable(true);
+    m_actionZUp->setChecked(true);  // Z-up is the default
+    // Connected in FullModeWindow to handle coordinate system change
+
+    m_actionOrbitSelected = viewMenu->addAction(tr("&Orbit Selected Object"));
+    m_actionOrbitSelected->setCheckable(true);
+    m_actionOrbitSelected->setChecked(false);  // Off by default
+    // Connected in FullModeWindow to viewport
 
     viewMenu->addSeparator();
 
@@ -447,39 +525,25 @@ void MainWindow::createDockPanels()
     originPt->setText(0, tr("Origin Point"));
 
     // Bodies section
-    auto* bodies = new QTreeWidgetItem(objectsTree);
-    bodies->setText(0, tr("Bodies"));
-    bodies->setData(0, Qt::UserRole, QStringLiteral("container.bodies"));
-    bodies->setExpanded(true);
+    m_bodiesTreeItem = new QTreeWidgetItem(objectsTree);
+    m_bodiesTreeItem->setText(0, tr("Bodies"));
+    m_bodiesTreeItem->setData(0, Qt::UserRole, QStringLiteral("container.bodies"));
+    m_bodiesTreeItem->setExpanded(true);
 
     // Sketches section
-    auto* sketches = new QTreeWidgetItem(objectsTree);
-    sketches->setText(0, tr("Sketches"));
-    sketches->setData(0, Qt::UserRole, QStringLiteral("container.sketches"));
-    sketches->setExpanded(true);
+    m_sketchesTreeItem = new QTreeWidgetItem(objectsTree);
+    m_sketchesTreeItem->setText(0, tr("Sketches"));
+    m_sketchesTreeItem->setData(0, Qt::UserRole, QStringLiteral("container.sketches"));
+    m_sketchesTreeItem->setExpanded(true);
 
     // Construction section
-    auto* construction = new QTreeWidgetItem(objectsTree);
-    construction->setText(0, tr("Construction"));
-    construction->setData(0, Qt::UserRole, QStringLiteral("container.construction"));
-    construction->setExpanded(false);
+    m_constructionTreeItem = new QTreeWidgetItem(objectsTree);
+    m_constructionTreeItem->setText(0, tr("Construction"));
+    m_constructionTreeItem->setData(0, Qt::UserRole, QStringLiteral("container.construction"));
+    m_constructionTreeItem->setExpanded(false);
 
-    // Example items to demonstrate renaming (remove when real objects exist)
-    auto* exampleBody = new QTreeWidgetItem(bodies);
-    exampleBody->setText(0, tr("Body1"));
-    exampleBody->setFlags(exampleBody->flags() | Qt::ItemIsEditable);
-    exampleBody->setData(0, Qt::UserRole, QStringLiteral("object"));
-
-    auto* exampleSketch = new QTreeWidgetItem(sketches);
-    exampleSketch->setText(0, tr("Sketch1"));
-    exampleSketch->setFlags(exampleSketch->flags() | Qt::ItemIsEditable);
-    exampleSketch->setData(0, Qt::UserRole, QStringLiteral("object"));
-
-    // Example sub-item under Body1
-    auto* exampleFeature = new QTreeWidgetItem(exampleBody);
-    exampleFeature->setText(0, tr("Extrude1"));
-    exampleFeature->setFlags(exampleFeature->flags() | Qt::ItemIsEditable);
-    exampleFeature->setData(0, Qt::UserRole, QStringLiteral("feature"));
+    // Bodies, Sketches, and Construction containers are empty by default
+    // Items are added as the user creates features
 
     projectTabs->addTab(objectsTree, tr("Objects"));
 
@@ -492,6 +556,22 @@ void MainWindow::createDockPanels()
         QTreeWidgetItem* item = objectsTree->currentItem();
         if (item && (item->flags() & Qt::ItemIsEditable)) {
             objectsTree->editItem(item, 0);
+        }
+    });
+
+    // Handle item selection in objects tree
+    connect(objectsTree, &QTreeWidget::currentItemChanged,
+            this, [this](QTreeWidgetItem* current, QTreeWidgetItem*) {
+        if (!current) return;
+
+        QString itemType = current->data(0, Qt::UserRole).toString();
+
+        if (itemType == QStringLiteral("construction_plane")) {
+            int planeId = current->data(0, Qt::UserRole + 1).toInt();
+            emit constructionPlaneSelected(planeId);
+        } else if (itemType == QStringLiteral("sketch")) {
+            int sketchIdx = current->data(0, Qt::UserRole + 1).toInt();
+            emit sketchSelectedInTree(sketchIdx);
         }
     });
 
@@ -510,6 +590,7 @@ void MainWindow::createDockPanels()
     m_propertiesDock->setObjectName(QStringLiteral("PropertiesDock"));
     m_propertiesDock->setAllowedAreas(
         Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    m_propertiesDock->setMinimumWidth(150);  // Ensure title "Properties" isn't clipped
 
     // Container widget with tree and action bar
     auto* propsContainer = new QWidget();
@@ -555,6 +636,7 @@ void MainWindow::createDockPanels()
         Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
 
     m_cliPanel = new CliPanel(this);
+    m_cliPanel->setGuiMode(true);  // We're in GUI mode, show warnings for missing viewport
     m_terminalDock->setWidget(m_cliPanel);
 
     addDockWidget(Qt::BottomDockWidgetArea, m_terminalDock);
@@ -589,7 +671,8 @@ void MainWindow::onFileNew()
 {
     if (!maybeSave()) return;
 
-    m_document.createTestSolid();
+    m_document.clear();
+    m_document.setModified(false);  // New document starts unmodified
     updateTitle();
     onDocumentLoaded();
     m_statusLabel->setText(tr("New document created"));
@@ -601,70 +684,149 @@ void MainWindow::onFileOpen()
 
     QString selectedFilter;
     QString path = QFileDialog::getOpenFileName(this,
-        tr("Open BREP File"),
+        tr("Open File"),
         QString(),
-        tr(kBrepFilter),
+        tr(kOpenFilter),
         &selectedFilter);
 
     if (path.isEmpty()) return;
 
-    // If the file doesn't exist and the BREP filter is active,
-    // try appending .brep before giving up
-    if (!QFileInfo::exists(path)) {
-        QString withExt = ensureBrepExtension(path, selectedFilter);
-        if (withExt != path && QFileInfo::exists(withExt))
-            path = withExt;
-    }
+    // Determine file type by extension or by checking if it's a directory
+    QFileInfo info(path);
+    bool isProject = info.isDir() || path.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive);
 
-    if (m_document.loadBrep(path)) {
-        updateTitle();
-        onDocumentLoaded();
-        m_statusLabel->setText(tr("Opened: %1").arg(path));
+    if (isProject) {
+        // Open as HobbyCAD project
+        QString errorMsg;
+        if (m_project.load(path, &errorMsg)) {
+            // Sync document shapes from project
+            m_document.clear();
+            for (const auto& shape : m_project.shapes()) {
+                m_document.addShape(shape);
+            }
+            m_document.setModified(false);
+
+            updateTitle();
+            onDocumentLoaded();
+            m_statusLabel->setText(tr("Opened project: %1").arg(m_project.name()));
+        } else {
+            QMessageBox::warning(this,
+                tr("Open Failed"),
+                tr("Could not open project:\n%1\n\n%2").arg(path, errorMsg));
+        }
     } else {
-        QMessageBox::warning(this,
-            tr("Open Failed"),
-            tr("Could not open file:\n%1").arg(path));
+        // Open as standalone BREP file (raw geometry import)
+        // If the file doesn't exist and the BREP filter is active,
+        // try appending .brep before giving up
+        if (!QFileInfo::exists(path)) {
+            QString withExt = ensureBrepExtension(path, selectedFilter);
+            if (withExt != path && QFileInfo::exists(withExt))
+                path = withExt;
+        }
+
+        if (m_document.loadBrep(path)) {
+            // Clear project state since we're loading raw geometry only
+            m_project.close();
+
+            updateTitle();
+            onDocumentLoaded();
+            m_statusLabel->setText(tr("Opened: %1").arg(path));
+        } else {
+            QMessageBox::warning(this,
+                tr("Open Failed"),
+                tr("Could not open file:\n%1").arg(path));
+        }
     }
 }
 
 void MainWindow::onFileSave()
 {
-    if (m_document.isNew()) {
-        onFileSaveAs();
-        return;
-    }
-
-    if (m_document.saveBrep()) {
-        updateTitle();
-        m_statusLabel->setText(
-            tr("Saved: %1").arg(m_document.filePath()));
+    // Check if we have an existing project or document
+    if (!m_project.isNew()) {
+        // Save to existing project
+        QString errorMsg;
+        if (m_project.save(QString(), &errorMsg)) {
+            m_document.setModified(false);
+            updateTitle();
+            m_statusLabel->setText(tr("Saved project: %1").arg(m_project.name()));
+        } else {
+            QMessageBox::warning(this,
+                tr("Save Failed"),
+                tr("Could not save project:\n%1").arg(errorMsg));
+        }
+    } else if (!m_document.isNew()) {
+        // Save to existing BREP file
+        if (m_document.saveBrep()) {
+            updateTitle();
+            m_statusLabel->setText(tr("Saved: %1").arg(m_document.filePath()));
+        } else {
+            QMessageBox::warning(this,
+                tr("Save Failed"),
+                tr("Could not save file:\n%1").arg(m_document.filePath()));
+        }
     } else {
-        QMessageBox::warning(this,
-            tr("Save Failed"),
-            tr("Could not save file:\n%1").arg(m_document.filePath()));
+        // No existing file - prompt for location
+        onFileSaveAs();
     }
 }
 
 void MainWindow::onFileSaveAs()
 {
-    QString selectedFilter;
+    QString selectedFilter = tr(kProjectFilter);  // Default to project format
     QString path = QFileDialog::getSaveFileName(this,
-        tr("Save BREP File"),
+        tr("Save As"),
         QString(),
-        tr(kBrepFilter),
+        tr(kSaveFilter),
         &selectedFilter);
 
     if (path.isEmpty()) return;
 
-    path = ensureBrepExtension(path, selectedFilter);
+    bool saveAsProject = selectedFilter.contains(QStringLiteral(".hcad"));
 
-    if (m_document.saveBrep(path)) {
-        updateTitle();
-        m_statusLabel->setText(tr("Saved: %1").arg(path));
+    if (saveAsProject) {
+        // Project structure per project_definition.txt Section 5.2:
+        //   my_widget/              <- directory (NO .hcad extension)
+        //     my_widget.hcad        <- manifest file
+        //
+        // User might enter:
+        //   - "my_widget" (directory name)
+        //   - "my_widget.hcad" (we strip the extension for directory)
+        //   - "/path/to/my_widget.hcad" (manifest path)
+
+        // Strip .hcad extension if user added it (it's for the manifest, not directory)
+        if (path.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive)) {
+            path.chop(5);
+        }
+
+        // Sync shapes to project
+        m_project.setShapes(m_document.shapes());
+
+        // Set project name from directory name
+        QFileInfo info(path);
+        m_project.setName(info.fileName());
+
+        QString errorMsg;
+        if (m_project.save(path, &errorMsg)) {
+            m_document.setModified(false);
+            updateTitle();
+            m_statusLabel->setText(tr("Saved project: %1").arg(m_project.name()));
+        } else {
+            QMessageBox::warning(this,
+                tr("Save Failed"),
+                tr("Could not save project:\n%1").arg(errorMsg));
+        }
     } else {
-        QMessageBox::warning(this,
-            tr("Save Failed"),
-            tr("Could not save file:\n%1").arg(path));
+        // Save as BREP
+        path = ensureBrepExtension(path, selectedFilter);
+
+        if (m_document.saveBrep(path)) {
+            updateTitle();
+            m_statusLabel->setText(tr("Saved: %1").arg(path));
+        } else {
+            QMessageBox::warning(this,
+                tr("Save Failed"),
+                tr("Could not save file:\n%1").arg(path));
+        }
     }
 }
 
@@ -679,6 +841,7 @@ void MainWindow::onFileClose()
 
     m_document.clear();
     m_document.setModified(false);
+    m_project.close();
     updateTitle();
     onDocumentClosed();
     m_statusLabel->setText(tr("Document closed"));
@@ -701,7 +864,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 bool MainWindow::maybeSave()
 {
-    if (!m_document.isModified()) {
+    if (!m_document.isModified() && !m_project.isModified()) {
         return true;  // nothing to save — proceed
     }
 
@@ -729,34 +892,62 @@ bool MainWindow::maybeSave()
     }
 
     if (clicked == saveBtn) {
-        // Try to save — if the doc is new, prompt for a filename
-        if (m_document.isNew()) {
-            QString selectedFilter;
+        // Try to save
+        if (!m_project.isNew()) {
+            // Save to existing project
+            QString errorMsg;
+            if (!m_project.save(QString(), &errorMsg)) {
+                QMessageBox::warning(this,
+                    tr("Save Failed"),
+                    tr("Could not save project:\n%1").arg(errorMsg));
+                return false;
+            }
+        } else if (!m_document.isNew()) {
+            // Save to existing BREP file
+            if (!m_document.saveBrep()) {
+                QMessageBox::warning(this,
+                    tr("Save Failed"),
+                    tr("Could not save file:\n%1").arg(m_document.filePath()));
+                return false;
+            }
+        } else {
+            // New document — prompt for location
+            QString selectedFilter = tr(kProjectFilter);
             QString path = QFileDialog::getSaveFileName(this,
-                tr("Save BREP File"),
+                tr("Save As"),
                 QString(),
-                tr(kBrepFilter),
+                tr(kSaveFilter),
                 &selectedFilter);
 
             if (path.isEmpty()) {
                 return false;  // user cancelled the save dialog
             }
 
-            path = ensureBrepExtension(path, selectedFilter);
+            bool saveAsProject = selectedFilter.contains(QStringLiteral(".hcad"));
 
-            if (!m_document.saveBrep(path)) {
-                QMessageBox::warning(this,
-                    tr("Save Failed"),
-                    tr("Could not save file:\n%1").arg(path));
-                return false;  // save failed — don't close
-            }
-        } else {
-            if (!m_document.saveBrep()) {
-                QMessageBox::warning(this,
-                    tr("Save Failed"),
-                    tr("Could not save file:\n%1")
-                        .arg(m_document.filePath()));
-                return false;
+            if (saveAsProject) {
+                if (!path.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive)) {
+                    path += QStringLiteral(".hcad");
+                }
+                m_project.setShapes(m_document.shapes());
+                QFileInfo info(path);
+                m_project.setName(info.baseName().replace(QStringLiteral(".hcad"), QString()));
+
+                QString errorMsg;
+                if (!m_project.save(path, &errorMsg)) {
+                    QMessageBox::warning(this,
+                        tr("Save Failed"),
+                        tr("Could not save project:\n%1").arg(errorMsg));
+                    return false;
+                }
+            } else {
+                path = ensureBrepExtension(path, selectedFilter);
+                if (!m_document.saveBrep(path)) {
+                    QMessageBox::warning(this,
+                        tr("Save Failed"),
+                        tr("Could not save file:\n%1").arg(path));
+                    return false;
+                }
             }
         }
     }
@@ -852,17 +1043,138 @@ void MainWindow::updateTitle()
 {
     QString title = QStringLiteral("HobbyCAD");
 
-    if (!m_document.isNew()) {
+    if (!m_project.isNew()) {
+        // Show project name
+        title += QStringLiteral(" — ") + m_project.name();
+    } else if (!m_document.isNew()) {
+        // Show legacy BREP file path
         title += QStringLiteral(" — ") + m_document.filePath();
     } else {
         title += QStringLiteral(" — [New Document]");
     }
 
-    if (m_document.isModified()) {
+    if (m_project.isModified() || m_document.isModified()) {
         title += QStringLiteral(" *");
     }
 
     setWindowTitle(title);
+}
+
+void MainWindow::addSketchToTree(const QString& name, int index)
+{
+    if (!m_sketchesTreeItem)
+        return;
+
+    auto* item = new QTreeWidgetItem(m_sketchesTreeItem);
+    item->setText(0, name);
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
+    item->setData(0, Qt::UserRole, QStringLiteral("sketch"));
+    item->setData(0, Qt::UserRole + 1, index);  // Store sketch index
+
+    m_sketchesTreeItem->setExpanded(true);
+}
+
+void MainWindow::selectSketchInTree(int index)
+{
+    if (!m_sketchesTreeItem)
+        return;
+
+    for (int i = 0; i < m_sketchesTreeItem->childCount(); ++i) {
+        QTreeWidgetItem* item = m_sketchesTreeItem->child(i);
+        if (item->data(0, Qt::UserRole + 1).toInt() == index) {
+            item->treeWidget()->setCurrentItem(item);
+            return;
+        }
+    }
+}
+
+void MainWindow::clearSketchesInTree()
+{
+    if (!m_sketchesTreeItem)
+        return;
+
+    while (m_sketchesTreeItem->childCount() > 0) {
+        delete m_sketchesTreeItem->takeChild(0);
+    }
+}
+
+void MainWindow::addBodyToTree(const QString& name, int index)
+{
+    if (!m_bodiesTreeItem)
+        return;
+
+    auto* item = new QTreeWidgetItem(m_bodiesTreeItem);
+    item->setText(0, name);
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
+    item->setData(0, Qt::UserRole, QStringLiteral("body"));
+    item->setData(0, Qt::UserRole + 1, index);
+
+    m_bodiesTreeItem->setExpanded(true);
+}
+
+void MainWindow::clearBodiesInTree()
+{
+    if (!m_bodiesTreeItem)
+        return;
+
+    while (m_bodiesTreeItem->childCount() > 0) {
+        delete m_bodiesTreeItem->takeChild(0);
+    }
+}
+
+void MainWindow::setUnitsFromString(const QString& units)
+{
+    QString u = units.toLower();
+    if (u == QLatin1String("mm"))
+        m_currentUnits = 0;
+    else if (u == QLatin1String("cm"))
+        m_currentUnits = 1;
+    else if (u == QLatin1String("m"))
+        m_currentUnits = 2;
+    else if (u == QLatin1String("in"))
+        m_currentUnits = 3;
+    else if (u == QLatin1String("ft"))
+        m_currentUnits = 4;
+    else
+        m_currentUnits = 0;  // default to mm
+}
+
+void MainWindow::addConstructionPlaneToTree(const QString& name, int id)
+{
+    if (!m_constructionTreeItem)
+        return;
+
+    auto* item = new QTreeWidgetItem(m_constructionTreeItem);
+    item->setText(0, name);
+    item->setFlags(item->flags() | Qt::ItemIsEditable);
+    item->setData(0, Qt::UserRole, QStringLiteral("construction_plane"));
+    item->setData(0, Qt::UserRole + 1, id);  // Store plane ID
+
+    m_constructionTreeItem->setExpanded(true);
+}
+
+void MainWindow::selectConstructionPlaneInTree(int id)
+{
+    if (!m_constructionTreeItem)
+        return;
+
+    for (int i = 0; i < m_constructionTreeItem->childCount(); ++i) {
+        QTreeWidgetItem* item = m_constructionTreeItem->child(i);
+        if (item->data(0, Qt::UserRole + 1).toInt() == id) {
+            item->treeWidget()->setCurrentItem(item);
+            return;
+        }
+    }
+}
+
+void MainWindow::clearConstructionPlanesInTree()
+{
+    if (!m_constructionTreeItem)
+        return;
+
+    while (m_constructionTreeItem->childCount() > 0) {
+        delete m_constructionTreeItem->takeChild(0);
+    }
 }
 
 }  // namespace hobbycad

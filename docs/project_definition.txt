@@ -462,6 +462,9 @@
         body_001.brep             Solid body geometry (OCCT BREP)
         body_002.brep             Additional bodies
         ...
+      construction/
+        plane_001.json            Construction plane definition
+        ...
       sketches/
         sketch_001.json           2D sketch geometry and constraints
         ...
@@ -513,6 +516,9 @@
       "geometry": [
         "geometry/body_001.brep",
         "geometry/body_002.brep"
+      ],
+      "construction_planes": [
+        "construction/plane_001.json"
       ],
       "sketches": [
         "sketches/sketch_001.json"
@@ -903,6 +909,8 @@
       geometry/
         body_001.brep
         body_002.brep
+      construction/
+        plane_001.json
       sketches/
         sketch_001.json
       features/

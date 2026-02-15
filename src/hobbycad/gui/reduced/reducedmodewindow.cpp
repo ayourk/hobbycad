@@ -14,6 +14,7 @@
 #include "gui/sketchtoolbar.h"
 #include "gui/sketchcanvas.h"
 #include "gui/sketchactionbar.h"
+#include "gui/sketchplanedialog.h"
 
 #include <QAction>
 #include <QApplication>
@@ -169,6 +170,17 @@ void ReducedModeWindow::onTerminalToggled(bool visible)
     }
 }
 
+void ReducedModeWindow::applyPreferences()
+{
+    // Call base class to apply standard bindings
+    MainWindow::applyPreferences();
+
+    // Reload sketch canvas key bindings
+    if (m_sketchCanvas) {
+        m_sketchCanvas->reloadBindings();
+    }
+}
+
 void ReducedModeWindow::onViewportClicked()
 {
     showDiagnosticDialog();
@@ -200,20 +212,20 @@ void ReducedModeWindow::createToolbar()
     // Buttons with icons above labels
     // Using standard freedesktop icons as placeholders
 
-    // Create Sketch - start a 2D sketch on a plane or face
+    // Create - start a 2D sketch or create construction geometry
     auto* sketchBtn = m_toolbar->addButton(
         QIcon::fromTheme(QStringLiteral("draw-freehand"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Create\nSketch"));
+        tr("Create"));
     auto* sketchDrop = sketchBtn->dropdown();
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-freehand"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("New Sketch"));
+        tr("Sketch"));
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-rectangle"),
                          style()->standardIcon(QStyle::SP_FileDialogListView)),
-        tr("Sketch on\nPlane"));
+        tr("Construction\nPlane"));
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-polygon"),
                          style()->standardIcon(QStyle::SP_FileDialogContentsView)),
@@ -350,7 +362,7 @@ void ReducedModeWindow::createToolbar()
 
     m_toolbar->addSeparator();
 
-    // Parameters - manage model parameters/variables
+    // Parameters - manage object parameters/variables
     auto* paramsBtn = m_toolbar->addButton(
         QIcon::fromTheme(QStringLiteral("document-properties"),
                          style()->standardIcon(QStyle::SP_FileDialogInfoView)),
@@ -366,7 +378,7 @@ void ReducedModeWindow::createToolbar()
     connect(paramsBtn, &ToolbarButton::clicked,
             this, &ReducedModeWindow::showParametersDialog);
 
-    // Connect Create Sketch button - 2D sketching works in reduced mode!
+    // Connect Create button - enters sketch mode in reduced mode
     connect(sketchBtn, &ToolbarButton::clicked,
             this, &ReducedModeWindow::onCreateSketchClicked);
 
@@ -452,7 +464,7 @@ void ReducedModeWindow::initDefaultParameters()
     angle.isUserParam = true;
     m_parameters.append(angle);
 
-    // Example model parameters (from features - read-only)
+    // Example object parameters (from features - read-only)
     Parameter extrude1Dist;
     extrude1Dist.name = QStringLiteral("Extrude1_Distance");
     extrude1Dist.expression = QStringLiteral("10");
@@ -780,8 +792,19 @@ void ReducedModeWindow::showFeatureProperties(int index)
 
 void ReducedModeWindow::onCreateSketchClicked()
 {
-    // Default to XY plane - user can change in properties
-    enterSketchMode(SketchPlane::XY);
+    // Show plane selection dialog
+    SketchPlaneDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;  // User cancelled
+    }
+
+    SketchPlane plane = dialog.selectedPlane();
+    double offset = dialog.offset();
+
+    // Store offset for display in properties
+    m_pendingSketchOffset = offset;
+
+    enterSketchMode(plane);
 }
 
 void ReducedModeWindow::enterSketchMode(SketchPlane plane)
@@ -838,6 +861,11 @@ void ReducedModeWindow::enterSketchMode(SketchPlane plane)
         planeItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
         planeItem->setData(1, Qt::UserRole + 1, planes);
         planeItem->setData(1, Qt::UserRole + 2, planeIdx);
+
+        // Plane offset
+        auto* offsetItem = new QTreeWidgetItem(propsTree);
+        offsetItem->setText(0, tr("Offset"));
+        offsetItem->setText(1, tr("%1 mm").arg(m_pendingSketchOffset, 0, 'g', 6));
 
         // Grid settings
         auto* gridHeader = new QTreeWidgetItem(propsTree);

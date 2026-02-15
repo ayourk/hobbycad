@@ -51,6 +51,13 @@ public:
     /// Get the current radius.
     double Radius() const { return m_radius; }
 
+    /// Flip the arrow directions (swap CW/CCW controls).
+    /// Call this when the camera is looking against the axis.
+    void setFlipped(bool flipped);
+
+    /// Returns true if arrows are flipped.
+    bool isFlipped() const { return m_flipped; }
+
 protected:
     void onPaint() override;
 
@@ -68,6 +75,7 @@ private:
     NavControlId   m_ccwCtrl;
     Quantity_Color m_color;
     double         m_radius;
+    bool           m_flipped = false;
 
     static constexpr double kArrowLen  = 10.0;  ///< tip-to-base
     static constexpr double kArrowHalf =  5.0;  ///< half-width

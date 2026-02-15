@@ -388,6 +388,9 @@
       security_risks.txt           Threat model
       coding_standards.txt         This document
       theming.txt                  GUI theming guide
+      gui_reference.txt            GUI features and menu options
+      cli_commands.txt             CLI command reference
+      changelog.txt                Version history
 
     themes/                        User/community Qt stylesheet themes
       sample.qss                   Reference theme (all IDs, defaults)
