@@ -104,6 +104,18 @@ if "!IN_MSYS2_SHELL!"=="false" (
         if /i "%%A"=="run" set "DO_RUN=1"
     )
 
+    REM If just "run" with no clean, and binary exists, skip build
+    if defined DO_RUN (
+        if not defined DO_CLEAN (
+            if exist "!BINARY!" (
+                echo   [INFO] Binary exists, skipping build
+                echo   [INFO] Launching HobbyCAD...
+                start "" "!BINARY!"
+                exit /b 0
+            )
+        )
+    )
+
     REM Build the bash commands
     set "BASH_CMD="
     if defined DO_CLEAN set "BASH_CMD=rm -rf build && "
