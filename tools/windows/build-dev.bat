@@ -121,11 +121,13 @@ if "!IN_MSYS2_SHELL!"=="false" (
     if defined DO_CLEAN set "BASH_CMD=rm -rf build && "
     set "BASH_CMD=!BASH_CMD!cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
 
-    REM Execute through MSYS2 UCRT64 shell (not just bash)
-    REM Using msys2_shell.cmd ensures proper environment setup
+    REM Execute through MSYS2 UCRT64 using the proper shell initialization
+    REM Set MSYSTEM=UCRT64 and use bash with full profile loading
     echo   [INFO] Running: !BASH_CMD!
     echo.
-    "!MSYS2_ROOT!\msys2_shell.cmd" -defterm -no-start -ucrt64 -c "cd '!PROJECT_MSYS!' && !BASH_CMD! && echo BUILD_SUCCESS || echo BUILD_FAILED"
+    set "MSYSTEM=UCRT64"
+    set "CHERE_INVOKING=1"
+    "!MSYS2_ROOT!\usr\bin\bash.exe" --login -c "cd '!PROJECT_MSYS!' && !BASH_CMD! && echo BUILD_SUCCESS || echo BUILD_FAILED"
 
     REM Check if build output indicates success (errorlevel from ucrt64.exe is unreliable)
     set "BUILD_RESULT=0"
