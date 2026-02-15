@@ -759,7 +759,8 @@ $msys2Packages = @(
     "mingw-w64-ucrt-x86_64-python-pip",
     "mingw-w64-ucrt-x86_64-qt6-base",
     "mingw-w64-ucrt-x86_64-qt6-tools",
-    "mingw-w64-ucrt-x86_64-opencascade"
+    "mingw-w64-ucrt-x86_64-opencascade",
+    "mingw-w64-ucrt-x86_64-solvespace"
 )
 
 $msys2Present = Test-Path (Join-Path $Msys2Root "msys2.exe")
@@ -772,6 +773,7 @@ if ($msys2Present) {
     $gitPath = Join-Path $ucrt64Bin "git.exe"
     $qt6Path = Join-Path $Msys2Root "ucrt64\lib\cmake\Qt6\Qt6Config.cmake"
     $occtPath = Join-Path $Msys2Root "ucrt64\lib\cmake\opencascade\OpenCASCADEConfig.cmake"
+    $slvsPath = Join-Path $Msys2Root "ucrt64\include\slvs.h"
 
     $missing = @()
     if (-not (Test-Path $gppPath)) { $missing += "g++" }
@@ -781,6 +783,7 @@ if ($msys2Present) {
     if (-not (Test-Path $gitPath)) { $missing += "git" }
     if (-not (Test-Path $qt6Path)) { $missing += "qt6" }
     if (-not (Test-Path $occtPath)) { $missing += "opencascade" }
+    if (-not (Test-Path $slvsPath)) { $missing += "solvespace" }
 
     if ($missing.Count -eq 0) {
         Write-Ok "Toolchain packages installed."
@@ -832,6 +835,9 @@ if ($msys2Present) {
             }
             if (-not (Test-Path $occtPath)) {
                 $stillMissing += "opencascade"
+            }
+            if (-not (Test-Path $slvsPath)) {
+                $stillMissing += "solvespace"
             }
 
             if ($stillMissing.Count -eq 0) {
