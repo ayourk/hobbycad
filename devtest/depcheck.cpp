@@ -381,7 +381,9 @@ int main(int argc, char* argv[])
         sys.param  = params;
         sys.params = 2;
 
-        entities[0] = Slvs_MakePoint2d(1, 1, 1, 2);
+        // Args: entity_id, group, workplane, param_u, param_v
+        // Use 0 for workplane (free in 3D space, but params define 2D position)
+        entities[0] = Slvs_MakePoint2d(1, 1, 0, 1, 2);
         sys.entity   = entities;
         sys.entities = 1;
 

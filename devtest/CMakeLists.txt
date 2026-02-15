@@ -169,16 +169,21 @@ endif()
 # ---- Phase 1: Basic Modeling (required) ------------------------------
 
 # libslvs — PPA package on Linux, MSYS2 package on Windows, build from
-# source on macOS.  Try pkg-config first, then CMake config.
+# source on macOS.  Try pkg-config first, then CMake config, then manual.
 set(HAVE_SLVS FALSE)
 set(SLVS_TARGET "")
+
+# Method 1: pkg-config
 if(PkgConfig_FOUND)
     pkg_check_modules(SLVS IMPORTED_TARGET slvs)
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
         set(SLVS_TARGET PkgConfig::SLVS)
+        depcheck_log("Found libslvs via pkg-config (Phase 1)")
     endif()
 endif()
+
+# Method 2: CMake config
 if(NOT HAVE_SLVS)
     find_package(slvs QUIET)
     if(slvs_FOUND)
@@ -186,11 +191,30 @@ if(NOT HAVE_SLVS)
         if(TARGET slvs::slvs)
             set(SLVS_TARGET slvs::slvs)
         endif()
+        depcheck_log("Found libslvs via CMake config (Phase 1)")
     endif()
 endif()
+
+# Method 3: Manual detection (header + library)
+if(NOT HAVE_SLVS)
+    find_path(SLVS_INCLUDE_DIR slvs.h
+        HINTS /usr/include /usr/local/include)
+    find_library(SLVS_LIBRARY slvs
+        HINTS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
+    if(SLVS_INCLUDE_DIR AND SLVS_LIBRARY)
+        set(HAVE_SLVS TRUE)
+        # Create imported target for manual detection
+        add_library(slvs_manual UNKNOWN IMPORTED)
+        set_target_properties(slvs_manual PROPERTIES
+            IMPORTED_LOCATION "${SLVS_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${SLVS_INCLUDE_DIR}")
+        set(SLVS_TARGET slvs_manual)
+        depcheck_log("Found libslvs: ${SLVS_LIBRARY} (Phase 1)")
+    endif()
+endif()
+
 if(HAVE_SLVS)
     add_compile_definitions(HAVE_SLVS)
-    depcheck_log("Found libslvs (Phase 1)")
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
         message(FATAL_ERROR
