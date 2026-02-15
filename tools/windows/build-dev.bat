@@ -115,25 +115,37 @@ if "!IN_MSYS2_SHELL!"=="false" (
     "!MSYS2_ROOT!\ucrt64.exe" bash -l -c "cd '!PROJECT_MSYS!' && !BASH_CMD!"
     set "BUILD_RESULT=!errorlevel!"
 
-    REM Check result and optionally launch
-    if !BUILD_RESULT!==0 (
-        if defined DO_RUN (
-            if exist "!BINARY!" (
-                echo.
-                echo   [INFO] Launching HobbyCAD...
-                start "" "!BINARY!"
-            )
-        ) else (
-            echo.
-            echo   [OK] Build successful
-            echo   [INFO] Binary: !BINARY!
-        )
-    ) else (
+    REM Check result and verify binary exists
+    if !BUILD_RESULT! neq 0 (
         echo.
         echo   [FAIL] Build failed with exit code !BUILD_RESULT!
+        exit /b !BUILD_RESULT!
     )
 
-    exit /b !BUILD_RESULT!
+    REM Verify the binary was actually created
+    if not exist "!BINARY!" (
+        echo.
+        echo   [FAIL] Build reported success but binary not found
+        echo   [INFO] Expected: !BINARY!
+        echo   [INFO] Searching for hobbycad.exe...
+        for /f "delims=" %%F in ('dir /s /b "!BUILD_DIR!\*.exe" 2^>nul') do (
+            echo   [INFO] Found: %%F
+        )
+        exit /b 1
+    )
+
+    REM Success - optionally launch
+    if defined DO_RUN (
+        echo.
+        echo   [INFO] Launching HobbyCAD...
+        start "" "!BINARY!"
+    ) else (
+        echo.
+        echo   [OK] Build successful
+        echo   [INFO] Binary: !BINARY!
+    )
+
+    exit /b 0
 )
 
 REM =====================================================================
