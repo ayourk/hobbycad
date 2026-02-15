@@ -15,29 +15,38 @@
 find_package(OpenCASCADE REQUIRED)
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui OpenGL)
 
-# Optional: libslvs for constraint solving
+# Required: libslvs for constraint solving (Phase 1)
 include(FindPkgConfig OPTIONAL)
 set(HAVE_SLVS FALSE)
+set(SLVS_TARGET "")
 if(PKG_CONFIG_FOUND)
     pkg_check_modules(SLVS IMPORTED_TARGET slvs)
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
-        message(STATUS "libhobbycad: Found libslvs via pkg-config (constraint solving enabled)")
+        set(SLVS_TARGET PkgConfig::SLVS)
+        message(STATUS "libhobbycad: Found libslvs via pkg-config")
     endif()
 endif()
 if(NOT HAVE_SLVS)
     find_package(slvs CONFIG QUIET)
     if(slvs_FOUND)
         set(HAVE_SLVS TRUE)
-        message(STATUS "libhobbycad: Found libslvs via CMake config (constraint solving enabled)")
+        if(TARGET slvs::slvs)
+            set(SLVS_TARGET slvs::slvs)
+        endif()
+        message(STATUS "libhobbycad: Found libslvs via CMake config")
     endif()
 endif()
 if(NOT HAVE_SLVS)
-    message(STATUS "libhobbycad: libslvs not found - constraint solving disabled")
+    message(FATAL_ERROR
+        "libslvs not found (required for Phase 1 constraint solving).\n"
+        "  Linux:   sudo add-apt-repository ppa:ayourk/hobbycad && sudo apt install libslvs-dev\n"
+        "  Windows: pacman -S mingw-w64-ucrt-x86_64-solvespace\n"
+        "  macOS:   build from source: https://github.com/solvespace/solvespace")
 endif()
 
-# Export HAVE_SLVS to parent scope so GUI knows if solver is in library
-set(LIBHOBBYCAD_HAVE_SLVS ${HAVE_SLVS} PARENT_SCOPE)
+# Export HAVE_SLVS to parent scope so GUI knows solver is available
+set(LIBHOBBYCAD_HAVE_SLVS TRUE PARENT_SCOPE)
 
 # ---- Source files ----------------------------------------------------
 
@@ -184,15 +193,11 @@ target_link_libraries(hobbycad-lib
         ${HOBBYCAD_OCCT_LIBS}
 )
 
-# Link libslvs if available
-if(HAVE_SLVS)
-    if(TARGET PkgConfig::SLVS)
-        target_link_libraries(hobbycad-lib PRIVATE PkgConfig::SLVS)
-    else()
-        target_link_libraries(hobbycad-lib PRIVATE slvs::slvs)
-    endif()
-    target_compile_definitions(hobbycad-lib PRIVATE HAVE_SLVS)
+# Link libslvs (required for Phase 1)
+if(SLVS_TARGET)
+    target_link_libraries(hobbycad-lib PRIVATE ${SLVS_TARGET})
 endif()
+target_compile_definitions(hobbycad-lib PRIVATE HAVE_SLVS)
 
 # Shared library: export symbols
 if(HOBBYCAD_CORE_LINKAGE STREQUAL "SHARED")

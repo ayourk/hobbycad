@@ -5,9 +5,9 @@
 #  Builds and runs a test program that verifies every HobbyCAD and
 #  HobbyMesh dependency across all development phases.
 #
-#  Phase 0 dependencies are REQUIRED — cmake will fail if they are
-#  missing.  All later-phase dependencies are optional and report
-#  [WARN] at runtime if absent.
+#  Phase 0 and Phase 1 dependencies are REQUIRED — cmake will fail if
+#  they are missing.  All later-phase dependencies are optional and
+#  report [WARN] at runtime if absent.
 #
 #  Linux:
 #    cd devtest
@@ -166,21 +166,26 @@ else()
     depcheck_log("TBB not found (may be bundled with OCCT)")
 endif()
 
-# ---- Phase 1: Basic Modeling (optional) ------------------------------
+# ---- Phase 1: Basic Modeling (required) ------------------------------
 
-# libslvs — PPA package on Linux, must build from source on
-# Windows/macOS.  Try pkg-config first, then CMake config.
+# libslvs — PPA package on Linux, MSYS2 package on Windows, build from
+# source on macOS.  Try pkg-config first, then CMake config.
 set(HAVE_SLVS FALSE)
+set(SLVS_TARGET "")
 if(PkgConfig_FOUND)
     pkg_check_modules(SLVS IMPORTED_TARGET slvs)
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
+        set(SLVS_TARGET PkgConfig::SLVS)
     endif()
 endif()
 if(NOT HAVE_SLVS)
     find_package(slvs QUIET)
     if(slvs_FOUND)
         set(HAVE_SLVS TRUE)
+        if(TARGET slvs::slvs)
+            set(SLVS_TARGET slvs::slvs)
+        endif()
     endif()
 endif()
 if(HAVE_SLVS)
@@ -188,13 +193,20 @@ if(HAVE_SLVS)
     depcheck_log("Found libslvs (Phase 1)")
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
-        depcheck_log(
-            "libslvs not found (Phase 1) — "
-            "install libslvs-dev from ppa:ayourk/hobbycad")
+        message(FATAL_ERROR
+            "libslvs not found (Phase 1 required).  "
+            "Install libslvs-dev from ppa:ayourk/hobbycad:\n"
+            "  sudo add-apt-repository ppa:ayourk/hobbycad\n"
+            "  sudo apt update && sudo apt install libslvs-dev")
+    elseif(HOBBYCAD_PLATFORM STREQUAL "windows")
+        message(FATAL_ERROR
+            "libslvs not found (Phase 1 required).  "
+            "Install via MSYS2:\n"
+            "  pacman -S mingw-w64-ucrt-x86_64-solvespace")
     else()
-        depcheck_log(
-            "libslvs not found (Phase 1) — "
-            "build from source: https://github.com/solvespace/solvespace")
+        message(FATAL_ERROR
+            "libslvs not found (Phase 1 required).  "
+            "Build from source: https://github.com/solvespace/solvespace")
     endif()
 endif()
 
@@ -400,11 +412,9 @@ elseif(TARGET PkgConfig::TBB)
     target_link_libraries(depcheck PRIVATE PkgConfig::TBB)
 endif()
 
-# Phase 1
-if(HAVE_SLVS)
-    if(TARGET PkgConfig::SLVS)
-        target_link_libraries(depcheck PRIVATE PkgConfig::SLVS)
-    endif()
+# Phase 1 (required)
+if(SLVS_TARGET)
+    target_link_libraries(depcheck PRIVATE ${SLVS_TARGET})
 endif()
 
 # Phase 3
