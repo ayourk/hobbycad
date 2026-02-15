@@ -4,8 +4,11 @@ REM  tools\windows\build-dev.bat — HobbyCAD Developer Build Script
 REM =====================================================================
 REM
 REM  Configures and builds HobbyCAD for day-to-day development.
-REM  All output is logged to build-hobbycad.log in the project root
-REM  and also displayed on the terminal.
+REM  Can be run from Windows Command Prompt or MSYS2 UCRT64 terminal.
+REM
+REM  When run from Windows Command Prompt, this script automatically
+REM  invokes the build through MSYS2 UCRT64 bash to ensure all
+REM  dependencies are properly resolved.
 REM
 REM  Parameters are processed left to right:
 REM
@@ -27,8 +30,7 @@ REM    - If either is missing: devtest check, build, then launch
 REM    - "clean" before "run" forces a full rebuild
 REM
 REM  Prerequisites:
-REM    - MSYS2 UCRT64 installed (cmake/ninja auto-detected), or
-REM      CMake + Ninja already on PATH (e.g. MSVC Developer Prompt)
+REM    - MSYS2 UCRT64 installed with required packages
 REM    - Can be run from any directory (repo root, tools\windows, etc.)
 REM
 REM  SPDX-License-Identifier: GPL-3.0-only
@@ -46,40 +48,116 @@ popd
 
 set "BUILD_DIR=%PROJECT_ROOT%\build"
 set "LOG=%PROJECT_ROOT%\build-hobbycad.log"
+set "BINARY=%BUILD_DIR%\src\hobbycad\hobbycad.exe"
 
-set "DEVTEST_DIR=%PROJECT_ROOT%\devtest"
-set "DEVTEST_LOG=%DEVTEST_DIR%\devtest.log"
-
-REM ---- Locate MSYS2 UCRT64 tools ------------------------------------
+REM ---- Detect environment ---------------------------------------------
 REM
-REM  If cmake/ninja aren't already on PATH, look for them under the
-REM  default MSYS2 install and prepend ucrt64\bin so the build works
-REM  from a plain cmd.exe window.
+REM  Check if we're running from MSYS2 shell (MSYSTEM is set) or
+REM  Windows cmd.exe. If cmd.exe, delegate to MSYS2 bash.
 
-where cmake >nul 2>&1
-if %errorlevel% neq 0 (
-    set "MSYS2_UCRT64="
-    REM Check env var first, then common install locations
+set "IN_MSYS2_SHELL=false"
+if defined MSYSTEM (
+    if /i "!MSYSTEM!"=="UCRT64" set "IN_MSYS2_SHELL=true"
+    if /i "!MSYSTEM!"=="MINGW64" set "IN_MSYS2_SHELL=true"
+    if /i "!MSYSTEM!"=="CLANG64" set "IN_MSYS2_SHELL=true"
+)
+
+REM ---- If running from Windows cmd.exe, delegate to MSYS2 ------------
+
+if "!IN_MSYS2_SHELL!"=="false" (
+    REM Find MSYS2 installation
+    set "MSYS2_ROOT="
     if defined MSYS2_ROOT (
-        if exist "!MSYS2_ROOT!\ucrt64\bin\cmake.exe" (
-            set "MSYS2_UCRT64=!MSYS2_ROOT!\ucrt64\bin"
-        )
+        if exist "!MSYS2_ROOT!\ucrt64.exe" set "MSYS2_ROOT=!MSYS2_ROOT!"
     )
-    if not defined MSYS2_UCRT64 (
+    if not defined MSYS2_ROOT (
         for %%D in (C:\msys64 D:\msys64 C:\msys2 D:\msys2) do (
-            if exist "%%D\ucrt64\bin\cmake.exe" (
-                if not defined MSYS2_UCRT64 set "MSYS2_UCRT64=%%D\ucrt64\bin"
+            if exist "%%D\ucrt64.exe" (
+                if not defined MSYS2_ROOT set "MSYS2_ROOT=%%D"
             )
         )
     )
-    if defined MSYS2_UCRT64 (
-        echo   [INFO] Adding !MSYS2_UCRT64! to PATH
-        set "PATH=!MSYS2_UCRT64!;!PATH!"
-    ) else (
-        echo   [FAIL] cmake not found.  Run from an MSYS2 UCRT64 shell
-        echo          or ensure cmake is on PATH.
+
+    if not defined MSYS2_ROOT (
+        echo   [FAIL] MSYS2 not found. Please either:
+        echo          1. Install MSYS2 to C:\msys64, or
+        echo          2. Set MSYS2_ROOT environment variable
         exit /b 1
     )
+
+    echo   [INFO] Running from Windows Command Prompt
+    echo   [INFO] Delegating to MSYS2 UCRT64 at !MSYS2_ROOT!
+    echo.
+
+    REM Convert Windows path to MSYS2 path
+    set "PROJECT_MSYS=!PROJECT_ROOT:\=/!"
+    set "PROJECT_MSYS=/!PROJECT_MSYS::=!"
+
+    REM Build the bash command with all arguments
+    set "BASH_ARGS="
+    :collect_args
+    if "%~1"=="" goto done_args
+    set "BASH_ARGS=!BASH_ARGS! %~1"
+    shift
+    goto collect_args
+    :done_args
+
+    REM Determine build type
+    set "BUILD_TYPE=debug"
+    set "DO_CLEAN="
+    set "DO_RUN="
+    for %%A in (%*) do (
+        if /i "%%A"=="release" set "BUILD_TYPE=release"
+        if /i "%%A"=="clean" set "DO_CLEAN=1"
+        if /i "%%A"=="run" set "DO_RUN=1"
+    )
+
+    REM Build the bash commands
+    set "BASH_CMD="
+    if defined DO_CLEAN (
+        set "BASH_CMD=rm -rf build && "
+    )
+    set "BASH_CMD=!BASH_CMD!cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
+
+    REM Execute through MSYS2 UCRT64 bash
+    echo   [INFO] Running: !BASH_CMD!
+    echo.
+    "!MSYS2_ROOT!\ucrt64.exe" bash -l -c "cd '!PROJECT_MSYS!' && !BASH_CMD!"
+    set "BUILD_RESULT=!errorlevel!"
+
+    REM If build succeeded and 'run' was requested, launch from Windows
+    if !BUILD_RESULT!==0 (
+        if defined DO_RUN (
+            if exist "!BINARY!" (
+                echo.
+                echo   [INFO] Launching HobbyCAD...
+                start "" "!BINARY!"
+            )
+        ) else (
+            echo.
+            echo   [OK] Build successful
+            echo   [INFO] Binary: !BINARY!
+        )
+    ) else (
+        echo.
+        echo   [FAIL] Build failed with exit code !BUILD_RESULT!
+    )
+
+    exit /b !BUILD_RESULT!
+)
+
+REM =====================================================================
+REM  Running from MSYS2 shell - execute build directly
+REM =====================================================================
+
+echo   [INFO] Running from MSYS2 !MSYSTEM! shell
+
+REM Verify cmake is available
+where cmake >nul 2>&1
+if %errorlevel% neq 0 (
+    echo   [FAIL] cmake not found. Install with:
+    echo          pacman -S mingw-w64-ucrt-x86_64-cmake
+    exit /b 1
 )
 
 REM ---- Detect generator -----------------------------------------------
@@ -130,20 +208,15 @@ if %ACTION_COUNT%==0 (
     set "ACTION_1=build"
 )
 
-REM ---- Detect binary path (depends on generator + build type) --------
-
-if "!GENERATOR!"=="Ninja" (
-    set "BINARY=%BUILD_DIR%\src\hobbycad\hobbycad.exe"
-) else (
-    set "BINARY=%BUILD_DIR%\src\hobbycad\!BUILD_TYPE!\hobbycad.exe"
-)
-
 REM ---- Clear log file -------------------------------------------------
 
 echo. > "%LOG%"
 
 set "JOBS=%NUMBER_OF_PROCESSORS%"
 if "%JOBS%"=="" set "JOBS=4"
+
+set "DEVTEST_DIR=%PROJECT_ROOT%\devtest"
+set "DEVTEST_LOG=%DEVTEST_DIR%\devtest.log"
 
 call :log "====================================================================="
 call :log "  HobbyCAD Developer Build"
