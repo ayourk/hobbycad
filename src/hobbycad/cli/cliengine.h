@@ -23,12 +23,30 @@ namespace hobbycad {
 
 class CliHistory;
 
+/// Viewport action type for CLI commands that affect the viewport.
+enum class ViewportAction {
+    None,
+    ZoomPercent,     ///< zoom <percent>
+    ZoomHome,        ///< zoom home
+    PanTo,           ///< panto <x>,<y>,<z>
+    PanHome,         ///< panto home
+    RotateAxis,      ///< rotate on <axis> <degrees>
+    RotateHome       ///< rotate home
+};
+
 /// Result of executing a command.
 struct CliResult {
     int     exitCode = 0;    ///< 0 = success, non-zero = error
     QString output;          ///< Normal output text
     QString error;           ///< Error output text (if any)
     bool    requestExit = false;  ///< True if exit/quit was entered
+
+    // Viewport action fields (for commands that need to affect the viewport)
+    ViewportAction viewportAction = ViewportAction::None;
+    double vpArg1 = 0.0;     ///< First argument (zoom percent, pan X, rotate degrees)
+    double vpArg2 = 0.0;     ///< Second argument (pan Y)
+    double vpArg3 = 0.0;     ///< Third argument (pan Z)
+    char   vpAxis = 'z';     ///< Rotation axis ('x', 'y', 'z')
 };
 
 class CliEngine {
@@ -66,6 +84,8 @@ private:
     CliResult cmdNew();
     CliResult cmdOpen(const QStringList& args);
     CliResult cmdSave(const QStringList& args);
+    CliResult cmdConvert(const QStringList& args);
+    CliResult cmdScript(const QStringList& args);
     CliResult cmdCd(const QStringList& args);
     CliResult cmdPwd() const;
     CliResult cmdInfo() const;
@@ -81,6 +101,11 @@ private:
     CliResult cmdSketchCircle(const QStringList& args);
     CliResult cmdSketchRectangle(const QStringList& args);
     CliResult cmdSketchArc(const QStringList& args);
+
+    // Viewport commands (parsed here, executed via signals)
+    CliResult cmdZoom(const QStringList& args);
+    CliResult cmdPanTo(const QStringList& args);
+    CliResult cmdRotate(const QStringList& args);
 
     CliHistory& m_history;
 

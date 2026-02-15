@@ -40,7 +40,7 @@ void ParametersDialog::setupUi()
     m_filterCombo = new QComboBox(this);
     m_filterCombo->addItem(tr("All Parameters"));
     m_filterCombo->addItem(tr("User Parameters"));
-    m_filterCombo->addItem(tr("Model Parameters"));
+    m_filterCombo->addItem(tr("Object Parameters"));
     filterLayout->addWidget(m_filterCombo);
 
     m_filterEdit = new QLineEdit(this);
@@ -330,7 +330,7 @@ void ParametersDialog::onDeleteParameter()
 
     const Parameter& param = m_parameters[paramIdx];
 
-    // Don't allow deleting model parameters
+    // Don't allow deleting object parameters
     if (!param.isUserParam) {
         QMessageBox::warning(this, tr("Cannot Delete"),
             tr("Model parameters cannot be deleted. They are defined by features."));
@@ -595,7 +595,7 @@ void ParametersDialog::updateStatusLabel()
         else ++modelCount;
     }
 
-    m_statusLabel->setText(tr("%1 user, %2 model parameters").arg(userCount).arg(modelCount));
+    m_statusLabel->setText(tr("%1 user, %2 object parameters").arg(userCount).arg(modelCount));
     m_statusLabel->setStyleSheet(QStringLiteral("color: #666;"));
 }
 

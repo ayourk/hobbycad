@@ -39,6 +39,36 @@ signals:
     /// Emitted when the user types "exit" or "quit".
     void exitRequested();
 
+    // ---- Viewport command signals (full mode only) ----
+
+    /// Emitted for "zoom <percent>" command.
+    void zoomRequested(double percent);
+
+    /// Emitted for "zoom home" command (reset to fit all).
+    void zoomHomeRequested();
+
+    /// Emitted for "panto <x>,<y>,<z>" command.
+    void panToRequested(double x, double y, double z);
+
+    /// Emitted for "panto home" command (pan to origin).
+    void panHomeRequested();
+
+    /// Emitted for "rotate on <axis> <degrees>" command.
+    void rotateRequested(char axis, double degrees);
+
+    /// Emitted for "rotate home" command (reset to isometric).
+    void rotateHomeRequested();
+
+public slots:
+    /// Call this to indicate that a viewport is connected and commands will work.
+    void setViewportConnected(bool connected);
+
+    /// Call this to indicate we're running in GUI mode (show warnings for missing viewport).
+    void setGuiMode(bool guiMode);
+
+    /// Call this to indicate we're in sketch mode (viewport commands unavailable).
+    void setSketchModeActive(bool active);
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -69,6 +99,10 @@ private:
 
     int         m_historyIndex = -1;
     QString     m_savedInput;
+
+    bool        m_viewportConnected = false;
+    bool        m_guiMode = false;
+    bool        m_sketchModeActive = false;
 };
 
 }  // namespace hobbycad

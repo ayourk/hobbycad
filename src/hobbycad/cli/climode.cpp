@@ -12,7 +12,10 @@
 #include <hobbycad/core.h>
 #include <hobbycad/brep_io.h>
 
+#include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
+#include <QTextStream>
 
 #include <iostream>
 
@@ -81,12 +84,124 @@ int CliMode::runConvert(const QString& input, const QString& output)
 
 // ---- Single-command: script -----------------------------------------
 
-int CliMode::runScript(const QString& scriptPath)
+int CliMode::runScript(const QString& scriptPath, bool checkOnly)
 {
-    std::cerr << "Error: Python scripting is not yet available "
-                 "(planned for Phase 3)." << std::endl;
-    std::cerr << "  Script: " << scriptPath.toStdString() << std::endl;
-    return 1;
+    // Support reading from stdin: "hobbycad script -" or "hobbycad script"
+    // Also works with: cat script.txt | hobbycad script -
+    bool readFromStdin = scriptPath.isEmpty() || scriptPath == QLatin1String("-");
+
+    QFile file;
+    QTextStream in;
+
+    if (readFromStdin) {
+        // Read from stdin
+        if (!file.open(stdin, QIODevice::ReadOnly | QIODevice::Text)) {
+            std::cerr << "Error: Could not open stdin for reading."
+                      << std::endl;
+            return 1;
+        }
+        in.setDevice(&file);
+        std::cerr << "Reading script from stdin..." << std::endl;
+    } else {
+        // Read from file
+        file.setFileName(scriptPath);
+
+        if (!file.exists()) {
+            std::cerr << "Error: Script file not found: "
+                      << scriptPath.toStdString() << std::endl;
+            return 1;
+        }
+
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            std::cerr << "Error: Could not open script file: "
+                      << file.errorString().toStdString() << std::endl;
+            return 1;
+        }
+        in.setDevice(&file);
+
+        if (checkOnly) {
+            std::cout << "Checking script: " << scriptPath.toStdString() << std::endl;
+        } else {
+            std::cout << "Running script: " << scriptPath.toStdString() << std::endl;
+        }
+    }
+
+    int lineNum = 0;
+    int commandCount = 0;
+    int errorCount = 0;
+    QStringList validCmds = m_engine.commandNames();
+
+    // Also add sketch commands for syntax checking
+    validCmds << QStringLiteral("point") << QStringLiteral("line")
+              << QStringLiteral("circle") << QStringLiteral("rectangle")
+              << QStringLiteral("arc") << QStringLiteral("finish")
+              << QStringLiteral("discard");
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        lineNum++;
+
+        // Skip empty lines and comments
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) {
+            continue;
+        }
+
+        commandCount++;
+
+        if (checkOnly) {
+            // Syntax check only - validate command name exists
+            QStringList tokens = line.split(QRegularExpression(QStringLiteral("\\s+")),
+                                            Qt::SkipEmptyParts);
+            if (tokens.isEmpty()) continue;
+
+            QString cmd = tokens.first().toLower();
+
+            if (!validCmds.contains(cmd)) {
+                std::cerr << "[" << lineNum << "] ERROR: Unknown command '"
+                          << cmd.toStdString() << "'" << std::endl;
+                errorCount++;
+            } else {
+                std::cout << "[" << lineNum << "] OK: "
+                          << line.toStdString() << std::endl;
+            }
+        } else {
+            // Execute the command
+            CliResult result = m_engine.execute(line);
+
+            if (!result.output.isEmpty()) {
+                std::cout << "[" << lineNum << "] "
+                          << result.output.toStdString() << std::endl;
+            }
+
+            if (result.exitCode != 0) {
+                std::cerr << "Error at line " << lineNum << ": "
+                          << result.error.toStdString() << std::endl;
+                return 1;
+            }
+
+            if (result.requestExit) {
+                // Script requested exit
+                break;
+            }
+        }
+    }
+
+    if (checkOnly) {
+        if (errorCount > 0) {
+            std::cerr << "\nSyntax check failed: " << errorCount
+                      << " error(s) in " << commandCount << " command(s)"
+                      << std::endl;
+            return 1;
+        } else {
+            std::cout << "\nSyntax check passed: " << commandCount
+                      << " command(s) OK" << std::endl;
+            return 0;
+        }
+    } else {
+        std::cout << "\nScript completed: " << commandCount
+                  << " command(s) executed." << std::endl;
+        return 0;
+    }
 }
 
 // ---- Interactive REPL -----------------------------------------------

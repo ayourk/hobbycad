@@ -4,10 +4,11 @@
 //
 //  Determines the appropriate startup mode:
 //
-//    1. CLI flags (--no-gui, --convert, --script) → Command-Line Mode
-//    2. No display server detected                → Command-Line Mode
-//    3. OpenGL 3.3+ available                     → Full Mode
-//    4. OpenGL below 3.3 or unavailable           → Reduced Mode
+//    1. Subcommands (convert, script)    → Command-Line Mode
+//    2. --no-gui flag                    → Interactive CLI Mode
+//    3. No display server detected       → Interactive CLI Mode
+//    4. OpenGL 3.3+ available            → Full Mode (3D)
+//    5. OpenGL below 3.3 or unavailable  → Reduced Mode (2D)
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //
@@ -35,14 +36,62 @@
 // ---- Helper: check for CLI-only flags --------------------------------
 
 struct StartupFlags {
+    bool help    = false;
+    bool version = false;
     bool noGui   = false;
-    bool convert = false;
-    bool script  = false;
+    QString themePath;          // --theme <file.qss>
+    QString fileToOpen;         // positional argument (file/project to open)
+
+    // Subcommand: convert
+    bool convertCmd = false;
+    bool convertHelp = false;
     QString convertInput;
     QString convertOutput;
+    QString convertFormat;      // --format (future: step, iges, stl, etc.)
+
+    // Subcommand: script
+    bool scriptCmd = false;
+    bool scriptHelp = false;
+    bool scriptCheck = false;   // --dry-run for syntax validation
     QString scriptPath;
-    QString themePath;     // --theme <file.qss>
 };
+
+static bool isHelpFlag(const QString& arg)
+{
+    // Unix/macOS style: --help, -h
+    if (arg == QLatin1String("--help") ||
+        arg == QLatin1String("-h")) {
+        return true;
+    }
+
+#ifdef Q_OS_WIN
+    // Windows style: /h, /?, /help
+    if (arg == QLatin1String("/h") ||
+        arg == QLatin1String("/?") ||
+        arg == QLatin1String("/help")) {
+        return true;
+    }
+#endif
+
+    return false;
+}
+
+static bool isVersionFlag(const QString& arg)
+{
+    // --version only (not -v/-V, which typically means verbose)
+    if (arg == QLatin1String("--version")) {
+        return true;
+    }
+
+#ifdef Q_OS_WIN
+    // Windows style: /version
+    if (arg == QLatin1String("/version")) {
+        return true;
+    }
+#endif
+
+    return false;
+}
 
 static StartupFlags parseFlags(int argc, char* argv[])
 {
@@ -51,24 +100,197 @@ static StartupFlags parseFlags(int argc, char* argv[])
     for (int i = 1; i < argc; ++i) {
         QString arg = QString::fromLocal8Bit(argv[i]);
 
-        if (arg == QLatin1String("--no-gui")) {
+        // Global flags (before any subcommand)
+        if (isHelpFlag(arg) && !flags.convertCmd && !flags.scriptCmd) {
+            flags.help = true;
+        }
+        else if (isVersionFlag(arg)) {
+            flags.version = true;
+        }
+        else if (arg == QLatin1String("--no-gui")) {
             flags.noGui = true;
-        }
-        else if (arg == QLatin1String("--convert") && i + 2 < argc) {
-            flags.convert      = true;
-            flags.convertInput  = QString::fromLocal8Bit(argv[++i]);
-            flags.convertOutput = QString::fromLocal8Bit(argv[++i]);
-        }
-        else if (arg == QLatin1String("--script") && i + 1 < argc) {
-            flags.script     = true;
-            flags.scriptPath = QString::fromLocal8Bit(argv[++i]);
         }
         else if (arg == QLatin1String("--theme") && i + 1 < argc) {
             flags.themePath = QString::fromLocal8Bit(argv[++i]);
         }
+        // Subcommand: convert
+        else if (arg == QLatin1String("convert") && !flags.convertCmd && !flags.scriptCmd) {
+            flags.convertCmd = true;
+            // Parse convert subcommand arguments
+            while (++i < argc) {
+                QString subArg = QString::fromLocal8Bit(argv[i]);
+                if (isHelpFlag(subArg)) {
+                    flags.convertHelp = true;
+                }
+                else if (subArg == QLatin1String("--format") && i + 1 < argc) {
+                    flags.convertFormat = QString::fromLocal8Bit(argv[++i]);
+                }
+                else if (!subArg.startsWith(QLatin1Char('-'))) {
+                    // Positional arguments: input and output
+                    if (flags.convertInput.isEmpty()) {
+                        flags.convertInput = subArg;
+                    } else if (flags.convertOutput.isEmpty()) {
+                        flags.convertOutput = subArg;
+                    }
+                }
+            }
+        }
+        // Subcommand: script
+        else if (arg == QLatin1String("script") && !flags.convertCmd && !flags.scriptCmd) {
+            flags.scriptCmd = true;
+            // Parse script subcommand arguments
+            while (++i < argc) {
+                QString subArg = QString::fromLocal8Bit(argv[i]);
+                if (isHelpFlag(subArg)) {
+                    flags.scriptHelp = true;
+                }
+                else if (subArg == QLatin1String("--check") ||
+                         subArg == QLatin1String("--dry-run")) {
+                    flags.scriptCheck = true;
+                }
+                else if (!subArg.startsWith(QLatin1Char('-'))) {
+                    if (flags.scriptPath.isEmpty()) {
+                        flags.scriptPath = subArg;
+                    }
+                }
+            }
+        }
+        // Positional argument: file to open
+        else if (!arg.startsWith(QLatin1Char('-')) && flags.fileToOpen.isEmpty()) {
+            flags.fileToOpen = arg;
+        }
     }
 
     return flags;
+}
+
+// ---- Helper: print help/version without GUI --------------------------
+
+static void printHelp(const char* programPath)
+{
+    // Extract just the executable name from the path
+    QString fullPath = QString::fromLocal8Bit(programPath);
+    QString programName = QFileInfo(fullPath).fileName();
+    if (programName.isEmpty()) {
+        programName = QStringLiteral("hobbycad");
+    }
+
+    std::cout << "HobbyCAD - Parametric 3D CAD Application\n"
+              << "Version " << hobbycad::version() << "\n"
+              << "\n"
+              << "Usage: " << programName.toStdString() << " [options] [file]\n"
+              << "       " << programName.toStdString() << " <command> [args]\n"
+              << "\n"
+              << "Options:\n"
+#ifdef Q_OS_WIN
+              << "  -h, --help, /?, /h       Show this help message and exit\n"
+              << "  --version, /version      Show version information and exit\n"
+#else
+              << "  -h, --help               Show this help message and exit\n"
+              << "  --version                Show version information and exit\n"
+#endif
+              << "  --no-gui                 Start in interactive command-line mode\n"
+              << "  --theme <file.qss>       Load custom Qt stylesheet theme\n"
+              << "\n"
+              << "Commands:\n"
+              << "  convert <in> <out>       Convert between file formats\n"
+              << "  script <file>            Execute a script file\n"
+              << "\n"
+              << "  Run '" << programName.toStdString() << " <command> --help' for command-specific options.\n"
+              << "\n"
+              << "Environment Variables:\n"
+              << "  HOBBYCAD_THEME           Path to Qt stylesheet (.qss) file\n"
+              << "  HOBBYCAD_REDUCED_MODE=1  Force Reduced Mode (2D canvas only)\n"
+              << "  HOBBYCAD_GEOMETRY=WxH    Set initial window size (e.g., 1280x720)\n"
+              << "\n"
+              << "Startup Modes:\n"
+              << "  Full Mode       OpenGL 3.3+ with 3D viewport (default when available)\n"
+              << "  Reduced Mode    2D canvas only (when OpenGL unavailable or forced)\n"
+              << "  CLI Mode        Interactive terminal (--no-gui or no display server)\n"
+              << "\n"
+              << "Interactive CLI:\n"
+              << "  Start with --no-gui for an interactive command-line interface.\n"
+              << "  Type 'help' for available commands including:\n"
+              << "    new, open, save, export, import, extrude, sketch, and more.\n"
+              << "\n"
+              << "File Formats:\n"
+              << "  .hcad           Native HobbyCAD project (directory with manifest)\n"
+              << "  .brep, .brp     OpenCASCADE BREP geometry\n"
+              << "\n"
+              << "Examples:\n"
+              << "  " << programName.toStdString() << "                       Start GUI (auto-detect mode)\n"
+              << "  " << programName.toStdString() << " myproject/            Open project directory\n"
+              << "  " << programName.toStdString() << " model.brep            Open BREP file in GUI\n"
+              << "  " << programName.toStdString() << " --no-gui              Start interactive CLI\n"
+              << "  " << programName.toStdString() << " convert in.brep out.brep\n"
+              << "  " << programName.toStdString() << " script myscript.txt\n"
+              << "\n"
+              << "For more information, visit: https://github.com/ayourk/hobbycad\n";
+}
+
+static void printConvertHelp()
+{
+    std::cout << "Usage: hobbycad convert [options] <input> <output>\n"
+              << "\n"
+              << "Convert between CAD file formats.\n"
+              << "\n"
+              << "Arguments:\n"
+              << "  <input>                  Input file path\n"
+              << "  <output>                 Output file path\n"
+              << "\n"
+              << "Options:\n"
+              << "  -h, --help               Show this help message\n"
+              << "  --format <fmt>           Force output format (auto-detected from extension)\n"
+              << "\n"
+              << "Supported Formats:\n"
+              << "  .hcad                    HobbyCAD project\n"
+              << "  .brep, .brp              OpenCASCADE BREP\n"
+              << "\n"
+              << "Examples:\n"
+              << "  hobbycad convert model.brep project/\n"
+              << "  hobbycad convert myproject/ export.brep\n";
+}
+
+static void printScriptHelp()
+{
+    std::cout << "Usage: hobbycad script [options] [file]\n"
+              << "\n"
+              << "Execute a HobbyCAD script file.\n"
+              << "\n"
+              << "Arguments:\n"
+              << "  <file>                   Script file to execute\n"
+              << "  -                        Read script from stdin (for piping)\n"
+              << "\n"
+              << "Options:\n"
+              << "  -h, --help               Show this help message\n"
+              << "  --dry-run                Check syntax without executing\n"
+              << "\n"
+              << "Script files contain CLI commands, one per line.\n"
+              << "Lines starting with '#' are treated as comments.\n"
+              << "\n"
+              << "Example script (egg.txt):\n"
+              << "  # Create an egg shape from a cube\n"
+              << "  new\n"
+              << "  box 10 10 10\n"
+              << "  fillet 2\n"
+              << "  scale 1 1 1.5\n"
+              << "  save myegg/\n"
+              << "\n"
+              << "Run with:\n"
+              << "  hobbycad script egg.txt\n"
+              << "  hobbycad script --dry-run egg.txt   # Validate without running\n"
+              << "  cat egg.txt | hobbycad script -\n";
+}
+
+static void printVersion()
+{
+    std::cout << "HobbyCAD " << hobbycad::version() << "\n"
+              << "Copyright (C) 2024-2026 HobbyCAD Contributors\n"
+              << "License: GPL-3.0-only\n"
+              << "\n"
+              << "Built with:\n"
+              << "  Qt " << QT_VERSION_STR << "\n"
+              << "  OpenCASCADE Technology (OCCT)\n";
 }
 
 // ---- Helper: detect display server -----------------------------------
@@ -94,6 +316,26 @@ int main(int argc, char* argv[])
     // Step 1: Parse CLI flags
     StartupFlags flags = parseFlags(argc, argv);
 
+    // Step 1a: Handle --help and --version immediately (no GUI, no core init)
+    if (flags.help) {
+        printHelp(argv[0]);
+        return 0;
+    }
+    if (flags.version) {
+        printVersion();
+        return 0;
+    }
+
+    // Step 1b: Handle subcommand help (no core init needed)
+    if (flags.convertCmd && flags.convertHelp) {
+        printConvertHelp();
+        return 0;
+    }
+    if (flags.scriptCmd && flags.scriptHelp) {
+        printScriptHelp();
+        return 0;
+    }
+
     // Initialize the core library
     if (!hobbycad::initialize()) {
         std::cerr << "Fatal: failed to initialize HobbyCAD core library."
@@ -101,19 +343,32 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Step 1b: CLI-only modes — no GUI needed
-    if (flags.noGui || flags.convert || flags.script) {
-        hobbycad::CliMode cli;
-
-        int result = 0;
-        if (flags.convert) {
-            result = cli.runConvert(flags.convertInput, flags.convertOutput);
-        } else if (flags.script) {
-            result = cli.runScript(flags.scriptPath);
-        } else {
-            result = cli.runInteractive();
+    // Step 1c: Handle subcommands (CLI-only, no GUI needed)
+    if (flags.convertCmd) {
+        if (flags.convertInput.isEmpty() || flags.convertOutput.isEmpty()) {
+            std::cerr << "Error: convert requires input and output arguments.\n"
+                      << "Run 'hobbycad convert --help' for usage.\n";
+            hobbycad::shutdown();
+            return 1;
         }
+        hobbycad::CliMode cli;
+        int result = cli.runConvert(flags.convertInput, flags.convertOutput);
+        hobbycad::shutdown();
+        return result;
+    }
 
+    if (flags.scriptCmd) {
+        // scriptPath can be empty (for stdin) or "-" or a filename
+        hobbycad::CliMode cli;
+        int result = cli.runScript(flags.scriptPath, flags.scriptCheck);
+        hobbycad::shutdown();
+        return result;
+    }
+
+    // Step 1d: Interactive CLI mode
+    if (flags.noGui) {
+        hobbycad::CliMode cli;
+        int result = cli.runInteractive();
         hobbycad::shutdown();
         return result;
     }

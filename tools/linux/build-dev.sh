@@ -55,18 +55,21 @@ fi
 # ---- Parse arguments -------------------------------------------------
 
 BUILD_TYPE="Debug"
+LINKAGE="STATIC"
 ACTIONS=()
 
 for arg in "$@"; do
     case "${arg,,}" in
         release)  BUILD_TYPE="Release" ;;
         debug)    BUILD_TYPE="Debug" ;;
+        shared)   LINKAGE="SHARED" ;;
+        static)   LINKAGE="STATIC" ;;
         clean)    ACTIONS+=("clean") ;;
         run)      ACTIONS+=("run") ;;
         run-cli)  ACTIONS+=("run-cli") ;;
         run-reduced) ACTIONS+=("run-reduced") ;;
         *)
-            echo "Usage: $0 [debug|release] [clean] [run|run-reduced|run-cli]"
+            echo "Usage: $0 [debug|release] [static|shared] [clean] [run|run-reduced|run-cli]"
             echo ""
             echo "Log written to ${LOG}"
             exit 1
@@ -90,6 +93,7 @@ echo ""
 echo "  Project root : ${PROJECT_ROOT}"
 echo "  Build dir    : ${BUILD_DIR}"
 echo "  Build type   : ${BUILD_TYPE}"
+echo "  Lib linkage  : ${LINKAGE}"
 echo "  Log file     : ${LOG}"
 echo "  Date         : $(date)"
 echo "  Cores        : $(nproc)"
@@ -173,7 +177,7 @@ do_build() {
     echo ""
 
     local preset="linux-${BUILD_TYPE,,}"
-    cmake --preset "${preset}" -S "${PROJECT_ROOT}"
+    cmake --preset "${preset}" -S "${PROJECT_ROOT}" -DHOBBYCAD_CORE_LINKAGE="${LINKAGE}"
 
     echo ""
     echo "--- Building (Ninja, $(nproc) jobs) ---"

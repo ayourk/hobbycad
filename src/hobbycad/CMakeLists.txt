@@ -14,6 +14,9 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS
     Core Gui Widgets OpenGL Svg)
 find_package(OpenGL REQUIRED)
 
+# Note: libslvs is now linked via libhobbycad (see src/libhobbycad/CMakeLists.txt)
+# The GUI uses sketch::Solver from the library, no direct SLVS dependency needed here.
+
 # ---- Source files ----------------------------------------------------
 
 set(APP_SOURCES
@@ -37,14 +40,22 @@ set(APP_SOURCES
     gui/parametersdialog.cpp
     gui/sketchtoolbar.cpp
     gui/sketchcanvas.cpp
+    gui/sketchsolver.cpp
     gui/sketchactionbar.cpp
     gui/sketchmodecontroller.cpp
+    gui/sketchplanedialog.cpp
+    gui/constructionplanedialog.cpp
+    gui/backgroundimagedialog.cpp
+    gui/backgroundcalibrationdialog.cpp
+    gui/sketchpropertieswidget.cpp
 
     # Full mode (OpenGL viewport)
     gui/full/viewportwidget.cpp
     gui/full/fullmodewindow.cpp
     gui/full/scalebarwidget.cpp
     gui/full/aiscanvas2d.cpp
+    gui/full/aisgrid.cpp
+    gui/full/aissketchplane.cpp
     gui/full/navorbitring.cpp
     gui/full/navhomebutton.cpp
 
@@ -78,12 +89,20 @@ set(APP_HEADERS
     gui/parametersdialog.h
     gui/sketchtoolbar.h
     gui/sketchcanvas.h
+    gui/sketchsolver.h
     gui/sketchactionbar.h
     gui/sketchmodecontroller.h
+    gui/sketchplanedialog.h
+    gui/constructionplanedialog.h
+    gui/backgroundimagedialog.h
+    gui/backgroundcalibrationdialog.h
+    gui/sketchpropertieswidget.h
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h
     gui/full/scalebarwidget.h
     gui/full/aiscanvas2d.h
+    gui/full/aisgrid.h
+    gui/full/aissketchplane.h
     gui/full/navcontrols.h
     gui/full/navorbitring.h
     gui/full/navhomebutton.h
@@ -132,6 +151,8 @@ target_link_libraries(hobbycad PRIVATE
     OpenGL::GL
     ${APP_OCCT_LIBS}
 )
+
+# Note: libslvs is now linked via libhobbycad - no direct linking needed here
 
 # Pass build-tool versions as compile definitions for the About dialog
 target_compile_definitions(hobbycad PRIVATE

@@ -121,7 +121,41 @@ Fixed
 
 Added
 -----
+- Shell --help and --version flags (no GUI initialization required)
+- Platform-specific flag aliases:
+  - Linux/macOS: -h, --help, --version
+  - Windows: /h, /?, /help, /version (in addition to Unix-style)
+- Shell subcommands for non-interactive use:
+  - `hobbycad convert <in> <out>` - Convert between file formats
+  - `hobbycad script <file>` - Execute script file
+  - Each subcommand has its own --help
+- Script --dry-run option for syntax validation without execution
+- Script stdin piping: `cat file | hobbycad script -`
+- Interactive CLI `convert` command (same features as shell subcommand)
+- Interactive CLI `script` command with --dry-run support
+- GUI project loading: features, sketches, parameters now populate when
+  opening .hcad projects (feature tree, timeline, parameter table)
 - CLI `select <type> <name>` command for selecting objects
+- Custom AIS grid (replaces V3d_Viewer grid) for proper FitAll behavior
+- ViewCube improvements:
+  - Smooth animated transitions when clicking faces/edges/corners
+  - Orbit-based rotation keeps center point fixed in viewport
+  - Panning updates orbit center for subsequent rotations
+  - Home button animates back to isometric view
+  - Proper text orientation on all faces (including Bottom)
+- View > Z-Up Orientation toggle (View menu, default on)
+  - Z-up: standard CAD/engineering convention
+  - Y-up: game engine/3D graphics convention
+- View > Orbit Selected Object toggle (View menu, default off)
+  - When enabled, ViewCube rotates around selected object's center
+  - When disabled, rotates around current pan position
+  - Animated transition when toggling the option
+- Axis trihedron and grid excluded from FitAll bounding box calculations
+- Preferences dialog: Z-Up Orientation and Orbit Selected Object settings
+  - Settings persist across sessions
+  - Preferences > General page with Coordinate System and Orbit Behavior groups
+- Bindings dialog: Show Grid, Snap to Grid, Z-Up, Orbit Selected actions
+- GUI reference documentation (docs/gui_reference.txt)
 - CLI `create sketch [name]` command for creating sketches
 - Context-aware CLI prompt shows sketch name (e.g., "Sketch Sketch1>")
 - Tab completion with contextual argument hints
@@ -142,6 +176,36 @@ Added
 - Parameters dialog: invalid names turn field red, disable OK/Apply
 - Auto-prefix underscore for parameter names starting with digit on load
 - This changelog (docs/changelog.txt)
+- CLI viewport control commands (full mode only):
+  - `zoom <percent>` - Set zoom level (e.g., zoom 200 for 2x)
+  - `zoom home` - Reset zoom to fit all objects
+  - `panto <x>,<y>,<z>` - Pan camera to center on coordinates
+  - `panto home` - Pan to origin (0,0,0)
+  - `rotate on <axis> <degrees>` - Rotate view around axis
+  - `rotate home` - Reset to isometric view
+- CLI viewport command warnings:
+  - Sketch Mode: "3D viewport commands are not available in Sketch Mode"
+  - Reduced Mode: "No 3D viewport available. 3D viewport commands only work in Full Mode"
+  - Pure CLI mode: Commands silently ignored (no GUI context)
+- Orbit ring arrow direction correction:
+  - Arrows automatically flip based on camera orientation
+  - Ensures visual rotation direction matches actual rotation from any view angle
+  - Applies to X, Y, and Z axis orbit rings
+- Sketch plane selection dialog:
+  - Shown when clicking "Create Sketch" button
+  - Select sketch plane orientation: XY, XZ, YZ, or custom angled plane
+  - Custom angled planes: rotate XY plane around X, Y, or Z axis by any angle
+  - Set offset distance from origin along the plane's normal axis
+  - Preview text shows resulting plane equation (e.g., "Sketch on XY plane at Z = 10")
+  - Angled plane preview shows rotation (e.g., "Sketch on plane rotated 45° around X axis")
+  - Offset is applied when generating 3D wireframe of completed sketch
+  - All plane parameters saved with project files
+- Sketch plane visualization in 3D viewport:
+  - Semi-transparent blue rectangle shows plane orientation and position
+  - Center crosshair marks the plane origin
+  - Plane is displayed when a sketch is selected in timeline
+  - Supports offset planes and custom angled planes
+  - Automatically hidden when another feature is selected
 
 Changed
 -------
@@ -150,4 +214,67 @@ Changed
 Fixed
 -----
 - Windows MSVC CI: OpenCASCADE include path calculation (port-version 4)
+
+================================================================================
+2026-02-14
+================================================================================
+
+Added
+-----
+- 2D sketch canvas view rotation controls:
+  - Q: Rotate canvas counter-clockwise (90°)
+  - E: Rotate canvas clockwise (90°)
+  - Ctrl+0: Reset canvas rotation to 0°
+  - Instant rotation (no animation, QPainter-based)
+  - Useful for sketch orientation in lofts with twist
+- Context-aware keyboard bindings system:
+  - Global context: active in all modes (command search)
+  - Always-active contexts: file, edit, view, navigation, viewport
+  - Mode-specific contexts: sketch vs design (mutually exclusive)
+  - Intelligent conflict detection based on context
+  - Same key can have different meanings in different contexts
+  - Example: E = "Rotate Canvas CW" (sketch), "Extrude" (design)
+- Reserved keyboard shortcuts for future features (Fusion 360 compatible):
+  - Sketch tools: S (Select), L (Line), R (Rectangle), C (Circle),
+    A (Arc), P (Point), D (Dimension), X (Construction), O (Offset),
+    T (Trim), G (Toggle Grid)
+  - Design tools: E (Extrude), M (Move), F (Fillet), H (Hole),
+    J (Joint), I (Measure), V (Toggle Visibility)
+  - Global: / (Command Search)
+- Construction planes as first-class objects:
+  - Three types: OffsetFromOrigin, OffsetFromPlane, Angled
+  - Roll angle for sketch orientation around plane normal
+  - Custom origin point in absolute 3D coordinates
+  - Properties panel integration when plane selected
+  - JSON serialization in project files
+  - Construction Plane dialog for creating/editing planes
+  - Construct menu in menu bar
+- SketchCanvas configurable key bindings:
+  - Bindings loaded from settings on startup
+  - Automatic reload when preferences change
+  - Integration with FullModeWindow and ReducedModeWindow
+- Updated GUI reference documentation with keyboard shortcuts
+
+Changed
+-------
+- 2D viewport rotation shortcuts from `[`/`]` to `Q`/`E`
+  (Space Engineers style, left-hand ergonomic)
+- Bindings dialog conflict messages now explain context conflicts
+- Text entities now support font properties (family, size, bold, italic, rotation)
+- Refactored GUI to use library functions, reducing sketchcanvas.cpp by ~735 lines:
+  - findAllIntersections() now uses sketch::findAllIntersections()
+  - trimEntityAt() now uses sketch::trimEntity()
+  - splitEntityAt() and splitEntityAtIntersections() use library functions
+  - offsetEntity() now uses sketch::offsetEntity()
+  - findClosestPointOnEntity() now uses Entity::closestPoint()
+  - Removed ~166 lines of dead code (unused profile detection helpers)
+- Build script supports shared library linkage (./build-dev.sh shared)
+  - Release shared: 1.9 MB executable + 950 KB library
+  - Release static: 2.3 MB executable (default)
+
+Added
+-----
+- Text parsing module (sketch/parsing.h): coordinate and expression parsing
+- Intersection conversion helpers in sketchutils.h
+- TKOffset to OpenCASCADE library dependencies (required for shared builds)
 

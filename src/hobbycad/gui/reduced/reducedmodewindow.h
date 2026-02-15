@@ -58,6 +58,9 @@ public slots:
     /// Exit sketch editing mode
     void exitSketchMode();
 
+protected:
+    void applyPreferences() override;
+
 private slots:
     void onViewportClicked();
     void onTerminalToggled(bool visible);
@@ -96,6 +99,7 @@ private:
     TimelineWidget*  m_timeline        = nullptr;
     bool             m_suppressDialog  = false;
     bool             m_inSketchMode    = false;
+    double           m_pendingSketchOffset = 0.0;  ///< Offset for sketch being created
 
     QList<Parameter> m_parameters;  ///< Document parameters
 };

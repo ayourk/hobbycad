@@ -69,6 +69,8 @@ private:
     // General page controls
     QCheckBox*      m_showGridOnStart  = nullptr;
     QCheckBox*      m_restoreSession   = nullptr;
+    QCheckBox*      m_zUpOrientation   = nullptr;
+    QCheckBox*      m_orbitSelected    = nullptr;
 };
 
 }  // namespace hobbycad

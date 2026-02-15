@@ -41,14 +41,25 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 
 ### HobbyCAD Core
 
-- Parametric 3D solid modeling using B-Rep geometry (OpenCASCADE)
-- 2D parametric sketch editor with constraint solver
-- Feature-based modeling: extrude, revolve, fillet, chamfer, pattern, Boolean operations, sweep, loft
+- **Parametric 3D solid modeling** using B-Rep geometry (OpenCASCADE)
+- **2D parametric sketch editor** with constraint solver (libslvs integration)
+  - Entity types: line, arc, circle, rectangle, polygon, slot, ellipse, spline, text
+  - Geometric constraints: distance, angle, horizontal, vertical, parallel, perpendicular, tangent, coincident, equal, symmetric, concentric
+  - Operations: offset, fillet, chamfer, trim, extend, split, mirror
+  - Patterns: linear, rectangular, circular, mirror
+  - Background image support with scale calibration and auto-rotation
+  - DXF and SVG import/export
+  - Profile detection for 3D operations
+- **Feature-based modeling**: extrude (symmetric), revolve, sweep, loft, Boolean operations (fuse, cut, intersect), 3D fillet, chamfer, shell, offset
+- **Geometry library** with computational algorithms:
+  - Convex hull, polygon simplification, bounding shapes
+  - 2D Boolean operations, polygon offset, triangulation
+  - Path operations for CNC/manufacturing applications
 - Feature history tree with parametric modification
 - Multi-body part design with construction bodies
-- Assembly design with mates and constraints
-- Python scripting and plugin system with macro recording
-- Built-in git integration for project history and collaboration
+- Assembly design with mates and constraints (planned)
+- Python scripting and plugin system with macro recording (planned)
+- Built-in git integration for project history and collaboration (planned)
 - Directory-first project format (`.hcad` manifest + plain-text files) — fully inspectable, hand-editable, and diff-friendly
 - Tiered startup: Full Mode (OpenGL 3.3+), Reduced Mode (GUI without 3D viewport), Command-Line Mode (headless/batch)
 

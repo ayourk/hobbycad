@@ -18,6 +18,7 @@
 
 class QStatusBar;
 class QTreeWidget;
+class QTreeWidgetItem;
 
 namespace hobbycad {
 
@@ -94,10 +95,12 @@ private slots:
     void onFinishRequested();
     void onSaveClicked();
     void onCancelClicked();
+    void onPropertyItemChanged(QTreeWidgetItem* item, int column);
 
 private:
     void updatePropertiesForSketch(const QString& sketchName, SketchPlane plane);
     void showEntityProperties(int entityId);
+    void showMultiSelectionProperties(const QSet<int>& selectedIds);
     void updateEntityCount();
 
     SketchCanvas*    m_canvas     = nullptr;

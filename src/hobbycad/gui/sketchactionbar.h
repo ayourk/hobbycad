@@ -16,6 +16,7 @@
 #include <QWidget>
 
 class QPushButton;
+class QTimer;
 
 namespace hobbycad {
 
@@ -35,6 +36,9 @@ public:
     void setModified(bool modified);
     bool isModified() const { return m_modified; }
 
+    /// Show Save/Discard buttons and flash them to draw attention
+    void showAndFlash();
+
 signals:
     /// Emitted when the user clicks Save
     void saveClicked();
@@ -46,11 +50,19 @@ private slots:
     void onFinishClicked();
 
 private:
+    void doFlashStep();
+
     QPushButton* m_finishButton = nullptr;
     QWidget* m_saveDiscardWidget = nullptr;
     QPushButton* m_saveButton = nullptr;
     QPushButton* m_discardButton = nullptr;
     bool m_modified = false;
+
+    // Flash animation state
+    QTimer* m_flashTimer = nullptr;
+    int m_flashCount = 0;
+    QString m_saveButtonOriginalStyle;
+    QString m_discardButtonOriginalStyle;
 };
 
 }  // namespace hobbycad

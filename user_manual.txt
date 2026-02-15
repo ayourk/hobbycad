@@ -1,0 +1,612 @@
+HobbyCAD User Manual
+=====================
+
+Version: 0.1 (Phase 0)
+
+
+INTRODUCTION
+------------
+
+HobbyCAD is a Linux-native, open-source, parametric 3D CAD application
+designed for mechanical engineering, product design, and hobbyist
+fabrication. It provides professional-quality tools without proprietary
+software, cloud lock-in, or subscription fees.
+
+Key Features:
+- Parametric 3D solid modeling using B-Rep geometry
+- 2D parametric sketch editor with constraint solver
+- Feature-based modeling (extrude, revolve, fillet, chamfer, etc.)
+- Feature history tree with parametric modification
+- Python scripting and plugin system
+- Built-in git integration for version control
+- Fully offline — no cloud dependency or telemetry
+
+Companion Tool:
+HobbyCAD is accompanied by HobbyMesh, a mesh editing and 3D printing
+preparation tool (planned for Phase 5).
+
+
+SYSTEM REQUIREMENTS
+-------------------
+
+Minimum (Full Mode):
+- Linux, Windows 10+, or macOS 11+
+- OpenGL 3.3+ capable GPU with 1 GB+ VRAM
+- 8 GB RAM
+- 2 GB disk space
+
+Reduced Mode:
+- Works without OpenGL 3.3
+- GUI launches with all non-visual features functional
+- 3D viewport replaced with informational panel
+
+Command-Line Mode:
+- No display server or GPU required
+- Suitable for headless servers, CI/CD, and batch processing
+
+
+SUPPORTED PLATFORMS
+-------------------
+
+HobbyCAD requires Qt6, which determines our minimum supported OS versions.
+Multiple installation methods are available depending on your platform.
+
+Linux (x86_64 and arm64):
+
+  AppImage (Recommended for most users):
+    - Works on any Linux distro with glibc 2.35+ (circa 2022)
+    - Single portable executable, no installation required
+    - Download, chmod +x, and run
+    - Best for: Users who want simplicity or run older distros
+
+  Flatpak (Recommended for immutable systems):
+    - Works on virtually any Linux distro, including older releases
+    - Flatpak runtime bundles Qt6 and dependencies independent of host
+    - Runs on distros without Qt6 in repos (e.g., Ubuntu 18.04, Debian 10)
+    - Sandboxed, auto-updating via Flathub
+    - Best for: SteamOS, Bazzite, Fedora Silverblue, VanillaOS
+    - Install: flatpak install org.hobbycad.HobbyCAD
+
+  Native Packages:
+    Ubuntu/Debian (.deb):
+      - Ubuntu 22.04 (Jammy) and newer
+      - Ubuntu 24.04 (Noble) and newer
+      - Debian 12 (Bookworm) and newer
+      - Linux Mint 21+ (use Ubuntu 22.04 package)
+      - Pop!_OS 22.04+ (use Ubuntu package)
+
+    Fedora/RHEL (.rpm):
+      - Fedora 40 and newer
+      - AlmaLinux 9 / Rocky Linux 9 / RHEL 9 and newer
+      - CentOS Stream 9 and newer
+
+    Arch Linux (.pkg.tar.zst):
+      - Arch Linux (rolling release)
+      - CachyOS
+      - Manjaro
+      - EndeavourOS
+      - SteamOS (with unlocked root, but Flatpak preferred)
+
+  Not Supported:
+    - Ubuntu 20.04 and older (no Qt6 in repos)
+    - Debian 11 and older (no Qt6 in repos)
+    - RHEL 8 / AlmaLinux 8 and older (no Qt6)
+    - Any distro without Qt6 in repositories
+
+Windows (x64 and arm64):
+
+  Portable ZIP:
+    - Windows 10 (1809+) and newer
+    - Windows 11
+    - Extract and run, no installation required
+    - Both x64 and arm64 builds available
+
+  Installer (.exe via Inno Setup):
+    - Windows 10 (1809+) and newer
+    - Windows 11
+    - Start menu and optional desktop shortcuts
+    - File association for .hcad files
+    - Add/Remove Programs entry with uninstaller
+
+  MSI Installer (via WiX):
+    - Windows 10 (1809+) and newer
+    - Windows 11
+    - For enterprise/group policy deployment
+    - System-wide installation
+
+macOS (arm64 and x86_64):
+
+  Application Bundle (.app):
+    - macOS 11 (Big Sur) and newer on Apple Silicon (arm64)
+    - macOS 10.15 (Catalina) and newer on Intel (x86_64)
+    - Drag to /Applications to install
+
+  Homebrew:
+    - brew tap ayourk/hobbycad && brew install hobbycad
+    - Installs dependencies automatically
+    - Easy updates via brew upgrade
+
+Installation Method Comparison:
+
+  | Method      | Isolation | Auto-Update | Oldest Distro Support |
+  |-------------|-----------|-------------|----------------------|
+  | AppImage    | None      | Manual      | glibc 2.35 (~2022)   |
+  | Flatpak     | Sandboxed | Yes         | Any with flatpak     |
+  | Native .deb | None      | Via apt     | Ubuntu 22.04         |
+  | Native .rpm | None      | Via dnf/yum | Fedora 40, RHEL 9    |
+  | Arch pkg    | None      | Via pacman  | Current Arch         |
+
+Recommended Installation by Use Case:
+
+  - Desktop Linux user: AppImage or native package
+  - Steam Deck / SteamOS: Flatpak
+  - Gaming distro (Bazzite, CachyOS): Flatpak or Arch package
+  - Enterprise Linux (RHEL, Alma): RPM package
+  - Developer: Native package for your distro
+  - Trying it out: AppImage (no installation needed)
+
+Why No Snap?
+
+  HobbyCAD does not provide Snap packages. Flatpak and AppImage already
+  cover the "universal package" use case with better cross-distro adoption.
+  Ubuntu users can install the native .deb package instead.
+
+
+APPLICATION MODES
+-----------------
+
+HobbyCAD has two application modes:
+
+Full Mode:
+- Complete CAD environment with 3D viewport
+- Feature tree, timeline, and properties panels
+- Full sketch and modeling capabilities
+
+Reduced Mode:
+- Simplified interface for 2D sketch work only
+- No 3D viewport
+- Lighter resource usage
+
+
+COMMON CONTROLS
+---------------
+
+These controls apply to both the 2D sketch canvas and the 3D viewport.
+
+Handle Dragging:
+- Hover over a handle to see the move cursor
+- Click and drag to move the handle
+- Properties update in real-time while dragging
+
+Snap to Grid (Shift):
+- Hold Shift while dragging to snap to grid points
+- Works even when global snap-to-grid is disabled
+- Release Shift to return to free positioning
+
+Axis Constraint (Ctrl + X/Y/Z):
+- Hold Ctrl while dragging to enable axis constraint mode
+- Press X, Y, or Z to lock movement to that axis
+- Release Ctrl to remove the axis constraint
+- In 2D sketches, only axes on the sketch plane are active
+- In 3D viewport, all three axes are available
+
+Combining Modifiers:
+- Shift + Ctrl + axis key: snap to grid AND constrain to axis
+
+Visual Feedback During Constrained Drag:
+- Orange crosshair: full snap to grid active
+- Red line with "X": X-axis constraint
+- Green line with "Y": Y-axis constraint
+- Blue line with "Z": Z-axis constraint (3D viewport only, Full Mode)
+
+Panning:
+- Middle-click and drag to pan the view
+
+Zooming:
+- Scroll wheel to zoom in/out (centered on cursor)
+
+
+SKETCH MODE
+-----------
+
+Starting a Sketch:
+- Click "New Sketch" or use the menu to enter sketch mode
+- Select a sketch plane (XY, XZ, or YZ)
+- The sketch is added to the timeline and feature tree
+
+Tool Selection:
+- Click a tool in the toolbar to select it
+- Click the same tool again to deselect and return to Select mode
+- Click a different tool to switch tools
+- Keyboard shortcuts:
+    S - Select tool
+    L - Line tool
+    R - Rectangle tool
+    C - Circle tool
+    A - Arc tool
+    P - Point tool
+    D - Dimension tool
+
+Drawing Objects:
+- With a drawing tool selected, click to start drawing
+- Move the mouse and click again to complete the shape
+- Points are created with a single click
+- After drawing, the object's properties appear in the Properties panel
+
+Selection:
+- Use the Select tool to click on objects
+- Selected objects show handles at their control points
+- Clicking empty space deselects and clears the Properties panel
+
+Escape Key Behavior:
+- If drawing: cancels the current drawing operation
+- If a tool is selected: returns to Select mode (keeps selection)
+- If in Select mode with selection: deselects the object
+- If in Select mode with no selection: no effect
+
+Deleting Objects:
+- Select an object and press Delete or Backspace
+
+Discarding a Sketch:
+- New sketch: removes the sketch from timeline and feature tree
+- Editing existing sketch: discards changes only, keeps original
+
+
+SKETCH AXIS CONSTRAINTS
+-----------------------
+
+In 2D sketch mode, axis keys are mapped based on the sketch plane:
+
+    XY Plane:
+      X - constrain to horizontal (X axis)
+      Y - constrain to vertical (Y axis)
+      Z - ignored (perpendicular to sketch)
+
+    XZ Plane:
+      X - constrain to horizontal (X axis)
+      Y - ignored (perpendicular to sketch)
+      Z - constrain to vertical (Z axis)
+
+    YZ Plane:
+      X - ignored (perpendicular to sketch)
+      Y - constrain to horizontal (Y axis)
+      Z - constrain to vertical (Z axis)
+
+
+VIEW CONTROLS
+-------------
+
+Panning:
+- Middle-click and drag to pan the view
+
+Zooming:
+- Scroll wheel to zoom in/out (centered on cursor)
+
+View Menu:
+- Show Grid (Ctrl+Shift+G): toggle grid visibility
+- Snap to Grid (Ctrl+G): toggle automatic snap (disabled if grid hidden)
+
+View Commands:
+- Reset View: return to default zoom and center
+- Zoom to Fit: fit all objects in view
+
+
+KEYBOARD SHORTCUTS
+------------------
+
+Tools:
+  S         Select
+  L         Line
+  R         Rectangle
+  C         Circle
+  A         Arc
+  P         Point
+  D         Dimension
+  G         Toggle grid visibility
+
+View:
+  Ctrl+Shift+G    Show/Hide Grid
+  Ctrl+G          Toggle Snap to Grid
+
+Editing:
+  Delete/Backspace    Delete selected object
+  Escape              Cancel/deselect (see above)
+
+Dragging Modifiers:
+  Shift       Snap to grid while held
+  Ctrl+X      Constrain to X axis
+  Ctrl+Y      Constrain to Y axis
+  Ctrl+Z      Constrain to Z axis
+
+
+FILE OPERATIONS
+---------------
+
+New Document:
+- File > New (Ctrl+N)
+- Creates a new empty document
+
+Open Document:
+- File > Open (Ctrl+O)
+- Supported formats: HobbyCAD native (.hcad)
+
+Save Document:
+- File > Save (Ctrl+S)
+- File > Save As (Ctrl+Shift+S)
+
+Export:
+- File > Export
+- Supported export formats: STEP, STL, DXF (sketches only)
+
+Import:
+- File > Import
+- Supported import formats: STEP, IGES, DXF
+
+
+INTERFACE OVERVIEW
+------------------
+
+Main Window (Full Mode):
++--------------------------------------------------+
+|  Menu Bar                                        |
++--------------------------------------------------+
+|  Main Toolbar                                    |
++--------+-----------------------------+-----------+
+|        |                             |           |
+| Feature|      3D Viewport            | Properties|
+|  Tree  |         or                  |   Panel   |
+|        |    Sketch Canvas            |           |
+|        |                             |           |
++--------+-----------------------------+-----------+
+|  Timeline                                        |
++--------------------------------------------------+
+|  Status Bar                                      |
++--------------------------------------------------+
+
+Feature Tree:
+- Hierarchical view of all features in the model
+- Double-click to edit a feature
+- Right-click for context menu options
+
+Timeline:
+- Linear history of modeling operations
+- Click to roll back to a previous state
+- Drag to reorder features (when possible)
+
+Properties Panel:
+- Shows properties of selected object
+- Edit values directly to modify geometry
+- Changes apply immediately
+
+
+3D VIEWPORT (Full Mode)
+-----------------------
+
+Navigation:
+- Rotate: Right-click and drag
+- Pan: Middle-click and drag
+- Zoom: Scroll wheel
+
+View Orientation:
+- Home: Reset to default isometric view
+- Front/Back/Left/Right/Top/Bottom: Standard orthographic views
+- Fit All: Zoom to show entire model
+
+Display Modes:
+- Shaded: Solid surfaces with lighting
+- Wireframe: Edge lines only
+- Shaded with Edges: Solid surfaces with visible edges
+
+
+MODELING OPERATIONS (Full Mode)
+-------------------------------
+
+Extrude:
+- Select a closed sketch profile
+- Specify distance or "To Next/All"
+- Options: Add, Cut, Intersect
+
+Revolve:
+- Select a closed sketch profile
+- Select or define an axis of revolution
+- Specify angle (default 360°)
+
+Fillet:
+- Select edges to round
+- Specify radius
+- Multiple edges can share same radius
+
+Chamfer:
+- Select edges to bevel
+- Specify distance or angle
+
+Boolean Operations:
+- Union: Combine two bodies
+- Subtract: Cut one body from another
+- Intersect: Keep only overlapping volume
+
+
+CONSTRAINTS (Sketch Mode)
+-------------------------
+
+Geometric Constraints:
+- Horizontal: Line parallel to X axis
+- Vertical: Line parallel to Y axis
+- Coincident: Two points share same location
+- Tangent: Curves meet smoothly
+- Perpendicular: Lines at 90° angle
+- Parallel: Lines maintain same direction
+- Equal: Elements share same dimension
+- Concentric: Circles/arcs share center
+
+Dimensional Constraints:
+- Distance: Fixed length between points
+- Angle: Fixed angle between lines
+- Radius: Fixed circle/arc radius
+- Diameter: Fixed circle diameter
+
+Constraint Colors:
+- Black: Under-constrained (can still move)
+- Green: Fully constrained
+- Red: Over-constrained (conflict)
+
+
+TIPS AND BEST PRACTICES
+-----------------------
+
+Sketching:
+- Fully constrain sketches before extruding
+- Use construction geometry for reference
+- Start from the origin when possible
+
+Modeling:
+- Use parameters for dimensions you may change
+- Name features descriptively
+- Keep sketches simple; use multiple features
+
+Performance:
+- Hide complex features while working
+- Use Reduced Mode for sketch-only work
+- Close unused documents
+
+
+TROUBLESHOOTING
+---------------
+
+Sketch won't extrude:
+- Ensure profile is fully closed
+- Check for self-intersecting lines
+- Verify sketch is fully constrained
+
+Model appears corrupted:
+- Try rolling back in timeline
+- Check for failed features (marked with warning)
+- Rebuild model (Edit > Rebuild All)
+
+Performance issues:
+- Reduce display quality in preferences
+- Hide complex features
+- Use Reduced Mode for 2D work
+
+
+COMMAND-LINE INTERFACE
+----------------------
+
+HobbyCAD includes a built-in command-line interface accessible via the
+CLI panel. Commands support tab completion with contextual hints.
+
+General Commands:
+  help              Show available commands
+  version           Show HobbyCAD version
+  info              Show document information
+  exit / quit       Exit HobbyCAD
+
+File Commands:
+  new               Create new document
+  open <file>       Open a BREP file (.brep)
+  save <file>       Save to a BREP file
+
+Directory Commands:
+  cd [dir]          Change working directory
+  pwd               Print current directory
+
+Selection & Creation:
+  select <type> <name>    Select object (sketch, body, face, edge, vertex)
+  create sketch [name]    Create a new sketch
+
+Sketch Geometry (in sketch mode):
+  point [at] <x>,<y>
+  line [from] <x1>,<y1> to <x2>,<y2>
+  circle [at] <x>,<y> radius|diameter <value>
+  rectangle [from] <x1>,<y1> to <x2>,<y2>
+  arc [at] <x>,<y> radius <r> [angle] <start> to <end>
+
+Sketch Exit:
+  finish            Save sketch and exit sketch mode
+  discard           Discard changes and exit sketch mode
+
+Numeric Values:
+- Plain numbers: 10, 25.5, -3.14
+- Parameter names: width, myRadius
+- Expressions: (width/2), (radius*2+offset)
+
+History Commands:
+  history           Show command history
+  history clear     Clear history
+  history max <n>   Set max history lines
+  !!                Repeat last command
+  !<prefix>         Most recent command starting with prefix
+
+CLI Keyboard Shortcuts:
+  Tab               Complete command/argument
+  ?                 Show argument hints
+  Up/Down           Navigate history
+  Ctrl+R            Reverse search history
+  Ctrl+L            Clear screen
+  Ctrl+C            Cancel current line
+
+See docs/cli_commands.txt for complete CLI reference.
+
+
+CUSTOMIZATION
+-------------
+
+Key Bindings:
+- View > Preferences > Key Bindings
+- Supports up to 3 bindings per action
+- Both keyboard and mouse bindings supported
+- Changes apply immediately (no restart needed)
+- Stored in ~/.config/HobbyCAD/HobbyCAD.conf
+
+Configuration Files:
+- Settings: ~/.config/HobbyCAD/HobbyCAD.conf
+- Plugins: ~/.config/hobbycad/plugins/
+
+
+SUPPORTED FILE FORMATS
+----------------------
+
+Native Format:
+- .hcad - HobbyCAD project (directory-based, git-friendly)
+- .brep - OpenCASCADE BREP (lossless geometry)
+
+Import Formats:
+- STEP (.step, .stp) - Industry standard CAD interchange
+- IGES (.iges, .igs) - Legacy CAD interchange
+- DXF (.dxf) - 2D drawing interchange
+- STL (.stl) - Mesh import
+- OBJ (.obj) - Mesh import
+
+Export Formats:
+- STEP (.step, .stp) - Recommended for CAD interchange
+- STL (.stl) - For 3D printing
+- OBJ (.obj) - For rendering/visualization
+- DXF (.dxf) - For 2D sketches
+
+
+GETTING HELP
+------------
+
+Documentation:
+- This manual: user_manual.txt
+- CLI reference: docs/cli_commands.txt
+- Project info: docs/project_definition.txt
+
+In Application:
+- Help menu
+- CLI 'help' command
+- Tab completion with hints
+
+Online:
+- GitHub: https://github.com/ayourk/hobbycad
+- Issues: https://github.com/ayourk/hobbycad/issues
+
+
+LICENSE
+-------
+
+HobbyCAD is licensed under the GNU General Public License v3.0 only.
+
+- Plugins linking against HobbyCAD must be GPL 3.0
+- Python scripts using the API are user content (license freely)
+- See docs/project_definition.txt Section 12 for full details

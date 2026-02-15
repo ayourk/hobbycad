@@ -56,6 +56,22 @@ cmake --preset macos-debug
 cmake --build --preset macos-debug
 ```
 
+### Library Linkage
+
+The core library can be built as static (default) or shared:
+
+```bash
+# Static library (default) - embedded in executable
+tools/linux/build-dev.sh release static
+
+# Shared library - separate libhobbycad.so
+tools/linux/build-dev.sh release shared
+```
+
+Release build sizes (as of 2026-02-14):
+- Static: ~2.3 MB executable
+- Shared: ~1.9 MB executable + ~950 KB library
+
 ## Coding Standards
 
 - See `docs/coding_standards.txt` for full details
@@ -86,67 +102,78 @@ cmake --build --preset macos-debug
 - **Windows:** Two jobs — MSYS2/UCRT64/GCC + MSVC/vcpkg
 - **macOS:** Homebrew tap ayourk/hobbycad, Clang on ARM64
 
-## Current State (as of 2026-02-13)
+## Current State (as of 2026-02-14)
 
-### Recently Completed
-- Viewport navigation: ViewCube, orbit rings (AIS_Canvas2D), scale bar, home button
-- All three CI workflows created and being debugged
-- Setup scripts for all platforms reconciled
-- Homebrew tap: TBB disabled, BRepFont FreeType fix, CMake 4.x compat
-- vcpkg overlay port: BRepFont whitespace fix, LICENSE_LGPL_21.txt fix
-- OCCT 7.8+ library name detection (occt_pick_lib macro)
-- **Bindings dialog** — accessible from View > Preferences, supports up to 3 bindings per action
-  - Both keyboard shortcuts and mouse bindings (Ctrl+Shift+Alt+Button+Drag)
-  - Expandable tree with bindings as child nodes under actions
-  - Apply button enabled only when changes detected
-  - Bindings apply to QActions at runtime (no restart needed)
-  - Stored in QSettings (~/.config/HobbyCAD/HobbyCAD.conf)
-  - Fixed Windows CI OpenCASCADE include path issue (vcpkg overlay port)
-- **Edit menu** — skeleton menu with Cut/Copy/Paste/Delete/Select All
-  - All actions initially disabled (enabled when selections exist)
-  - Standard keyboard shortcuts (Ctrl+X/C/V, Del, Ctrl+A)
-  - Fully integrated with Bindings dialog for customization
-- **Properties panel** — right-side dock panel for object properties
-  - QTreeWidget placeholder ready for property editing
-  - Toggleable via View > Properties or Ctrl+P
-  - Visible by default, state persists via QSettings
-- **Viewport toolbar** — toolbar above viewport with icon-above-label buttons
-  - Buttons: Create Sketch, Box, Extrude, Revolve | Fillet, Hole | Move, Mirror
-  - Icon above text label, dropdown arrows for related actions
-  - Toggleable via View > Toolbar
-  - FullModeWindow receives workspaceChanged signal for toolbar updates
-- **View > Workspace submenu** — Design, Render, Animation, Simulation
-  - Changes toolbar buttons based on selected workspace
-  - Uses QActionGroup for exclusive selection
-- **CLI commands** — `select <type> <name>` and `create sketch [name]`
-  - Context-aware prompt shows sketch name when in sketch mode (e.g., "Sketch Sketch1>")
-  - Tab completion with contextual argument hints (press Tab or ? to see hints)
-  - Documentation at `docs/cli_commands.txt`
-- **Sketch geometry commands** — natural English syntax with optional keywords
-  - `point [at] <x>,<y>`
-  - `line [from] <x1>,<y1> to <x2>,<y2>`
-  - `circle [at] <x>,<y> radius|diameter <value>`
-  - `rectangle [from] <x1>,<y1> to <x2>,<y2>`
-  - `arc [at] <x>,<y> radius <r> [angle] <start> to <end>`
-  - Numeric values support: plain numbers, parameter names, or (expressions)
-  - Parenthesized expressions preserved as single tokens (spaces allowed inside)
-  - Parameter name completion when typing letters in numeric fields
-- **Parameter validation** — strict naming rules enforced in CLI and GUI
-  - Names must start with letter or underscore (not a digit)
-  - Can contain letters, numbers, and underscores
-  - Reserved words (sin, cos, sqrt, pi, etc.) cannot be used
-  - Parameters dialog: invalid names turn field red, disables OK/Apply buttons
-  - On project load: names starting with digit auto-prefixed with underscore
-  - TODO: Apply same sanitization in Document::loadParameters() when implemented
+### libhobbycad Library
+
+The core library (`src/libhobbycad/`) provides reusable CAD functionality:
+
+**Geometry Module** (`hobbycad/geometry/`):
+- `types.h` — Points, vectors, arcs, bounding boxes, intersection results
+- `intersections.h` — Line-line, line-circle, line-arc, circle-circle, arc-arc intersections
+- `utils.h` — Vector ops, angle functions, polygon utilities, tangent circle/arc construction
+- `algorithms.h` — Advanced computational geometry:
+  - Convex hull (Andrew's monotone chain)
+  - Polygon simplification (Douglas-Peucker, Visvalingam-Whyatt)
+  - Minimal bounding circle (Welzl's algorithm)
+  - Oriented bounding box (rotating calipers)
+  - 2D Boolean operations (union, intersection, difference, XOR)
+  - Polygon offset with miter/round/square joins
+  - Ear clipping triangulation
+  - Polygon with holes triangulation (bridge insertion)
+  - Delaunay triangulation (Bowyer-Watson)
+  - Constrained Delaunay triangulation
+  - Voronoi diagram generation
+  - Path analysis (length, resampling, curvature, corner detection)
+  - Point set analysis (diameter, closest pair, Hausdorff distance)
+
+**Sketch Module** (`hobbycad/sketch/`):
+- `entity.h` — Entity types (line, arc, circle, rectangle, polygon, slot, ellipse, spline, text), with font properties for text
+- `constraint.h` — Constraint types (dimensional: distance, radius, diameter, angle; geometric: horizontal, vertical, parallel, perpendicular, coincident, tangent, equal, midpoint, symmetric, etc.)
+- `solver.h` — Parametric constraint solver (libslvs backend, optional)
+- `operations.h` — 2D operations: intersection detection, offset, fillet, chamfer, trim, extend, split, mirror, connected chain finding
+- `patterns.h` — Linear, rectangular, circular, mirror patterns
+- `profiles.h` — Closed profile detection for extrusion
+- `background.h` — Background image with calibration, rotation, opacity, flip
+- `export.h` — SVG import/export, DXF import/export
+- `queries.h` — Hit testing, validation, tessellation, curve analysis
+- `parsing.h` — Text parsing utilities for CLI: coordinate parsing, expression parsing, value parsing
+
+**BREP Module** (`hobbycad/brep/`):
+- `operations.h` — 3D solid operations using OpenCASCADE:
+  - Extrude (regular and symmetric)
+  - Revolve around axis
+  - Sweep along path
+  - Loft between profiles
+  - Boolean operations (fuse, cut, intersect)
+  - 3D fillet and chamfer
+  - Shell (hollow out solid)
+  - 3D offset
+
+### GUI Features
+
+- **Sketch Canvas** — Full 2D parametric sketch editor with:
+  - All entity types (line, arc, circle, rectangle, polygon, slot, ellipse, spline, text)
+  - Parametric constraints (dimension tool with distance/radius/diameter/angle)
+  - Geometric constraints (horizontal, vertical, parallel, perpendicular, etc.)
+  - Constraint solver integration (libslvs) with over-constraint detection
+  - Trim/Extend/Split operations
+  - Offset, fillet, chamfer tools
+  - Mirror and pattern tools
+  - Profile detection for 3D operations
+  - Background image support with calibration dialog
+  - Multi-selection and group operations
+  - Undo/redo
+- **Viewport** — ViewCube, orbit rings, scale bar, home button
+- **Bindings dialog** — Keyboard/mouse binding customization
+- **CLI commands** — Sketch geometry commands with natural English syntax
+- **Properties panel** — Object property editing
+- **Workspace toolbar** — Context-sensitive toolbars
 
 ### Pending
-1. **Commit and push** — uncommitted changes above need to be committed
-2. **CI verification** — all three platforms need clean pass after latest fixes
-3. **libhobbycad CMakeLists** — occt_pick_lib macro needs to be applied
-   to src/libhobbycad/CMakeLists.txt (delivered as standalone file)
-4. **ViewCube bottom view** — may still have 45° rotation issue
-5. **vcpkg baseline hash** — vcpkg-configuration.json placeholder
-6. **File headers** — old format, update incrementally
+1. **CI verification** — all three platforms need clean pass
+2. **ViewCube bottom view** — may still have 45° rotation issue
+3. **vcpkg baseline hash** — vcpkg-configuration.json placeholder
 
 ## Preferences
 

@@ -100,6 +100,115 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
     defaults.insert("view.rotateRight", ActionBinding(
         "view.rotateRight", tr("Rotate Right 90\xC2\xB0"), tr("View")));
 
+    // Sketch canvas view rotation (2D)
+    defaults.insert("sketch.rotateCCW", ActionBinding(
+        "sketch.rotateCCW", tr("Rotate Canvas CCW"), tr("Sketch"),
+        QKeySequence(Qt::Key_Q).toString()));
+
+    defaults.insert("sketch.rotateCW", ActionBinding(
+        "sketch.rotateCW", tr("Rotate Canvas CW"), tr("Sketch"),
+        QKeySequence(Qt::Key_E).toString()));
+
+    defaults.insert("sketch.rotateReset", ActionBinding(
+        "sketch.rotateReset", tr("Reset Canvas Rotation"), tr("Sketch"),
+        QKeySequence(Qt::CTRL | Qt::Key_0).toString()));
+
+    // Sketch tools
+    defaults.insert("sketch.select", ActionBinding(
+        "sketch.select", tr("Select Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_S).toString()));
+
+    defaults.insert("sketch.line", ActionBinding(
+        "sketch.line", tr("Line Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_L).toString()));
+
+    defaults.insert("sketch.rectangle", ActionBinding(
+        "sketch.rectangle", tr("Rectangle Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_R).toString()));
+
+    defaults.insert("sketch.circle", ActionBinding(
+        "sketch.circle", tr("Circle Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_C).toString()));
+
+    defaults.insert("sketch.arc", ActionBinding(
+        "sketch.arc", tr("Arc Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_A).toString()));
+
+    defaults.insert("sketch.point", ActionBinding(
+        "sketch.point", tr("Point Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_P).toString()));
+
+    defaults.insert("sketch.dimension", ActionBinding(
+        "sketch.dimension", tr("Dimension Tool"), tr("Sketch"),
+        QKeySequence(Qt::Key_D).toString()));
+
+    defaults.insert("sketch.construction", ActionBinding(
+        "sketch.construction", tr("Toggle Construction Mode"), tr("Sketch"),
+        QKeySequence(Qt::Key_X).toString()));
+
+    defaults.insert("sketch.offset", ActionBinding(
+        "sketch.offset", tr("Offset"), tr("Sketch"),
+        QKeySequence(Qt::Key_O).toString()));
+
+    defaults.insert("sketch.trim", ActionBinding(
+        "sketch.trim", tr("Trim"), tr("Sketch"),
+        QKeySequence(Qt::Key_T).toString()));
+
+    defaults.insert("sketch.toggleGrid", ActionBinding(
+        "sketch.toggleGrid", tr("Toggle Grid"), tr("Sketch"),
+        QKeySequence(Qt::Key_G).toString()));
+
+    // Design/3D workspace (reserved for future)
+    defaults.insert("design.extrude", ActionBinding(
+        "design.extrude", tr("Extrude"), tr("Design"),
+        QKeySequence(Qt::Key_E).toString()));
+
+    defaults.insert("design.move", ActionBinding(
+        "design.move", tr("Move"), tr("Design"),
+        QKeySequence(Qt::Key_M).toString()));
+
+    defaults.insert("design.fillet", ActionBinding(
+        "design.fillet", tr("Fillet"), tr("Design"),
+        QKeySequence(Qt::Key_F).toString()));
+
+    defaults.insert("design.chamfer", ActionBinding(
+        "design.chamfer", tr("Chamfer"), tr("Design")));
+
+    defaults.insert("design.hole", ActionBinding(
+        "design.hole", tr("Hole"), tr("Design"),
+        QKeySequence(Qt::Key_H).toString()));
+
+    defaults.insert("design.joint", ActionBinding(
+        "design.joint", tr("Joint"), tr("Design"),
+        QKeySequence(Qt::Key_J).toString()));
+
+    defaults.insert("design.measure", ActionBinding(
+        "design.measure", tr("Measure"), tr("Design"),
+        QKeySequence(Qt::Key_I).toString()));
+
+    defaults.insert("design.toggleVisibility", ActionBinding(
+        "design.toggleVisibility", tr("Toggle Visibility"), tr("Design"),
+        QKeySequence(Qt::Key_V).toString()));
+
+    // Global commands
+    defaults.insert("global.commandSearch", ActionBinding(
+        "global.commandSearch", tr("Command Search"), tr("Global"),
+        QKeySequence(Qt::Key_Slash).toString()));
+
+    defaults.insert("view.showGrid", ActionBinding(
+        "view.showGrid", tr("Show Grid"), tr("View"),
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G).toString()));
+
+    defaults.insert("view.snapToGrid", ActionBinding(
+        "view.snapToGrid", tr("Snap to Grid"), tr("View"),
+        QKeySequence(Qt::CTRL | Qt::Key_G).toString()));
+
+    defaults.insert("view.zUpOrientation", ActionBinding(
+        "view.zUpOrientation", tr("Z-Up Orientation"), tr("View")));
+
+    defaults.insert("view.orbitSelected", ActionBinding(
+        "view.orbitSelected", tr("Orbit Selected Object"), tr("View")));
+
     defaults.insert("view.preferences", ActionBinding(
         "view.preferences", tr("Preferences..."), tr("View"),
         QKeySequence(QKeySequence::Preferences).toString()));
@@ -330,6 +439,8 @@ void BindingsDialog::populateActions()
 
     // Define display order for actions
     static const QStringList actionOrder = {
+        // Global
+        "global.commandSearch",
         // File
         "file.new", "file.open", "file.save", "file.saveAs",
         "file.close", "file.quit",
@@ -339,6 +450,17 @@ void BindingsDialog::populateActions()
         // View
         "view.terminal", "view.project", "view.properties", "view.resetView",
         "view.rotateLeft", "view.rotateRight", "view.preferences",
+        // Sketch - Tools
+        "sketch.select", "sketch.line", "sketch.rectangle", "sketch.circle",
+        "sketch.arc", "sketch.point", "sketch.dimension",
+        // Sketch - Modifiers
+        "sketch.construction", "sketch.offset", "sketch.trim",
+        // Sketch - View
+        "sketch.rotateCCW", "sketch.rotateCW", "sketch.rotateReset",
+        "sketch.toggleGrid",
+        // Design (3D workspace - reserved)
+        "design.extrude", "design.move", "design.fillet", "design.chamfer",
+        "design.hole", "design.joint", "design.measure", "design.toggleVisibility",
         // Navigation - Continuous rotation
         "nav.rotateUp", "nav.rotateDown",
         // Navigation - Rotation axis
@@ -541,21 +663,70 @@ void BindingsDialog::updateTreeForAction(const QString& actionId)
     }
 }
 
+QString BindingsDialog::getActionContext(const QString& actionId)
+{
+    // Extract context from action ID prefix (e.g., "sketch.line" -> "sketch")
+    int dotIndex = actionId.indexOf(QLatin1Char('.'));
+    if (dotIndex > 0) {
+        return actionId.left(dotIndex);
+    }
+    return QString();
+}
+
 QString BindingsDialog::checkConflict(const QString& actionId,
                                        const QString& binding) const
 {
     if (binding.isEmpty()) return QString();
+
+    QString myContext = getActionContext(actionId);
 
     for (auto it = m_bindings.constBegin();
          it != m_bindings.constEnd(); ++it) {
         if (it.key() == actionId) continue;  // Skip self
 
         const ActionBinding& ab = it.value();
-        if (ab.binding1 == binding ||
-            ab.binding2 == binding ||
-            ab.binding3 == binding) {
+
+        // Check if bindings match
+        bool hasConflict = (ab.binding1 == binding ||
+                            ab.binding2 == binding ||
+                            ab.binding3 == binding);
+
+        if (!hasConflict) continue;
+
+        // Now check if contexts conflict
+        QString otherContext = getActionContext(it.key());
+
+        // Global context conflicts with everything
+        if (myContext == QStringLiteral("global") ||
+            otherContext == QStringLiteral("global")) {
             return ab.actionId;
         }
+
+        // Same context conflicts (e.g., sketch vs sketch)
+        if (myContext == otherContext) {
+            return ab.actionId;
+        }
+
+        // File, Edit, View, Navigation, Viewport are always active - they conflict
+        // with each other and with mode-specific contexts
+        static const QStringList alwaysActiveContexts = {
+            QStringLiteral("file"),
+            QStringLiteral("edit"),
+            QStringLiteral("view"),
+            QStringLiteral("nav"),
+            QStringLiteral("viewport")
+        };
+
+        bool myContextAlwaysActive = alwaysActiveContexts.contains(myContext);
+        bool otherContextAlwaysActive = alwaysActiveContexts.contains(otherContext);
+
+        // If either is always-active, they conflict
+        if (myContextAlwaysActive || otherContextAlwaysActive) {
+            return ab.actionId;
+        }
+
+        // Different mode-specific contexts don't conflict
+        // (e.g., sketch vs design are mutually exclusive)
     }
 
     return QString();
@@ -566,14 +737,30 @@ bool BindingsDialog::confirmConflict(const QString& conflictingActionId,
 {
     const ActionBinding& conflicting = m_bindings.value(conflictingActionId);
 
+    // Determine why there's a conflict for a better message
+    QString myContext = getActionContext(m_selectedAction);
+    QString otherContext = getActionContext(conflictingActionId);
+
+    QString contextInfo;
+    if (myContext == otherContext) {
+        contextInfo = tr("Both actions are in the %1 context.")
+                      .arg(conflicting.category);
+    } else if (myContext == QStringLiteral("global") ||
+               otherContext == QStringLiteral("global")) {
+        contextInfo = tr("Global bindings are active in all contexts.");
+    } else {
+        contextInfo = tr("The %1 context is always active.")
+                      .arg(conflicting.category);
+    }
+
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(tr("Binding Conflict"));
     msgBox.setIcon(QMessageBox::Warning);
     msgBox.setText(tr("The binding \"%1\" is already assigned to \"%2\".")
                    .arg(binding, conflicting.displayName));
     msgBox.setInformativeText(
-        tr("Do you want to remove it from \"%1\" and assign it here?")
-        .arg(conflicting.displayName));
+        tr("%1\n\nDo you want to remove it from \"%2\" and assign it here?")
+        .arg(contextInfo, conflicting.displayName));
     msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
     msgBox.setDefaultButton(QMessageBox::No);
 

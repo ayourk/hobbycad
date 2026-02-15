@@ -1,0 +1,1310 @@
+================================================================================
+  HobbyCAD — LIBHOBBYCAD API REFERENCE
+================================================================================
+
+  Project          : HobbyCAD
+  Repository       : HobbyCAD (ayourk/hobbycad)
+  File             : docs/libhobbycad_api.txt
+  Document Version : 0.0.2
+  Date             : 2026-02-14
+
+  AI Attribution   : This document was primarily generated with
+                     the assistance of Claude AI (Anthropic).
+                     Human review and editorial direction provided
+                     by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+    1. Overview
+    2. Library Initialization
+       2.1  Initialization Functions
+       2.2  Export Macros
+    3. Document Class
+       3.1  File Path Management
+       3.2  Shape Management
+       3.3  File I/O
+    4. Project Class
+       4.1  Project Metadata
+       4.2  Project State
+       4.3  Geometry Management
+       4.4  Construction Planes
+       4.5  Sketches
+       4.6  Parameters
+       4.7  Features
+       4.8  File I/O
+    5. Data Structures
+       5.1  Sketch Entity Types
+       5.2  Constraint Types
+       5.3  Plane Types
+       5.4  Feature Types
+       5.5  Sketch Data Structures
+       5.6  Construction Plane Data
+       5.7  Parameter Data
+       5.8  Feature Data
+    6. BREP I/O Functions
+    7. .hcad File Format
+    8. Geometry Module
+       8.1  Geometric Types
+       8.2  Intersection Functions
+       8.3  Geometry Utilities
+    9. Sketch Module
+       9.1  Entity Types
+       9.2  Constraint Types
+       9.3  Sketch Operations
+       9.4  Pattern Operations
+       9.5  Profile Detection
+       9.6  Constraint Solver
+       9.7  Text Parsing Utilities
+   10. GUI Integration
+
+================================================================================
+  1. OVERVIEW
+================================================================================
+
+    libhobbycad is the core library for HobbyCAD, providing:
+
+    - Document and project management
+    - 3D geometry storage (TopoDS_Shape from OpenCASCADE)
+    - Sketch serialization (entities, constraints)
+    - Parametric feature tree
+    - BREP file I/O
+    - .hcad project format (directory-based, git-friendly)
+    - 2D geometry operations (intersections, transforms)
+    - Sketch operations (offset, fillet, chamfer, trim, patterns)
+    - Profile detection for closed loops
+
+    The library is designed to be used by both GUI and CLI applications.
+
+    ALTERNATIVE UI SUPPORT
+    ----------------------
+    All functions in libhobbycad are UI-agnostic and can be used to build
+    alternative user interfaces. The library has no dependencies on Qt Widgets
+    or any GUI framework - only Qt Core and Qt Gui (for QPointF, QPolygonF).
+
+    The geometry and sketch modules provide all the computational logic needed
+    for a 2D sketching application:
+
+    - Entity creation and manipulation (sketch/entity.h)
+    - Constraint management (sketch/constraint.h)
+    - Geometric operations like fillet, chamfer, offset (sketch/operations.h)
+    - Pattern creation (sketch/patterns.h)
+    - Profile/loop detection for extrusion (sketch/profiles.h)
+    - Low-level geometry calculations (geometry/*.h)
+
+    To build an alternative UI (e.g., web-based, terminal, or different
+    toolkit), simply link against libhobbycad and use the provided functions.
+    See Section 10 (GUI Integration) for examples of how the Qt-based
+    SketchCanvas converts between its UI types and library types.
+
+    Header Files:
+      hobbycad/core.h                 Library initialization and version
+      hobbycad/document.h             Simple document model (single file)
+      hobbycad/project.h              Full project model (.hcad format)
+      hobbycad/brep_io.h              BREP file read/write utilities
+      hobbycad/geometry/types.h       Geometric types and transforms
+      hobbycad/geometry/intersections.h  Intersection calculations
+      hobbycad/geometry/utils.h       Geometry utility functions
+      hobbycad/sketch/entity.h        Sketch entity types
+      hobbycad/sketch/constraint.h    Constraint types
+      hobbycad/sketch/operations.h    Sketch operations (fillet, chamfer, etc.)
+      hobbycad/sketch/patterns.h      Pattern operations
+      hobbycad/sketch/profiles.h      Profile detection
+      hobbycad/sketch/solver.h        Constraint solver (libslvs wrapper)
+
+    Namespaces:
+      hobbycad           Core types (Document, Project)
+      hobbycad::geometry Geometric primitives and operations
+      hobbycad::sketch   Sketch entities, constraints, operations
+
+================================================================================
+  2. LIBRARY INITIALIZATION
+================================================================================
+
+  2.1  Initialization Functions
+  ------------------------------
+
+    #include <hobbycad/core.h>
+
+    const char* hobbycad::version()
+        Returns the library version string (e.g., "0.0.1").
+
+    bool hobbycad::initialize()
+        Initialize the OCCT kernel and library-wide state.
+        Call once at application startup before using other functions.
+        Returns true on success.
+
+    void hobbycad::shutdown()
+        Shut down the library and release resources.
+        Call once at application exit.
+
+    Example Usage:
+
+        #include <hobbycad/core.h>
+
+        int main() {
+            if (!hobbycad::initialize()) {
+                return 1;  // Initialization failed
+            }
+
+            // ... use the library ...
+
+            hobbycad::shutdown();
+            return 0;
+        }
+
+
+  2.2  Export Macros
+  -------------------
+
+    HOBBYCAD_EXPORT
+        Macro for exporting symbols from the shared library.
+        Automatically handles Windows (__declspec) and Unix (visibility).
+
+    Build Definitions:
+        HOBBYCAD_SHARED     Defined when building/linking shared library
+        HOBBYCAD_BUILDING   Defined when building the library itself
+
+================================================================================
+  3. DOCUMENT CLASS
+================================================================================
+
+    #include <hobbycad/document.h>
+
+    The Document class provides a simple document model for holding
+    TopoDS_Shape objects and tracking file path and modification state.
+
+
+  3.1  File Path Management
+  --------------------------
+
+    QString Document::filePath() const
+        Returns the path to the file on disk, or empty if unsaved.
+
+    bool Document::isNew() const
+        Returns true if the document has never been saved.
+
+    bool Document::isModified() const
+        Returns true if the document has been modified since last save.
+
+    void Document::setModified(bool modified = true)
+        Mark the document as modified (or not).
+
+
+  3.2  Shape Management
+  ----------------------
+
+    const QList<TopoDS_Shape>& Document::shapes() const
+        Returns all shapes in the document.
+
+    void Document::addShape(const TopoDS_Shape& shape)
+        Add a shape to the document. Marks document as modified.
+
+    void Document::clear()
+        Remove all shapes. Marks document as modified.
+
+    void Document::createTestSolid()
+        Create a default test solid (a box) for initial display.
+        Clears existing shapes and adds a single box.
+
+
+  3.3  File I/O
+  --------------
+
+    bool Document::loadBrep(const QString& path)
+        Load a BREP file. Replaces current shapes.
+        Returns true on success.
+
+    bool Document::saveBrep(const QString& path = QString())
+        Save shapes to a BREP file.
+        If path is empty, uses the current filePath().
+        Returns true on success.
+
+================================================================================
+  4. PROJECT CLASS
+================================================================================
+
+    #include <hobbycad/project.h>
+
+    The Project class represents a complete HobbyCAD project with support
+    for sketches, parameters, features, construction planes, and geometry.
+
+
+  4.1  Project Metadata
+  ----------------------
+
+    QString Project::name() const
+    void Project::setName(const QString& name)
+        Project name (displayed in title bar, etc.)
+
+    QString Project::author() const
+    void Project::setAuthor(const QString& author)
+        Author/creator of the project
+
+    QString Project::description() const
+    void Project::setDescription(const QString& desc)
+        Project description
+
+    QString Project::units() const
+    void Project::setUnits(const QString& units)
+        Units system (default: "mm")
+
+    QDateTime Project::created() const
+        Timestamp when project was created
+
+    QDateTime Project::modified() const
+        Timestamp when project was last modified
+
+
+  4.2  Project State
+  -------------------
+
+    QString Project::projectPath() const
+        Directory path of the project (empty if unsaved)
+
+    bool Project::isNew() const
+        True if the project has never been saved
+
+    bool Project::isModified() const
+        True if the project has unsaved changes
+
+    void Project::setModified(bool modified = true)
+        Mark the project as modified
+
+
+  4.3  Geometry Management
+  -------------------------
+
+    const QList<TopoDS_Shape>& Project::shapes() const
+        Returns all 3D shapes in the project
+
+    void Project::addShape(const TopoDS_Shape& shape)
+        Add a shape to the project
+
+    void Project::setShapes(const QList<TopoDS_Shape>& shapes)
+        Replace all shapes
+
+    void Project::clearShapes()
+        Remove all shapes
+
+
+  4.4  Construction Planes
+  -------------------------
+
+    const QVector<ConstructionPlaneData>& Project::constructionPlanes() const
+        Returns all construction planes
+
+    void Project::addConstructionPlane(const ConstructionPlaneData& plane)
+        Add a construction plane
+
+    void Project::setConstructionPlane(int index, const ConstructionPlaneData& plane)
+        Update a construction plane at the given index
+
+    void Project::removeConstructionPlane(int index)
+        Remove a construction plane
+
+    void Project::clearConstructionPlanes()
+        Remove all construction planes
+
+    int Project::nextConstructionPlaneId() const
+        Get the next available construction plane ID
+
+    const ConstructionPlaneData* Project::constructionPlaneById(int id) const
+        Find a construction plane by ID (returns nullptr if not found)
+
+
+  4.5  Sketches
+  --------------
+
+    const QVector<SketchData>& Project::sketches() const
+        Returns all sketches
+
+    void Project::addSketch(const SketchData& sketch)
+        Add a sketch to the project
+
+    void Project::setSketch(int index, const SketchData& sketch)
+        Update a sketch at the given index
+
+    void Project::removeSketch(int index)
+        Remove a sketch
+
+    void Project::clearSketches()
+        Remove all sketches
+
+
+  4.6  Parameters
+  ----------------
+
+    const QList<ParameterData>& Project::parameters() const
+        Returns all parameters
+
+    void Project::setParameters(const QList<ParameterData>& params)
+        Replace all parameters
+
+    void Project::addParameter(const ParameterData& param)
+        Add a parameter
+
+    void Project::clearParameters()
+        Remove all parameters
+
+
+  4.7  Features
+  --------------
+
+    const QVector<FeatureData>& Project::features() const
+        Returns the feature tree
+
+    void Project::addFeature(const FeatureData& feature)
+        Add a feature to the tree
+
+    void Project::setFeatures(const QVector<FeatureData>& features)
+        Replace the feature tree
+
+    void Project::clearFeatures()
+        Remove all features
+
+
+  4.8  File I/O
+  --------------
+
+    bool Project::load(const QString& path, QString* errorMsg = nullptr)
+        Load a project from a .hcad directory.
+        Returns true on success.
+        If errorMsg is non-null, sets it to error description on failure.
+
+    bool Project::save(const QString& path = QString(), QString* errorMsg = nullptr)
+        Save the project to a .hcad directory.
+        If path is empty, uses the current projectPath().
+        Returns true on success.
+
+    void Project::createNew(const QString& name = QString())
+        Create a new empty project with optional name.
+
+    void Project::close()
+        Close the project and clear all data.
+
+    Constants:
+        static constexpr int FORMAT_VERSION = 1
+            Current file format version
+
+        static const char* HOBBYCAD_VERSION
+            HobbyCAD version string
+
+================================================================================
+  5. DATA STRUCTURES
+================================================================================
+
+  5.1  Sketch Entity Types
+  -------------------------
+
+    enum class SketchEntityType {
+        Point,       // Single point
+        Line,        // Line segment (2 points)
+        Rectangle,   // Axis-aligned rectangle (2 corner points)
+        Circle,      // Circle (center point + radius)
+        Arc,         // Arc (center + radius + start/sweep angles)
+        Spline,      // Catmull-Rom spline (multiple control points)
+        Polygon,     // Regular polygon (center + radius + sides)
+        Slot,        // Obround/stadium slot (2 points + radius)
+        Ellipse,     // Ellipse (center + major/minor radii)
+        Text,        // Text annotation
+        Dimension    // Dimension annotation
+    };
+
+
+  5.2  Constraint Types
+  ----------------------
+
+    enum class ConstraintType {
+        // Dimensional constraints
+        Distance,      // Linear distance between two points or point-to-line
+        Radius,        // Circle/arc radius
+        Diameter,      // Circle/arc diameter
+        Angle,         // Angle between two lines
+
+        // Geometric constraints
+        Horizontal,    // Line is horizontal
+        Vertical,      // Line is vertical
+        Parallel,      // Two lines are parallel
+        Perpendicular, // Two lines are perpendicular
+        Coincident,    // Two points share same position
+        Tangent,       // Arc/circle tangent to line or arc/circle
+        Equal,         // Two entities have equal length/radius
+        Midpoint,      // Point at midpoint of line
+        Symmetric      // Two points symmetric about a line
+    };
+
+
+  5.3  Plane Types
+  -----------------
+
+    enum class SketchPlane {
+        XY,      // XY plane (normal along Z)
+        XZ,      // XZ plane (normal along Y)
+        YZ,      // YZ plane (normal along X)
+        Custom   // Custom angled plane or references a ConstructionPlane
+    };
+
+    enum class PlaneRotationAxis {
+        X,
+        Y,
+        Z
+    };
+
+    enum class ConstructionPlaneType {
+        OffsetFromOrigin,    // Offset from XY, XZ, or YZ origin plane
+        OffsetFromPlane,     // Offset from another construction plane
+        Angled               // Rotated around one or two axes
+    };
+
+
+  5.4  Feature Types
+  -------------------
+
+    enum class FeatureType {
+        Origin,      // Coordinate system origin
+        Sketch,      // 2D sketch
+        Extrude,     // Extrusion of sketch profile
+        Revolve,     // Revolution of sketch profile
+        Fillet,      // 3D fillet (rounded edges)
+        Chamfer,     // 3D chamfer (beveled edges)
+        Hole,        // Hole feature
+        Mirror,      // Mirror operation
+        Pattern,     // Linear or circular pattern
+        Box,         // Primitive box
+        Cylinder,    // Primitive cylinder
+        Sphere,      // Primitive sphere
+        Move,        // Move/transform operation
+        Join,        // Boolean union
+        Cut,         // Boolean subtraction
+        Intersect    // Boolean intersection
+    };
+
+
+  5.5  Sketch Data Structures
+  ----------------------------
+
+    struct SketchEntityData {
+        int id = 0;                              // Unique entity ID
+        SketchEntityType type;                   // Entity type
+        QVector<QPointF> points;                 // Control/definition points
+        double radius = 0.0;                     // For circles, arcs, slots
+        double startAngle = 0.0;                 // For arcs (degrees)
+        double sweepAngle = 0.0;                 // For arcs (degrees)
+        int sides = 6;                           // For polygons
+        double majorRadius = 0.0;                // For ellipses
+        double minorRadius = 0.0;                // For ellipses
+        QString text;                            // For text entities
+        bool constrained = false;                // Has active constraints
+        bool isConstruction = false;             // Construction geometry flag
+    };
+
+    struct ConstraintData {
+        int id = 0;                              // Unique constraint ID
+        ConstraintType type;                     // Constraint type
+        QVector<int> entityIds;                  // IDs of entities involved
+        QVector<int> pointIndices;               // Point indices within entities
+        double value = 0.0;                      // Dimension value
+        bool isDriving = true;                   // Driving vs reference
+        QPointF labelPosition;                   // Label position in sketch
+        bool labelVisible = true;                // Label visibility
+        bool enabled = true;                     // Constraint active state
+    };
+
+    struct SketchData {
+        QString name;                            // Sketch name
+        SketchPlane plane = SketchPlane::XY;     // Plane type
+        int constructionPlaneId = -1;            // Construction plane reference
+        double planeOffset = 0.0;                // Offset from origin
+        PlaneRotationAxis rotationAxis;          // Rotation axis
+        double rotationAngle = 0.0;              // Rotation angle
+        QVector<SketchEntityData> entities;      // All entities
+        QVector<ConstraintData> constraints;     // All constraints
+        double gridSpacing = 10.0;               // Grid spacing (mm)
+    };
+
+
+  5.6  Construction Plane Data
+  -----------------------------
+
+    struct ConstructionPlaneData {
+        int id = 0;                              // Unique plane ID
+        QString name;                            // User-visible name
+        ConstructionPlaneType type;              // How plane is defined
+
+        // Base plane reference
+        SketchPlane basePlane = SketchPlane::XY; // For OffsetFromOrigin
+        int basePlaneId = -1;                    // For OffsetFromPlane
+
+        // Plane origin in absolute coordinates
+        double originX = 0.0;
+        double originY = 0.0;
+        double originZ = 0.0;
+
+        // Offset along normal
+        double offset = 0.0;
+
+        // Primary rotation
+        PlaneRotationAxis primaryAxis;
+        double primaryAngle = 0.0;               // Degrees
+
+        // Secondary rotation
+        PlaneRotationAxis secondaryAxis;
+        double secondaryAngle = 0.0;             // Degrees
+
+        // Roll (rotation around normal)
+        double rollAngle = 0.0;                  // Degrees
+
+        // Visibility
+        bool visible = true;
+
+        bool hasCustomOrigin() const;            // Non-zero origin check
+    };
+
+
+  5.7  Parameter Data
+  --------------------
+
+    struct ParameterData {
+        QString name;             // Parameter name (e.g., "length")
+        QString expression;       // Expression string (e.g., "width * 2")
+        double value = 0.0;       // Evaluated numeric value
+        QString unit;             // Unit string (e.g., "mm")
+        QString comment;          // User comment
+        bool isUserParam = true;  // User vs system parameter
+    };
+
+
+  5.8  Feature Data
+  ------------------
+
+    struct FeatureData {
+        int id = 0;               // Unique feature ID
+        FeatureType type;         // Feature type
+        QString name;             // Feature name
+        QJsonObject properties;   // Feature-specific properties
+    };
+
+================================================================================
+  6. BREP I/O FUNCTIONS
+================================================================================
+
+    #include <hobbycad/brep_io.h>
+
+    Standalone BREP file read/write functions in the brep_io namespace.
+
+    QList<TopoDS_Shape> hobbycad::brep_io::readBrep(
+        const QString& path,
+        QString* errorMsg = nullptr)
+
+        Read a BREP file and return the shapes it contains.
+        On failure, returns an empty list.
+        If errorMsg is non-null, sets it to error description.
+
+    bool hobbycad::brep_io::writeBrep(
+        const QString& path,
+        const QList<TopoDS_Shape>& shapes,
+        QString* errorMsg = nullptr)
+
+        Write multiple shapes to a BREP file.
+        Returns true on success.
+
+    bool hobbycad::brep_io::writeBrep(
+        const QString& path,
+        const TopoDS_Shape& shape,
+        QString* errorMsg = nullptr)
+
+        Write a single shape to a BREP file.
+        Returns true on success.
+
+    Example:
+
+        #include <hobbycad/brep_io.h>
+
+        QString error;
+        auto shapes = hobbycad::brep_io::readBrep("model.brep", &error);
+        if (shapes.isEmpty() && !error.isEmpty()) {
+            qWarning() << "Failed to load:" << error;
+        }
+
+================================================================================
+  7. .HCAD FILE FORMAT
+================================================================================
+
+    The .hcad format is a directory-based project structure designed for
+    git-friendliness and human-readability.
+
+    Directory Structure:
+
+        my_project/
+        +-- my_project.hcad          # Project manifest (JSON)
+        +-- geometry/
+        |   +-- body_001.brep        # 3D geometry (BREP format)
+        |   +-- body_002.brep
+        +-- planes/
+        |   +-- plane_001.json       # Construction plane definitions
+        +-- sketches/
+        |   +-- sketch_001.json      # Sketch data (entities, constraints)
+        |   +-- sketch_002.json
+        +-- parameters.json          # User-defined parameters
+        +-- features.json            # Feature tree
+
+    Manifest File (project_name.hcad):
+
+        {
+            "format_version": 1,
+            "hobbycad_version": "0.0.1",
+            "name": "My Project",
+            "author": "User Name",
+            "description": "Project description",
+            "units": "mm",
+            "created": "2026-02-14T12:00:00Z",
+            "modified": "2026-02-14T14:30:00Z",
+            "geometry_files": ["geometry/body_001.brep"],
+            "construction_plane_files": ["planes/plane_001.json"],
+            "sketch_files": ["sketches/sketch_001.json"]
+        }
+
+    Sketch File Format:
+
+        {
+            "name": "Sketch1",
+            "plane": "XY",
+            "plane_offset": 0.0,
+            "rotation_axis": "X",
+            "rotation_angle": 0.0,
+            "construction_plane_id": -1,
+            "grid_spacing": 10.0,
+            "entities": [
+                {
+                    "id": 1,
+                    "type": "Line",
+                    "points": [[0, 0], [100, 0]],
+                    "is_construction": false
+                }
+            ],
+            "constraints": [
+                {
+                    "id": 1,
+                    "type": "Distance",
+                    "entity_ids": [1],
+                    "value": 100.0,
+                    "is_driving": true,
+                    "label_position": [50, 10]
+                }
+            ]
+        }
+
+    Construction Plane File Format:
+
+        {
+            "id": 1,
+            "name": "Reference Plane 1",
+            "type": "OffsetFromOrigin",
+            "base_plane": "XY",
+            "origin": [0, 0, 50],
+            "offset": 0.0,
+            "primary_axis": "X",
+            "primary_angle": 0.0,
+            "secondary_axis": "Y",
+            "secondary_angle": 0.0,
+            "roll_angle": 0.0,
+            "visible": true
+        }
+
+    Parameters File Format:
+
+        {
+            "parameters": [
+                {
+                    "name": "width",
+                    "expression": "100",
+                    "value": 100.0,
+                    "unit": "mm",
+                    "comment": "Base width",
+                    "is_user_param": true
+                }
+            ]
+        }
+
+    Features File Format:
+
+        {
+            "features": [
+                {
+                    "id": 1,
+                    "type": "Origin",
+                    "name": "Origin",
+                    "properties": {}
+                },
+                {
+                    "id": 2,
+                    "type": "Sketch",
+                    "name": "Sketch1",
+                    "properties": {
+                        "sketch_index": 0
+                    }
+                },
+                {
+                    "id": 3,
+                    "type": "Extrude",
+                    "name": "Extrude1",
+                    "properties": {
+                        "sketch_id": 2,
+                        "distance": 50.0,
+                        "direction": "normal"
+                    }
+                }
+            ]
+        }
+
+================================================================================
+  8. GEOMETRY MODULE
+================================================================================
+
+    The geometry module provides low-level 2D geometry operations.
+
+    Header Files:
+      hobbycad/geometry/types.h         Basic geometric types
+      hobbycad/geometry/intersections.h Intersection calculations
+      hobbycad/geometry/utils.h         Utility functions
+
+    Namespace:
+      hobbycad::geometry
+
+  8.1  Geometric Types (types.h)
+  ------------------------------
+
+    Constants:
+
+        DEFAULT_TOLERANCE   Default geometric tolerance (1e-6)
+        POINT_TOLERANCE     Point comparison tolerance (1e-4)
+
+    struct LineLineIntersection
+        bool intersects           Whether lines intersect
+        QPointF point             Intersection point
+        double t1, t2             Parameter values on each line [0,1]
+        bool withinSegment1       True if intersection is within segment 1
+        bool withinSegment2       True if intersection is within segment 2
+        bool parallel             True if lines are parallel
+
+    struct LineCircleIntersection
+        int count                 Number of intersections (0, 1, or 2)
+        QPointF point1, point2    Intersection points
+        double t1, t2             Parameters on line
+        bool withinSegment1       point1 is within segment
+        bool withinSegment2       point2 is within segment
+
+    struct CircleCircleIntersection
+        int count                 Number of intersections (0, 1, or 2)
+        QPointF point1, point2    Intersection points
+        bool tangent              True if circles are tangent
+
+    struct Arc
+        QPointF center            Center point
+        double radius             Arc radius
+        double startAngle         Start angle (degrees)
+        double sweepAngle         Sweep angle (degrees, can be negative)
+
+        QPointF startPoint() const    Get arc start point
+        QPointF endPoint() const      Get arc end point
+        QPointF midPoint() const      Get arc midpoint
+        bool containsAngle(double angle) const
+
+    struct BoundingBox
+        double minX, minY, maxX, maxY
+        bool valid
+
+        void include(const QPointF& p)   Expand to include point
+        void include(const BoundingBox&) Expand to include another box
+        QPointF center() const
+        double width() const
+        double height() const
+        bool contains(const QPointF& p) const
+        bool intersects(const BoundingBox& other) const
+
+    struct Transform2D
+        double m11, m12, m13      3x3 transform matrix
+        double m21, m22, m23      (m31=0, m32=0, m33=1 implicit)
+
+        static Transform2D identity()
+        static Transform2D translation(double dx, double dy)
+        static Transform2D rotation(double angleDeg, const QPointF& center)
+        static Transform2D scale(double sx, double sy, const QPointF& center)
+        static Transform2D mirror(const QPointF& p1, const QPointF& p2)
+
+        QPointF apply(const QPointF& p) const
+        Transform2D compose(const Transform2D& other) const
+        Transform2D inverse() const
+
+  8.2  Intersection Functions (intersections.h)
+  ---------------------------------------------
+
+    Line-Line:
+        LineLineIntersection lineLineIntersection(p1, p2, p3, p4)
+        LineLineIntersection infiniteLineIntersection(p1, p2, p3, p4)
+
+    Line-Circle:
+        LineCircleIntersection lineCircleIntersection(lineStart, lineEnd, center, radius)
+        LineCircleIntersection infiniteLineCircleIntersection(p1, p2, center, radius)
+
+    Circle-Circle:
+        CircleCircleIntersection circleCircleIntersection(c1, r1, c2, r2)
+
+    Line-Arc / Arc-Arc:
+        LineArcIntersection lineArcIntersection(lineStart, lineEnd, arc)
+        CircleCircleIntersection arcArcIntersection(arc1, arc2)
+
+    Closest Points:
+        QPointF closestPointOnLine(point, lineStart, lineEnd)
+        QPointF closestPointOnCircle(point, center, radius)
+        QPointF closestPointOnArc(point, arc)
+
+    Distance Functions:
+        double pointToLineDistance(point, lineStart, lineEnd)
+        double pointToInfiniteLineDistance(point, p1, p2)
+        double pointToCircleDistance(point, center, radius)
+        double pointToArcDistance(point, arc)
+
+    Utility Functions:
+        bool pointsCoincident(p1, p2, tolerance)
+        bool pointOnLine(point, lineStart, lineEnd, tolerance)
+        bool pointOnCircle(point, center, radius, tolerance)
+        bool pointOnArc(point, arc, tolerance)
+        double normalizeAngle(degrees)      Normalize to [0, 360)
+        double normalizeAngleSigned(degrees) Normalize to [-180, 180)
+
+  8.3  Geometry Utilities (utils.h)
+  ---------------------------------
+
+    Vector Operations:
+        double dot(a, b)          Dot product
+        double cross(a, b)        Cross product (2D: scalar result)
+        double length(v)          Vector length
+        double lengthSquared(v)   Squared length (avoid sqrt)
+        QPointF normalize(v)      Unit vector
+        QPointF perpendicular(v)  CCW perpendicular
+        QPointF perpendicularCW(v) CW perpendicular
+        QPointF lerp(a, b, t)     Linear interpolation
+
+    Angle Operations:
+        double vectorAngle(v)     Angle of vector (degrees)
+        double angleBetween(a, b) Unsigned angle between vectors
+        double signedAngleBetween(a, b) Signed angle between vectors
+        QPointF rotatePoint(p, angleDeg) Rotate around origin
+        QPointF rotatePointAround(p, center, angleDeg) Rotate around center
+
+    Line Operations:
+        double lineLength(p1, p2)
+        QPointF lineMidpoint(p1, p2)
+        QPointF lineDirection(p1, p2)  Normalized direction
+        QPointF pointOnLine(p1, p2, t)  Point at parameter t
+        double projectPointOnLine(point, lineStart, lineEnd)  Returns t
+        bool linesParallel(p1, p2, p3, p4, tolerance)
+        bool linesPerpendicular(p1, p2, p3, p4, tolerance)
+
+    Arc Operations:
+        std::optional<Arc> arcFromThreePoints(start, mid, end)
+        Arc arcFromCenterAndEndpoints(center, start, end, sweepCCW)
+        double arcLength(arc)
+        QVector<Arc> splitArc(arc, point)
+
+    Polygon Operations:
+        double polygonArea(polygon)       Signed area (CCW positive)
+        bool polygonIsCCW(polygon)
+        QVector<QPointF> reversePolygon(polygon)
+        bool pointInPolygon(point, polygon)
+        QPointF polygonCentroid(polygon)
+        BoundingBox polygonBounds(polygon)
+
+    Rectangle Tests:
+        bool pointInRect(point, rect)
+        bool lineIntersectsRect(p1, p2, rect)
+        bool circleIntersectsRect(center, radius, rect)
+        bool lineEnclosedByRect(p1, p2, rect)
+        bool circleEnclosedByRect(center, radius, rect)
+
+================================================================================
+  9. SKETCH MODULE
+================================================================================
+
+    The sketch module provides 2D sketch entity types and operations.
+
+    Header Files:
+      hobbycad/sketch/entity.h      Entity types and factories
+      hobbycad/sketch/constraint.h  Constraint types and helpers
+      hobbycad/sketch/operations.h  Sketch modification operations
+      hobbycad/sketch/patterns.h    Pattern creation (rect, circular)
+      hobbycad/sketch/profiles.h    Profile detection (closed loops)
+
+    Namespace:
+      hobbycad::sketch
+
+  9.1  Entity Types (entity.h)
+  ----------------------------
+
+    enum class EntityType
+        Point, Line, Rectangle, Circle, Arc, Spline,
+        Polygon, Slot, Ellipse, Text
+
+    struct Entity
+        int id                    Unique entity ID
+        EntityType type           Entity type
+        QVector<QPointF> points   Control/definition points
+        double radius             Circle/arc radius
+        double startAngle         Arc start angle (degrees)
+        double sweepAngle         Arc sweep angle (degrees)
+        int sides                 Polygon side count
+        double majorRadius        Ellipse semi-major axis
+        double minorRadius        Ellipse semi-minor axis
+        QString text              Text content
+        bool isConstruction       Construction geometry flag
+        bool constrained          Has constraints applied
+
+        BoundingBox boundingBox() const
+        QVector<QPointF> endpoints() const
+        Entity transformed(const Transform2D& t) const
+        void transform(const Transform2D& t)
+
+    Factory Functions:
+        Entity createPoint(id, position)
+        Entity createLine(id, start, end)
+        Entity createRectangle(id, corner1, corner2)
+        Entity createCircle(id, center, radius)
+        Entity createArc(id, center, radius, startAngle, sweepAngle)
+        Entity createArcFromThreePoints(id, start, mid, end)
+        Entity createPolygon(id, center, radius, sides, rotation)
+        Entity createSlot(id, center1, center2, radius)
+        Entity createEllipse(id, center, majorR, minorR, rotation)
+        Entity createText(id, position, text)
+
+    Utility Functions:
+        bool entitiesConnected(e1, e2, tolerance)
+        QPointF entityCenter(entity)
+        double entityLength(entity)
+
+  9.2  Constraint Types (constraint.h)
+  ------------------------------------
+
+    enum class ConstraintType
+        Distance        Point-to-point or point-to-line distance
+        Radius          Circle/arc radius
+        Diameter        Circle/arc diameter
+        Angle           Angle between lines
+        Horizontal      Line/points constrained horizontal
+        Vertical        Line/points constrained vertical
+        Parallel        Lines constrained parallel
+        Perpendicular   Lines constrained perpendicular
+        Coincident      Points constrained to same location
+        Tangent         Tangent to circle/arc
+        Equal           Equal length/radius
+        Midpoint        Point at midpoint
+        Symmetric       Symmetric about line
+        Fix             Fixed position/rotation
+        Concentric      Circles share center
+
+    struct Constraint
+        int id                    Unique constraint ID
+        ConstraintType type       Constraint type
+        QVector<int> entityIds    Entities involved
+        QVector<int> pointIndices Point indices within entities
+        double value              Dimensional value (mm or degrees)
+        bool isDriving            Driving vs reference
+        QPointF labelPosition     Dimension label position
+        bool labelVisible         Show dimension text
+        bool enabled              Constraint active
+
+    Utility Functions:
+        QString constraintTypeName(type)
+        bool isDimensionalConstraint(type)
+        bool isGeometricConstraint(type)
+        QVector<ConstraintType> applicableConstraints(entityType)
+        QVector<ConstraintType> suggestConstraints(e1, e2)
+        int requiredEntityCount(type)
+
+  9.3  Sketch Operations (operations.h)
+  -------------------------------------
+
+    Intersection Detection:
+        struct Intersection { entityId1, entityId2, point, param1, param2 }
+        QVector<Intersection> findAllIntersections(entities)
+        QVector<Intersection> findIntersections(entity1, entity2)
+
+    Offset:
+        struct OffsetResult { success, entity, errorMessage }
+        OffsetResult offsetEntity(entity, distance, side, nextId)
+
+    Fillet:
+        struct FilletResult { success, arc, line1, line2, errorMessage }
+        FilletResult createFillet(line1, line2, radius, entities, nextId)
+
+    Chamfer:
+        struct ChamferResult { success, chamferLine, line1, line2, errorMessage }
+        ChamferResult createChamfer(line1, line2, distance, entities, nextId)
+
+    Trim:
+        struct TrimResult { success, newEntities, entitiesToRemove, errorMessage }
+        TrimResult trimEntity(entityId, trimPoint, entities, nextId)
+
+    Extend:
+        struct ExtendResult { success, extendedEntity, errorMessage }
+        ExtendResult extendEntity(entityId, targetId, entities)
+
+    Split:
+        struct SplitResult { success, newEntities, errorMessage }
+        SplitResult splitEntity(entityId, splitPoint, entities, nextId)
+
+    Chain Detection:
+        QVector<int> findConnectedChain(startId, entities, tolerance)
+        bool isChainClosed(chain, entities, tolerance)
+
+  9.4  Pattern Operations (patterns.h)
+  ------------------------------------
+
+    Rectangular Pattern:
+        struct RectPatternParams {
+            int countX, countY       Grid dimensions
+            double spacingX, spacingY Spacing between copies
+            bool includeOriginal     Include original at (0,0)
+        }
+        struct RectPatternResult { success, entities, errorMessage }
+
+        RectPatternResult createRectangularPattern(
+            sourceEntities, params, nextIdFunc)
+
+    Circular Pattern:
+        struct CircPatternParams {
+            QPointF center           Rotation center
+            int count                Total copies (including original)
+            double totalAngle        Total angle span (degrees)
+        }
+        struct CircPatternResult { success, entities, errorMessage }
+
+        CircPatternResult createCircularPattern(
+            sourceEntities, params, nextIdFunc)
+
+    Linear Pattern:
+        struct LinearPatternParams {
+            double angle             Direction angle (degrees)
+            int count                Number of copies
+            double spacing           Distance between copies
+        }
+        struct LinearPatternResult { success, entities, errorMessage }
+
+        LinearPatternResult createLinearPattern(
+            sourceEntities, params, nextIdFunc)
+
+    Mirror Pattern:
+        struct MirrorPatternParams {
+            QPointF linePoint1, linePoint2  Mirror line
+            bool deleteOriginal             Delete source entities
+        }
+        struct MirrorPatternResult { success, entities, errorMessage }
+
+        MirrorPatternResult createMirrorPattern(
+            sourceEntities, params, nextIdFunc)
+
+  9.5  Profile Detection (profiles.h)
+  -----------------------------------
+
+    struct Profile
+        int id                    Profile ID
+        QVector<int> entityIds    Entities forming loop (in order)
+        QVector<bool> reversed    Entity traversal direction
+        QPolygonF polygon         Polygon approximation
+        double area               Signed area (CCW positive)
+        bool isOuter              Outer vs inner (hole)
+        BoundingBox bounds
+
+        bool contains(other) const
+        bool containsPoint(point) const
+
+    struct ProfileDetectionOptions
+        double tolerance          Endpoint connection tolerance
+        bool excludeConstruction  Skip construction geometry
+        int maxProfiles           Maximum profiles to detect
+        int polygonSegments       Arc discretization segments
+
+    Detection Functions:
+        QVector<Profile> detectProfiles(entities, options)
+        QVector<Profile> detectProfilesWithHoles(entities, options)
+
+    Profile Utilities:
+        QPolygonF profileToPolygon(profile, entities, segments)
+        double profileArea(profile, entities)
+        bool profilesShareEdge(p1, p2)
+        QPointF profileCentroid(profile, entities)
+        bool profileIsCCW(profile)
+        Profile reverseProfile(profile)
+
+    Connectivity Analysis:
+        struct ConnectivityNode { entityId, pointIndex, position }
+        struct ConnectivityEdge { entityId, startNode, endNode, length }
+        struct ConnectivityGraph { nodes, edges, adjacency }
+
+        ConnectivityGraph buildConnectivityGraph(entities, tolerance)
+        QVector<QVector<int>> findCycles(graph, maxCycles)
+
+  9.6  Constraint Solver (solver.h)
+  ---------------------------------
+
+    The solver wraps libslvs for parametric constraint solving.
+    When entities are modified, the solver adjusts their geometry
+    to satisfy all constraints.
+
+    struct SolveResult
+        bool success              True if solved successfully
+        int dof                   Remaining degrees of freedom
+        QString errorMessage      Error description on failure
+        QVector<int> failedConstraintIds
+        ResultCode resultCode     Detailed result code
+
+        enum ResultCode {
+            Okay,               Solved successfully
+            Inconsistent,       Constraints conflict
+            DidntConverge,      Solver failed to converge
+            TooManyUnknowns,    System too complex
+            RedundantOkay       Solved but over-constrained
+        }
+
+    struct OverConstraintInfo
+        bool wouldOverConstrain   Would adding constraint fail?
+        QVector<int> conflictingConstraintIds
+        QString reason            Human-readable explanation
+
+    class Solver
+
+        SolveResult solve(entities, constraints)
+            Solve constraints and update entity geometry in place.
+            Returns result with success status and diagnostics.
+
+        bool wouldOverConstrain(entities, existingConstraints, newConstraint)
+            Test if adding a new constraint would over-constrain.
+
+        OverConstraintInfo checkOverConstrain(entities, existing, new)
+            Detailed over-constraint check with conflict info.
+
+        int degreesOfFreedom(entities, constraints)
+            Calculate remaining DOF (0 = fully constrained).
+
+        static bool isAvailable()
+            True if libslvs is compiled in.
+
+    Utility Functions:
+        QString solveResultName(ResultCode code)
+        bool constraintSupported(ConstraintType type)
+        QVector<ConstraintType> supportedConstraintTypes()
+
+    Supported Constraint Types:
+        Distance, Radius, Diameter, Angle, Horizontal, Vertical,
+        Parallel, Perpendicular, Coincident, Equal, Tangent,
+        Midpoint, Symmetric
+
+    Example Usage:
+        Solver solver;
+        QVector<Entity> entities = { ... };
+        QVector<Constraint> constraints = { ... };
+
+        SolveResult result = solver.solve(entities, constraints);
+        if (result.success) {
+            // entities have been modified to satisfy constraints
+            qDebug() << "DOF remaining:" << result.dof;
+        } else {
+            qWarning() << "Solve failed:" << result.errorMessage;
+            for (int id : result.failedConstraintIds) {
+                // highlight failed constraints in UI
+            }
+        }
+
+  9.7  Text Parsing Utilities (parsing.h)
+  ---------------------------------------
+
+    Text parsing utilities for CLI input, supporting coordinates,
+    parameter references, and expressions.
+
+    struct ParsedValue
+        bool valid            True if parsing succeeded
+        double numericValue   Numeric result (if isNumeric)
+        QString expression    Original or transformed expression
+        bool isNumeric        True if value is a plain number
+        bool isParameter      True if value is a parameter name
+        bool isExpression     True if value is an expression
+
+    struct ParsedCoordinate
+        bool valid            True if parsing succeeded
+        ParsedValue x         X component
+        ParsedValue y         Y component
+        bool isAbsolute       True for absolute coordinates
+
+    Parsing Functions:
+
+        ParsedValue parseValue(str)
+            Parse a value string. Handles:
+            - Numeric literals: "10", "-5.5", ".25"
+            - Parameter names: "$width", "$height"
+            - Expressions: "10+5", "$width/2"
+
+        bool parseValue(str, &value, &expression)
+            Overload that returns numeric value and expression separately.
+
+        QStringList splitCoordinate(str)
+            Split "x,y" into components, handling parentheses.
+
+        ParsedCoordinate parseCoordinate(str)
+            Parse coordinate string like "10,20" or "$x,$y".
+
+        std::optional<QPointF> parsePoint(str)
+            Parse to QPointF if both components are numeric.
+
+        bool isValidIdentifier(str)
+            Check if string is valid parameter name.
+
+    Example Usage:
+        auto coord = sketch::parseCoordinate("10,20");
+        if (coord.valid && coord.x.isNumeric && coord.y.isNumeric) {
+            QPointF point(coord.x.numericValue, coord.y.numericValue);
+        }
+
+        auto value = sketch::parseValue("$radius*2");
+        if (value.isExpression) {
+            // Store expression for parametric evaluation
+        }
+
+================================================================================
+  10. GUI INTEGRATION
+================================================================================
+
+    The SketchCanvas uses a thin wrapper to convert between GUI types
+    (SketchEntity, SketchConstraint, SketchProfile) and library types
+    (sketch::Entity, sketch::Constraint, sketch::Profile).
+
+    See: src/hobbycad/gui/sketchutils.h
+
+    Conversion Functions:
+        sketch::Entity toLibraryEntity(const SketchEntity&)
+        SketchEntity toGuiEntity(const sketch::Entity&)
+        QVector<sketch::Entity> toLibraryEntities(const QVector<SketchEntity>&)
+        QVector<SketchEntity> toGuiEntities(const QVector<sketch::Entity>&)
+        SketchProfile toGuiProfile(const sketch::Profile&)
+        QVector<SketchProfile> toGuiProfiles(const QVector<sketch::Profile>&)
+        SketchCanvas::Intersection toGuiIntersection(const sketch::Intersection&)
+        QVector<SketchCanvas::Intersection> toGuiIntersections(...)
+
+    Example Usage (in SketchCanvas):
+
+        // Profile detection using library
+        QVector<sketch::Entity> libEntities = toLibraryEntities(m_entities);
+        QVector<sketch::Profile> libProfiles =
+            sketch::detectProfilesWithHoles(libEntities);
+        return toGuiProfiles(libProfiles);
+
+        // Pattern creation using library
+        QVector<sketch::Entity> source = toLibraryEntities(selectedEntities);
+        sketch::RectPatternResult result =
+            sketch::createRectangularPattern(source, params, idGenerator);
+        for (const sketch::Entity& e : result.entities) {
+            m_entities.append(toGuiEntity(e));
+        }
+
+================================================================================

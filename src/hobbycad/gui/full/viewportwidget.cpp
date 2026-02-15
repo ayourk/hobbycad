@@ -15,6 +15,7 @@
 // =====================================================================
 
 #include "viewportwidget.h"
+#include "aisgrid.h"
 #include "scalebarwidget.h"
 #include "navorbitring.h"
 #include "navhomebutton.h"
@@ -35,6 +36,7 @@
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_DatumAspect.hxx>
 #include <SelectMgr_EntityOwner.hxx>
+#include <V3d.hxx>
 #include <V3d_AmbientLight.hxx>
 #include <V3d_DirectionalLight.hxx>
 #include <Quantity_Color.hxx>
@@ -45,6 +47,7 @@
 #include <QResizeEvent>
 
 #include <gp_Trsf.hxx>
+#include <gp_Vec.hxx>
 
 #include <cmath>
 
@@ -52,6 +55,7 @@ namespace hobbycad {
 
 ViewportWidget::ViewportWidget(QWidget* parent)
     : QWidget(parent)
+    , m_orbitCenter(0.0, 0.0, 0.0)
 {
     setObjectName(QStringLiteral("Viewport"));
     setMouseTracking(true);
@@ -94,6 +98,73 @@ ViewportWidget::ViewportWidget(QWidget* parent)
             m_snapTimer.stop();
         }
     });
+
+    // ViewCube animation timer: smooth orbit transition (~16ms = 60fps)
+    m_viewCubeAnimTimer.setInterval(16);
+    connect(&m_viewCubeAnimTimer, &QTimer::timeout, this, [this]() {
+        if (m_view.IsNull()) {
+            m_viewCubeAnimTimer.stop();
+            return;
+        }
+
+        m_animStep++;
+        double t = static_cast<double>(m_animStep) / m_animTotalSteps;
+
+        // Smooth ease-in-out interpolation
+        t = t < 0.5 ? 2.0 * t * t : 1.0 - std::pow(-2.0 * t + 2.0, 2.0) / 2.0;
+
+        if (m_animStep >= m_animTotalSteps) {
+            // Final position - set exact target
+            m_view->SetEye(m_animEndEye.X(), m_animEndEye.Y(), m_animEndEye.Z());
+            m_view->SetAt(m_animOrbitCenter.X(), m_animOrbitCenter.Y(), m_animOrbitCenter.Z());
+            m_view->SetUp(m_animEndUp.X(), m_animEndUp.Y(), m_animEndUp.Z());
+            m_viewCubeAnimTimer.stop();
+        } else {
+            // Interpolate eye position (spherical interpolation around orbit center)
+            gp_Vec startVec(m_animOrbitCenter, m_animStartEye);
+            gp_Vec endVec(m_animOrbitCenter, m_animEndEye);
+            double radius = startVec.Magnitude();
+
+            // Normalize and slerp the direction
+            if (startVec.Magnitude() > 1e-6 && endVec.Magnitude() > 1e-6) {
+                gp_Dir startDir(startVec);
+                gp_Dir endDir(endVec);
+
+                // Linear interpolation of direction (good enough for small angles)
+                // then renormalize and apply radius
+                double x = startDir.X() * (1.0 - t) + endDir.X() * t;
+                double y = startDir.Y() * (1.0 - t) + endDir.Y() * t;
+                double z = startDir.Z() * (1.0 - t) + endDir.Z() * t;
+                double len = std::sqrt(x*x + y*y + z*z);
+                if (len > 1e-6) {
+                    x /= len; y /= len; z /= len;
+                }
+
+                gp_Pnt interpEye(
+                    m_animOrbitCenter.X() + x * radius,
+                    m_animOrbitCenter.Y() + y * radius,
+                    m_animOrbitCenter.Z() + z * radius);
+
+                // Interpolate up vector
+                double upX = m_animStartUp.X() * (1.0 - t) + m_animEndUp.X() * t;
+                double upY = m_animStartUp.Y() * (1.0 - t) + m_animEndUp.Y() * t;
+                double upZ = m_animStartUp.Z() * (1.0 - t) + m_animEndUp.Z() * t;
+                double upLen = std::sqrt(upX*upX + upY*upY + upZ*upZ);
+                if (upLen > 1e-6) {
+                    upX /= upLen; upY /= upLen; upZ /= upLen;
+                }
+
+                m_view->SetEye(interpEye.X(), interpEye.Y(), interpEye.Z());
+                m_view->SetAt(m_animOrbitCenter.X(), m_animOrbitCenter.Y(), m_animOrbitCenter.Z());
+                m_view->SetUp(upX, upY, upZ);
+            }
+        }
+
+        m_view->Redraw();
+        updateScaleBar();
+        updateOrbitRingFlips();
+        update();
+    });
 }
 
 ViewportWidget::~ViewportWidget()
@@ -129,12 +200,12 @@ void ViewportWidget::fitAll()
 void ViewportWidget::setGridVisible(bool visible)
 {
     m_gridVisible = visible;
-    if (!m_viewer.IsNull()) {
-        if (visible)
-            m_viewer->ActivateGrid(Aspect_GT_Rectangular,
-                                   Aspect_GDM_Lines);
-        else
-            m_viewer->DeactivateGrid();
+    if (!m_context.IsNull() && !m_grid.IsNull()) {
+        if (visible) {
+            m_context->Display(m_grid, false);
+        } else {
+            m_context->Erase(m_grid, false);
+        }
 
         if (!m_view.IsNull()) {
             m_view->Invalidate();
@@ -146,6 +217,110 @@ void ViewportWidget::setGridVisible(bool visible)
 bool ViewportWidget::isGridVisible() const
 {
     return m_gridVisible;
+}
+
+void ViewportWidget::setZUpOrientation(bool zUp)
+{
+    if (m_zUpOrientation == zUp) return;
+
+    m_zUpOrientation = zUp;
+
+    // Update the ViewCube orientation
+    if (!m_viewCube.IsNull()) {
+        m_viewCube->SetYup(zUp ? Standard_False : Standard_True);
+        if (!m_context.IsNull()) {
+            m_context->Redisplay(m_viewCube, Standard_True);
+        }
+    }
+
+    // Reset camera to match new orientation
+    resetCamera();
+}
+
+bool ViewportWidget::isZUpOrientation() const
+{
+    return m_zUpOrientation;
+}
+
+void ViewportWidget::setOrbitSelectedObject(bool enabled)
+{
+    if (m_orbitSelectedObject == enabled) return;
+    if (m_view.IsNull() || m_context.IsNull()) {
+        m_orbitSelectedObject = enabled;
+        return;
+    }
+
+    m_orbitSelectedObject = enabled;
+
+    // Get current camera state for animation
+    Standard_Real eyeX, eyeY, eyeZ;
+    m_view->Eye(eyeX, eyeY, eyeZ);
+    m_animStartEye = gp_Pnt(eyeX, eyeY, eyeZ);
+
+    Standard_Real upX, upY, upZ;
+    m_view->Up(upX, upY, upZ);
+    m_animStartUp = gp_Dir(upX, upY, upZ);
+    m_animEndUp = m_animStartUp;  // up vector doesn't change
+
+    if (enabled) {
+        // Save current orbit center before switching
+        m_savedOrbitCenter = m_orbitCenter;
+
+        // Compute selected object's center
+        if (m_context->NbSelected() > 0) {
+            Bnd_Box selBox;
+            for (m_context->InitSelected(); m_context->MoreSelected(); m_context->NextSelected()) {
+                Handle(AIS_InteractiveObject) obj = m_context->SelectedInteractive();
+                if (!obj.IsNull()) {
+                    Bnd_Box objBox;
+                    obj->BoundingBox(objBox);
+                    if (!objBox.IsVoid()) {
+                        selBox.Add(objBox);
+                    }
+                }
+            }
+            if (!selBox.IsVoid()) {
+                Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+                selBox.Get(xMin, yMin, zMin, xMax, yMax, zMax);
+                m_animOrbitCenter = gp_Pnt(
+                    (xMin + xMax) / 2.0,
+                    (yMin + yMax) / 2.0,
+                    (zMin + zMax) / 2.0);
+            } else {
+                // No valid bounding box, stay where we are
+                return;
+            }
+        } else {
+            // Nothing selected, no change
+            return;
+        }
+    } else {
+        // Restore saved orbit center
+        m_animOrbitCenter = m_savedOrbitCenter;
+    }
+
+    // Compute new eye position: maintain same distance and direction from new center
+    gp_Vec viewVec(m_orbitCenter, m_animStartEye);
+    Standard_Real distance = viewVec.Magnitude();
+    if (distance < 1e-6) distance = 300.0;
+
+    gp_Dir viewDir(viewVec);
+    m_animEndEye = gp_Pnt(
+        m_animOrbitCenter.X() + viewDir.X() * distance,
+        m_animOrbitCenter.Y() + viewDir.Y() * distance,
+        m_animOrbitCenter.Z() + viewDir.Z() * distance);
+
+    // Update orbit center to target
+    m_orbitCenter = m_animOrbitCenter;
+
+    // Start animation
+    m_animStep = 0;
+    m_viewCubeAnimTimer.start();
+}
+
+bool ViewportWidget::isOrbitSelectedObject() const
+{
+    return m_orbitSelectedObject;
 }
 
 // ---- Paint / resize -------------------------------------------------
@@ -291,6 +466,9 @@ void ViewportWidget::setupAxisTrihedron()
     // Set axis length proportional to default view (300 mm)
     trihedron->SetSize(300.0);
 
+    // Mark as infinite so it's excluded from FitAll bounding box calculations
+    trihedron->SetInfiniteState(Standard_True);
+
     // Display as wireframe (default mode) — not selectable
     m_context->Display(trihedron, false);
     m_context->Deactivate(trihedron);
@@ -298,6 +476,7 @@ void ViewportWidget::setupAxisTrihedron()
     // Extend axes into the negative direction at the same length.
     // AIS_Trihedron only draws the positive direction, so we add
     // separate lines from origin into -X, -Y, and -Z.
+    // All are marked infinite to exclude from FitAll bounding box.
     {
         Handle(Geom_CartesianPoint) p1 = new Geom_CartesianPoint(
             gp_Pnt(0.0, 0.0, 0.0));
@@ -306,6 +485,7 @@ void ViewportWidget::setupAxisTrihedron()
         Handle(AIS_Line) negY = new AIS_Line(p1, p2);
         negY->SetColor(Quantity_Color(Quantity_NOC_GREEN));
         negY->SetWidth(1.0);
+        negY->SetInfiniteState(Standard_True);
         m_context->Display(negY, false);
         m_context->Deactivate(negY);
     }
@@ -319,6 +499,7 @@ void ViewportWidget::setupAxisTrihedron()
         Handle(AIS_Line) negX = new AIS_Line(p1, p2);
         negX->SetColor(Quantity_Color(Quantity_NOC_RED));
         negX->SetWidth(1.0);
+        negX->SetInfiniteState(Standard_True);
         m_context->Display(negX, false);
         m_context->Deactivate(negX);
     }
@@ -332,41 +513,35 @@ void ViewportWidget::setupAxisTrihedron()
         Handle(AIS_Line) negZ = new AIS_Line(p1, p2);
         negZ->SetColor(Quantity_Color(Quantity_NOC_BLUE1));
         negZ->SetWidth(1.0);
+        negZ->SetInfiniteState(Standard_True);
         m_context->Display(negZ, false);
         m_context->Deactivate(negZ);
     }
 }
 
-// ---- Ground grid (XZ plane) -----------------------------------------
+// ---- Ground grid (XY plane, Z=0) ------------------------------------
 
 void ViewportWidget::setupGrid()
 {
-    if (m_viewer.IsNull()) return;
+    if (m_context.IsNull()) return;
 
-    // Set the grid to lie on the XZ plane (Y = 0) since Y points
-    // toward the user.  The grid plane is defined by the viewer's
-    // "private grid" coordinate system.
+    // Create a custom AIS grid on the XY plane (Z=0).
+    // This replaces the V3d_Viewer built-in grid, allowing us to:
+    //   - Mark it infinite (excluded from FitAll bounding box)
+    //   - Have it rotate naturally with the view
     //
-    // Rectangular grid with 10 mm spacing, 100 mm major divisions.
-    m_viewer->SetRectangularGridValues(
-        0.0, 0.0,        // origin X, Z offset on the plane
-        10.0, 10.0,      // step in X and Z (10 mm)
-        0.0);            // rotation angle
+    // Grid: 100mm extent, 10mm minor spacing, 100mm major divisions
+    m_grid = new AisGrid(100.0, 10.0, 100.0);
 
-    m_viewer->SetRectangularGridGraphicValues(
-        100.0, 100.0,    // size X, Z (rendered extent — OCCT auto-tiles)
-        0.0);            // offset from plane
+    // Grid line colors (matching previous V3d grid)
+    m_grid->SetMinorColor(Quantity_Color(0.35, 0.38, 0.42, Quantity_TOC_RGB));
+    m_grid->SetMajorColor(Quantity_Color(0.50, 0.53, 0.58, Quantity_TOC_RGB));
 
-    // Grid line colors
-    Quantity_Color gridColor(0.35, 0.38, 0.42, Quantity_TOC_RGB);
-    Quantity_Color tenthColor(0.50, 0.53, 0.58, Quantity_TOC_RGB);
-
-    m_viewer->Grid()->SetColors(gridColor, tenthColor);
-
-    // Activate the grid
-    if (m_gridVisible)
-        m_viewer->ActivateGrid(Aspect_GT_Rectangular,
-                               Aspect_GDM_Lines);
+    // Display the grid (not selectable)
+    if (m_gridVisible) {
+        m_context->Display(m_grid, false);
+    }
+    m_context->Deactivate(m_grid);
 }
 
 // ---- Navigation cube (top-right corner) -----------------------------
@@ -389,6 +564,8 @@ void ViewportWidget::setupViewCube()
     m_viewCube->SetFixedAnimationLoop(false);
     m_viewCube->SetDrawAxes(false);  // we have our own trihedron
     m_viewCube->SetYup(Standard_False);  // Z-up coordinate system
+    m_viewCube->SetFitSelected(Standard_False);  // don't refit on click
+    m_viewCube->SetResetCamera(Standard_False);  // preserve camera target point
 
     // Position in the top-right corner of the viewport
     m_viewCube->SetTransformPersistence(
@@ -467,23 +644,95 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* event)
                     Handle(AIS_ViewCubeOwner) cubeOwner =
                         Handle(AIS_ViewCubeOwner)::DownCast(owner);
                     if (!cubeOwner.IsNull()) {
-                        m_viewCube->HandleClick(cubeOwner);
-                        for (int i = 0; i < 100; ++i) {
-                            if (!m_viewCube->UpdateAnimation(true)) break;
-                            m_view->Redraw();
+                        // Get the orientation from the clicked ViewCube face
+                        V3d_TypeOfOrientation orient = cubeOwner->MainOrientation();
+
+                        // Get the view direction for this orientation
+                        gp_Dir viewDir = V3d::GetProjAxis(orient);
+
+                        // Determine orbit center
+                        if (m_orbitSelectedObject && m_context->NbSelected() > 0) {
+                            // Compute bounding box center of selected objects
+                            Bnd_Box selBox;
+                            for (m_context->InitSelected(); m_context->MoreSelected(); m_context->NextSelected()) {
+                                Handle(AIS_InteractiveObject) obj = m_context->SelectedInteractive();
+                                if (!obj.IsNull()) {
+                                    Bnd_Box objBox;
+                                    obj->BoundingBox(objBox);
+                                    if (!objBox.IsVoid()) {
+                                        selBox.Add(objBox);
+                                    }
+                                }
+                            }
+                            if (!selBox.IsVoid()) {
+                                Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+                                selBox.Get(xMin, yMin, zMin, xMax, yMax, zMax);
+                                m_orbitCenter = gp_Pnt(
+                                    (xMin + xMax) / 2.0,
+                                    (yMin + yMax) / 2.0,
+                                    (zMin + zMax) / 2.0);
+                            }
                         }
-                        updateScaleBar();
-                        update();
+                        m_animOrbitCenter = m_orbitCenter;
+
+                        // Get current eye position and up vector
+                        Standard_Real eyeX, eyeY, eyeZ;
+                        m_view->Eye(eyeX, eyeY, eyeZ);
+                        m_animStartEye = gp_Pnt(eyeX, eyeY, eyeZ);
+
+                        Standard_Real upX, upY, upZ;
+                        m_view->Up(upX, upY, upZ);
+                        m_animStartUp = gp_Dir(upX, upY, upZ);
+
+                        // Compute distance to orbit center (preserve zoom)
+                        Standard_Real distance = m_animStartEye.Distance(m_animOrbitCenter);
+
+                        // Compute target eye position: orbit center + distance * viewDir
+                        // V3d::GetProjAxis returns the direction where the eye is located
+                        // (e.g., V3d_Zpos = eye at +Z looking toward origin = Top view)
+                        m_animEndEye = gp_Pnt(
+                            m_animOrbitCenter.X() + viewDir.X() * distance,
+                            m_animOrbitCenter.Y() + viewDir.Y() * distance,
+                            m_animOrbitCenter.Z() + viewDir.Z() * distance);
+
+                        // Determine target up vector based on orientation convention
+                        if (m_zUpOrientation) {
+                            // Z-up: Z is up for most views
+                            m_animEndUp = gp_Dir(0.0, 0.0, 1.0);
+                            if (orient == V3d_Zpos) {
+                                // Top view: Y is up
+                                m_animEndUp = gp_Dir(0.0, 1.0, 0.0);
+                            } else if (orient == V3d_Zneg) {
+                                // Bottom view: -Y is up (so text reads correctly)
+                                m_animEndUp = gp_Dir(0.0, -1.0, 0.0);
+                            }
+                        } else {
+                            // Y-up: Y is up for most views
+                            m_animEndUp = gp_Dir(0.0, 1.0, 0.0);
+                            if (orient == V3d_Ypos) {
+                                // Top view: -Z is up
+                                m_animEndUp = gp_Dir(0.0, 0.0, -1.0);
+                            } else if (orient == V3d_Yneg) {
+                                // Bottom view: +Z is up (so text reads correctly)
+                                m_animEndUp = gp_Dir(0.0, 0.0, 1.0);
+                            }
+                        }
+
+                        // Start animation
+                        m_animStep = 0;
+                        m_viewCubeAnimTimer.start();
                     }
                 }
             }
         }
         m_draggingViewCube = false;
+        updateOrbitRingFlips();
     } else if (event->button() == Qt::LeftButton) {
         // Not on the ViewCube — check for navigation control clicks
         handleNavControlClick(event->pos().x(), event->pos().y());
     } else if (event->button() == Qt::RightButton) {
         m_rotating = false;
+        updateOrbitRingFlips();
     } else if (event->button() == Qt::MiddleButton) {
         m_panning = false;
     }
@@ -515,6 +764,12 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event)
         m_view->Pan(pos.x() - m_lastMousePos.x(),
                     m_lastMousePos.y() - pos.y());
         m_lastMousePos = pos;
+
+        // Update orbit center to match the new camera target (At point)
+        Standard_Real atX, atY, atZ;
+        m_view->At(atX, atY, atZ);
+        m_orbitCenter = gp_Pnt(atX, atY, atZ);
+
         updateScaleBar();
         update();
     }
@@ -658,6 +913,7 @@ void ViewportWidget::rotateCameraAxis(double angleRad)
 
     m_view->Redraw();
     updateScaleBar();
+    updateOrbitRingFlips();
     update();
 }
 
@@ -821,19 +1077,44 @@ void ViewportWidget::resetCamera()
 {
     if (m_view.IsNull()) return;
 
-    // Restore the default startup camera position
-    m_view->SetEye(1.0, -1.0, 1.0);
-    m_view->SetUp(0.0, 0.0, 1.0);
-    m_view->SetAt(0.0, 0.0, 0.0);
+    // Get current camera state for animation start
+    Standard_Real eyeX, eyeY, eyeZ;
+    m_view->Eye(eyeX, eyeY, eyeZ);
+    m_animStartEye = gp_Pnt(eyeX, eyeY, eyeZ);
 
-    Bnd_Box gridBox;
-    gridBox.Update(-100.0, -1.0, -100.0);
-    gridBox.Update( 100.0,  1.0,  100.0);
-    m_view->FitAll(gridBox, 0.01);
+    Standard_Real upX, upY, upZ;
+    m_view->Up(upX, upY, upZ);
+    m_animStartUp = gp_Dir(upX, upY, upZ);
 
-    m_view->Redraw();
-    updateScaleBar();
-    update();
+    // Target: orbit around origin (reset the orbit center)
+    m_orbitCenter = gp_Pnt(0.0, 0.0, 0.0);
+    m_animOrbitCenter = m_orbitCenter;
+
+    // Compute target eye position for isometric view
+    // Use current distance to orbit center (preserve zoom)
+    Standard_Real distance = m_animStartEye.Distance(m_animOrbitCenter);
+    if (distance < 1.0) distance = 300.0;  // fallback if too close
+
+    // Isometric direction: normalized (1, -1, 1) for Z-up, (1, 1, 1) for Y-up
+    if (m_zUpOrientation) {
+        gp_Dir isoDir(1.0, -1.0, 1.0);
+        m_animEndEye = gp_Pnt(
+            m_animOrbitCenter.X() + isoDir.X() * distance,
+            m_animOrbitCenter.Y() + isoDir.Y() * distance,
+            m_animOrbitCenter.Z() + isoDir.Z() * distance);
+        m_animEndUp = gp_Dir(0.0, 0.0, 1.0);
+    } else {
+        gp_Dir isoDir(1.0, 1.0, 1.0);
+        m_animEndEye = gp_Pnt(
+            m_animOrbitCenter.X() + isoDir.X() * distance,
+            m_animOrbitCenter.Y() + isoDir.Y() * distance,
+            m_animOrbitCenter.Z() + isoDir.Z() * distance);
+        m_animEndUp = gp_Dir(0.0, 1.0, 0.0);
+    }
+
+    // Start animation
+    m_animStep = 0;
+    m_viewCubeAnimTimer.start();
 }
 
 // ---- Scale bar helper -----------------------------------------------
@@ -844,6 +1125,176 @@ void ViewportWidget::updateScaleBar()
         m_scaleBar->updateScale();
         m_context->Redisplay(m_scaleBar, false);
     }
+}
+
+// ---- Orbit ring flip state ------------------------------------------
+
+void ViewportWidget::updateOrbitRingFlips()
+{
+    if (m_view.IsNull()) return;
+
+    // Get camera direction (where the camera is looking)
+    Handle(Graphic3d_Camera) cam = m_view->Camera();
+    if (cam.IsNull()) return;
+
+    gp_Dir viewDir = cam->Direction();
+
+    // For each axis, determine when arrows need to flip based on camera direction.
+    // Camera Direction() points FROM eye TO target (where camera is looking).
+    //
+    // Flip when the camera is looking in the positive axis direction:
+    // - Z-axis ring: flip when viewDir.Z > 0 (looking toward +Z, bottom view)
+    // - Y-axis ring: flip when viewDir.Y > 0 (looking toward +Y, back view)
+    // - X-axis ring: flip when viewDir.X > 0 (looking toward +X, left view)
+
+    constexpr double kThreshold = 0.1;  // Small threshold to avoid flicker at edge
+
+    if (!m_ringZ.IsNull()) {
+        bool flipZ = viewDir.Z() > kThreshold;
+        if (m_ringZ->isFlipped() != flipZ) {
+            m_ringZ->setFlipped(flipZ);
+            m_context->Redisplay(m_ringZ, false);
+        }
+    }
+
+    if (!m_ringY.IsNull()) {
+        bool flipY = viewDir.Y() > kThreshold;
+        if (m_ringY->isFlipped() != flipY) {
+            m_ringY->setFlipped(flipY);
+            m_context->Redisplay(m_ringY, false);
+        }
+    }
+
+    if (!m_ringX.IsNull()) {
+        bool flipX = viewDir.X() > kThreshold;
+        if (m_ringX->isFlipped() != flipX) {
+            m_ringX->setFlipped(flipX);
+            m_context->Redisplay(m_ringX, false);
+        }
+    }
+}
+
+// ---- CLI viewport control commands ----------------------------------
+
+void ViewportWidget::setZoomPercent(double percent)
+{
+    if (m_view.IsNull()) return;
+
+    // Get current zoom level and compute factor to reach target
+    double current = zoomPercent();
+    if (current <= 0.0) return;
+
+    double factor = percent / current;
+    if (factor <= 0.0) return;
+
+    m_view->SetZoom(factor);
+    m_view->Redraw();
+    updateScaleBar();
+    update();
+}
+
+double ViewportWidget::zoomPercent() const
+{
+    if (m_view.IsNull()) return 100.0;
+
+    // Zoom percentage is inversely related to the view scale
+    // A larger scale value means we're "zoomed out" (smaller objects on screen)
+    // We use FitAll to establish a baseline, then compare to current scale
+    Handle(Graphic3d_Camera) cam = m_view->Camera();
+    if (cam.IsNull()) return 100.0;
+
+    // Use the camera scale (inverse of zoom)
+    // Scale of 1.0 corresponds to 100% zoom
+    double scale = cam->Scale();
+    if (scale <= 0.0) return 100.0;
+
+    // Approximate: scale of 100 world units fitting in view = 100%
+    // This is a heuristic - actual percentage depends on content
+    // Return inverse of scale as percentage (smaller scale = more zoomed in)
+    return 100.0 / scale * 100.0;
+}
+
+void ViewportWidget::panTo(double x, double y, double z)
+{
+    if (m_view.IsNull()) return;
+
+    // Get current camera position
+    Standard_Real eyeX, eyeY, eyeZ;
+    m_view->Eye(eyeX, eyeY, eyeZ);
+    gp_Pnt currentEye(eyeX, eyeY, eyeZ);
+
+    Standard_Real atX, atY, atZ;
+    m_view->At(atX, atY, atZ);
+    gp_Pnt currentAt(atX, atY, atZ);
+
+    // Compute offset from current target to new target
+    gp_Vec offset(currentAt, gp_Pnt(x, y, z));
+
+    // Move both eye and target by this offset
+    gp_Pnt newEye(
+        currentEye.X() + offset.X(),
+        currentEye.Y() + offset.Y(),
+        currentEye.Z() + offset.Z());
+    gp_Pnt newAt(x, y, z);
+
+    // Set the new camera position
+    m_view->SetEye(newEye.X(), newEye.Y(), newEye.Z());
+    m_view->SetAt(newAt.X(), newAt.Y(), newAt.Z());
+
+    // Update orbit center
+    m_orbitCenter = newAt;
+
+    m_view->Redraw();
+    updateScaleBar();
+    update();
+}
+
+void ViewportWidget::cameraTarget(double& x, double& y, double& z) const
+{
+    if (m_view.IsNull()) {
+        x = y = z = 0.0;
+        return;
+    }
+
+    Standard_Real atX, atY, atZ;
+    m_view->At(atX, atY, atZ);
+    x = atX;
+    y = atY;
+    z = atZ;
+}
+
+void ViewportWidget::rotateOnAxis(char axis, double degrees)
+{
+    if (m_view.IsNull()) return;
+
+    // Convert degrees to radians
+    double radians = degrees * M_PI / 180.0;
+
+    Handle(Graphic3d_Camera) cam = m_view->Camera();
+    gp_Dir eye = cam->Direction();
+    gp_Dir up  = cam->Up();
+
+    // Determine rotation axis
+    gp_Dir axisDir;
+    char axisUpper = static_cast<char>(std::toupper(static_cast<unsigned char>(axis)));
+    switch (axisUpper) {
+        case 'X': axisDir = gp_Dir(1, 0, 0); break;
+        case 'Y': axisDir = gp_Dir(0, 1, 0); break;
+        case 'Z':
+        default:  axisDir = gp_Dir(0, 0, 1); break;
+    }
+
+    // Apply rotation
+    gp_Trsf rot;
+    rot.SetRotation(gp_Ax1(gp_Pnt(0, 0, 0), axisDir), radians);
+
+    cam->SetDirection(eye.Transformed(rot));
+    cam->SetUp(up.Transformed(rot));
+
+    m_view->Redraw();
+    updateScaleBar();
+    updateOrbitRingFlips();
+    update();
 }
 
 }  // namespace hobbycad

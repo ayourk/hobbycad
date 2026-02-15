@@ -32,10 +32,22 @@ enum class SketchTool {
     Circle,
     Arc,
     Spline,
+    Polygon,
+    Slot,
+    Ellipse,
     Point,
     Text,
     Dimension,
-    Constraint
+    Constraint,
+    Trim,
+    Extend,
+    Split,
+    Offset,
+    Fillet,
+    Chamfer,
+    RectPattern,
+    CircPattern,
+    Project
 };
 
 class SketchToolbar : public QWidget {
@@ -70,10 +82,22 @@ private:
     ToolbarButton* m_circleBtn = nullptr;
     ToolbarButton* m_arcBtn = nullptr;
     ToolbarButton* m_splineBtn = nullptr;
+    ToolbarButton* m_polygonBtn = nullptr;
+    ToolbarButton* m_slotBtn = nullptr;
+    ToolbarButton* m_ellipseBtn = nullptr;
     ToolbarButton* m_pointBtn = nullptr;
     ToolbarButton* m_textBtn = nullptr;
     ToolbarButton* m_dimBtn = nullptr;
     ToolbarButton* m_constraintBtn = nullptr;
+    ToolbarButton* m_trimBtn = nullptr;
+    ToolbarButton* m_extendBtn = nullptr;
+    ToolbarButton* m_splitBtn = nullptr;
+    ToolbarButton* m_offsetBtn = nullptr;
+    ToolbarButton* m_filletBtn = nullptr;
+    ToolbarButton* m_chamferBtn = nullptr;
+    ToolbarButton* m_rectPatternBtn = nullptr;
+    ToolbarButton* m_circPatternBtn = nullptr;
+    ToolbarButton* m_projectBtn = nullptr;
 };
 
 }  // namespace hobbycad
