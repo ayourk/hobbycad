@@ -1,5 +1,5 @@
 # =====================================================================
-#  devtest/CMakeLists.txt — HobbyCAD Dependency Verification
+#  HobbyCAD — devtest/CMakeLists.txt — Dependency Verification
 # =====================================================================
 #
 #  Builds and runs a test program that verifies every HobbyCAD and
