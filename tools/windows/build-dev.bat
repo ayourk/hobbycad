@@ -116,15 +116,16 @@ if "!IN_MSYS2_SHELL!"=="false" (
         )
     )
 
-    REM Build the bash commands - set CMAKE_PREFIX_PATH explicitly for MSYS2 packages
+    REM Build the bash commands
     set "BASH_CMD="
     if defined DO_CLEAN set "BASH_CMD=rm -rf build && "
-    set "BASH_CMD=!BASH_CMD!CMAKE_PREFIX_PATH=/ucrt64 cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
+    set "BASH_CMD=!BASH_CMD!cmake --preset msys2-!BUILD_TYPE! && cmake --build --preset msys2-!BUILD_TYPE! -j"
 
-    REM Execute through MSYS2 UCRT64 bash and capture exit code
+    REM Execute through MSYS2 UCRT64 shell (not just bash)
+    REM Using msys2_shell.cmd ensures proper environment setup
     echo   [INFO] Running: !BASH_CMD!
     echo.
-    "!MSYS2_ROOT!\ucrt64.exe" bash -l -c "cd '!PROJECT_MSYS!' && !BASH_CMD! && echo BUILD_SUCCESS || echo BUILD_FAILED"
+    "!MSYS2_ROOT!\msys2_shell.cmd" -defterm -no-start -ucrt64 -c "cd '!PROJECT_MSYS!' && !BASH_CMD! && echo BUILD_SUCCESS || echo BUILD_FAILED"
 
     REM Check if build output indicates success (errorlevel from ucrt64.exe is unreliable)
     set "BUILD_RESULT=0"
