@@ -128,6 +128,73 @@ jobs:
                   url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.7.2.tar.gz
                   sha256: de384e29d7efc9330c6cdb126ebf88342b5025d920dcb7c645defad85195ea7f
 
+            # libslvs (SolveSpace constraint solver library)
+            # Source from Launchpad PPA with patches applied
+            - name: libslvs
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DBUILD_LIB=ON
+                - -DENABLE_GUI=OFF
+                - -DENABLE_CLI=OFF
+                - -DENABLE_OPENMP=OFF
+                - -DENABLE_TESTS=OFF
+              sources:
+                - type: archive
+                  url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz
+                  sha256: 89221ff3a92f9e4d59f61ca86cf82bb38cf313183be660fdd7b628da66790864
+                - type: archive
+                  url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz
+                  dest: debian-patches
+                - type: shell
+                  commands:
+                    - patch -p1 < debian-patches/debian/patches/0001-handle-missing-git-directory.patch
+                    - for submod in zlib libpng freetype cairo pixman angle; do mkdir -p extlib/\$submod && echo "# stub" > extlib/\$submod/CMakeLists.txt; done
+
+            # lib3mf (3D Manufacturing Format)
+            # Source from Launchpad PPA
+            - name: lib3mf
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DLIB3MF_TESTS=OFF
+              sources:
+                - type: archive
+                  url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/lib3mf/2.4.1.git~20260208-1~ppa1~noble1/lib3mf_2.4.1.git~20260208.orig.tar.gz
+                  sha256: 469f4b8780ee4c369b695210611d70fc70e8e4b22da6ea97265f69c9a50828b1
+
+            # OpenMesh
+            # Source from Launchpad PPA
+            - name: openmesh
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DOPENMESH_BUILD_SHARED=ON
+                - -DOPENMESH_BUILD_PYTHON_BINDINGS=OFF
+              sources:
+                - type: archive
+                  url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz
+                  sha256: b6f0a3eb3078984ca651b6bf38a781a072049222f77bac1025101371fca18899
+
+            # MeshFix
+            # Source from Launchpad PPA with patches applied
+            - name: meshfix
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DMESHFIX_BUILD_SHARED=ON
+                - -DMESHFIX_BUILD_CLI=OFF
+              sources:
+                - type: archive
+                  url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz
+                  sha256: 27d135e85e320439df49d96c8de79042d2cbb524f9aa952eb7a8544571131fbf
+                - type: archive
+                  url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz
+                  dest: debian-patches
+                - type: shell
+                  commands:
+                    - patch -p1 < debian-patches/debian/patches/0001-build-shared-library.patch
+
             # HobbyCAD
             - name: hobbycad
               buildsystem: cmake-ninja

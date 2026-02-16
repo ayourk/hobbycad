@@ -100,20 +100,24 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          if [ -n "${{ matrix.container }}" ]; then
-            # Container - need full apt-get update
-            apt-get update
-          else
-            # Native runner
-            sudo apt-get update
-          fi
-
           SUDO=""
           if [ -z "${{ matrix.container }}" ]; then
             SUDO="sudo"
           fi
 
+          # Add HobbyCAD PPA for libslvs (Ubuntu only, not Debian containers)
+          if [ -z "${{ matrix.container }}" ]; then
+            $SUDO add-apt-repository -y ppa:ayourk/hobbycad
+            $SUDO apt-get update
+            INSTALL_LIBSLVS="libslvs-dev"
+          else
+            # For Debian containers, we'll build libslvs from source after deps
+            apt-get update
+            INSTALL_LIBSLVS=""
+          fi
+
           $SUDO apt-get install -y \
+            $INSTALL_LIBSLVS \
             build-essential cmake ninja-build pkg-config \
             dpkg-dev debhelper fakeroot \
             libocct-data-exchange-dev libocct-draw-dev \
@@ -127,7 +131,34 @@ jobs:
             libpng-dev libjpeg-dev \
             libzip-dev libminizip-dev \
             libgit2-dev \
+            lib3mf-dev libopenmesh-dev libmeshfix-dev \
             librsvg2-bin
+
+      - name: Build libslvs from source (Debian containers only)
+        if: matrix.container != ''
+        run: |
+          # Download source and patches from Launchpad PPA
+          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
+          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
+          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
+          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+
+          # Stub empty submodule directories
+          for submod in zlib libpng freetype cairo pixman angle; do
+            mkdir -p extlib/$submod
+            echo "# stub" > extlib/$submod/CMakeLists.txt
+          done
+
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIB=ON \
+            -DENABLE_GUI=OFF \
+            -DENABLE_CLI=OFF \
+            -DENABLE_OPENMP=OFF \
+            -DENABLE_TESTS=OFF
+          cmake --build build
+          cmake --install build
 
       - name: Configure CMake
         run: |

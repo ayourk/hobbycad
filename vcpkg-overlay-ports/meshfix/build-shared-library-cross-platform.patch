@@ -1,0 +1,179 @@
+--- a/CMakeLists.txt	2026-02-10 21:13:54.882846890 +0000
++++ b/CMakeLists.txt	2026-02-10 21:13:55.109846831 +0000
+@@ -1,20 +1,28 @@
+-################################################################################
+-# General Informations
+-################################################################################
++cmake_minimum_required(VERSION 3.12)
++project(MeshFix VERSION 2.1 LANGUAGES C CXX)
+ 
+-cmake_minimum_required(VERSION 3.0)
+-project(MeshFix)
+-
+-################################################################################
++include(GNUInstallDirs)
++include(CMakePackageConfigHelpers)
+ 
+ if(NOT CMAKE_BUILD_TYPE)
+ 	message(STATUS "No build type selected, default to Release")
+ 	set(CMAKE_BUILD_TYPE "Release")
+ endif()
+ 
+-################################################################################
++set(CMAKE_CXX_STANDARD 11)
++set(CMAKE_CXX_STANDARD_REQUIRED ON)
++set(CMAKE_POSITION_INDEPENDENT_CODE ON)
++
++option(MESHFIX_BUILD_SHARED "Build shared library" ON)
++option(MESHFIX_BUILD_CLI "Build command-line executable" ON)
++
++if(MESHFIX_BUILD_SHARED)
++	set(LIB_TYPE SHARED)
++else()
++	set(LIB_TYPE STATIC)
++endif()
+ 
+-set(SOURCES
++set(LIB_SOURCES
+ 		src/TMesh/edge.cpp
+ 		src/TMesh/vertex.cpp
+ 		src/TMesh/io.cpp
+@@ -33,36 +41,99 @@
+ 		src/Kernel/graph.cpp
+ 		src/Kernel/point.cpp
+ 		src/Kernel/jqsort.cpp
+-		src/MeshFix/meshfix.cpp
+ )
+ 
+-################################################################################
++# Library
++add_library(meshfix ${LIB_TYPE} ${LIB_SOURCES})
+ 
+-add_executable(MeshFix ${SOURCES})
++target_include_directories(meshfix PUBLIC
++		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/TMesh>
++		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Kernel>
++		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/meshfix/TMesh>
++		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/meshfix/Kernel>
++)
+ 
+-target_include_directories(MeshFix PUBLIC
+-		include/TMesh
+-		include/Kernel
++set_target_properties(meshfix PROPERTIES
++		VERSION ${PROJECT_VERSION}
++		SOVERSION 1
+ )
+ 
+-################################################################################
++# Export all symbols on Windows when building shared
++if(MESHFIX_BUILD_SHARED AND WIN32)
++	set_target_properties(meshfix PROPERTIES
++			WINDOWS_EXPORT_ALL_SYMBOLS ON
++	)
++endif()
+ 
+ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+ 	message(STATUS "64 bits compiler detected")
+-	target_compile_definitions(MeshFix PUBLIC -DIS64BITPLATFORM)
+-	set(BIN_FOLDER "bin64")
++	target_compile_definitions(meshfix PUBLIC IS64BITPLATFORM)
++endif()
++
++# MSVC: suppress deprecation warnings for standard C functions
++if(MSVC)
++	target_compile_definitions(meshfix PRIVATE _CRT_SECURE_NO_WARNINGS)
++	target_compile_options(meshfix PRIVATE /W3 /wd4996 /wd4267)
+ else()
+-	message(STATUS "32 bits compiler detected")
+-	set(BIN_FOLDER "bin")
++	target_compile_options(meshfix PRIVATE -Wall)
+ endif()
+ 
+-################################################################################
++# Executable
++if(MESHFIX_BUILD_CLI)
++	add_executable(MeshFix src/MeshFix/meshfix.cpp)
++	target_include_directories(MeshFix PRIVATE
++			include/TMesh
++			include/Kernel
++	)
++	target_link_libraries(MeshFix PRIVATE meshfix)
++
++	if(MSVC)
++		target_compile_definitions(MeshFix PRIVATE _CRT_SECURE_NO_WARNINGS)
++		target_compile_options(MeshFix PRIVATE /W3 /wd4996 /wd4267)
++	endif()
+ 
+-set_target_properties(MeshFix
+-	PROPERTIES
+-	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${BIN_FOLDER}"
++	install(TARGETS MeshFix
++		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
++endif()
++
++# Install library
++install(TARGETS meshfix
++	EXPORT meshfix-targets
++	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
++	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+ )
+ 
+-# Use C++11
+-set_target_properties(MeshFix PROPERTIES CXX_STANDARD 11)
+-set_target_properties(MeshFix PROPERTIES CXX_STANDARD_REQUIRED ON)
++# Install headers
++install(DIRECTORY include/TMesh/
++	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/meshfix/TMesh
++	FILES_MATCHING PATTERN "*.h")
++
++install(DIRECTORY include/Kernel/
++	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/meshfix/Kernel
++	FILES_MATCHING PATTERN "*.h")
++
++# CMake package config
++install(EXPORT meshfix-targets
++	FILE meshfix-targets.cmake
++	NAMESPACE meshfix::
++	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshfix
++)
++
++configure_package_config_file(
++	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/meshfix-config.cmake.in"
++	"${CMAKE_CURRENT_BINARY_DIR}/meshfix-config.cmake"
++	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshfix
++)
++
++write_basic_package_version_file(
++	"${CMAKE_CURRENT_BINARY_DIR}/meshfix-config-version.cmake"
++	VERSION ${PROJECT_VERSION}
++	COMPATIBILITY AnyNewerVersion
++)
++
++install(FILES
++	"${CMAKE_CURRENT_BINARY_DIR}/meshfix-config.cmake"
++	"${CMAKE_CURRENT_BINARY_DIR}/meshfix-config-version.cmake"
++	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshfix
++)
+diff -ruN a/cmake/meshfix-config.cmake.in b/cmake/meshfix-config.cmake.in
+--- a/cmake/meshfix-config.cmake.in	1970-01-01 00:00:00.000000000 +0000
++++ b/cmake/meshfix-config.cmake.in	2026-02-10 21:13:38.211851279 +0000
+@@ -0,0 +1,5 @@
++@PACKAGE_INIT@
++
++include("${CMAKE_CURRENT_LIST_DIR}/meshfix-targets.cmake")
++
++check_required_components(meshfix)
+--- a/include/Kernel/coordinates.h	2026-02-10 21:13:54.960846870 +0000
++++ b/include/Kernel/coordinates.h	2026-02-10 21:13:55.188846810 +0000
+@@ -60,9 +60,7 @@
+ 
+ #endif
+ 
+-#ifndef __APPLE__
+ #include <cstdint>
+-#endif
+ 
+ namespace T_MESH
+ {

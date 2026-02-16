@@ -1,0 +1,8 @@
+{
+  "name": "libslvs",
+  "version": "3.1",
+  "description": "SolveSpace constraint solver library",
+  "homepage": "https://github.com/solvespace/solvespace",
+  "license": "GPL-3.0-or-later",
+  "supports": "!uwp"
+}
