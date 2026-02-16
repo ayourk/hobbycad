@@ -36,9 +36,10 @@ enum class EntityType {
     Arc,         ///< Arc (center + radius + angles)
     Spline,      ///< Catmull-Rom spline (control points)
     Polygon,     ///< Regular polygon (center + radius + sides)
-    Slot,        ///< Obround/stadium slot (2 centers + radius)
+    Slot,        ///< Slot: Linear (2 arc centers + radius) or Arc (arc center + start + end + radius)
     Ellipse,     ///< Ellipse (center + major/minor radii)
-    Text         ///< Text annotation
+    Text,        ///< Text annotation
+    Dimension    ///< Dimension annotation (GUI-only, not stored as geometry)
 };
 
 // =====================================================================
@@ -67,6 +68,9 @@ struct HOBBYCAD_EXPORT Entity {
     bool fontBold = false;                ///< Bold text
     bool fontItalic = false;              ///< Italic text
     double textRotation = 0.0;            ///< Text rotation in degrees
+
+    // Arc slot specific
+    bool arcFlipped = false;              ///< For arc slots: true = >180 degree arc
 
     // State
     bool isConstruction = false;          ///< Construction geometry flag
@@ -130,8 +134,23 @@ HOBBYCAD_EXPORT Entity createSpline(int id, const QVector<QPointF>& controlPoint
 /// Create a polygon entity
 HOBBYCAD_EXPORT Entity createPolygon(int id, const QPointF& center, double radius, int sides);
 
-/// Create a slot entity
+/// Create a linear slot entity (obround/stadium shape)
+/// @param id Entity ID
+/// @param center1 Center of first semicircular end
+/// @param center2 Center of second semicircular end
+/// @param radius Half-width of the slot (radius of end semicircles)
 HOBBYCAD_EXPORT Entity createSlot(int id, const QPointF& center1, const QPointF& center2, double radius);
+
+/// Create an arc slot entity (curved slot following an arc path)
+/// Storage format: points[0] = arc center, points[1] = start endpoint, points[2] = end endpoint
+/// @param id Entity ID
+/// @param arcCenter Center of the arc that the slot follows
+/// @param start Start endpoint (on the arc)
+/// @param end End endpoint (on the arc)
+/// @param radius Half-width of the slot
+/// @param flipped True for >180 degree arcs (inverts the sweep direction)
+HOBBYCAD_EXPORT Entity createArcSlot(int id, const QPointF& arcCenter, const QPointF& start,
+                                      const QPointF& end, double radius, bool flipped = false);
 
 /// Create an ellipse entity
 HOBBYCAD_EXPORT Entity createEllipse(int id, const QPointF& center, double majorRadius, double minorRadius);

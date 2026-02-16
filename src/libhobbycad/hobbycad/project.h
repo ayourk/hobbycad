@@ -23,6 +23,7 @@
 
 #include "core.h"
 #include "sketch/background.h"
+#include "sketch/entity.h"
 
 #include <TopoDS_Shape.hxx>
 
@@ -35,22 +36,10 @@
 
 namespace hobbycad {
 
-// ---- Sketch types (mirrored from GUI for serialization) ----
+// ---- Sketch types ----
 
-/// Sketch entity type
-enum class SketchEntityType {
-    Point,
-    Line,
-    Rectangle,
-    Circle,
-    Arc,
-    Spline,
-    Polygon,
-    Slot,
-    Ellipse,
-    Text,
-    Dimension
-};
+// Use the canonical entity type from the sketch library
+using SketchEntityType = sketch::EntityType;
 
 /// Constraint type for parametric sketching
 enum class ConstraintType {
@@ -137,21 +126,8 @@ struct ConstructionPlaneData {
     }
 };
 
-/// A single entity in a sketch
-struct SketchEntityData {
-    int id = 0;
-    SketchEntityType type = SketchEntityType::Point;
-    QVector<QPointF> points;
-    double radius = 0.0;
-    double startAngle = 0.0;
-    double sweepAngle = 0.0;
-    int sides = 6;                ///< For polygons (number of sides)
-    double majorRadius = 0.0;     ///< For ellipses (semi-major axis)
-    double minorRadius = 0.0;     ///< For ellipses (semi-minor axis)
-    QString text;
-    bool constrained = false;
-    bool isConstruction = false;  ///< Construction geometry (excluded from profiles)
-};
+/// A single entity in a sketch - alias for the canonical sketch::Entity type
+using SketchEntityData = sketch::Entity;
 
 /// A constraint relationship between sketch entities
 struct ConstraintData {
@@ -199,6 +175,15 @@ struct ParameterData {
     bool isUserParam = true;
 };
 
+// ---- Foreign file tracking ----
+
+/// A foreign file entry (non-CAD file tracked by the project)
+struct ForeignFileData {
+    QString path;           ///< Relative path from project root
+    QString description;    ///< Optional description
+    QString category;       ///< Category (version_control, documentation, etc.)
+};
+
 // ---- Feature types ----
 
 /// Feature type in the modeling history
@@ -221,12 +206,24 @@ enum class FeatureType {
     Intersect
 };
 
+/// Feature state for validation status
+/// Used to indicate errors or warnings from constraint solving, BREP operations, etc.
+enum class FeatureState {
+    Normal,     ///< Feature is valid
+    Warning,    ///< Feature has a warning (e.g., over-constrained sketch)
+    Error       ///< Feature has an error (e.g., failed BREP operation, conflicting constraints)
+};
+
 /// A single feature in the history tree
 struct FeatureData {
     int id = 0;
     FeatureType type = FeatureType::Origin;
     QString name;
     QJsonObject properties;  ///< Feature-specific properties
+    QVector<int> dependsOn;  ///< IDs of features this depends on (parents)
+    bool suppressed = false; ///< True if feature is suppressed
+    FeatureState state = FeatureState::Normal;  ///< Validation state
+    QString stateMessage;    ///< Human-readable error/warning message
 };
 
 // ---- Project class ----
@@ -304,6 +301,18 @@ public:
     void setFeatures(const QVector<FeatureData>& features);
     void clearFeatures();
 
+    // ---- Foreign Files ----
+
+    const QVector<ForeignFileData>& foreignFiles() const { return m_foreignFiles; }
+    void addForeignFile(const ForeignFileData& file);
+    void addForeignFile(const QString& path, const QString& category = QString(),
+                        const QString& description = QString());
+    void removeForeignFile(const QString& path);
+    void setForeignFiles(const QVector<ForeignFileData>& files);
+    void clearForeignFiles();
+    bool isForeignFile(const QString& relativePath) const;
+    const ForeignFileData* foreignFileByPath(const QString& path) const;
+
     // ---- File I/O ----
 
     /// Load a project from a .hcad directory
@@ -376,6 +385,7 @@ private:
     QVector<SketchData> m_sketches;
     QList<ParameterData> m_parameters;
     QVector<FeatureData> m_features;
+    QVector<ForeignFileData> m_foreignFiles;
 
     // File references (relative paths within project)
     QStringList m_geometryFiles;

@@ -1,0 +1,184 @@
+# .github/workflows/linux-deb.yml
+#
+# Build HobbyCAD DEB packages for Debian and Ubuntu.
+#
+# Builds native .deb packages for:
+#   - Ubuntu 22.04 (Jammy) - LTS until 2027
+#   - Ubuntu 24.04 (Noble) - LTS until 2029
+#   - Debian 12 (Bookworm) - stable, matches Ubuntu 22.04 era
+#
+# Both x86_64 (amd64) and aarch64 (arm64) architectures are supported.
+
+name: Linux DEB
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  DEB Build Matrix
+  # ================================================================
+  #
+  #  Builds .deb packages using native containers or runners.
+  #  Debian 12 uses containers; Ubuntu uses native runners.
+
+  deb:
+    name: HobbyCAD DEB (${{ matrix.distro }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 (native runners)
+          - distro: ubuntu2204
+            distro_name: jammy
+            arch: amd64
+            runner: ubuntu-22.04
+            container: ""
+            artifact_name: hobbycad-ubuntu2204-amd64
+          - distro: ubuntu2204
+            distro_name: jammy
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            container: ""
+            artifact_name: hobbycad-ubuntu2204-arm64
+          # Ubuntu 24.04 (native runners)
+          - distro: ubuntu2404
+            distro_name: noble
+            arch: amd64
+            runner: ubuntu-24.04
+            container: ""
+            artifact_name: hobbycad-ubuntu2404-amd64
+          - distro: ubuntu2404
+            distro_name: noble
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            container: ""
+            artifact_name: hobbycad-ubuntu2404-arm64
+          # Debian 12 (containers)
+          - distro: debian12
+            distro_name: bookworm
+            arch: amd64
+            runner: ubuntu-22.04
+            container: debian:12
+            artifact_name: hobbycad-debian12-amd64
+          - distro: debian12
+            distro_name: bookworm
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            container: debian:12
+            artifact_name: hobbycad-debian12-arm64
+
+    steps:
+      - name: Install git (for containers)
+        if: matrix.container != ''
+        run: |
+          apt-get update
+          apt-get install -y git
+
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          if [ -n "${{ matrix.container }}" ]; then
+            # Container - need full apt-get update
+            apt-get update
+          else
+            # Native runner
+            sudo apt-get update
+          fi
+
+          SUDO=""
+          if [ -z "${{ matrix.container }}" ]; then
+            SUDO="sudo"
+          fi
+
+          $SUDO apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            dpkg-dev debhelper fakeroot \
+            libocct-data-exchange-dev libocct-draw-dev \
+            libocct-foundation-dev libocct-modeling-algorithms-dev \
+            libocct-modeling-data-dev libocct-ocaf-dev \
+            libocct-visualization-dev occt-misc libtbb-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
+            qt6-tools-dev-tools libqt6opengl6-dev \
+            libqt6openglwidgets6 libqt6svg6-dev qmake6 \
+            libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
+            libpng-dev libjpeg-dev \
+            libzip-dev libminizip-dev \
+            libgit2-dev \
+            librsvg2-bin
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Create DEB package structure
+        run: |
+          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
+          VERSION=${VERSION:-0.0.1}
+          PKGDIR="hobbycad_${VERSION}_${{ matrix.arch }}"
+
+          # Create package directory structure
+          mkdir -p "${PKGDIR}/DEBIAN"
+          mkdir -p "${PKGDIR}/usr"
+
+          # Install to package directory
+          DESTDIR=$(pwd)/${PKGDIR} cmake --install build
+
+          # Create control file
+          cat > "${PKGDIR}/DEBIAN/control" << EOF
+          Package: hobbycad
+          Version: ${VERSION}
+          Section: graphics
+          Priority: optional
+          Architecture: ${{ matrix.arch }}
+          Depends: libc6, libqt6core6, libqt6gui6, libqt6widgets6, libqt6opengl6, libqt6svg6, libocct-modeling-algorithms7, libocct-visualization7, libocct-data-exchange7, libtbb12, libgit2-1.1 | libgit2-1.5 | libgit2-1.7
+          Maintainer: Aaron Yourk <ayourk@gmail.com>
+          Description: Parametric 3D CAD Application
+           HobbyCAD is a Linux-native open-source parametric 3D CAD application
+           built with Qt6 and OpenCASCADE. It provides a modern interface for
+           creating and editing 3D models with parametric constraints.
+          Homepage: https://github.com/ayourk/hobbycad
+          EOF
+
+          # Set permissions
+          find "${PKGDIR}" -type d -exec chmod 755 {} \;
+          find "${PKGDIR}" -type f -exec chmod 644 {} \;
+          chmod 755 "${PKGDIR}/usr/bin/hobbycad"
+
+          # Build the package
+          dpkg-deb --build --root-owner-group "${PKGDIR}"
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-deb
+          path: "*.deb"
+          retention-days: 14
+          if-no-files-found: error

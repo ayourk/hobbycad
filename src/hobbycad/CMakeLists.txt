@@ -39,6 +39,7 @@ set(APP_SOURCES
     gui/formulafield.cpp
     gui/parametersdialog.cpp
     gui/sketchtoolbar.cpp
+    gui/modeltoolbar.cpp
     gui/sketchcanvas.cpp
     gui/sketchsolver.cpp
     gui/sketchactionbar.cpp
@@ -48,6 +49,9 @@ set(APP_SOURCES
     gui/backgroundimagedialog.cpp
     gui/backgroundcalibrationdialog.cpp
     gui/sketchpropertieswidget.cpp
+    gui/projectbrowserwidget.cpp
+    gui/extrudedialog.cpp
+    gui/revolvedialog.cpp
 
     # Full mode (OpenGL viewport)
     gui/full/viewportwidget.cpp
@@ -88,6 +92,7 @@ set(APP_HEADERS
     gui/formulafield.h
     gui/parametersdialog.h
     gui/sketchtoolbar.h
+    gui/modeltoolbar.h
     gui/sketchcanvas.h
     gui/sketchsolver.h
     gui/sketchactionbar.h
@@ -97,6 +102,8 @@ set(APP_HEADERS
     gui/backgroundimagedialog.h
     gui/backgroundcalibrationdialog.h
     gui/sketchpropertieswidget.h
+    gui/extrudedialog.h
+    gui/revolvedialog.h
     gui/full/viewportwidget.h
     gui/full/fullmodewindow.h
     gui/full/scalebarwidget.h

@@ -1,15 +1,30 @@
 // =====================================================================
-//  src/hobbycad/gui/sketchtoolbar.cpp — Sketch mode toolbar
+//  HobbyCAD — src/hobbycad/gui/sketchtoolbar.cpp — Sketch mode toolbar
 // =====================================================================
 
 #include "sketchtoolbar.h"
 #include "toolbarbutton.h"
+#include "toolbardropdown.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QStyle>
+#include <QToolButton>
 
 namespace hobbycad {
+
+// Indices for create dropdown items
+enum CreateIndex {
+    CreateLine = 0,
+    CreateRect,
+    CreateCircle,
+    CreateArc,
+    CreateSpline,
+    CreatePolygon,
+    CreateSlot,
+    CreateEllipse,
+    CreatePoint
+};
 
 SketchToolbar::SketchToolbar(QWidget* parent)
     : QWidget(parent)
@@ -22,10 +37,10 @@ SketchToolbar::SketchToolbar(QWidget* parent)
     m_layout->setContentsMargins(4, 2, 4, 2);
     m_layout->setSpacing(4);
 
-    // Add stretch at the end by default to left-align buttons
-    m_layout->addStretch();
-
     createTools();
+
+    // Add stretch at the end to left-align buttons
+    m_layout->addStretch();
 }
 
 ToolbarButton* SketchToolbar::createToolButton(const QIcon& icon,
@@ -35,12 +50,7 @@ ToolbarButton* SketchToolbar::createToolButton(const QIcon& icon,
     auto* btn = new ToolbarButton(icon, text, tooltip, this);
     btn->setCheckable(true);
     connect(btn, &ToolbarButton::clicked, this, &SketchToolbar::onToolClicked);
-
-    // Insert before the final stretch
-    int idx = m_layout->count() - 1;
-    if (idx < 0) idx = 0;
-    m_layout->insertWidget(idx, btn);
-
+    m_layout->addWidget(btn);
     return btn;
 }
 
@@ -52,168 +62,223 @@ void SketchToolbar::createTools()
         sep->setFrameShape(QFrame::VLine);
         sep->setFrameShadow(QFrame::Sunken);
         sep->setFixedWidth(2);
-        int idx = m_layout->count() - 1;
-        if (idx < 0) idx = 0;
-        m_layout->insertWidget(idx, sep);
+        m_layout->addWidget(sep);
     };
 
-    // Line tool
-    m_lineBtn = createToolButton(
+    // ===== CREATE button with dropdown for geometry creation =====
+    // Dropdown-first: user must choose from dropdown before button works
+    m_defaultCreateIcon = QIcon::fromTheme(QStringLiteral("draw-freehand"),
+                                           style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+    m_defaultCreateText = tr("Create");
+    m_createBtn = createToolButton(
+        m_defaultCreateIcon,
+        m_defaultCreateText,
+        tr("Create geometry"));
+
+    // Populate dropdown with create tools (list style with submenus)
+    auto* createDropdown = m_createBtn->dropdown();
+    createDropdown->setIconSize(16);
+
+    // Line - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-line"),
                          style()->standardIcon(QStyle::SP_ArrowForward)),
-        tr("Line"),
-        tr("Draw line (L)"));
-    m_lineBtn->setChecked(true);  // Default tool
+        tr("Line"), tr("Draw line (L)"));
+    createDropdown->addVariant(tr("Two Point"), static_cast<int>(CreationMode::LineTwoPoint));
+    createDropdown->addVariant(tr("Horizontal"), static_cast<int>(CreationMode::LineHorizontal));
+    createDropdown->addVariant(tr("Vertical"), static_cast<int>(CreationMode::LineVertical));
+    createDropdown->addVariant(tr("Tangent"), static_cast<int>(CreationMode::LineTangent));
+    createDropdown->addVariant(tr("Construction"), static_cast<int>(CreationMode::LineConstruction));
 
-    // Rectangle tool
-    m_rectBtn = createToolButton(
+    // Rectangle - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-rectangle"),
                          style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Rectangle"),
-        tr("Draw rectangle (R)"));
+        tr("Rectangle"), tr("Draw rectangle (R)"));
+    createDropdown->addVariant(tr("Corner to Corner"), static_cast<int>(CreationMode::RectCorner));
+    createDropdown->addVariant(tr("Center"), static_cast<int>(CreationMode::RectCenter));
+    createDropdown->addVariant(tr("3-Point (Angled)"), static_cast<int>(CreationMode::RectThreePoint));
 
-    // Circle tool
-    m_circleBtn = createToolButton(
+    // Circle - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-circle"),
                          style()->standardIcon(QStyle::SP_DialogHelpButton)),
-        tr("Circle"),
-        tr("Draw circle (C)"));
+        tr("Circle"), tr("Draw circle (C)"));
+    createDropdown->addVariant(tr("Center + Radius"), static_cast<int>(CreationMode::CircleCenterRadius));
+    createDropdown->addVariant(tr("2-Point (Diameter)"), static_cast<int>(CreationMode::CircleTwoPoint));
+    createDropdown->addVariant(tr("3-Point"), static_cast<int>(CreationMode::CircleThreePoint));
 
-    // Arc tool
-    m_arcBtn = createToolButton(
+    // Arc - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-arc"),
                          style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Arc"),
-        tr("Draw arc (A)"));
+        tr("Arc"), tr("Draw arc (A)"));
+    createDropdown->addVariant(tr("3-Point"), static_cast<int>(CreationMode::ArcThreePoint));
+    createDropdown->addVariant(tr("Center + Start + End"), static_cast<int>(CreationMode::ArcCenterStartEnd));
+    createDropdown->addVariant(tr("Start + End + Radius"), static_cast<int>(CreationMode::ArcStartEndRadius));
+    createDropdown->addVariant(tr("Tangent"), static_cast<int>(CreationMode::ArcTangent));
 
-    // Spline tool
-    m_splineBtn = createToolButton(
+    // Spline - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-bezier-curves"),
                          style()->standardIcon(QStyle::SP_DesktopIcon)),
-        tr("Spline"),
-        tr("Draw spline curve"));
+        tr("Spline"), tr("Draw spline curve"));
+    createDropdown->addVariant(tr("Control Points"), static_cast<int>(CreationMode::SplineControlPoints));
+    createDropdown->addVariant(tr("Fit Points"), static_cast<int>(CreationMode::SplineFitPoints));
 
-    // Polygon tool
-    m_polygonBtn = createToolButton(
+    // Polygon - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-polygon"),
                          style()->standardIcon(QStyle::SP_DialogResetButton)),
-        tr("Polygon"),
-        tr("Draw polygon"));
+        tr("Polygon"), tr("Draw polygon"));
+    createDropdown->addVariant(tr("Inscribed"), static_cast<int>(CreationMode::PolygonInscribed));
+    createDropdown->addVariant(tr("Circumscribed"), static_cast<int>(CreationMode::PolygonCircumscribed));
 
-    // Slot tool
-    m_slotBtn = createToolButton(
+    // Slot - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-rectangle"),
                          style()->standardIcon(QStyle::SP_BrowserStop)),
-        tr("Slot"),
-        tr("Draw slot"));
+        tr("Slot"), tr("Draw slot"));
+    createDropdown->addVariant(tr("Center to Center"), static_cast<int>(CreationMode::SlotCenterToCenter));
+    createDropdown->addVariant(tr("Overall Length"), static_cast<int>(CreationMode::SlotOverall));
+    createDropdown->addVariant(tr("Arc Slot (Radius)"), static_cast<int>(CreationMode::SlotArcRadius));
+    createDropdown->addVariant(tr("Arc Slot (Ends)"), static_cast<int>(CreationMode::SlotArcEnds));
 
-    // Ellipse tool
-    m_ellipseBtn = createToolButton(
+    // Ellipse - with variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-ellipse"),
                          style()->standardIcon(QStyle::SP_MessageBoxInformation)),
-        tr("Ellipse"),
-        tr("Draw ellipse"));
+        tr("Ellipse"), tr("Draw ellipse"));
+    createDropdown->addVariant(tr("Center + Axes"), static_cast<int>(CreationMode::EllipseCenterAxes));
+    createDropdown->addVariant(tr("3-Point"), static_cast<int>(CreationMode::EllipseThreePoint));
 
-    // Point tool
-    m_pointBtn = createToolButton(
+    // Point - no variants
+    createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-circle"),
                          style()->standardIcon(QStyle::SP_DialogCancelButton)),
-        tr("Point"),
-        tr("Place point (P)"));
+        tr("Point"), tr("Place point (P)"));
+
+    // Connect dropdown signals
+    connect(m_createBtn, &ToolbarButton::dropdownClicked,
+            this, &SketchToolbar::onCreateDropdownClicked);
+    connect(createDropdown, &ToolbarDropdown::variantClicked,
+            this, &SketchToolbar::onCreateVariantClicked);
+    connect(createDropdown, &ToolbarDropdown::variantSelected,
+            this, &SketchToolbar::onCreateVariantSelected);
 
     addSeparator();
 
-    // Dimension tool
-    m_dimBtn = createToolButton(
+    // ===== CONSTRAIN button with dropdown =====
+    // Default to Dimension (most common constraint operation)
+    m_defaultConstrainIcon = QIcon::fromTheme(QStringLiteral("measure"),
+                                              style()->standardIcon(QStyle::SP_FileDialogInfoView));
+    m_defaultConstrainText = tr("Dimension");
+    m_constrainBtn = createToolButton(
+        m_defaultConstrainIcon,
+        m_defaultConstrainText,
+        tr("Add dimension"));
+
+    auto* constrainDropdown = m_constrainBtn->dropdown();
+    constrainDropdown->setIconSize(16);
+
+    constrainDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("measure"),
                          style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Dimension"),
-        tr("Add dimension (D)"));
+        tr("Dimension"), tr("Add dimension (D)"));
 
-    // Constraint tool
-    m_constraintBtn = createToolButton(
+    constrainDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-connector"),
                          style()->standardIcon(QStyle::SP_DialogOkButton)),
-        tr("Constraint"),
-        tr("Add constraint (X)"));
+        tr("Constraint"), tr("Add constraint (X)"));
 
-    // Text tool
-    m_textBtn = createToolButton(
+    constrainDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-text"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Text"),
-        tr("Add text (T)"));
+        tr("Text"), tr("Add text (T)"));
+
+    connect(m_constrainBtn, &ToolbarButton::dropdownClicked,
+            this, &SketchToolbar::onConstrainDropdownClicked);
 
     addSeparator();
 
-    // Trim tool
-    m_trimBtn = createToolButton(
-        QIcon::fromTheme(QStringLiteral("edit-cut"),
-                         style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Trim"),
+    // ===== MODIFY button with dropdown =====
+    // Default to Trim (most common modify operation)
+    m_defaultModifyIcon = QIcon::fromTheme(QStringLiteral("edit-cut"),
+                                           style()->standardIcon(QStyle::SP_DialogDiscardButton));
+    m_defaultModifyText = tr("Trim");
+    m_modifyBtn = createToolButton(
+        m_defaultModifyIcon,
+        m_defaultModifyText,
         tr("Trim entity at intersections"));
 
-    // Extend tool
-    m_extendBtn = createToolButton(
+    auto* modifyDropdown = m_modifyBtn->dropdown();
+    modifyDropdown->setIconSize(16);
+
+    modifyDropdown->addButton(
+        QIcon::fromTheme(QStringLiteral("edit-cut"),
+                         style()->standardIcon(QStyle::SP_DialogDiscardButton)),
+        tr("Trim"), tr("Trim entity at intersections"));
+
+    modifyDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("format-indent-more"),
                          style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Extend"),
-        tr("Extend entity to nearest intersection"));
+        tr("Extend"), tr("Extend entity to nearest intersection"));
 
-    // Split tool
-    m_splitBtn = createToolButton(
+    modifyDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("view-split-left-right"),
                          style()->standardIcon(QStyle::SP_DialogNoButton)),
-        tr("Split"),
-        tr("Split entity at intersections"));
+        tr("Split"), tr("Split entity at intersections"));
 
-    addSeparator();
-
-    // Offset tool
-    m_offsetBtn = createToolButton(
+    modifyDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("object-order-raise"),
                          style()->standardIcon(QStyle::SP_FileDialogContentsView)),
-        tr("Offset"),
-        tr("Offset geometry (O)"));
+        tr("Offset"), tr("Offset geometry (O)"));
 
-    // Fillet tool
-    m_filletBtn = createToolButton(
+    modifyDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-bezier-curves"),
                          style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Fillet"),
-        tr("Fillet corners (F)"));
+        tr("Fillet"), tr("Fillet corners (F)"));
 
-    // Chamfer tool
-    m_chamferBtn = createToolButton(
+    modifyDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-polygon"),
                          style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Chamfer"),
-        tr("Chamfer corners"));
+        tr("Chamfer"), tr("Chamfer corners"));
+
+    connect(m_modifyBtn, &ToolbarButton::dropdownClicked,
+            this, &SketchToolbar::onModifyDropdownClicked);
 
     addSeparator();
 
-    // Rectangular Pattern tool
-    m_rectPatternBtn = createToolButton(
-        QIcon::fromTheme(QStringLiteral("view-grid"),
-                         style()->standardIcon(QStyle::SP_FileDialogListView)),
-        tr("Rect Pattern"),
+    // ===== PATTERN button with dropdown =====
+    // Default to Rect Pattern (most common pattern type)
+    m_defaultPatternIcon = QIcon::fromTheme(QStringLiteral("view-grid"),
+                                            style()->standardIcon(QStyle::SP_FileDialogListView));
+    m_defaultPatternText = tr("Rect\nPattern");
+    m_patternBtn = createToolButton(
+        m_defaultPatternIcon,
+        m_defaultPatternText,
         tr("Create rectangular pattern"));
 
-    // Circular Pattern tool
-    m_circPatternBtn = createToolButton(
+    auto* patternDropdown = m_patternBtn->dropdown();
+    patternDropdown->setIconSize(16);
+
+    patternDropdown->addButton(
+        QIcon::fromTheme(QStringLiteral("view-grid"),
+                         style()->standardIcon(QStyle::SP_FileDialogListView)),
+        tr("Rect Pattern"), tr("Create rectangular pattern"));
+
+    patternDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("view-refresh"),
                          style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Circ Pattern"),
-        tr("Create circular pattern"));
+        tr("Circ Pattern"), tr("Create circular pattern"));
 
-    addSeparator();
-
-    // Project tool
-    m_projectBtn = createToolButton(
+    patternDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("transform-move"),
                          style()->standardIcon(QStyle::SP_ArrowDown)),
-        tr("Project"),
-        tr("Project geometry from other sketches"));
+        tr("Project"), tr("Project geometry from other sketches"));
+
+    connect(m_patternBtn, &ToolbarButton::dropdownClicked,
+            this, &SketchToolbar::onPatternDropdownClicked);
 }
 
 void SketchToolbar::onToolClicked()
@@ -221,88 +286,209 @@ void SketchToolbar::onToolClicked()
     auto* btn = qobject_cast<ToolbarButton*>(sender());
     if (!btn) return;
 
-    SketchTool clickedTool = SketchTool::Line;  // Default
+    // Create button is dropdown-first: must choose before button works
+    if (btn == m_createBtn) {
+        if (m_lastCreateTool == SketchTool::Select) {
+            m_createBtn->showDropdown();
+            return;
+        }
+        setActiveToolInternal(m_lastCreateTool, m_lastCreateMode, btn);
+    }
+    // Other buttons are default-first: clicking activates the last selected tool
+    else if (btn == m_constrainBtn) {
+        setActiveToolInternal(m_lastConstrainTool, CreationMode::Default, btn);
+    }
+    else if (btn == m_modifyBtn) {
+        setActiveToolInternal(m_lastModifyTool, CreationMode::Default, btn);
+    }
+    else if (btn == m_patternBtn) {
+        setActiveToolInternal(m_lastPatternTool, CreationMode::Default, btn);
+    }
+}
 
-    if (btn == m_lineBtn)            clickedTool = SketchTool::Line;
-    else if (btn == m_rectBtn)       clickedTool = SketchTool::Rectangle;
-    else if (btn == m_circleBtn)     clickedTool = SketchTool::Circle;
-    else if (btn == m_arcBtn)        clickedTool = SketchTool::Arc;
-    else if (btn == m_splineBtn)     clickedTool = SketchTool::Spline;
-    else if (btn == m_polygonBtn)    clickedTool = SketchTool::Polygon;
-    else if (btn == m_slotBtn)       clickedTool = SketchTool::Slot;
-    else if (btn == m_ellipseBtn)    clickedTool = SketchTool::Ellipse;
-    else if (btn == m_pointBtn)      clickedTool = SketchTool::Point;
-    else if (btn == m_textBtn)       clickedTool = SketchTool::Text;
-    else if (btn == m_dimBtn)        clickedTool = SketchTool::Dimension;
-    else if (btn == m_constraintBtn) clickedTool = SketchTool::Constraint;
-    else if (btn == m_trimBtn)       clickedTool = SketchTool::Trim;
-    else if (btn == m_extendBtn)     clickedTool = SketchTool::Extend;
-    else if (btn == m_splitBtn)      clickedTool = SketchTool::Split;
-    else if (btn == m_offsetBtn)     clickedTool = SketchTool::Offset;
-    else if (btn == m_filletBtn)     clickedTool = SketchTool::Fillet;
-    else if (btn == m_chamferBtn)    clickedTool = SketchTool::Chamfer;
-    else if (btn == m_rectPatternBtn) clickedTool = SketchTool::RectPattern;
-    else if (btn == m_circPatternBtn) clickedTool = SketchTool::CircPattern;
-    else if (btn == m_projectBtn)    clickedTool = SketchTool::Project;
+void SketchToolbar::onCreateDropdownClicked(int index)
+{
+    static const SketchTool tools[] = {
+        SketchTool::Line, SketchTool::Rectangle, SketchTool::Circle,
+        SketchTool::Arc, SketchTool::Spline, SketchTool::Polygon,
+        SketchTool::Slot, SketchTool::Ellipse, SketchTool::Point
+    };
+    static const char* names[] = {
+        "Line", "Rectangle", "Circle", "Arc", "Spline", "Polygon",
+        "Slot", "Ellipse", "Point"
+    };
+    if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
+        SketchTool tool = tools[index];
+        CreationMode mode = CreationMode::Default;
 
-    // If clicking the same tool, deselect it and switch to Select mode
-    SketchTool newTool = (clickedTool == m_activeTool) ? SketchTool::Select : clickedTool;
+        // Store as last selected create tool
+        m_lastCreateTool = tool;
+        m_lastCreateMode = mode;
 
-    // Update checked state - all unchecked for Select mode, otherwise one checked
-    m_lineBtn->setChecked(newTool == SketchTool::Line);
-    m_rectBtn->setChecked(newTool == SketchTool::Rectangle);
-    m_circleBtn->setChecked(newTool == SketchTool::Circle);
-    m_arcBtn->setChecked(newTool == SketchTool::Arc);
-    m_splineBtn->setChecked(newTool == SketchTool::Spline);
-    m_polygonBtn->setChecked(newTool == SketchTool::Polygon);
-    m_slotBtn->setChecked(newTool == SketchTool::Slot);
-    m_ellipseBtn->setChecked(newTool == SketchTool::Ellipse);
-    m_pointBtn->setChecked(newTool == SketchTool::Point);
-    m_textBtn->setChecked(newTool == SketchTool::Text);
-    m_dimBtn->setChecked(newTool == SketchTool::Dimension);
-    m_constraintBtn->setChecked(newTool == SketchTool::Constraint);
-    m_trimBtn->setChecked(newTool == SketchTool::Trim);
-    m_extendBtn->setChecked(newTool == SketchTool::Extend);
-    m_splitBtn->setChecked(newTool == SketchTool::Split);
-    m_offsetBtn->setChecked(newTool == SketchTool::Offset);
-    m_filletBtn->setChecked(newTool == SketchTool::Fillet);
-    m_chamferBtn->setChecked(newTool == SketchTool::Chamfer);
-    m_rectPatternBtn->setChecked(newTool == SketchTool::RectPattern);
-    m_circPatternBtn->setChecked(newTool == SketchTool::CircPattern);
-    m_projectBtn->setChecked(newTool == SketchTool::Project);
+        // Update button text to show selected tool
+        m_createBtn->setText(tr(names[index]));
 
-    if (newTool != m_activeTool) {
+        setActiveToolInternal(tool, mode, m_createBtn);
+    }
+}
+
+void SketchToolbar::onCreateVariantClicked(int index, int variantId)
+{
+    // This is called for backward compatibility but we use variantSelected now
+    // which includes the variant name
+    static const SketchTool tools[] = {
+        SketchTool::Line, SketchTool::Rectangle, SketchTool::Circle,
+        SketchTool::Arc, SketchTool::Spline, SketchTool::Polygon,
+        SketchTool::Slot, SketchTool::Ellipse, SketchTool::Point
+    };
+    static const char* names[] = {
+        "Line", "Rectangle", "Circle", "Arc", "Spline", "Polygon",
+        "Slot", "Ellipse", "Point"
+    };
+    if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
+        SketchTool tool = tools[index];
+        CreationMode mode = static_cast<CreationMode>(variantId);
+
+        // Store as last selected create tool
+        m_lastCreateTool = tool;
+        m_lastCreateMode = mode;
+
+        // Button text will be updated by onCreateVariantSelected
+
+        setActiveToolInternal(tool, mode, m_createBtn);
+    }
+}
+
+void SketchToolbar::onCreateVariantSelected(int index, int variantId, const QString& variantName)
+{
+    Q_UNUSED(index)
+    Q_UNUSED(variantId)
+    // Update button text to show the specific variant name
+    m_createBtn->setText(variantName);
+}
+
+void SketchToolbar::onConstrainDropdownClicked(int index)
+{
+    static const SketchTool tools[] = {
+        SketchTool::Dimension, SketchTool::Constraint, SketchTool::Text
+    };
+    static const char* names[] = {
+        "Dimension", "Constraint", "Text"
+    };
+    if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
+        m_lastConstrainTool = tools[index];
+        m_constrainBtn->setText(tr(names[index]));
+        setActiveToolInternal(tools[index], CreationMode::Default, m_constrainBtn);
+    }
+}
+
+void SketchToolbar::onModifyDropdownClicked(int index)
+{
+    static const SketchTool tools[] = {
+        SketchTool::Trim, SketchTool::Extend, SketchTool::Split,
+        SketchTool::Offset, SketchTool::Fillet, SketchTool::Chamfer
+    };
+    static const char* names[] = {
+        "Trim", "Extend", "Split", "Offset", "Fillet", "Chamfer"
+    };
+    if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
+        m_lastModifyTool = tools[index];
+        m_modifyBtn->setText(tr(names[index]));
+        setActiveToolInternal(tools[index], CreationMode::Default, m_modifyBtn);
+    }
+}
+
+void SketchToolbar::onPatternDropdownClicked(int index)
+{
+    static const SketchTool tools[] = {
+        SketchTool::RectPattern, SketchTool::CircPattern, SketchTool::Project
+    };
+    static const char* names[] = {
+        "Rect Pattern", "Circ Pattern", "Project"
+    };
+    if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
+        m_lastPatternTool = tools[index];
+        m_patternBtn->setText(tr(names[index]));
+        setActiveToolInternal(tools[index], CreationMode::Default, m_patternBtn);
+    }
+}
+
+void SketchToolbar::setActiveToolInternal(SketchTool tool, CreationMode mode,
+                                           ToolbarButton* activeBtn)
+{
+    // If clicking the same tool AND same mode, deselect and switch to Select mode
+    // But if mode is different (e.g., switching from Slot to Arc Slot), keep the tool active
+    bool sameToolAndMode = (tool == m_activeTool && mode == m_creationMode);
+    SketchTool newTool = sameToolAndMode ? SketchTool::Select : tool;
+    CreationMode newMode = (newTool == SketchTool::Select) ? CreationMode::Default : mode;
+
+    // Update checked states - only one group can be active
+    m_createBtn->setChecked(activeBtn == m_createBtn && newTool != SketchTool::Select);
+    m_constrainBtn->setChecked(activeBtn == m_constrainBtn && newTool != SketchTool::Select);
+    m_modifyBtn->setChecked(activeBtn == m_modifyBtn && newTool != SketchTool::Select);
+    m_patternBtn->setChecked(activeBtn == m_patternBtn && newTool != SketchTool::Select);
+
+    if (newTool != m_activeTool || newMode != m_creationMode) {
         m_activeTool = newTool;
-        emit toolSelected(m_activeTool);
+        m_creationMode = newMode;
+        emit toolChanged(m_activeTool);
+        emit toolSelected(m_activeTool, m_creationMode);
     }
 }
 
 void SketchToolbar::setActiveTool(SketchTool tool)
 {
-    m_activeTool = tool;
+    setActiveTool(tool, CreationMode::Default);
+}
 
-    // Update button states
-    m_lineBtn->setChecked(tool == SketchTool::Line);
-    m_rectBtn->setChecked(tool == SketchTool::Rectangle);
-    m_circleBtn->setChecked(tool == SketchTool::Circle);
-    m_arcBtn->setChecked(tool == SketchTool::Arc);
-    m_splineBtn->setChecked(tool == SketchTool::Spline);
-    m_polygonBtn->setChecked(tool == SketchTool::Polygon);
-    m_slotBtn->setChecked(tool == SketchTool::Slot);
-    m_ellipseBtn->setChecked(tool == SketchTool::Ellipse);
-    m_pointBtn->setChecked(tool == SketchTool::Point);
-    m_textBtn->setChecked(tool == SketchTool::Text);
-    m_dimBtn->setChecked(tool == SketchTool::Dimension);
-    m_constraintBtn->setChecked(tool == SketchTool::Constraint);
-    m_trimBtn->setChecked(tool == SketchTool::Trim);
-    m_extendBtn->setChecked(tool == SketchTool::Extend);
-    m_splitBtn->setChecked(tool == SketchTool::Split);
-    m_offsetBtn->setChecked(tool == SketchTool::Offset);
-    m_filletBtn->setChecked(tool == SketchTool::Fillet);
-    m_chamferBtn->setChecked(tool == SketchTool::Chamfer);
-    m_rectPatternBtn->setChecked(tool == SketchTool::RectPattern);
-    m_circPatternBtn->setChecked(tool == SketchTool::CircPattern);
-    m_projectBtn->setChecked(tool == SketchTool::Project);
+void SketchToolbar::setActiveTool(SketchTool tool, CreationMode mode)
+{
+    m_activeTool = tool;
+    m_creationMode = mode;
+
+    // Determine which button group this tool belongs to
+    bool isCreate = (tool == SketchTool::Line || tool == SketchTool::Rectangle ||
+                     tool == SketchTool::Circle || tool == SketchTool::Arc ||
+                     tool == SketchTool::Spline || tool == SketchTool::Polygon ||
+                     tool == SketchTool::Slot || tool == SketchTool::Ellipse ||
+                     tool == SketchTool::Point);
+    bool isConstrain = (tool == SketchTool::Dimension || tool == SketchTool::Constraint ||
+                        tool == SketchTool::Text);
+    bool isModify = (tool == SketchTool::Trim || tool == SketchTool::Extend ||
+                     tool == SketchTool::Split || tool == SketchTool::Offset ||
+                     tool == SketchTool::Fillet || tool == SketchTool::Chamfer);
+    bool isPattern = (tool == SketchTool::RectPattern || tool == SketchTool::CircPattern ||
+                      tool == SketchTool::Project);
+
+    m_createBtn->setChecked(isCreate);
+    m_constrainBtn->setChecked(isConstrain);
+    m_modifyBtn->setChecked(isModify);
+    m_patternBtn->setChecked(isPattern);
+}
+
+void SketchToolbar::resetCreateButton()
+{
+    // Reset Create button to dropdown-first (must choose)
+    m_lastCreateTool = SketchTool::Select;
+    m_lastCreateMode = CreationMode::Default;
+    m_createBtn->setIcon(m_defaultCreateIcon);
+    m_createBtn->setText(m_defaultCreateText);
+
+    // Reset dropdown item variant selections (e.g., "Arc Slot" back to "Slot")
+    m_createBtn->dropdown()->resetAllItems();
+
+    // Reset other buttons to their default tools
+    m_lastConstrainTool = SketchTool::Dimension;
+    m_constrainBtn->setIcon(m_defaultConstrainIcon);
+    m_constrainBtn->setText(m_defaultConstrainText);
+
+    m_lastModifyTool = SketchTool::Trim;
+    m_modifyBtn->setIcon(m_defaultModifyIcon);
+    m_modifyBtn->setText(m_defaultModifyText);
+
+    m_lastPatternTool = SketchTool::RectPattern;
+    m_patternBtn->setIcon(m_defaultPatternIcon);
+    m_patternBtn->setText(m_defaultPatternText);
 }
 
 }  // namespace hobbycad

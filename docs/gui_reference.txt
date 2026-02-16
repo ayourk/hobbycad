@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/gui_reference.txt
-  Document Version : 0.0.3
-  Date             : 2026-02-14
+  Document Version : 0.0.4
+  Date             : 2026-02-15
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -320,7 +320,7 @@
     Categories:
       Global        Command Search (/)
       File          New, Open, Save, Save As, Close, Quit
-      Edit          Cut, Copy, Paste, Delete, Select All
+      Edit          Undo, Redo, Cut, Copy, Paste, Delete, Select All
       View          Toggle Terminal/Project/Properties, Reset View,
                     Rotate Left/Right, Show Grid, Snap to Grid,
                     Z-Up Orientation, Orbit Selected Object, Preferences
@@ -695,7 +695,7 @@
   ------------------------
 
     The sketch canvas displays a grid for alignment and provides various
-    snapping behaviors.
+    snapping behaviors including entity snap points.
 
     Grid Display:
       - Grid is shown as light gray lines
@@ -708,27 +708,68 @@
       Show Grid (G)       Toggle grid visibility
       Snap to Grid        When enabled, points snap to grid intersections
 
+    Entity Snap Points (always active):
+      Entity snap points allow precise alignment to existing geometry.
+      When the cursor approaches a snap point, a visual indicator appears.
+
+      Snap Point Types:
+        - Endpoint (square): Line endpoints, arc endpoints, polygon vertices
+        - Midpoint (triangle): Line midpoints, arc midpoints, edge midpoints
+        - Center (circle with cross): Circle/arc/ellipse/polygon centers
+        - Quadrant (diamond): Circle/ellipse axis points (0°, 90°, 180°, 270°)
+        - Arc End Center (circle): Slot endpoint arc centers
+
+      Entity-Specific Snap Points:
+        Line:       2 endpoints, 1 midpoint
+        Rectangle:  4 corners, 4 edge midpoints, 1 center
+        Circle:     1 center, 4 quadrant points
+        Arc:        1 center, 2 endpoints, 1 arc midpoint
+        Polygon:    1 center, all vertices, all edge midpoints
+        Ellipse:    1 center, 4 quadrant points
+        Slot:       Arc centers, centerline midpoint, extreme endpoints
+        Spline:     All control points
+
+      Construction geometry provides snap points just like regular geometry.
+
     Snapping Behaviors:
 
       Grid Snap (when enabled):
         - Drawing points snap to nearest grid intersection
         - Applies during entity creation and handle dragging
 
-      Force Snap (Shift key):
-        - Hold Shift while dragging to force grid snap
-        - Works even when global snap setting is off
-        - Useful for occasional precise placement
+      Modifier Keys During Drawing:
 
-      Axis Constraint (Ctrl + X/Y key):
-        - Hold Ctrl and press X or Y during a drag
-        - Movement is constrained to that axis only
-        - Visual guide line appears showing the constraint
-        - Release Ctrl to allow free movement again
+        Ctrl (Angle Snap):
+          - Hold Ctrl during line/rectangle/linear slot creation
+          - Constrains to 45° angle increments (0°, 45°, 90°, 135°, etc.)
+          - Visual indicator shows snapped angle and guide lines
 
-      Combined Snap + Constraint (Shift + Ctrl):
-        - Hold both Shift and Ctrl during drag
-        - Snaps to grid AND constrains to axis
-        - Creates a crosshair guide at the constrained position
+        Alt (Disable Entity Snap):
+          - Hold Alt to temporarily disable entity snap points
+          - Allows free-form drawing without snapping to geometry
+          - Grid snap still applies if enabled
+
+        Shift (Arc Slot Flip):
+          - During arc slot creation, toggles arc direction
+          - Creates >180° arc when flipped
+
+      Modifier Keys During Handle Dragging:
+
+        Shift (Force Grid Snap):
+          - Hold Shift while dragging to force grid snap
+          - Works even when global snap setting is off
+          - Useful for occasional precise placement
+
+        Ctrl + X/Y (Axis Constraint):
+          - Hold Ctrl and press X or Y during a drag
+          - Movement is constrained to that axis only
+          - Visual guide line appears showing the constraint
+          - Release Ctrl to allow free movement again
+
+        Shift + Ctrl (Combined):
+          - Hold both Shift and Ctrl during drag
+          - Snaps to grid AND constrains to axis
+          - Creates a crosshair guide at the constrained position
 
 
   6.9.1  Construction Geometry
@@ -1102,6 +1143,11 @@
       Escape        Cancel current operation / Deselect / Exit sketch
       Enter         Finish spline (same as right-click)
       Right-click   Finish spline / Context menu
+
+    Edit:
+      Ctrl+Z        Undo last operation
+      Ctrl+Y        Redo (alternative: Ctrl+Shift+Z)
+      Ctrl+Shift+Z  Redo
 
     Selection:
       Click         Select single entity

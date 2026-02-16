@@ -82,7 +82,12 @@ QVector<QPointF> Entity::endpoints() const
         }
         break;
     case EntityType::Slot:
-        if (points.size() >= 2) {
+        if (points.size() >= 3) {
+            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
+            result.append(points[1]);
+            result.append(points[2]);
+        } else if (points.size() >= 2) {
+            // Linear slot: points[0] and points[1] are arc centers (endpoints)
             result.append(points[0]);
             result.append(points[1]);
         }
@@ -156,6 +161,89 @@ QPointF Entity::closestPoint(const QPointF& point) const
         }
         break;
 
+    case EntityType::Slot:
+        if (points.size() >= 3) {
+            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
+            QPointF arcCenter = points[0];
+            QPointF start = points[1];
+            QPointF end = points[2];
+            double halfWidth = radius;
+
+            double arcRadius = QLineF(arcCenter, start).length();
+            double distToCenter = QLineF(arcCenter, point).length();
+
+            // Compute angles
+            double startAngle = std::atan2(start.y() - arcCenter.y(), start.x() - arcCenter.x());
+            double endAngle = std::atan2(end.y() - arcCenter.y(), end.x() - arcCenter.x());
+            double pointAngle = std::atan2(point.y() - arcCenter.y(), point.x() - arcCenter.x());
+
+            // Normalize sweep angle
+            double sweep = endAngle - startAngle;
+            while (sweep > M_PI) sweep -= 2 * M_PI;
+            while (sweep < -M_PI) sweep += 2 * M_PI;
+            if (arcFlipped) {
+                sweep = (sweep > 0) ? sweep - 2 * M_PI : sweep + 2 * M_PI;
+            }
+
+            double relAngle = pointAngle - startAngle;
+            while (relAngle > M_PI) relAngle -= 2 * M_PI;
+            while (relAngle < -M_PI) relAngle += 2 * M_PI;
+
+            bool inSweep = (sweep >= 0) ? (relAngle >= 0 && relAngle <= sweep) : (relAngle <= 0 && relAngle >= sweep);
+
+            if (inSweep) {
+                // Point is in angular range - return closest point on inner or outer arc
+                if (distToCenter < arcRadius) {
+                    // Inside arc - closest is on inner edge
+                    double innerR = arcRadius - halfWidth;
+                    return arcCenter + (point - arcCenter) * (innerR / distToCenter);
+                } else {
+                    // Outside arc - closest is on outer edge
+                    double outerR = arcRadius + halfWidth;
+                    return arcCenter + (point - arcCenter) * (outerR / distToCenter);
+                }
+            } else {
+                // Point is outside angular range - closest to one of the endpoint semicircles
+                double distToStart = QLineF(start, point).length();
+                double distToEnd = QLineF(end, point).length();
+                if (distToStart < distToEnd) {
+                    return start + (point - start) * (halfWidth / distToStart);
+                } else {
+                    return end + (point - end) * (halfWidth / distToEnd);
+                }
+            }
+        } else if (points.size() >= 2) {
+            // Linear slot: points[0] and points[1] are arc centers
+            QPointF p1 = points[0];
+            QPointF p2 = points[1];
+            double halfWidth = radius;
+
+            double len = QLineF(p1, p2).length();
+            if (len < 0.001) return p1;
+
+            QPointF d = p2 - p1;
+            double t = QPointF::dotProduct(point - p1, d) / (len * len);
+
+            if (t >= 0.0 && t <= 1.0) {
+                // Project onto center line
+                QPointF onLine = p1 + t * d;
+                double dist = QLineF(onLine, point).length();
+                if (dist < 0.001) return onLine;  // On center line
+                return onLine + (point - onLine) * (halfWidth / dist);
+            } else if (t < 0.0) {
+                // Beyond p1 - closest on p1's semicircle
+                double dist = QLineF(p1, point).length();
+                if (dist < 0.001) return p1;
+                return p1 + (point - p1) * (halfWidth / dist);
+            } else {
+                // Beyond p2 - closest on p2's semicircle
+                double dist = QLineF(p2, point).length();
+                if (dist < 0.001) return p2;
+                return p2 + (point - p2) * (halfWidth / dist);
+            }
+        }
+        break;
+
     default:
         break;
     }
@@ -199,6 +287,91 @@ double Entity::distanceTo(const QPointF& point) const
         if (points.size() >= 2) {
             QPointF cp = closestPoint(point);
             return QLineF(point, cp).length();
+        }
+        break;
+
+    case EntityType::Slot:
+        if (points.size() >= 3) {
+            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
+            QPointF arcCenter = points[0];
+            QPointF start = points[1];
+            QPointF end = points[2];
+            double halfWidth = radius;
+
+            double arcRadius = QLineF(arcCenter, start).length();
+            double distToCenter = QLineF(arcCenter, point).length();
+
+            // Compute angles
+            double startAngle = std::atan2(start.y() - arcCenter.y(), start.x() - arcCenter.x());
+            double endAngle = std::atan2(end.y() - arcCenter.y(), end.x() - arcCenter.x());
+            double pointAngle = std::atan2(point.y() - arcCenter.y(), point.x() - arcCenter.x());
+
+            // Normalize sweep angle
+            double sweep = endAngle - startAngle;
+            while (sweep > M_PI) sweep -= 2 * M_PI;
+            while (sweep < -M_PI) sweep += 2 * M_PI;
+            if (arcFlipped) {
+                sweep = (sweep > 0) ? sweep - 2 * M_PI : sweep + 2 * M_PI;
+            }
+
+            double relAngle = pointAngle - startAngle;
+            while (relAngle > M_PI) relAngle -= 2 * M_PI;
+            while (relAngle < -M_PI) relAngle += 2 * M_PI;
+
+            bool inSweep = (sweep >= 0) ? (relAngle >= 0 && relAngle <= sweep) : (relAngle <= 0 && relAngle >= sweep);
+
+            if (inSweep) {
+                // Point is in angular range - check radial distance
+                double innerRadius = arcRadius - halfWidth;
+                double outerRadius = arcRadius + halfWidth;
+                if (distToCenter >= innerRadius && distToCenter <= outerRadius) {
+                    return 0.0;  // Inside the slot
+                } else if (distToCenter < innerRadius) {
+                    return innerRadius - distToCenter;
+                } else {
+                    return distToCenter - outerRadius;
+                }
+            } else {
+                // Point is outside angular range - check endpoint semicircles
+                double distToStart = QLineF(start, point).length();
+                double distToEnd = QLineF(end, point).length();
+                double minDist = std::min(distToStart, distToEnd);
+                if (minDist <= halfWidth) {
+                    return 0.0;  // Inside endpoint semicircle
+                }
+                return minDist - halfWidth;
+            }
+        } else if (points.size() >= 2) {
+            // Linear slot: points[0] and points[1] are arc centers
+            QPointF p1 = points[0];
+            QPointF p2 = points[1];
+            double halfWidth = radius;
+
+            double len = QLineF(p1, p2).length();
+            if (len < 0.001) return QLineF(p1, point).length();
+
+            QPointF d = p2 - p1;
+            double t = QPointF::dotProduct(point - p1, d) / (len * len);
+
+            if (t >= 0.0 && t <= 1.0) {
+                // Project onto center line
+                QPointF onLine = p1 + t * d;
+                double dist = QLineF(onLine, point).length();
+                if (dist <= halfWidth) {
+                    return 0.0;  // Inside the slot
+                }
+                return dist - halfWidth;
+            } else if (t < 0.0) {
+                // Beyond p1 - check p1's semicircle
+                double dist = QLineF(p1, point).length();
+                if (dist <= halfWidth) return 0.0;
+                return dist - halfWidth;
+            } else {
+                // Beyond p2 - check p2's semicircle
+                double dist = QLineF(p2, point).length();
+                if (dist <= halfWidth) return 0.0;
+                return dist - halfWidth;
+            }
         }
         break;
 
@@ -327,6 +500,20 @@ Entity createSlot(int id, const QPointF& center1, const QPointF& center2, double
     e.points.append(center1);
     e.points.append(center2);
     e.radius = radius;
+    return e;
+}
+
+Entity createArcSlot(int id, const QPointF& arcCenter, const QPointF& start,
+                     const QPointF& end, double radius, bool flipped)
+{
+    Entity e;
+    e.id = id;
+    e.type = EntityType::Slot;
+    e.points.append(arcCenter);   // points[0] = arc center
+    e.points.append(start);       // points[1] = start endpoint
+    e.points.append(end);         // points[2] = end endpoint
+    e.radius = radius;            // Half-width of the slot
+    e.arcFlipped = flipped;       // True for >180 degree arcs
     return e;
 }
 
@@ -577,8 +764,77 @@ QVector<QPointF> entityToPolygon(const Entity& entity, int segments)
         break;
 
     case EntityType::Slot:
-        if (entity.points.size() >= 2) {
-            // Slot is two semicircles connected by lines
+        if (entity.points.size() >= 3) {
+            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
+            QPointF arcCenter = entity.points[0];
+            QPointF start = entity.points[1];
+            QPointF end = entity.points[2];
+            double halfWidth = entity.radius;
+
+            double arcRadius = QLineF(arcCenter, start).length();
+            double innerRadius = arcRadius - halfWidth;
+            double outerRadius = arcRadius + halfWidth;
+
+            // Calculate angles
+            double startAngle = std::atan2(start.y() - arcCenter.y(), start.x() - arcCenter.x());
+            double endAngle = std::atan2(end.y() - arcCenter.y(), end.x() - arcCenter.x());
+            double sweepAngle = endAngle - startAngle;
+
+            // Normalize sweep
+            while (sweepAngle > M_PI) sweepAngle -= 2 * M_PI;
+            while (sweepAngle < -M_PI) sweepAngle += 2 * M_PI;
+            if (entity.arcFlipped) {
+                sweepAngle = (sweepAngle > 0) ? sweepAngle - 2 * M_PI : sweepAngle + 2 * M_PI;
+            }
+
+            int arcSegs = qMax(8, static_cast<int>(segments * qAbs(sweepAngle) / (2 * M_PI)));
+            int capSegs = segments / 4;
+
+            // Outer arc
+            for (int i = 0; i <= arcSegs; ++i) {
+                double angle = startAngle + sweepAngle * i / arcSegs;
+                result.append(QPointF(
+                    arcCenter.x() + outerRadius * std::cos(angle),
+                    arcCenter.y() + outerRadius * std::sin(angle)));
+            }
+
+            // End cap (semicircle)
+            QPointF endOuter = arcCenter + QPointF(outerRadius * std::cos(endAngle), outerRadius * std::sin(endAngle));
+            QPointF endInner = arcCenter + QPointF(innerRadius * std::cos(endAngle), innerRadius * std::sin(endAngle));
+            QPointF endCapCenter = (endOuter + endInner) / 2.0;
+            double capDir = (sweepAngle >= 0) ? 1.0 : -1.0;
+            for (int i = 1; i <= capSegs; ++i) {
+                double capAngle = endAngle + capDir * M_PI * i / capSegs;
+                result.append(QPointF(
+                    endCapCenter.x() + halfWidth * std::cos(capAngle),
+                    endCapCenter.y() + halfWidth * std::sin(capAngle)));
+            }
+
+            // Inner arc (reverse)
+            for (int i = arcSegs; i >= 0; --i) {
+                double angle = startAngle + sweepAngle * i / arcSegs;
+                result.append(QPointF(
+                    arcCenter.x() + innerRadius * std::cos(angle),
+                    arcCenter.y() + innerRadius * std::sin(angle)));
+            }
+
+            // Start cap (semicircle)
+            QPointF startOuter = arcCenter + QPointF(outerRadius * std::cos(startAngle), outerRadius * std::sin(startAngle));
+            QPointF startInner = arcCenter + QPointF(innerRadius * std::cos(startAngle), innerRadius * std::sin(startAngle));
+            QPointF startCapCenter = (startOuter + startInner) / 2.0;
+            for (int i = 1; i < capSegs; ++i) {
+                double capAngle = startAngle + M_PI + capDir * M_PI * i / capSegs;
+                result.append(QPointF(
+                    startCapCenter.x() + halfWidth * std::cos(capAngle),
+                    startCapCenter.y() + halfWidth * std::sin(capAngle)));
+            }
+
+            // Close
+            if (!result.isEmpty()) {
+                result.append(result.first());
+            }
+        } else if (entity.points.size() >= 2) {
+            // Linear slot: two semicircles connected by lines
             QPointF c1 = entity.points[0];
             QPointF c2 = entity.points[1];
             QPointF dir = c2 - c1;

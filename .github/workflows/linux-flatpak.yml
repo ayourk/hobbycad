@@ -1,0 +1,157 @@
+# .github/workflows/linux-flatpak.yml
+#
+# Build HobbyCAD Flatpak for universal Linux distribution.
+#
+# Flatpak provides sandboxed, distribution-independent packages.
+# Works on virtually all Linux distros including:
+#   - SteamOS (preferred installation method)
+#   - Fedora, Ubuntu, Debian, Arch, openSUSE, etc.
+#
+# Both x86_64 and aarch64 architectures are supported.
+
+name: Linux Flatpak
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  Flatpak Build
+  # ================================================================
+  #
+  #  Builds Flatpak bundles using flatpak-builder.
+  #  Uses the KDE runtime for Qt6 support.
+
+  flatpak:
+    name: HobbyCAD Flatpak (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+            flatpak_arch: x86_64
+            artifact_name: hobbycad-flatpak-x86_64
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            flatpak_arch: aarch64
+            artifact_name: hobbycad-flatpak-aarch64
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install Flatpak and flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Add Flathub repository
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install Flatpak SDK and runtime
+        run: |
+          # Install KDE runtime and SDK for Qt6 support
+          flatpak install --user -y flathub org.kde.Platform//6.6
+          flatpak install --user -y flathub org.kde.Sdk//6.6
+
+      - name: Create Flatpak manifest
+        run: |
+          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
+          VERSION=${VERSION:-0.0.1}
+
+          cat > org.hobbycad.HobbyCAD.yml << EOF
+          app-id: org.hobbycad.HobbyCAD
+          runtime: org.kde.Platform
+          runtime-version: '6.6'
+          sdk: org.kde.Sdk
+          command: hobbycad
+          finish-args:
+            # X11 + Wayland
+            - --share=ipc
+            - --socket=x11
+            - --socket=wayland
+            # OpenGL
+            - --device=dri
+            # File access for loading/saving projects
+            - --filesystem=home
+            # For IPC with other apps if needed
+            - --talk-name=org.freedesktop.Notifications
+
+          modules:
+            # OpenCASCADE
+            - name: opencascade
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DBUILD_LIBRARY_TYPE=Shared
+                - -DBUILD_MODULE_Draw=OFF
+                - -DBUILD_MODULE_Visualization=ON
+                - -DBUILD_MODULE_ApplicationFramework=ON
+                - -DBUILD_MODULE_DataExchange=ON
+                - -DUSE_TBB=ON
+                - -DUSE_FREETYPE=ON
+              sources:
+                - type: archive
+                  url: https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_6_3.tar.gz
+                  sha256: baae5b3a7a38825396fc45ef9d170db406339f5eeec62e21b21036afeda31200
+
+            # libgit2
+            - name: libgit2
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DBUILD_TESTS=OFF
+                - -DBUILD_CLI=OFF
+              sources:
+                - type: archive
+                  url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.7.2.tar.gz
+                  sha256: de384e29d7efc9330c6cdb126ebf88342b5025d920dcb7c645defad85195ea7f
+
+            # HobbyCAD
+            - name: hobbycad
+              buildsystem: cmake-ninja
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+              sources:
+                - type: dir
+                  path: .
+          EOF
+
+      - name: Build Flatpak
+        run: |
+          flatpak-builder --user --force-clean --repo=repo \
+            builddir org.hobbycad.HobbyCAD.yml
+
+      - name: Create Flatpak bundle
+        run: |
+          flatpak build-bundle repo HobbyCAD-${{ matrix.arch }}.flatpak \
+            org.hobbycad.HobbyCAD
+
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: "*.flatpak"
+          retention-days: 14
+          if-no-files-found: error

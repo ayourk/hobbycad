@@ -1,0 +1,150 @@
+# .github/workflows/linux-arch.yml
+#
+# Build HobbyCAD pacman packages for Arch-based distros.
+#
+# Uses Arch Linux containers to build native packages:
+#   - Arch Linux (rolling release, base for derivatives)
+#   - Works on: Arch, CachyOS, Manjaro, EndeavourOS, SteamOS (unlocked)
+#
+# Both x86_64 and aarch64 architectures are supported.
+
+name: Linux Arch
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  Arch Linux pacman package
+  # ================================================================
+  #
+  #  Builds .pkg.tar.zst packages using makepkg in Arch containers.
+  #  Compatible with Arch, CachyOS, Manjaro, EndeavourOS, SteamOS.
+
+  arch:
+    name: HobbyCAD Arch (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    container: archlinux:base-devel
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+            artifact_name: hobbycad-arch-x86_64
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            artifact_name: hobbycad-arch-aarch64
+
+    steps:
+      - name: Setup pacman and install git
+        run: |
+          # Initialize pacman keyring
+          pacman-key --init
+          pacman-key --populate archlinux
+
+          # Update system and install git
+          pacman -Syu --noconfirm git
+
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -S --noconfirm --needed \
+            base-devel cmake ninja pkgconf \
+            qt6-base qt6-svg qt6-tools \
+            opencascade tbb \
+            libpng libjpeg-turbo \
+            libzip minizip \
+            libgit2 \
+            librsvg \
+            mesa glu libxkbcommon
+
+      - name: Create PKGBUILD
+        run: |
+          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
+          VERSION=${VERSION:-0.0.1}
+
+          mkdir -p pkgbuild
+          cat > pkgbuild/PKGBUILD << 'EOF'
+          # Maintainer: Aaron Yourk <ayourk@gmail.com>
+          pkgname=hobbycad
+          pkgver=VERSION_PLACEHOLDER
+          pkgrel=1
+          pkgdesc="Parametric 3D CAD Application"
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/ayourk/hobbycad"
+          license=('GPL-3.0-only')
+          depends=(
+            'qt6-base'
+            'qt6-svg'
+            'opencascade'
+            'tbb'
+            'libgit2'
+            'libzip'
+            'minizip'
+          )
+          makedepends=(
+            'cmake'
+            'ninja'
+            'qt6-tools'
+            'librsvg'
+          )
+          source=()
+
+          build() {
+            cd "$startdir/.."
+            cmake -B build -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/usr
+            cmake --build build
+          }
+
+          package() {
+            cd "$startdir/.."
+            DESTDIR="$pkgdir" cmake --install build
+          }
+          EOF
+
+          # Replace version placeholder
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" pkgbuild/PKGBUILD
+
+      - name: Build package
+        run: |
+          # makepkg cannot run as root, create a build user
+          useradd -m builder
+          chown -R builder:builder .
+
+          cd pkgbuild
+          # Allow building as root via env var workaround, or use builder user
+          su builder -c "makepkg -sf --noconfirm"
+
+          # Copy package to workspace root
+          cp *.pkg.tar.zst ../ || cp *.pkg.tar.xz ../
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-pkg
+          path: "*.pkg.tar.*"
+          retention-days: 14
+          if-no-files-found: error

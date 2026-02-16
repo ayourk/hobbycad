@@ -1,0 +1,149 @@
+# .github/workflows/linux-appimage.yml
+#
+# Build HobbyCAD AppImage for x86_64 and arm64.
+#
+# AppImages are built on Ubuntu 22.04 (glibc 2.35) for maximum compatibility.
+# The resulting AppImages run on most Linux distros from 2022 onward:
+# Ubuntu 22.04+, Fedora 36+, Debian 12+, Arch, openSUSE Tumbleweed, etc.
+#
+# AppImage bundles all dependencies (Qt6, OCCT, etc.) into a single
+# portable executable that requires no installation.
+#
+# Note: AppImages are intentionally built only on Ubuntu 22.04 (not 24.04)
+# because the older glibc provides broader compatibility. Users wanting
+# the latest libraries should use native packages (.deb, .rpm) instead.
+
+name: Linux AppImage
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  AppImage Matrix Build
+  # ================================================================
+  #
+  #  Builds portable AppImages using linuxdeploy and the Qt plugin.
+  #  Each AppImage includes Qt6, OCCT, and all required libraries.
+
+  appimage:
+    name: HobbyCAD AppImage (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+            linuxdeploy_arch: x86_64
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            linuxdeploy_arch: aarch64
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            libocct-data-exchange-dev libocct-draw-dev \
+            libocct-foundation-dev libocct-modeling-algorithms-dev \
+            libocct-modeling-data-dev libocct-ocaf-dev \
+            libocct-visualization-dev occt-misc libtbb-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
+            qt6-tools-dev-tools libqt6opengl6-dev \
+            libqt6openglwidgets6 libqt6svg6-dev qmake6 \
+            libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
+            libpng-dev libjpeg-dev \
+            libzip-dev libminizip-dev \
+            libgit2-dev \
+            librsvg2-bin \
+            libfuse2 file
+
+      - name: Configure CMake
+        run: cmake --preset linux-release
+
+      - name: Build
+        run: cmake --build --preset linux-release
+
+      - name: Install to AppDir
+        run: |
+          cmake --install build --prefix AppDir/usr
+
+      - name: Download linuxdeploy tools
+        run: |
+          # Download linuxdeploy for this architecture
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.linuxdeploy_arch }}.AppImage
+          chmod +x linuxdeploy-${{ matrix.linuxdeploy_arch }}.AppImage
+
+          # Download Qt plugin for linuxdeploy
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${{ matrix.linuxdeploy_arch }}.AppImage
+          chmod +x linuxdeploy-plugin-qt-${{ matrix.linuxdeploy_arch }}.AppImage
+
+      - name: Create AppImage
+        env:
+          QMAKE: /usr/bin/qmake6
+          QT_SELECT: qt6
+        run: |
+          # Create desktop file if not already installed
+          mkdir -p AppDir/usr/share/applications
+          cat > AppDir/usr/share/applications/hobbycad.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=HobbyCAD
+          Comment=Parametric 3D CAD Application
+          Exec=hobbycad
+          Icon=hobbycad
+          Categories=Graphics;3DGraphics;Engineering;
+          Terminal=false
+          StartupNotify=true
+          MimeType=application/x-hobbycad;
+          EOF
+
+          # Ensure icon exists
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          if [ -f AppDir/usr/share/icons/hicolor/256x256/apps/hobbycad.png ]; then
+            cp AppDir/usr/share/icons/hicolor/256x256/apps/hobbycad.png AppDir/
+          elif [ -f resources/icons/hobbycad.svg ]; then
+            # Convert SVG to PNG if needed
+            rsvg-convert -w 256 -h 256 resources/icons/hobbycad.svg -o AppDir/hobbycad.png
+          fi
+
+          # Run linuxdeploy with Qt plugin
+          ./linuxdeploy-${{ matrix.linuxdeploy_arch }}.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage \
+            --desktop-file AppDir/usr/share/applications/hobbycad.desktop
+
+          # Rename to standard format
+          mv HobbyCAD*.AppImage HobbyCAD-${{ matrix.arch }}.AppImage
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-linux-${{ matrix.arch }}-appimage
+          path: HobbyCAD-${{ matrix.arch }}.AppImage
+          retention-days: 14
+          if-no-files-found: error

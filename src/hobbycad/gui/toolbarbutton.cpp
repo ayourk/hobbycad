@@ -100,6 +100,16 @@ bool ToolbarButton::isChecked() const
     return m_mainButton->isChecked();
 }
 
+void ToolbarButton::setIcon(const QIcon& icon)
+{
+    m_mainButton->setIcon(icon);
+}
+
+void ToolbarButton::setText(const QString& text)
+{
+    m_mainButton->setText(text);
+}
+
 void ToolbarButton::showDropdown()
 {
     m_dropdown->showBelow(this);

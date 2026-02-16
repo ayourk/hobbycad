@@ -49,6 +49,15 @@ public:
     void setChecked(bool checked);
     bool isChecked() const;
 
+    /// Update the button icon.
+    void setIcon(const QIcon& icon);
+
+    /// Update the button text.
+    void setText(const QString& text);
+
+    /// Show the dropdown menu.
+    void showDropdown();
+
 signals:
     /// Emitted when the main button is clicked.
     void clicked();
@@ -60,8 +69,6 @@ signals:
     void dropdownClicked(int index);
 
 private:
-    void showDropdown();
-
     QToolButton* m_mainButton = nullptr;
     QToolButton* m_dropButton = nullptr;
     ToolbarDropdown* m_dropdown = nullptr;

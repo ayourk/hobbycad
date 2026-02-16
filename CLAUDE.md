@@ -129,6 +129,8 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
 
 **Sketch Module** (`hobbycad/sketch/`):
 - `entity.h` — Entity types (line, arc, circle, rectangle, polygon, slot, ellipse, spline, text), with font properties for text
+  - Linear slots: 2 points (arc centers) + radius (half-width)
+  - Arc slots: 3 points (arc center, start, end) + radius (half-width) + arcFlipped flag
 - `constraint.h` — Constraint types (dimensional: distance, radius, diameter, angle; geometric: horizontal, vertical, parallel, perpendicular, coincident, tangent, equal, midpoint, symmetric, etc.)
 - `solver.h` — Parametric constraint solver (libslvs backend, optional)
 - `operations.h` — 2D operations: intersection detection, offset, fillet, chamfer, trim, extend, split, mirror, connected chain finding
@@ -164,6 +166,14 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
   - Background image support with calibration dialog
   - Multi-selection and group operations
   - Undo/redo
+  - **Entity snap points** (always active):
+    - Endpoints, midpoints, centers, quadrant points
+    - Slot centerline points (arc centers, midpoint)
+    - Construction geometry provides snap points
+  - **Modifier keys during drawing**:
+    - Ctrl: Angle snap (45° increments) for lines/rectangles/linear slots
+    - Alt: Disable entity snapping temporarily
+    - Shift: Arc slot flip (>180° arc direction)
 - **Viewport** — ViewCube, orbit rings, scale bar, home button
 - **Bindings dialog** — Keyboard/mouse binding customization
 - **CLI commands** — Sketch geometry commands with natural English syntax

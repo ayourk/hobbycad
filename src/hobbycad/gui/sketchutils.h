@@ -5,6 +5,10 @@
 //  Conversion utilities between GUI sketch types and library types.
 //  This bridges the SketchCanvas GUI structs with libhobbycad operations.
 //
+//  Since SketchEntity now inherits from sketch::Entity, most conversions
+//  are trivial. This file provides helpers for batch conversions and
+//  backwards compatibility.
+//
 //  SPDX-License-Identifier: GPL-3.0-only
 //
 // =====================================================================
@@ -23,43 +27,19 @@
 namespace hobbycad {
 
 // =====================================================================
-//  Entity Type Conversion
+//  Entity Type Conversion (now identity - types are aliased)
 // =====================================================================
 
-/// Convert GUI entity type to library entity type
+/// Convert GUI entity type to library entity type (identity - same type)
 inline sketch::EntityType toLibraryEntityType(SketchEntityType guiType)
 {
-    switch (guiType) {
-    case SketchEntityType::Point:      return sketch::EntityType::Point;
-    case SketchEntityType::Line:       return sketch::EntityType::Line;
-    case SketchEntityType::Rectangle:  return sketch::EntityType::Rectangle;
-    case SketchEntityType::Circle:     return sketch::EntityType::Circle;
-    case SketchEntityType::Arc:        return sketch::EntityType::Arc;
-    case SketchEntityType::Spline:     return sketch::EntityType::Spline;
-    case SketchEntityType::Polygon:    return sketch::EntityType::Polygon;
-    case SketchEntityType::Slot:       return sketch::EntityType::Slot;
-    case SketchEntityType::Ellipse:    return sketch::EntityType::Ellipse;
-    case SketchEntityType::Text:       return sketch::EntityType::Text;
-    default:                           return sketch::EntityType::Point;
-    }
+    return guiType;  // SketchEntityType is aliased to sketch::EntityType
 }
 
-/// Convert library entity type to GUI entity type
+/// Convert library entity type to GUI entity type (identity - same type)
 inline SketchEntityType toGuiEntityType(sketch::EntityType libType)
 {
-    switch (libType) {
-    case sketch::EntityType::Point:     return SketchEntityType::Point;
-    case sketch::EntityType::Line:      return SketchEntityType::Line;
-    case sketch::EntityType::Rectangle: return SketchEntityType::Rectangle;
-    case sketch::EntityType::Circle:    return SketchEntityType::Circle;
-    case sketch::EntityType::Arc:       return SketchEntityType::Arc;
-    case sketch::EntityType::Spline:    return SketchEntityType::Spline;
-    case sketch::EntityType::Polygon:   return SketchEntityType::Polygon;
-    case sketch::EntityType::Slot:      return SketchEntityType::Slot;
-    case sketch::EntityType::Ellipse:   return SketchEntityType::Ellipse;
-    case sketch::EntityType::Text:      return SketchEntityType::Text;
-    default:                            return SketchEntityType::Point;
-    }
+    return libType;  // SketchEntityType is aliased to sketch::EntityType
 }
 
 // =====================================================================
@@ -67,52 +47,16 @@ inline SketchEntityType toGuiEntityType(sketch::EntityType libType)
 // =====================================================================
 
 /// Convert GUI SketchEntity to library Entity
-inline sketch::Entity toLibraryEntity(const SketchEntity& gui)
+/// Since SketchEntity inherits from sketch::Entity, this is a simple slice
+inline const sketch::Entity& toLibraryEntity(const SketchEntity& gui)
 {
-    sketch::Entity lib;
-    lib.id = gui.id;
-    lib.type = toLibraryEntityType(gui.type);
-    lib.points = gui.points;
-    lib.radius = gui.radius;
-    lib.startAngle = gui.startAngle;
-    lib.sweepAngle = gui.sweepAngle;
-    lib.sides = gui.sides;
-    lib.majorRadius = gui.majorRadius;
-    lib.minorRadius = gui.minorRadius;
-    lib.text = gui.text;
-    lib.fontFamily = gui.fontFamily;
-    lib.fontSize = gui.fontSize;
-    lib.fontBold = gui.fontBold;
-    lib.fontItalic = gui.fontItalic;
-    lib.textRotation = gui.textRotation;
-    lib.isConstruction = gui.isConstruction;
-    lib.constrained = gui.constrained;
-    return lib;
+    return static_cast<const sketch::Entity&>(gui);
 }
 
 /// Convert library Entity to GUI SketchEntity
 inline SketchEntity toGuiEntity(const sketch::Entity& lib)
 {
-    SketchEntity gui;
-    gui.id = lib.id;
-    gui.type = toGuiEntityType(lib.type);
-    gui.points = lib.points;
-    gui.radius = lib.radius;
-    gui.startAngle = lib.startAngle;
-    gui.sweepAngle = lib.sweepAngle;
-    gui.sides = lib.sides;
-    gui.majorRadius = lib.majorRadius;
-    gui.minorRadius = lib.minorRadius;
-    gui.text = lib.text;
-    gui.fontFamily = lib.fontFamily;
-    gui.fontSize = lib.fontSize;
-    gui.fontBold = lib.fontBold;
-    gui.fontItalic = lib.fontItalic;
-    gui.textRotation = lib.textRotation;
-    gui.isConstruction = lib.isConstruction;
-    gui.constrained = lib.constrained;
-    gui.selected = false;  // GUI-only state
-    return gui;
+    return SketchEntity(lib);  // Uses SketchEntity(const Entity&) constructor
 }
 
 /// Convert a vector of GUI entities to library entities

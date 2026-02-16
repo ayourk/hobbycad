@@ -1,0 +1,248 @@
+# .github/workflows/windows-inno.yml
+#
+# Build HobbyCAD installer using Inno Setup.
+#
+# Creates user-friendly .exe installers:
+#   - Start menu shortcuts
+#   - Optional desktop shortcut
+#   - File association for .hcad files
+#   - Add/Remove Programs entry
+#   - Clean uninstaller
+#
+# Both x64 and arm64 architectures are supported.
+
+name: Windows Installer
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  Inno Setup Installer
+  # ================================================================
+  #
+  #  Builds .exe installers using Inno Setup.
+  #  Uses MSVC build output as the source.
+
+  inno:
+    name: HobbyCAD Installer (${{ matrix.arch }})
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            triplet: x64-windows
+            msvc_arch: x64
+            inno_arch: x64
+            artifact_name: hobbycad-windows-x64-setup
+          - arch: arm64
+            triplet: arm64-windows
+            msvc_arch: amd64_arm64
+            inno_arch: arm64
+            artifact_name: hobbycad-windows-arm64-setup
+
+    env:
+      BUILD_TYPE: Release
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Setup vcpkg
+        run: |
+          if (Test-Path "C:\vcpkg\vcpkg.exe") {
+              Write-Host "Using pre-installed vcpkg at C:\vcpkg"
+          } elseif (Test-Path "C:\vcpkg") {
+              & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          } else {
+              git clone --depth 1 https://github.com/microsoft/vcpkg.git C:\vcpkg
+              & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          }
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "C:\vcpkg" >> $env:GITHUB_PATH
+
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Install dependencies via vcpkg
+        run: |
+          vcpkg install --triplet ${{ matrix.triplet }} `
+            --overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports `
+            --x-install-root=vcpkg_installed
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
+            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed `
+            -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}\vcpkg-overlay-ports
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Prepare installation files
+        shell: pwsh
+        run: |
+          $installDir = "staging"
+          cmake --install build --prefix $installDir
+
+          # Copy runtime DLLs
+          $binDir = "$installDir\bin"
+          $vcpkgBin = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\bin"
+
+          # Qt plugins
+          $qtPluginDir = "$installDir\bin\platforms"
+          $vcpkgPlugins = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\plugins"
+          New-Item -ItemType Directory -Force -Path $qtPluginDir | Out-Null
+          Copy-Item "$vcpkgPlugins\platforms\qwindows.dll" $qtPluginDir -ErrorAction SilentlyContinue
+
+          # Copy DLL dependencies
+          $exePath = Get-ChildItem "$binDir\hobbycad.exe" -ErrorAction SilentlyContinue
+          if ($exePath) {
+              $deps = & dumpbin /dependents $exePath.FullName 2>$null |
+                      Select-String '\.dll' |
+                      ForEach-Object { $_.ToString().Trim() }
+              foreach ($dll in $deps) {
+                  $src = Join-Path $vcpkgBin $dll
+                  if (Test-Path $src) {
+                      Copy-Item $src $binDir -ErrorAction SilentlyContinue
+                  }
+              }
+          }
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          $version = Select-String -Path CMakeLists.txt -Pattern 'project.*VERSION\s+([0-9.]+)' |
+                     ForEach-Object { $_.Matches[0].Groups[1].Value }
+          if (-not $version) { $version = "0.0.1" }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Create Inno Setup script
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $arch = "${{ matrix.arch }}"
+
+          # Determine ArchitecturesAllowed and ArchitecturesInstallIn64BitMode
+          if ($arch -eq "arm64") {
+              $archAllowed = "arm64"
+              $arch64BitMode = "arm64"
+          } else {
+              $archAllowed = "x64"
+              $arch64BitMode = "x64"
+          }
+
+          @"
+          ; HobbyCAD Inno Setup Script
+          ; Generated by GitHub Actions
+
+          #define MyAppName "HobbyCAD"
+          #define MyAppVersion "$version"
+          #define MyAppPublisher "HobbyCAD Project"
+          #define MyAppURL "https://github.com/ayourk/hobbycad"
+          #define MyAppExeName "hobbycad.exe"
+
+          [Setup]
+          AppId={{E8F5A231-7B3C-4D5E-9F1A-2B3C4D5E6F7B}
+          AppName={#MyAppName}
+          AppVersion={#MyAppVersion}
+          AppPublisher={#MyAppPublisher}
+          AppPublisherURL={#MyAppURL}
+          AppSupportURL={#MyAppURL}/issues
+          AppUpdatesURL={#MyAppURL}/releases
+          DefaultDirName={autopf}\{#MyAppName}
+          DefaultGroupName={#MyAppName}
+          AllowNoIcons=yes
+          LicenseFile=LICENSE
+          OutputDir=.
+          OutputBaseFilename=HobbyCAD-{#MyAppVersion}-$arch-Setup
+          Compression=lzma2/ultra64
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=$archAllowed
+          ArchitecturesInstallIn64BitMode=$arch64BitMode
+          UninstallDisplayIcon={app}\bin\{#MyAppExeName}
+          SetupIconFile=resources\icons\hobbycad.ico
+          PrivilegesRequired=lowest
+          PrivilegesRequiredOverridesAllowed=dialog
+
+          [Languages]
+          Name: "english"; MessagesFile: "compiler:Default.isl"
+
+          [Tasks]
+          Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+          [Files]
+          Source: "staging\bin\{#MyAppExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion
+          Source: "staging\bin\*.dll"; DestDir: "{app}\bin"; Flags: ignoreversion
+          Source: "staging\bin\platforms\*.dll"; DestDir: "{app}\bin\platforms"; Flags: ignoreversion recursesubdirs createallsubdirs
+          ; Include any additional resources
+          Source: "staging\share\*"; DestDir: "{app}\share"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists('staging\share')
+
+          [Icons]
+          Name: "{group}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"
+          Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Tasks: desktopicon
+
+          [Registry]
+          ; File association for .hcad files
+          Root: HKA; Subkey: "Software\Classes\.hcad"; ValueType: string; ValueName: ""; ValueData: "HobbyCAD.Project"; Flags: uninsdeletevalue
+          Root: HKA; Subkey: "Software\Classes\HobbyCAD.Project"; ValueType: string; ValueName: ""; ValueData: "HobbyCAD Project"; Flags: uninsdeletekey
+          Root: HKA; Subkey: "Software\Classes\HobbyCAD.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\{#MyAppExeName},0"
+          Root: HKA; Subkey: "Software\Classes\HobbyCAD.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\{#MyAppExeName}"" ""%1"""
+
+          [Run]
+          Filename: "{app}\bin\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+          [Code]
+          function DirExists(Path: String): Boolean;
+          begin
+            Result := DirExists(ExpandConstant(Path));
+          end;
+          "@ | Out-File -FilePath "hobbycad.iss" -Encoding UTF8
+
+      - name: Build installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" hobbycad.iss
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: "*-Setup.exe"
+          retention-days: 14
+          if-no-files-found: error

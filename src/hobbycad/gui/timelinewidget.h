@@ -14,6 +14,8 @@
 #ifndef HOBBYCAD_TIMELINEWIDGET_H
 #define HOBBYCAD_TIMELINEWIDGET_H
 
+#include <hobbycad/project.h>
+
 #include <QWidget>
 #include <QVector>
 
@@ -44,14 +46,32 @@ enum class TimelineFeature {
     Intersect
 };
 
+/// Dependency information for a timeline item
+struct TimelineDependency {
+    int featureId = 0;              ///< Unique ID for this feature
+    QVector<int> dependsOn;         ///< IDs of features this depends on
+    QVector<int> dependents;        ///< IDs of features that depend on this
+};
+
+// Use FeatureState from the library
+using FeatureState = hobbycad::FeatureState;
+
 class TimelineWidget : public QWidget {
     Q_OBJECT
 
 public:
     explicit TimelineWidget(QWidget* parent = nullptr);
 
-    /// Add a timeline item with icon and tooltip name.
+    /// Add a timeline item with icon and tooltip name (appends to end).
     void addItem(TimelineFeature feature, const QString& name);
+
+    /// Insert a timeline item at a specific position.
+    /// If atRollback is true and rollback is active, inserts after rollback position.
+    void insertItem(TimelineFeature feature, const QString& name, int index);
+
+    /// Add item at the appropriate position (after rollback if active, else at end).
+    /// Returns the index where the item was inserted.
+    int addItemAtRollback(TimelineFeature feature, const QString& name);
 
     /// Clear all timeline items.
     void clear();
@@ -83,6 +103,57 @@ public:
     /// Remove an item at the given index.
     void removeItem(int index);
 
+    // ---- Dependency tracking ----
+
+    /// Set the feature ID for an item (for dependency tracking).
+    void setFeatureId(int index, int featureId);
+
+    /// Get the feature ID at an index.
+    int featureIdAt(int index) const;
+
+    /// Set dependencies for an item (IDs of features it depends on).
+    void setDependencies(int index, const QVector<int>& dependsOn);
+
+    /// Get dependencies for an item.
+    QVector<int> dependenciesAt(int index) const;
+
+    /// Set the state (normal/warning/error) for an item.
+    void setFeatureState(int index, FeatureState state);
+
+    /// Get the state for an item.
+    FeatureState featureStateAt(int index) const;
+
+    /// Set individual suppression for an item (independent of rollback).
+    void setFeatureSuppressed(int index, bool suppressed);
+
+    /// Check if an item is individually suppressed.
+    bool isFeatureSuppressed(int index) const;
+
+    /// Check if moving fromIndex to toIndex would violate dependencies.
+    /// Returns true if the move is valid, false if it would break dependencies.
+    bool canMoveItem(int fromIndex, int toIndex) const;
+
+    /// Get the index of a feature by its ID (-1 if not found).
+    int indexOfFeatureId(int featureId) const;
+
+    /// Get indices of all features that the item at index depends on.
+    QVector<int> getParentIndices(int index) const;
+
+    /// Get indices of all features that depend on the item at index.
+    QVector<int> getDependentIndices(int index) const;
+
+    /// Highlight dependencies when hovering over an item.
+    void highlightDependencies(int index);
+
+    /// Clear dependency highlighting.
+    void clearDependencyHighlights();
+
+    /// Update rollback position from drag (called by RollbackBar).
+    void updateRollbackFromDrag(int xPos);
+
+    /// Update the visual position of the rollback bar.
+    void updateRollbackBarPosition();
+
     /// Start dragging an item (called by TimelineItem).
     void startDrag(int index);
 
@@ -91,6 +162,9 @@ public:
 
     /// End dragging (called by TimelineItem on mouse release).
     void endDrag();
+
+    /// Show context menu for an item (called by TimelineItem).
+    void showItemContextMenu(int index, const QPoint& globalPos);
 
 signals:
     /// Emitted when a timeline item is clicked.
@@ -104,6 +178,18 @@ signals:
 
     /// Emitted when an item is moved via drag and drop.
     void itemMoved(int fromIndex, int toIndex);
+
+    /// Emitted when user requests to edit a feature (right-click > Edit).
+    void editFeatureRequested(int index);
+
+    /// Emitted when user requests to rename a feature.
+    void renameFeatureRequested(int index);
+
+    /// Emitted when user requests to delete a feature.
+    void deleteFeatureRequested(int index);
+
+    /// Emitted when user requests to suppress/unsuppress a feature.
+    void suppressFeatureRequested(int index, bool suppress);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -131,6 +217,10 @@ private:
     QVector<class TimelineItem*> m_items;
     QVector<TimelineFeature> m_features;  // Feature type for each item
     QVector<QString> m_names;             // Name for each item
+    QVector<int> m_featureIds;            // Feature ID for each item (for dependencies)
+    QVector<QVector<int>> m_dependencies; // Dependencies for each item (feature IDs)
+    QVector<FeatureState> m_featureStates; // Error/warning state for each item
+    QVector<bool> m_suppressedStates;      // Individual suppression state for each item
     int m_scrollStep = 60;    // pixels per scroll step
     int m_rollbackPos = -1;   // -1 = end (all active)
     int m_selectedIndex = -1; // Currently selected item (-1 = none)
@@ -138,6 +228,14 @@ private:
     // Drag state
     int m_dragIndex = -1;       // Index of item being dragged
     int m_dragOrigIndex = -1;   // Original index before drag started
+
+    // Dependency highlighting
+    int m_hoveredIndex = -1;               // Currently hovered item
+    QSet<int> m_highlightedParents;        // Indices highlighted as parents
+    QSet<int> m_highlightedDependents;     // Indices highlighted as dependents
+
+    // Rollback bar
+    class RollbackBar* m_rollbackBar = nullptr;
 };
 
 }  // namespace hobbycad

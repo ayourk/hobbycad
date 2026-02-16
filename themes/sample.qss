@@ -130,25 +130,15 @@ QLabel#GlModeLabel {
 /* =====================================================================
  *  SECTION 4:  DOCK PANELS
  *
- *  #FeatureTreeDock  — QDockWidget wrapping the feature tree (left)
- *  #TerminalDock     — QDockWidget wrapping the CLI panel (bottom)
+ *  #ProjectDock     — QDockWidget wrapping the project panel (left)
+ *  #PropertiesDock  — QDockWidget wrapping properties panel (right)
+ *  #TerminalDock    — QDockWidget wrapping the CLI panel (bottom)
  *
+ *  See Section 14, 15 for detailed Project/Properties dock styling.
  *  Dock title bars can be styled with QDockWidget::title.
  *  Dock close/float buttons: QDockWidget::close-button,
  *                             QDockWidget::float-button
  * ===================================================================== */
-
-QDockWidget#FeatureTreeDock {
-    /* Platform default */
-    /* color: palette(window-text); */
-}
-
-QDockWidget#FeatureTreeDock::title {
-    /* Platform default title bar */
-    /* background-color: palette(window); */
-    /* padding: 4px; */
-    /* text-align: left; */
-}
 
 QDockWidget#TerminalDock {
     /* Platform default */
@@ -164,39 +154,16 @@ QDockWidget#TerminalDock::title {
 
 
 /* =====================================================================
- *  SECTION 5:  FEATURE TREE
+ *  SECTION 5:  OBJECTS TREE (Legacy)
  *
- *  #FeatureTree — QTreeWidget inside #FeatureTreeDock
+ *  See Section 14 for current #ObjectsTree styling.
+ *  This section retained for backward compatibility.
  *
  *  Items:     QTreeWidget::item
  *  Selected:  QTreeWidget::item:selected
  *  Branches:  QTreeWidget::branch
  *  Header:    QHeaderView::section
  * ===================================================================== */
-
-QTreeWidget#FeatureTree {
-    /* Platform default */
-    /* background-color: palette(base); */
-    /* color: palette(text); */
-    /* border: 1px solid palette(mid); */
-}
-
-QTreeWidget#FeatureTree::item {
-    /* padding: 2px 0; */
-}
-
-QTreeWidget#FeatureTree::item:selected {
-    /* background-color: palette(highlight); */
-    /* color: palette(highlighted-text); */
-}
-
-QTreeWidget#FeatureTree QHeaderView::section {
-    /* background-color: palette(button); */
-    /* color: palette(button-text); */
-    /* padding: 4px; */
-    /* border: none; */
-    /* border-bottom: 1px solid palette(mid); */
-}
 
 
 /* =====================================================================
@@ -389,5 +356,199 @@ QToolTip {
     /* color: palette(tooltip-text); */
     /* border: 1px solid palette(mid); */
     /* padding: 4px; */
+}
+
+
+/* =====================================================================
+ *  SECTION 14:  PROJECT PANEL (Left Dock)
+ *
+ *  #ProjectDock    — QDockWidget wrapping the project panel
+ *  #ProjectTabs    — QTabWidget with Objects/Files tabs
+ *  #ObjectsTree    — QTreeWidget showing feature tree
+ *  #TimelineWidget — Timeline at bottom of Objects tab
+ * ===================================================================== */
+
+QDockWidget#ProjectDock {
+    /* Platform default */
+    /* color: palette(window-text); */
+}
+
+QDockWidget#ProjectDock::title {
+    /* background-color: palette(window); */
+    /* padding: 4px; */
+}
+
+QTabWidget#ProjectTabs {
+    /* Platform default */
+}
+
+QTabWidget#ProjectTabs::pane {
+    /* border: 1px solid palette(mid); */
+}
+
+QTabWidget#ProjectTabs::tab-bar {
+    /* alignment: left; */
+}
+
+QTreeWidget#ObjectsTree {
+    /* background-color: palette(base); */
+    /* color: palette(text); */
+    /* border: 1px solid palette(mid); */
+}
+
+QTreeWidget#ObjectsTree::item:selected {
+    /* background-color: palette(highlight); */
+    /* color: palette(highlighted-text); */
+}
+
+QWidget#TimelineWidget {
+    /* Platform default */
+    /* background-color: palette(base); */
+}
+
+
+/* =====================================================================
+ *  SECTION 15:  PROPERTIES PANEL (Right Dock)
+ *
+ *  #PropertiesDock — QDockWidget wrapping the properties panel
+ *  #PropertiesTree — QTreeWidget showing property editor
+ * ===================================================================== */
+
+QDockWidget#PropertiesDock {
+    /* Platform default */
+    /* color: palette(window-text); */
+}
+
+QDockWidget#PropertiesDock::title {
+    /* background-color: palette(window); */
+    /* padding: 4px; */
+}
+
+QTreeWidget#PropertiesTree {
+    /* background-color: palette(base); */
+    /* color: palette(text); */
+    /* border: 1px solid palette(mid); */
+}
+
+
+/* =====================================================================
+ *  SECTION 16:  TOOLBARS
+ *
+ *  #SketchToolbar    — Sketch entity tools (line, arc, rect, etc.)
+ *  #SketchActionBar  — Finish/Save/Discard buttons in sketch mode
+ *  #ModelToolbar     — 3D modeling tools (extrude, revolve, etc.)
+ *  #ViewportToolbar  — View controls (fit, zoom, projection, etc.)
+ * ===================================================================== */
+
+QToolBar#SketchToolbar {
+    /* Platform default */
+    /* background-color: palette(window); */
+    /* border: none; */
+    /* spacing: 2px; */
+}
+
+QToolBar#SketchActionBar {
+    /* Platform default */
+    /* background-color: palette(window); */
+}
+
+QToolBar#ModelToolbar {
+    /* Platform default */
+    /* background-color: palette(window); */
+}
+
+QToolBar#ViewportToolbar {
+    /* Platform default */
+    /* background-color: palette(window); */
+}
+
+
+/* =====================================================================
+ *  SECTION 17:  SKETCH CANVAS (2D Editing)
+ *
+ *  #SketchCanvas — QGraphicsView for 2D sketch editing
+ *
+ *  The canvas background and entity colors are set programmatically.
+ *  Default background: white (#ffffff)
+ *  Grid: light gray
+ *  Entities: black (geometry), blue (construction), green (selected)
+ * ===================================================================== */
+
+QGraphicsView#SketchCanvas {
+    /* Platform default */
+    /* background-color: #ffffff; */
+    /* border: 1px solid palette(mid); */
+}
+
+
+/* =====================================================================
+ *  SECTION 18:  SKETCH MODE DIALOGS
+ *
+ *  #SketchPlaneDialog        — Dialog to select sketch plane
+ *  #ConstructionPlaneDialog  — Dialog to create construction planes
+ *  #ExtrudeDialog            — Extrude operation settings
+ *  #RevolveDialog            — Revolve operation settings
+ * ===================================================================== */
+
+QDialog#SketchPlaneDialog {
+    /* Platform default */
+}
+
+QDialog#ConstructionPlaneDialog {
+    /* Platform default */
+}
+
+QDialog#ExtrudeDialog {
+    /* Platform default */
+}
+
+QDialog#RevolveDialog {
+    /* Platform default */
+}
+
+
+/* =====================================================================
+ *  SECTION 19:  PREFERENCES DIALOG
+ *
+ *  #PreferencesPageList   — QListWidget for page selection
+ *  #PreferencesPageStack  — QStackedWidget for page content
+ *  #SnapPreviewLabel      — Preview of snap indicator
+ * ===================================================================== */
+
+QListWidget#PreferencesPageList {
+    /* background-color: palette(base); */
+    /* color: palette(text); */
+    /* border: 1px solid palette(mid); */
+}
+
+QListWidget#PreferencesPageList::item:selected {
+    /* background-color: palette(highlight); */
+    /* color: palette(highlighted-text); */
+}
+
+QStackedWidget#PreferencesPageStack {
+    /* Platform default */
+}
+
+QLabel#SnapPreviewLabel {
+    /* Platform default */
+    /* border: 1px solid palette(mid); */
+    /* padding: 4px; */
+}
+
+
+/* =====================================================================
+ *  SECTION 20:  VIEWPORT OVERLAY (3D View)
+ *
+ *  #AxisLabel — Shows current axis orientation in corner
+ *
+ *  This is a QLabel positioned over the viewport.
+ * ===================================================================== */
+
+QLabel#AxisLabel {
+    /* background-color: rgba(0, 0, 0, 128); */
+    /* color: white; */
+    /* padding: 4px 8px; */
+    /* border-radius: 3px; */
 }
 

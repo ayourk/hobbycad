@@ -30,6 +30,7 @@ class QTreeWidgetItem;
 namespace hobbycad {
 
 class CliPanel;
+class ProjectBrowserWidget;
 class SketchActionBar;
 
 class MainWindow : public QMainWindow {
@@ -65,6 +66,15 @@ protected:
     /// Intercept window close to prompt for unsaved changes.
     void closeEvent(QCloseEvent* event) override;
 
+    /// Track window state changes.
+    void changeEvent(QEvent* event) override;
+
+    /// Track resize to save normal geometry when not maximized.
+    void resizeEvent(QResizeEvent* event) override;
+
+    /// Track move to save normal geometry when not maximized.
+    void moveEvent(QMoveEvent* event) override;
+
     /// Access the View > Terminal toggle action.
     QAction* terminalToggleAction() const;
 
@@ -92,6 +102,18 @@ protected:
 
     /// Access the Construct > New Construction Plane action.
     QAction* newConstructionPlaneAction() const;
+
+    /// Access the Edit > Undo action.
+    QAction* undoAction() const;
+
+    /// Access the Edit > Redo action.
+    QAction* redoAction() const;
+
+    /// Access the Edit > Delete action.
+    QAction* deleteAction() const;
+
+    /// Access the Edit > Select All action.
+    QAction* selectAllAction() const;
 
     /// Access the properties tree widget for displaying selected item properties.
     QTreeWidget* propertiesTree() const;
@@ -173,6 +195,9 @@ private slots:
     void onFileSaveAs();
     void onFileClose();
     void onFileQuit();
+    void onFileImportStep();
+    void onFileExportStep();
+    void onFileExportStl();
     void onEditPreferences();
     void onHelpAbout();
 
@@ -195,7 +220,12 @@ private:
     QAction* m_actionSave   = nullptr;
     QAction* m_actionSaveAs = nullptr;
     QAction* m_actionClose  = nullptr;
+    QAction* m_actionImportStep = nullptr;
+    QAction* m_actionExportStep = nullptr;
+    QAction* m_actionExportStl = nullptr;
     QAction* m_actionQuit   = nullptr;
+    QAction* m_actionUndo   = nullptr;
+    QAction* m_actionRedo   = nullptr;
     QAction* m_actionCut    = nullptr;
     QAction* m_actionCopy   = nullptr;
     QAction* m_actionPaste  = nullptr;
@@ -229,6 +259,7 @@ private:
     CliPanel*    m_cliPanel        = nullptr;
     QTreeWidget* m_propertiesTree  = nullptr;
     SketchActionBar* m_sketchActionBar = nullptr;
+    ProjectBrowserWidget* m_projectBrowser = nullptr;  // In Project panel's Files tab
 
     // Feature tree container items
     QTreeWidgetItem* m_sketchesTreeItem = nullptr;
@@ -237,6 +268,9 @@ private:
 
     // Current unit system (0=mm, 1=cm, 2=m, 3=in, 4=ft)
     int m_currentUnits = 0;
+
+    // Normal (non-maximized) geometry for save/restore
+    QByteArray m_normalGeometry;
 };
 
 }  // namespace hobbycad

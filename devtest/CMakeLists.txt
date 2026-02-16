@@ -173,9 +173,12 @@ endif()
 set(HAVE_SLVS FALSE)
 set(SLVS_TARGET "")
 
-# Method 1: pkg-config
+# Method 1: pkg-config (try libslvs first, then slvs)
 if(PkgConfig_FOUND)
-    pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+    pkg_check_modules(SLVS IMPORTED_TARGET libslvs)
+    if(NOT SLVS_FOUND)
+        pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+    endif()
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
         set(SLVS_TARGET PkgConfig::SLVS)
@@ -420,6 +423,11 @@ target_compile_definitions(depcheck PRIVATE
 
 target_include_directories(depcheck PRIVATE
     ${OpenCASCADE_INCLUDE_DIR})
+
+# Suppress deprecation warnings from OCCT headers (std::iterator in
+# NCollection_StlIterator.hxx).  These are upstream issues we can't fix.
+target_compile_options(depcheck PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-deprecated-declarations>)
 
 # Phase 0 (required)
 target_link_libraries(depcheck PRIVATE

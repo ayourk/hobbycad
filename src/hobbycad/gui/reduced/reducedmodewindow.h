@@ -32,11 +32,11 @@ class QVBoxLayout;
 namespace hobbycad {
 
 class CliPanel;
+class ModelToolbar;
 class ReducedViewport;
 class SketchCanvas;
 class SketchToolbar;
 class TimelineWidget;
-class ViewportToolbar;
 
 class ReducedModeWindow : public MainWindow {
     Q_OBJECT
@@ -74,7 +74,6 @@ private slots:
 
 private:
     void showDiagnosticDialog();
-    void createToolbar();
     void createTimeline();
     void initDefaultParameters();
     void showSketchEntityProperties(int entityId);
@@ -86,7 +85,7 @@ private:
 
     // Toolbar stack (normal vs sketch mode)
     QStackedWidget*  m_toolbarStack    = nullptr;
-    ViewportToolbar* m_toolbar         = nullptr;
+    ModelToolbar*    m_toolbar         = nullptr;
     SketchToolbar*   m_sketchToolbar   = nullptr;
 
     // Viewport stack (reduced viewport vs sketch canvas)

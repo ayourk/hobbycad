@@ -278,3 +278,174 @@ Added
 - Intersection conversion helpers in sketchutils.h
 - TKOffset to OpenCASCADE library dependencies (required for shared builds)
 
+================================================================================
+2026-02-15
+================================================================================
+
+Added
+-----
+- Undo/redo support in Edit menu:
+  - Ctrl+Z for Undo
+  - Ctrl+Y and Ctrl+Shift+Z for Redo (both shortcuts work)
+  - Menu items show operation description (e.g., "Undo Add Line")
+  - Enabled/disabled state updates based on stack availability
+- Entity grouping module (sketch/group.h):
+  - Hierarchical group structure (groups can contain groups)
+  - Cycle detection prevents invalid nesting
+  - GroupManager for creating, deleting, and managing groups
+  - Utility functions: groupDepth(), groupPath(), commonAncestor()
+- Multi-level undo/redo module (sketch/undo.h):
+  - Configurable stack depth (default: 100 levels)
+  - Compound commands for grouping multiple operations
+  - Support for entity, constraint, and group operations
+  - TransformType and AlignmentType enums for transform operations
+  - entityTypeName() and entityTypeDisplayName() utility functions
+- Hit testing for all entity types:
+  - Slot, Arc, Ellipse, Polygon, Spline, and Text now selectable
+  - Click to select and view properties in Properties panel
+- Properties panel shows geometry for all entity types:
+  - Polygon: center, radius, sides
+  - Slot: center points, radius
+  - Ellipse: center, major/minor radii
+  - Spline: control point count
+  - Text: position, content
+- Entity snap points (always active):
+  - Endpoints, midpoints, centers, quadrant points for all entity types
+  - Slot centerline points (arc centers, midpoint)
+  - Construction geometry provides snap points
+  - Visual indicators: square (endpoint), triangle (midpoint),
+    circle+cross (center), diamond (quadrant)
+- Modifier keys during entity creation:
+  - Ctrl: Angle snap to 45° increments (lines, rectangles, linear slots)
+  - Alt: Temporarily disable entity snapping
+- Construction line for linear slots (dashed gray centerline)
+- Arc slot creation modes follow Fusion 360 conventions:
+  - ArcRadius mode: center-first workflow (center → start → end)
+  - Storage format: [arc_center, start, end] to match circle/arc pattern
+- Library additions:
+  - createArcSlot() factory function
+  - Slot support in Entity::distanceTo() and Entity::closestPoint()
+  - arcFlipped field for >180° arc slots
+
+Changed
+-------
+- Point entity placement: now placed on mouse release instead of click
+- Slot arc drawing: arcs now correctly appear on outside of slot
+- Timeline: items cannot be dragged before Origin
+- Create Sketch dropdown now functional in 3D workspace
+- Bindings dialog updated with undo/redo shortcuts
+- GUI refactored to use library types for groups, undo, transforms
+
+Fixed
+-----
+- Slot arc direction was inverted for certain drawing directions
+- Slot preview now matches final entity geometry
+- Delete and Select All menu actions now connected to SketchCanvas
+- Toolbar variant selection no longer deselects tool when changing modes
+  (e.g., switching from Slot to Arc Slot keeps the tool active)
+- Preview dimension labels now use consistent styling (blue text, white
+  background, no border) matching instruction text
+
+================================================================================
+2026-02-16
+================================================================================
+
+Added
+-----
+- Timeline feature management (Fusion 360-style):
+  - Rollback bar: draggable red marker to roll back model state
+  - Double-click timeline item to set rollback position
+  - Features after rollback are visually dimmed
+  - 3D geometry shows/hides based on rollback position
+- Timeline dependency tracking:
+  - Features track parent dependencies (dependsOn field)
+  - Visual highlighting: blue for parents, orange for dependents
+  - Drag validation prevents breaking dependency order
+- Timeline feature suppression:
+  - Per-feature suppression (independent of rollback)
+  - Suppressed features dimmed with opacity effect
+  - Context menu: Suppress/Unsuppress Feature
+- Timeline context menu actions:
+  - Edit Feature (opens sketch for editing)
+  - Rename Feature
+  - Delete Feature
+  - Suppress/Unsuppress Feature
+- Insert at rollback position:
+  - New features insert after rollback marker
+  - Rollback advances to include new feature
+- FeatureState enum moved to library (project.h):
+  - Normal, Warning, Error states
+  - stateMessage field for human-readable errors
+  - State determined by library operations (solver, BREP, dependencies)
+
+Changed
+-------
+- FeatureData struct expanded with state tracking fields
+- API documentation updated to version 0.0.5:
+  - Fixed section numbering (sections 10-12)
+  - Added Section 10.4: Geometry Algorithms (algorithms.h)
+  - Added Section 11.10: Sketch Queries (queries.h)
+  - Added Section 11.11: Sketch Export/Import (export.h)
+  - Added Section 11.12: Background Images (background.h)
+  - Updated header file list in Sketch Module section
+
+- Extrude operation fully wired:
+  - Extrude dialog with distance, direction, operation type
+  - Profile detection from sketch
+  - BREP solid generation via library
+  - 3D display in viewport
+  - Join/Cut/Intersect boolean operations
+  - Timeline entry with dependency tracking
+- Revolve operation fully wired:
+  - Revolve dialog with angle, axis selection
+  - Axis from X, Y, or sketch construction line
+  - Boolean operation support
+- STEP import/export (Phase 1 complete):
+  - File > Import > STEP File...
+  - File > Export > STEP File...
+  - Library: step_io module with readStep/writeStep
+  - Supports AP203, AP214, AP242 formats
+- STL export for 3D printing:
+  - File > Export > STL File...
+  - Library: stl_io module with writeStl
+  - Binary and ASCII format support
+  - Configurable mesh quality
+- Project Files Browser improvements:
+  - Foreign files now synced with Project class
+  - Add/remove foreign files persisted to manifest
+- Theme sample (themes/sample.qss) updated:
+  - Added sections 14-20 for new widgets
+  - Project dock (#ProjectDock, #ProjectTabs, #ObjectsTree)
+  - Properties dock (#PropertiesDock, #PropertiesTree)
+  - Toolbars (#SketchToolbar, #SketchActionBar, #ModelToolbar, #ViewportToolbar)
+  - Sketch canvas (#SketchCanvas)
+  - New dialogs (#SketchPlaneDialog, #ConstructionPlaneDialog, #ExtrudeDialog, #RevolveDialog)
+  - Preferences widgets (#PreferencesPageList, #PreferencesPageStack, #SnapPreviewLabel)
+  - Viewport overlay (#AxisLabel)
+  - Updated section 4-5 for renamed docks
+- Translation file (hobbycad_en.ts) regenerated:
+  - Added 141 new strings (1318 total)
+  - New contexts: ExtrudeDialog, RevolveDialog, TimelineWidget, ProjectBrowserWidget
+
+Fixed
+-----
+- Rectangle Center mode now draws correctly from center point
+  - Added RectMode enum (Corner, Center, ThreePoint)
+  - Preview shows rectangle expanding from center with center marker
+  - Dimensions show correct width/height values
+- Rectangle 3-Point (Angled) mode implemented:
+  - Click 1: First corner of rectangle
+  - Click 2: Second corner (defines first edge and angle)
+  - Click 3: Perpendicular offset (defines width)
+  - Creates rotated rectangles at any angle
+  - Stored as 4-point polygon for accurate rendering
+  - Snap points work correctly on rotated rectangles
+- Fixed 3-point rectangle click handling:
+  - Points now properly added on mouse press (not just release)
+  - Click-click-click mode works correctly
+  - Click-drag mode also supported for each point
+- Fixed arc slot click-drag support:
+  - Arc slots now support both click-click-click and click-drag modes
+  - Drag preview shows correct arc slot shape during drag
+  - ArcRadius mode properly constrains dragged points to arc
+

@@ -24,6 +24,9 @@
 
 #include <hobbycad/project.h>
 #include <hobbycad/sketch/background.h>
+#include <hobbycad/sketch/entity.h>
+#include <hobbycad/sketch/group.h>
+#include <hobbycad/sketch/undo.h>
 
 #include <QWidget>
 #include <QPointF>
@@ -31,6 +34,8 @@
 #include <QVector3D>
 #include <QKeySequence>
 #include <QHash>
+
+#include <optional>
 
 class QContextMenuEvent;
 
@@ -40,25 +45,17 @@ namespace hobbycad {
 // SketchEntityType and SketchPlane are defined in hobbycad/project.h
 
 /// A single sketch entity (GUI version with selection state)
-struct SketchEntity {
-    int id = 0;
-    SketchEntityType type = SketchEntityType::Line;
-    QVector<QPointF> points;      ///< Control points
-    double radius = 0.0;          ///< For circles/arcs/slots
-    double startAngle = 0.0;      ///< For arcs (degrees)
-    double sweepAngle = 360.0;    ///< For arcs (degrees)
-    int sides = 6;                ///< For polygons (number of sides)
-    double majorRadius = 0.0;     ///< For ellipses (semi-major axis)
-    double minorRadius = 0.0;     ///< For ellipses (semi-minor axis)
-    QString text;                 ///< For text entities
-    QString fontFamily;           ///< Font family (empty = default)
-    double fontSize = 12.0;       ///< Font size in mm
-    bool fontBold = false;        ///< Bold text
-    bool fontItalic = false;      ///< Italic text
-    double textRotation = 0.0;    ///< Text rotation in degrees
-    bool selected = false;
-    bool constrained = false;     ///< Has constraints applied
-    bool isConstruction = false;  ///< Construction geometry (dashed, excluded from profiles)
+/// Inherits all geometry data and methods from sketch::Entity,
+/// adding only GUI-specific state (selected).
+struct SketchEntity : public sketch::Entity {
+    bool selected = false;        ///< UI selection state
+
+    // Default constructor
+    SketchEntity() = default;
+
+    // Construct from library entity
+    explicit SketchEntity(const sketch::Entity& e)
+        : sketch::Entity(e), selected(false) {}
 };
 
 /// A parametric constraint (GUI version with selection and solver state)
@@ -87,33 +84,28 @@ struct SketchProfile {
     bool isOuter = true;           ///< True if outer profile, false if inner (hole)
 };
 
-/// Entity group for organizing related entities
-struct SketchGroup {
-    int id = 0;
-    QString name;
-    QVector<int> entityIds;
-    bool locked = false;           ///< Prevent modification of group members
+// Use library types for groups, undo, transforms
+using SketchGroup = sketch::Group;
+using TransformType = sketch::TransformType;
+using AlignmentType = sketch::AlignmentType;
+
+/// Undo command types (GUI-specific, uses GUI entity/constraint types)
+enum class UndoCommandType {
+    AddEntity,
+    DeleteEntity,
+    ModifyEntity,
+    AddConstraint,
+    DeleteConstraint,
+    ModifyConstraint
 };
 
-/// Transform operation types
-enum class TransformType {
-    Move,
-    Copy,
-    Rotate,
-    Scale,
-    Mirror
-};
-
-/// Alignment types for multi-selection
-enum class AlignmentType {
-    Left,
-    Right,
-    Top,
-    Bottom,
-    HorizontalCenter,
-    VerticalCenter,
-    DistributeHorizontal,
-    DistributeVertical
+/// A single undo command (GUI-specific, stores GUI entity/constraint types)
+struct UndoCommand {
+    UndoCommandType type;
+    SketchEntity entity;           ///< Entity state (for add/delete/modify)
+    SketchEntity previousEntity;   ///< Previous entity state (for modify)
+    SketchConstraint constraint;   ///< Constraint state (for add/delete/modify)
+    SketchConstraint previousConstraint; ///< Previous constraint state (for modify)
 };
 
 class SketchCanvas : public QWidget {
@@ -125,6 +117,9 @@ public:
     /// Set the active drawing tool
     void setActiveTool(SketchTool tool);
     SketchTool activeTool() const { return m_activeTool; }
+
+    /// Set creation mode (for tools with variants like Arc, Circle, Slot)
+    void setCreationMode(CreationMode mode);
 
     /// Set the sketch plane
     void setSketchPlane(SketchPlane plane);
@@ -140,6 +135,9 @@ public:
 
     /// Get all entities
     const QVector<SketchEntity>& entities() const { return m_entities; }
+
+    /// Set all entities (replaces current entities, used for loading)
+    void setEntities(const QVector<SketchEntity>& entities);
 
     /// Get selected entity (or nullptr if none) - returns primary selection
     SketchEntity* selectedEntity();
@@ -277,6 +275,19 @@ public:
     /// Get groups
     const QVector<SketchGroup>& groups() const { return m_groups; }
 
+    // Undo/Redo support
+    /// Undo the last operation
+    void undo();
+
+    /// Redo the last undone operation
+    void redo();
+
+    /// Check if undo is available
+    bool canUndo() const { return !m_undoStack.isEmpty(); }
+
+    /// Check if redo is available
+    bool canRedo() const { return !m_redoStack.isEmpty(); }
+
     // Background image support
     /// Set background image for the sketch
     void setBackgroundImage(const sketch::BackgroundImage& bg);
@@ -356,6 +367,10 @@ signals:
     /// Emitted when an entity is selected for calibration alignment
     void calibrationEntitySelected(int entityId, double angle);
 
+    /// Emitted when undo/redo availability changes
+    void undoAvailabilityChanged(bool canUndo);
+    void redoAvailabilityChanged(bool canRedo);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -369,10 +384,29 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
+    // Snap point types for entity snapping
+    enum class SnapType {
+        Endpoint,       // Line/arc/spline endpoints
+        Midpoint,       // Midpoint of line/arc/slot centerline
+        Center,         // Circle/arc/ellipse/polygon center
+        Quadrant,       // Circle/ellipse quadrant points
+        Intersection,   // Entity intersections (future)
+        ArcEndCenter    // Arc slot end semicircle centers
+    };
+
+    struct SnapPoint {
+        QPointF position;
+        SnapType type;
+        int entityId;
+    };
+
     // Coordinate transforms
     QPointF screenToWorld(const QPoint& screen) const;
     QPoint worldToScreen(const QPointF& world) const;
     QPointF snapPoint(const QPointF& world) const;
+    QPointF snapToAngle(const QPointF& origin, const QPointF& target) const;
+    QVector<SnapPoint> collectEntitySnapPoints() const;
+    void collectSnapPointsForEntity(const SketchEntity& entity, QVector<SnapPoint>& points) const;
 
     // Drawing helpers
     void drawGrid(QPainter& painter);
@@ -382,6 +416,9 @@ private:
     void drawPreview(QPainter& painter);
     void drawSelectionHandles(QPainter& painter, const SketchEntity& entity);
     void drawSnapGuides(QPainter& painter);
+    void drawPreviewDimension(QPainter& painter, const QPoint& p1, const QPoint& p2, double value);
+    void drawDimensionLabel(QPainter& painter, const QPointF& position, double value);
+    void drawSnapIndicator(QPainter& painter, const SnapPoint& snap);
 
     // Constraint drawing helpers
     void drawConstraints(QPainter& painter);
@@ -454,6 +491,8 @@ private:
     bool m_sketchSelected = true;  ///< Whether the sketch itself is selected (for Escape progression)
     QVector<QPointF> m_previewPoints;
     QPointF m_currentMouseWorld;
+    QPointF m_drawStartPos;          ///< Screen position when drawing started
+    bool m_wasDragged = false;       ///< True if mouse moved significantly during draw
 
     // Arc creation modes
     enum class ArcMode { ThreePoint, Tangent };
@@ -463,6 +502,15 @@ private:
     enum class CircleMode { CenterRadius, TwoTangent, ThreeTangent };
     CircleMode m_circleMode = CircleMode::CenterRadius;
     QVector<int> m_tangentTargets;  ///< Entity IDs for tangent targets (circle/arc)
+
+    // Rectangle creation modes
+    enum class RectMode { Corner, Center, ThreePoint };
+    RectMode m_rectMode = RectMode::Corner;
+
+    // Slot creation modes
+    enum class SlotMode { CenterToCenter, Overall, ArcRadius, ArcEnds };
+    SlotMode m_slotMode = SlotMode::CenterToCenter;
+    bool m_arcSlotFlipped = false;  // For > 180 degree arc slots (Shift key)
 
     // Pan state
     bool m_isPanning = false;
@@ -505,6 +553,7 @@ private:
     // Handle dragging state
     bool m_isDraggingHandle = false;
     int m_dragHandleIndex = -1;      ///< Index of handle point being dragged
+    int m_fixedHandleIndex = -1;     ///< Index of fixed handle for arc slot resize (-1 = none)
     QPointF m_dragStartWorld;        ///< World position when drag started
     QPointF m_dragHandleOriginal;    ///< Original handle position before drag
     QPointF m_dragHandleOriginal2;   ///< Second point for circles (radius point)
@@ -516,6 +565,15 @@ private:
     /// Axis lock for Ctrl+drag constraint
     enum class SnapAxis { None, X, Y };
     SnapAxis m_snapAxis = SnapAxis::None;  ///< Locked axis during Ctrl+drag
+
+    // Entity snap state
+    bool m_snapToEntities = true;           ///< Enable entity snap points
+    std::optional<SnapPoint> m_activeSnap;  ///< Currently active snap point (if any)
+    double m_entitySnapTolerance = 10.0;    ///< Snap tolerance in pixels
+
+    // Angle snap state (Ctrl key during line drawing)
+    bool m_angleSnapActive = false;         ///< Whether angle snap is currently active
+    double m_snappedAngle = 0.0;            ///< The angle we snapped to (degrees)
 
     // Handle hit testing
     int hitTestHandle(const QPointF& worldPos) const;
@@ -575,6 +633,17 @@ private:
     BackgroundHandle hitTestBackgroundHandle(const QPointF& worldPos) const;
     QRectF backgroundHandleRect(BackgroundHandle handle) const;
     void updateCursorForBackgroundHandle(BackgroundHandle handle);
+
+    // Undo/Redo support
+    QVector<UndoCommand> m_undoStack;
+    QVector<UndoCommand> m_redoStack;
+    static const int MaxUndoStackSize = 100;
+
+    /// Push an undo command and clear redo stack
+    void pushUndoCommand(const UndoCommand& cmd);
+
+    /// Update undo/redo action availability
+    void updateUndoRedoState();
 };
 
 }  // namespace hobbycad

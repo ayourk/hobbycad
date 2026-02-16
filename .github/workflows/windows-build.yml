@@ -1,8 +1,8 @@
 # .github/workflows/windows-build.yml
 #
-# Build HobbyCAD on Windows using two toolchains:
-#   - MSYS2 UCRT64 with GCC and pacman packages
-#   - MSVC with vcpkg manifest mode
+# Build HobbyCAD on Windows for x64 and arm64 using two toolchains:
+#   - MSYS2 UCRT64 with GCC and pacman packages (x64 only)
+#   - MSVC with vcpkg manifest mode (x64 and arm64)
 #
 # The MSYS2 job matches the local developer setup from
 # tools/windows/setup-env.ps1 (GCC, Ninja, pacman).
@@ -38,14 +38,15 @@ on:
 jobs:
 
   # ================================================================
-  #  MSYS2 / UCRT64 / GCC
+  #  MSYS2 / UCRT64 / GCC (x64 only)
   # ================================================================
   #
   #  Matches the local developer environment.  All dependencies
   #  come from MSYS2 pacman (pre-built, fast).
+  #  Note: MSYS2 does not support ARM64 Windows.
 
   msys2:
-    name: HobbyCAD via MSYS
+    name: HobbyCAD via MSYS2 (x64)
     runs-on: windows-latest
 
     defaults:
@@ -116,19 +117,34 @@ jobs:
           if-no-files-found: error
 
   # ================================================================
-  #  MSVC / vcpkg
+  #  MSVC / vcpkg (x64 and arm64)
   # ================================================================
   #
   #  Tests MSVC compatibility using the version-pinned
   #  dependencies declared in vcpkg.json.
 
   msvc:
-    name: HobbyCAD via MSVC
-    runs-on: windows-latest
+    name: HobbyCAD via MSVC (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            triplet: x64-windows
+            msvc_arch: x64
+            artifact_name: hobbycad-windows-x64-msvc
+          - arch: arm64
+            runner: windows-latest
+            triplet: arm64-windows
+            msvc_arch: amd64_arm64
+            artifact_name: hobbycad-windows-arm64-msvc
 
     env:
       BUILD_TYPE: Release
-      VCPKG_DEFAULT_TRIPLET: x64-windows
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     steps:
@@ -161,11 +177,11 @@ jobs:
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x64
+          arch: ${{ matrix.msvc_arch }}
 
       - name: Install dependencies via vcpkg
         run: |
-          vcpkg install --triplet x64-windows `
+          vcpkg install --triplet ${{ matrix.triplet }} `
             --overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports `
             --x-install-root=vcpkg_installed
 
@@ -174,7 +190,7 @@ jobs:
           cmake -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
-            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
             -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed `
             -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}\vcpkg-overlay-ports
 
@@ -189,11 +205,11 @@ jobs:
 
           # Copy Qt and OCCT runtime DLLs alongside the executable
           $binDir = "$installDir\bin"
-          $vcpkgBin = "${{ github.workspace }}\vcpkg_installed\x64-windows\bin"
+          $vcpkgBin = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\bin"
 
           # Qt plugins needed at runtime
           $qtPluginDir = "$installDir\bin\platforms"
-          $vcpkgPlugins = "${{ github.workspace }}\vcpkg_installed\x64-windows\plugins"
+          $vcpkgPlugins = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\plugins"
           New-Item -ItemType Directory -Force -Path $qtPluginDir | Out-Null
           Copy-Item "$vcpkgPlugins\platforms\qwindows.dll" $qtPluginDir -ErrorAction SilentlyContinue
 
@@ -214,7 +230,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hobbycad-windows-x64-msvc
+          name: ${{ matrix.artifact_name }}
           path: build/install/
           retention-days: 14
           if-no-files-found: error

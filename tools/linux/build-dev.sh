@@ -145,7 +145,7 @@ do_devtest() {
             cd "${DEVTEST_DIR}"
             cmake -B build 2>&1
             cmake --build build -j"$(nproc)" 2>&1
-            ./build/depcheck 2>&1 | tee "${DEVTEST_LOG}"
+            ./build/depcheck 2>&1
         )
         local devtest_exit=${PIPESTATUS[0]:-$?}
         if [ "${devtest_exit}" -ne 0 ]; then
