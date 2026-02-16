@@ -77,7 +77,29 @@ jobs:
             mingw-w64-ucrt-x86_64-libgit2
             mingw-w64-ucrt-x86_64-librsvg
             mingw-w64-ucrt-x86_64-ntldd
-            mingw-w64-ucrt-x86_64-solvespace
+            mingw-w64-ucrt-x86_64-eigen3
+            git
+
+      # libslvs is not available as an MSYS2 package - build from source
+      - name: Build libslvs from source
+        run: |
+          git clone --depth 1 --branch v3.2 https://github.com/solvespace/solvespace.git /tmp/solvespace
+          cd /tmp/solvespace
+          git submodule update --init extlib/mimalloc
+          mkdir build && cd build
+          cmake .. -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/ucrt64 \
+            -DENABLE_GUI=OFF \
+            -DENABLE_CLI=OFF \
+            -DENABLE_TESTS=OFF \
+            -DBUILD_LIB=ON
+          ninja slvs
+          # Install libslvs to MSYS2 prefix
+          cp libslvs.dll.a /ucrt64/lib/
+          cp libslvs.dll /ucrt64/bin/
+          mkdir -p /ucrt64/include/slvs
+          cp ../include/slvs.h /ucrt64/include/slvs/
 
       - name: Configure CMake
         run: cmake --preset msys2-release

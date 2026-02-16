@@ -1,5 +1,5 @@
 // =====================================================================
-//  src/libhobbycad/stl_io.cpp — STL file export utilities
+//  src/libhobbycad/stl_io.cpp — STL file import/export utilities
 // =====================================================================
 //
 //  Part of libhobbycad.
@@ -11,12 +11,19 @@
 
 // OpenCASCADE STL I/O
 #include <StlAPI_Writer.hxx>
+#include <RWStl.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <TopoDS_Compound.hxx>
+#include <TopoDS_Face.hxx>
 #include <BRep_Builder.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <Poly_Triangulation.hxx>
+#include <OSD_Path.hxx>
+#include <Message_ProgressRange.hxx>
 
+#include <QFile>
 #include <QFileInfo>
 
 namespace hobbycad {
@@ -149,6 +156,117 @@ MeshQuality highQuality()
 MeshQuality fastQuality()
 {
     return MeshQuality{0.5, 1.0, false};
+}
+
+// ---- Import functions ----
+
+StlFormat detectStlFormat(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return StlFormat::Binary;  // Default assumption
+    }
+
+    // Read first 80 bytes (header) plus some content
+    QByteArray header = file.read(256);
+    file.close();
+
+    if (header.size() < 6) {
+        return StlFormat::Binary;
+    }
+
+    // ASCII STL starts with "solid" (case insensitive)
+    // But binary files might coincidentally have "solid" in header
+    // So we also check for valid ASCII characters throughout
+    QByteArray lower = header.left(6).toLower();
+    if (lower.startsWith("solid ") || lower.startsWith("solid\n") || lower.startsWith("solid\r")) {
+        // Check if rest of header contains only printable ASCII
+        bool isAscii = true;
+        for (int i = 6; i < header.size() && isAscii; ++i) {
+            char c = header[i];
+            if (c != '\n' && c != '\r' && c != '\t' && (c < 32 || c > 126)) {
+                isAscii = false;
+            }
+        }
+        if (isAscii) {
+            return StlFormat::Ascii;
+        }
+    }
+
+    return StlFormat::Binary;
+}
+
+ReadResult readStl(const QString& path)
+{
+    ReadResult result;
+
+    if (!QFile::exists(path)) {
+        result.errorMessage = QStringLiteral("File not found: %1").arg(path);
+        return result;
+    }
+
+    // Detect format
+    result.detectedFormat = detectStlFormat(path);
+
+    // Read using RWStl
+    try {
+        OSD_Path osdPath(path.toUtf8().constData());
+        Handle(Poly_Triangulation) mesh;
+
+        if (result.detectedFormat == StlFormat::Ascii) {
+            mesh = RWStl::ReadAscii(osdPath, Message_ProgressRange());
+        } else {
+            mesh = RWStl::ReadBinary(osdPath, Message_ProgressRange());
+        }
+
+        if (mesh.IsNull()) {
+            result.errorMessage = QStringLiteral("Failed to read STL mesh");
+            return result;
+        }
+
+        result.mesh = mesh;
+        result.triangleCount = mesh->NbTriangles();
+        result.nodeCount = mesh->NbNodes();
+
+        // Build a face from the triangulation
+        TopoDS_Face face;
+        BRep_Builder builder;
+        builder.MakeFace(face);
+        builder.UpdateFace(face, mesh);
+
+        result.shape = face;
+        result.success = true;
+
+    } catch (const Standard_Failure& e) {
+        result.errorMessage = QStringLiteral("OCCT exception: %1")
+            .arg(e.GetMessageString());
+    } catch (...) {
+        result.errorMessage = QStringLiteral("Unknown exception during STL import");
+    }
+
+    return result;
+}
+
+TopoDS_Shape readStlAsShape(const QString& path, QString* errorMsg)
+{
+    ReadResult result = readStl(path);
+
+    if (errorMsg && !result.success) {
+        *errorMsg = result.errorMessage;
+    }
+
+    return result.shape;
+}
+
+Handle(Poly_Triangulation) readStlAsMesh(const QString& path, QString* errorMsg)
+{
+    ReadResult result = readStl(path);
+
+    if (errorMsg && !result.success) {
+        *errorMsg = result.errorMessage;
+    }
+
+    return result.mesh;
 }
 
 }  // namespace stl_io

@@ -114,7 +114,7 @@ jobs:
               sources:
                 - type: archive
                   url: https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_6_3.tar.gz
-                  sha256: baae5b3a7a38825396fc45ef9d170db406339f5eeec62e21b21036afeda31200
+                  sha256: 3f95808e2c5060c5b5001770b5e42c7d9a849b23d925272bc70a5a2377413aa9
 
             # libgit2
             - name: libgit2

@@ -77,7 +77,7 @@ jobs:
             libocct-modeling-data-dev libocct-ocaf-dev \
             libocct-visualization-dev occt-misc libtbb-dev \
             qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-            qt6-tools-dev-tools libqt6opengl6-dev \
+            qt6-tools-dev-tools qt6-l10n-tools libqt6opengl6-dev \
             libqt6openglwidgets6 libqt6svg6-dev qmake6 \
             libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
             libpng-dev libjpeg-dev \
