@@ -72,6 +72,10 @@ jobs:
           brew install ayourk/hobbycad/opencascade@7.6.3
           brew install ayourk/hobbycad/libzip@1.7.3
           brew install ayourk/hobbycad/libgit2@1.7.2
+          brew install ayourk/hobbycad/libslvs
+          brew install ayourk/hobbycad/lib3mf
+          brew install ayourk/hobbycad/openmesh
+          brew install ayourk/hobbycad/meshfix
 
           # Install standard dependencies
           brew install qt@6 ninja librsvg
@@ -81,9 +85,13 @@ jobs:
           OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.6.3)
           LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
           LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
+          SLVS_PFX=$(brew --prefix ayourk/hobbycad/libslvs)
+          L3MF_PFX=$(brew --prefix ayourk/hobbycad/lib3mf)
+          OMSH_PFX=$(brew --prefix ayourk/hobbycad/openmesh)
+          MFIX_PFX=$(brew --prefix ayourk/hobbycad/meshfix)
           QT6_PFX=$(brew --prefix qt@6)
 
-          PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${QT6_PFX}"
+          PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
           echo "CMAKE_PREFIX_PATH=${PREFIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Build HobbyCAD

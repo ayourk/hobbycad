@@ -1,0 +1,19 @@
+{
+  "name": "meshfix",
+  "version": "2.1",
+  "port-version": 0,
+  "description": "MeshFix — automatic repair of triangulated mesh models",
+  "homepage": "https://github.com/MarcoAttene/MeshFix-V2.1",
+  "license": "GPL-3.0-or-later",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

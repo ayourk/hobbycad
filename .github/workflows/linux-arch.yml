@@ -70,14 +70,40 @@ jobs:
       - name: Install build dependencies
         run: |
           pacman -S --noconfirm --needed \
-            base-devel cmake ninja pkgconf \
+            base-devel cmake ninja pkgconf curl patch \
             qt6-base qt6-svg qt6-tools \
             opencascade tbb \
             libpng libjpeg-turbo \
             libzip minizip \
             libgit2 \
+            lib3mf openmesh \
             librsvg \
             mesa glu libxkbcommon
+
+          # Build libslvs from source (solvespace package is GUI only)
+          git clone --depth 1 --recurse-submodules https://github.com/solvespace/solvespace.git /tmp/solvespace
+          cd /tmp/solvespace
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_GUI=OFF \
+            -DENABLE_CLI=OFF \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_COVERAGE=OFF
+          cmake --build build --target slvs
+          cmake --install build --component slvs
+
+          # Build meshfix from source (not packaged for Arch)
+          curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
+          curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
+          tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
+          cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMESHFIX_BUILD_SHARED=ON \
+            -DMESHFIX_BUILD_CLI=OFF
+          cmake --build build
+          cmake --install build
 
       - name: Create PKGBUILD
         run: |
@@ -102,6 +128,8 @@ jobs:
             'libgit2'
             'libzip'
             'minizip'
+            'lib3mf'
+            'openmesh'
           )
           makedepends=(
             'cmake'
