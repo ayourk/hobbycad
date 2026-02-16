@@ -29,17 +29,18 @@ namespace sketch {
 
 /// Types of sketch entities
 enum class EntityType {
-    Point,       ///< Single point
-    Line,        ///< Line segment (2 endpoints)
-    Rectangle,   ///< Axis-aligned rectangle (2 corner points)
-    Circle,      ///< Circle (center + radius)
-    Arc,         ///< Arc (center + radius + angles)
-    Spline,      ///< Catmull-Rom spline (control points)
-    Polygon,     ///< Regular polygon (center + radius + sides)
-    Slot,        ///< Slot: Linear (2 arc centers + radius) or Arc (arc center + start + end + radius)
-    Ellipse,     ///< Ellipse (center + major/minor radii)
-    Text,        ///< Text annotation
-    Dimension    ///< Dimension annotation (GUI-only, not stored as geometry)
+    Point,         ///< Single point
+    Line,          ///< Line segment (2 endpoints)
+    Rectangle,     ///< Axis-aligned rectangle (2 corner points) or angled (4 corner points)
+    Parallelogram, ///< Parallelogram (4 corner points: p1, p2, p3, p4 where p4 = p1 + (p3 - p2))
+    Circle,        ///< Circle (center + radius)
+    Arc,           ///< Arc (center + radius + angles)
+    Spline,        ///< Catmull-Rom spline (control points)
+    Polygon,       ///< Regular polygon (center + radius + sides)
+    Slot,          ///< Slot: Linear (2 arc centers + radius) or Arc (arc center + start + end + radius)
+    Ellipse,       ///< Ellipse (center + major/minor radii)
+    Text,          ///< Text annotation
+    Dimension      ///< Dimension annotation (GUI-only, not stored as geometry)
 };
 
 // =====================================================================

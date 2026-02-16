@@ -98,6 +98,7 @@ void SketchToolbar::createTools()
     createDropdown->addVariant(tr("Corner to Corner"), static_cast<int>(CreationMode::RectCorner));
     createDropdown->addVariant(tr("Center"), static_cast<int>(CreationMode::RectCenter));
     createDropdown->addVariant(tr("3-Point (Angled)"), static_cast<int>(CreationMode::RectThreePoint));
+    createDropdown->addVariant(tr("Parallelogram"), static_cast<int>(CreationMode::RectParallelogram));
 
     // Circle - with variants
     createDropdown->addButton(
@@ -314,8 +315,8 @@ void SketchToolbar::onCreateDropdownClicked(int index)
         SketchTool::Slot, SketchTool::Ellipse, SketchTool::Point
     };
     static const char* names[] = {
-        "Line", "Rectangle", "Circle", "Arc", "Spline", "Polygon",
-        "Slot", "Ellipse", "Point"
+        "Line", "Rectangle", "Circle", "Arc", "Spline",
+        "Polygon", "Slot", "Ellipse", "Point"
     };
     if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
         SketchTool tool = tools[index];
@@ -342,8 +343,8 @@ void SketchToolbar::onCreateVariantClicked(int index, int variantId)
         SketchTool::Slot, SketchTool::Ellipse, SketchTool::Point
     };
     static const char* names[] = {
-        "Line", "Rectangle", "Circle", "Arc", "Spline", "Polygon",
-        "Slot", "Ellipse", "Point"
+        "Line", "Rectangle", "Circle", "Arc", "Spline",
+        "Polygon", "Slot", "Ellipse", "Point"
     };
     if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
         SketchTool tool = tools[index];

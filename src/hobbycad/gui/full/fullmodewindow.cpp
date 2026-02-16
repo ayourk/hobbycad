@@ -94,6 +94,7 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     m_viewportStack->addWidget(m_viewport);
 
     m_sketchCanvas = new SketchCanvas(m_viewportStack);
+    m_sketchCanvas->setUnitSuffix(unitSuffix());
     m_viewportStack->addWidget(m_sketchCanvas);
 
     layout->addWidget(m_viewportStack, 1);  // stretch factor 1
@@ -2373,6 +2374,9 @@ void FullModeWindow::loadProjectData()
 
     // Load project units
     setUnitsFromString(m_project.units());
+    if (m_sketchCanvas) {
+        m_sketchCanvas->setUnitSuffix(unitSuffix());
+    }
 
     // Load parameters
     loadParametersFromProject();
