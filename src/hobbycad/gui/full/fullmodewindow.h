@@ -6,11 +6,13 @@
 #define HOBBYCAD_FULLMODEWINDOW_H
 
 #include "gui/mainwindow.h"
+#include "gui/modeltoolbar.h"
 #include "gui/parametersdialog.h"
 #include "gui/sketchcanvas.h"
 #include "gui/full/aissketchplane.h"
 
 #include <AIS_Shape.hxx>
+#include <TopoDS_Shape.hxx>
 
 #include <QList>
 
@@ -19,14 +21,15 @@ class QStackedWidget;
 
 namespace hobbycad {
 
+class ModelToolbar;
 class SketchCanvas;
 class SketchToolbar;
 class TimelineWidget;
-class ViewportToolbar;
 class ViewportWidget;
 
 /// A completed sketch with its 3D representation
 struct CompletedSketch {
+    int featureId = 0;          ///< Unique feature ID for dependency tracking
     QString name;
     SketchPlane plane;
     double planeOffset = 0.0;   ///< Offset from origin along plane normal
@@ -35,6 +38,7 @@ struct CompletedSketch {
     double rotationAngle = 0.0;  ///< Rotation angle in degrees
     QVector<SketchEntity> entities;
     Handle(AIS_Shape) aisShape;  ///< 3D wireframe for viewport display
+    bool suppressed = false;    ///< True if suppressed in timeline
 };
 
 class FullModeWindow : public MainWindow {
@@ -73,8 +77,20 @@ private slots:
     void onSketchEntityCreated(int entityId);
     void onSketchEntityModified(int entityId);
 
+    // Timeline context menu handlers
+    void onEditFeature(int index);
+    void onRenameFeature(int index);
+    void onDeleteFeature(int index);
+    void onSuppressFeature(int index, bool suppress);
+    void onFeatureMoved(int fromIndex, int toIndex);
+    void onRollbackChanged(int index);
+
+    // Model tool handlers
+    void onModelToolSelected(ModelTool tool);
+    void performExtrude();
+    void performRevolve();
+
 private:
-    void createToolbar();
     void createTimeline();
     void displayShapes();
     void showFeatureProperties(int index);
@@ -104,9 +120,13 @@ private:
     void displayConstructionPlane(int planeId);
     void hideConstructionPlane(int planeId);
 
+    // Timeline feature helpers
+    int sketchIndexFromTimelineIndex(int timelineIndex) const;
+    int timelineIndexFromSketchIndex(int sketchIndex) const;
+
     // Toolbar stack (normal vs sketch mode)
     QStackedWidget*  m_toolbarStack  = nullptr;
-    ViewportToolbar* m_toolbar       = nullptr;
+    ModelToolbar*    m_toolbar       = nullptr;
     SketchToolbar*   m_sketchToolbar = nullptr;
 
     // Viewport stack (3D viewport vs sketch canvas)
@@ -123,12 +143,20 @@ private:
     // Completed sketches
     QVector<CompletedSketch> m_completedSketches;
     int m_currentSketchIndex = -1;  ///< Index of sketch being edited (-1 if new)
+    int m_pendingSketchTimelineIdx = -1;  ///< Timeline index of sketch being created
     double m_pendingSketchOffset = 0.0;  ///< Offset for sketch being created
     PlaneRotationAxis m_pendingRotationAxis = PlaneRotationAxis::X;
     double m_pendingRotationAngle = 0.0;
 
     // Sketch plane visualization
     Handle(AisSketchPlane) m_sketchPlaneVis;
+
+    // Feature ID tracking for dependencies
+    int m_nextFeatureId = 1;  ///< Next feature ID to assign (0 reserved for Origin)
+
+    // 3D solid bodies from extrude/revolve operations
+    QVector<TopoDS_Shape> m_solidBodies;
+    QVector<Handle(AIS_Shape)> m_solidAisShapes;
 };
 
 }  // namespace hobbycad

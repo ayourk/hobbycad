@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/libhobbycad_api.txt
-  Document Version : 0.0.2
-  Date             : 2026-02-14
+  Document Version : 0.0.5
+  Date             : 2026-02-16
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -42,22 +42,33 @@
        5.5  Sketch Data Structures
        5.6  Construction Plane Data
        5.7  Parameter Data
-       5.8  Feature Data
+       5.8  Feature State
+       5.9  Feature Data
     6. BREP I/O Functions
-    7. .hcad File Format
-    8. Geometry Module
-       8.1  Geometric Types
-       8.2  Intersection Functions
-       8.3  Geometry Utilities
-    9. Sketch Module
-       9.1  Entity Types
-       9.2  Constraint Types
-       9.3  Sketch Operations
-       9.4  Pattern Operations
-       9.5  Profile Detection
-       9.6  Constraint Solver
-       9.7  Text Parsing Utilities
-   10. GUI Integration
+    7. STEP I/O Functions
+       7.1  Reading STEP Files
+       7.2  Writing STEP Files
+    8. STL I/O Functions
+    9. .hcad File Format
+   10. Geometry Module
+       10.1  Geometric Types
+       10.2  Intersection Functions
+       10.3  Geometry Utilities
+       10.4  Geometry Algorithms
+   11. Sketch Module
+       11.1  Entity Types
+       11.2  Constraint Types
+       11.3  Sketch Operations
+       11.4  Pattern Operations
+       11.5  Profile Detection
+       11.6  Constraint Solver
+       11.7  Text Parsing Utilities
+       11.8  Entity Grouping
+       11.9  Undo/Redo System
+       11.10 Sketch Queries
+       11.11 Sketch Export/Import
+       11.12 Background Images
+   12. GUI Integration
 
 ================================================================================
   1. OVERVIEW
@@ -95,7 +106,7 @@
 
     To build an alternative UI (e.g., web-based, terminal, or different
     toolkit), simply link against libhobbycad and use the provided functions.
-    See Section 10 (GUI Integration) for examples of how the Qt-based
+    See Section 12 (GUI Integration) for examples of how the Qt-based
     SketchCanvas converts between its UI types and library types.
 
     Header Files:
@@ -103,15 +114,24 @@
       hobbycad/document.h             Simple document model (single file)
       hobbycad/project.h              Full project model (.hcad format)
       hobbycad/brep_io.h              BREP file read/write utilities
+      hobbycad/step_io.h              STEP file import/export
+      hobbycad/stl_io.h               STL mesh export
       hobbycad/geometry/types.h       Geometric types and transforms
       hobbycad/geometry/intersections.h  Intersection calculations
       hobbycad/geometry/utils.h       Geometry utility functions
+      hobbycad/geometry/algorithms.h  Advanced geometry algorithms
       hobbycad/sketch/entity.h        Sketch entity types
       hobbycad/sketch/constraint.h    Constraint types
       hobbycad/sketch/operations.h    Sketch operations (fillet, chamfer, etc.)
       hobbycad/sketch/patterns.h      Pattern operations
       hobbycad/sketch/profiles.h      Profile detection
       hobbycad/sketch/solver.h        Constraint solver (libslvs wrapper)
+      hobbycad/sketch/parsing.h       Text/coordinate parsing
+      hobbycad/sketch/group.h         Entity grouping with nested groups
+      hobbycad/sketch/undo.h          Multi-level undo/redo system
+      hobbycad/sketch/queries.h       Hit testing and analysis
+      hobbycad/sketch/export.h        SVG/DXF export/import
+      hobbycad/sketch/background.h    Background images for tracing
 
     Namespaces:
       hobbycad           Core types (Document, Project)
@@ -406,7 +426,8 @@
         Arc,         // Arc (center + radius + start/sweep angles)
         Spline,      // Catmull-Rom spline (multiple control points)
         Polygon,     // Regular polygon (center + radius + sides)
-        Slot,        // Obround/stadium slot (2 points + radius)
+        Slot,        // Linear slot (2 arc centers + radius) or
+                     // Arc slot (arc center + start + end + radius + arcFlipped)
         Ellipse,     // Ellipse (center + major/minor radii)
         Text,        // Text annotation
         Dimension    // Dimension annotation
@@ -576,7 +597,22 @@
     };
 
 
-  5.8  Feature Data
+  5.8  Feature State
+  -------------------
+
+    enum class FeatureState {
+        Normal,      // Feature is valid
+        Warning,     // Feature has a warning (e.g., over-constrained sketch)
+        Error        // Feature has an error (e.g., failed BREP operation)
+    };
+
+    Feature state is determined by library-level operations:
+    - Constraint solver results (Inconsistent, RedundantOkay)
+    - BREP operation failures (no closed profile, boolean failure)
+    - Dependency validation (missing referenced features)
+
+
+  5.9  Feature Data
   ------------------
 
     struct FeatureData {
@@ -584,6 +620,10 @@
         FeatureType type;         // Feature type
         QString name;             // Feature name
         QJsonObject properties;   // Feature-specific properties
+        QVector<int> dependsOn;   // IDs of features this depends on
+        bool suppressed = false;  // Feature is suppressed (not computed)
+        FeatureState state;       // Validation state (Normal/Warning/Error)
+        QString stateMessage;     // Human-readable error/warning message
     };
 
 ================================================================================
@@ -629,7 +669,130 @@
         }
 
 ================================================================================
-  7. .HCAD FILE FORMAT
+  7. STEP I/O FUNCTIONS
+================================================================================
+
+    #include <hobbycad/step_io.h>
+
+    STEP (ISO 10303-21) import/export for CAD interchange.
+
+
+  7.1  Reading STEP Files
+  -----------------------
+
+    enum class StepVersion { AP203, AP214, AP242 };
+
+    struct ReadResult {
+        bool success;
+        QList<TopoDS_Shape> shapes;
+        QString errorMessage;
+        int shapeCount;          // Number of shapes read
+        int rootCount;           // Number of root entities
+    };
+
+    ReadResult hobbycad::step_io::readStep(const QString& path)
+
+        Read a STEP file and return all shapes.
+        Supports .step and .stp extensions.
+
+    Example:
+
+        auto result = step_io::readStep("model.step");
+        if (result.success) {
+            for (const auto& shape : result.shapes) {
+                document.addShape(shape);
+            }
+        }
+
+
+  7.2  Writing STEP Files
+  -----------------------
+
+    struct WriteResult {
+        bool success;
+        QString errorMessage;
+        int shapeCount;          // Number of shapes written
+    };
+
+    WriteResult hobbycad::step_io::writeStep(
+        const QString& path,
+        const QList<TopoDS_Shape>& shapes,
+        StepVersion version = StepVersion::AP214)
+
+        Write shapes to a STEP file.
+
+    WriteResult hobbycad::step_io::writeStep(
+        const QString& path,
+        const TopoDS_Shape& shape,
+        StepVersion version = StepVersion::AP214)
+
+        Write a single shape to a STEP file.
+
+    Utility functions:
+
+        bool isStepFile(const QString& path)
+        QStringList stepExtensions()
+
+    Example:
+
+        auto shapes = document.shapes();
+        auto result = step_io::writeStep("export.step", shapes);
+        if (!result.success) {
+            qWarning() << result.errorMessage;
+        }
+
+
+================================================================================
+  8. STL I/O FUNCTIONS
+================================================================================
+
+    #include <hobbycad/stl_io.h>
+
+    STL (stereolithography) export for 3D printing and mesh visualization.
+
+    enum class StlFormat { Binary, Ascii };
+
+    struct MeshQuality {
+        double linearDeflection = 0.1;   // Max linear deviation (mm)
+        double angularDeflection = 0.5;  // Max angular deviation (radians)
+        bool relative = false;
+    };
+
+    struct WriteResult {
+        bool success;
+        QString errorMessage;
+        int triangleCount;
+    };
+
+    WriteResult hobbycad::stl_io::writeStl(
+        const QString& path,
+        const QList<TopoDS_Shape>& shapes,
+        StlFormat format = StlFormat::Binary,
+        const MeshQuality& quality = MeshQuality{})
+
+        Write shapes to an STL file.
+
+    Preset quality settings:
+
+        MeshQuality defaultQuality()   // General purpose (0.1mm, 0.5rad)
+        MeshQuality highQuality()      // High detail (0.01mm, 0.1rad)
+        MeshQuality fastQuality()      // Fast export (0.5mm, 1.0rad)
+
+    Utility functions:
+
+        bool isStlFile(const QString& path)
+        QStringList stlExtensions()
+
+    Example:
+
+        auto shapes = document.shapes();
+        auto result = stl_io::writeStl("model.stl", shapes,
+                                       stl_io::StlFormat::Binary,
+                                       stl_io::highQuality());
+
+
+================================================================================
+  9. .HCAD FILE FORMAT
 ================================================================================
 
     The .hcad format is a directory-based project structure designed for
@@ -760,7 +923,7 @@
         }
 
 ================================================================================
-  8. GEOMETRY MODULE
+  10. GEOMETRY MODULE
 ================================================================================
 
     The geometry module provides low-level 2D geometry operations.
@@ -769,11 +932,12 @@
       hobbycad/geometry/types.h         Basic geometric types
       hobbycad/geometry/intersections.h Intersection calculations
       hobbycad/geometry/utils.h         Utility functions
+      hobbycad/geometry/algorithms.h    Advanced geometry algorithms
 
     Namespace:
       hobbycad::geometry
 
-  8.1  Geometric Types (types.h)
+  10.1  Geometric Types (types.h)
   ------------------------------
 
     Constants:
@@ -838,7 +1002,7 @@
         Transform2D compose(const Transform2D& other) const
         Transform2D inverse() const
 
-  8.2  Intersection Functions (intersections.h)
+  10.2  Intersection Functions (intersections.h)
   ---------------------------------------------
 
     Line-Line:
@@ -875,7 +1039,7 @@
         double normalizeAngle(degrees)      Normalize to [0, 360)
         double normalizeAngleSigned(degrees) Normalize to [-180, 180)
 
-  8.3  Geometry Utilities (utils.h)
+  10.3  Geometry Utilities (utils.h)
   ---------------------------------
 
     Vector Operations:
@@ -925,8 +1089,83 @@
         bool lineEnclosedByRect(p1, p2, rect)
         bool circleEnclosedByRect(center, radius, rect)
 
+  10.4  Geometry Algorithms (algorithms.h)
+  ----------------------------------------
+
+    Advanced computational geometry algorithms.
+
+    Convex Hull:
+        QVector<QPointF> convexHull(points)
+            Andrew's monotone chain algorithm, O(n log n)
+        bool isConvex(polygon)
+            Check if polygon is convex
+
+    Polygon Simplification:
+        QVector<QPointF> simplifyPolyline(points, epsilon)
+            Ramer-Douglas-Peucker algorithm
+        QVector<QPointF> simplifyPolygon(polygon, epsilon)
+            Douglas-Peucker for closed shapes
+        QVector<QPointF> simplifyByArea(points, minArea)
+            Visvalingam-Whyatt (area-based)
+
+    Bounding Shapes:
+        struct MinimalBoundingCircle { center, radius }
+        MinimalBoundingCircle minimalBoundingCircle(points)
+            Welzl's algorithm, O(n) expected
+        struct OrientedBoundingBox { center, halfExtents, angle }
+            corners(), area(), contains(point)
+        OrientedBoundingBox minimalOrientedBoundingBox(points)
+            Rotating calipers on convex hull
+        BoundingBox obbToAABB(obb)
+
+    2D Boolean Operations:
+        struct PolygonWithHoles { outer, holes }
+        struct BooleanResult { success, polygons, error }
+        BooleanResult polygonUnion(poly1, poly2)
+        BooleanResult polygonIntersection(poly1, poly2)
+        BooleanResult polygonDifference(poly1, poly2)
+        BooleanResult polygonXOR(poly1, poly2)
+
+    Polygon Offset:
+        QVector<QVector<QPointF>> offsetPolygon(polygon, distance, joinType, miterLimit)
+            joinType: 0=miter, 1=round, 2=square
+        QVector<QVector<QPointF>> offsetPolyline(polyline, distance, endType, joinType)
+            endType: 0=butt, 1=round, 2=square
+
+    Triangulation:
+        struct Triangle { i0, i1, i2 }
+        struct Edge { i0, i1 }
+        QVector<Triangle> triangulatePolygon(polygon)
+            Ear clipping
+        QPair<QVector<QPointF>, QVector<Triangle>>
+            triangulatePolygonWithHoles(outer, holes)
+        QVector<Triangle> delaunayTriangulation(points)
+            Bowyer-Watson algorithm
+        QVector<Triangle> constrainedDelaunay(points, constrainedEdges)
+        QVector<QVector<QPointF>> voronoiDiagram(points, bounds)
+
+    Point Set Analysis:
+        QPair<int, int> findDiameter(points)
+            Farthest pair of points
+        QPair<int, int> findClosestPair(points)
+            Nearest pair, O(n log n)
+        double hausdorffDistance(set1, set2)
+
+    Curve Analysis:
+        QVector<double> polylineCurvature(points)
+        QVector<int> findCorners(points, angleThreshold)
+        QVector<QPointF> smoothPolyline(points, iterations)
+            Chaikin's algorithm
+
+    Path Operations (CNC/Manufacturing):
+        double pathLength(points)
+        QVector<QPointF> resamplePath(points, spacing)
+        QVector<QPointF> resamplePathByCount(points, numPoints)
+        QPointF pointAtArcLength(points, arcLength)
+        QPointF tangentAtArcLength(points, arcLength)
+
 ================================================================================
-  9. SKETCH MODULE
+  11. SKETCH MODULE
 ================================================================================
 
     The sketch module provides 2D sketch entity types and operations.
@@ -937,11 +1176,18 @@
       hobbycad/sketch/operations.h  Sketch modification operations
       hobbycad/sketch/patterns.h    Pattern creation (rect, circular)
       hobbycad/sketch/profiles.h    Profile detection (closed loops)
+      hobbycad/sketch/solver.h      Constraint solver (libslvs)
+      hobbycad/sketch/parsing.h     Text parsing utilities
+      hobbycad/sketch/group.h       Entity grouping
+      hobbycad/sketch/undo.h        Undo/redo system
+      hobbycad/sketch/queries.h     Hit testing and analysis
+      hobbycad/sketch/export.h      SVG/DXF export/import
+      hobbycad/sketch/background.h  Background images
 
     Namespace:
       hobbycad::sketch
 
-  9.1  Entity Types (entity.h)
+  11.1  Entity Types (entity.h)
   ----------------------------
 
     enum class EntityType
@@ -976,6 +1222,12 @@
         Entity createArcFromThreePoints(id, start, mid, end)
         Entity createPolygon(id, center, radius, sides, rotation)
         Entity createSlot(id, center1, center2, radius)
+            Linear slot: center1/center2 are centers of end semicircles
+        Entity createArcSlot(id, arcCenter, start, end, radius, flipped)
+            Arc slot: arcCenter is center of arc path
+            start/end are slot endpoints on the arc
+            radius is half-width of slot
+            flipped inverts sweep for >180 degree arcs
         Entity createEllipse(id, center, majorR, minorR, rotation)
         Entity createText(id, position, text)
 
@@ -984,7 +1236,7 @@
         QPointF entityCenter(entity)
         double entityLength(entity)
 
-  9.2  Constraint Types (constraint.h)
+  11.2  Constraint Types (constraint.h)
   ------------------------------------
 
     enum class ConstraintType
@@ -1023,7 +1275,7 @@
         QVector<ConstraintType> suggestConstraints(e1, e2)
         int requiredEntityCount(type)
 
-  9.3  Sketch Operations (operations.h)
+  11.3  Sketch Operations (operations.h)
   -------------------------------------
 
     Intersection Detection:
@@ -1059,7 +1311,7 @@
         QVector<int> findConnectedChain(startId, entities, tolerance)
         bool isChainClosed(chain, entities, tolerance)
 
-  9.4  Pattern Operations (patterns.h)
+  11.4  Pattern Operations (patterns.h)
   ------------------------------------
 
     Rectangular Pattern:
@@ -1105,7 +1357,7 @@
         MirrorPatternResult createMirrorPattern(
             sourceEntities, params, nextIdFunc)
 
-  9.5  Profile Detection (profiles.h)
+  11.5  Profile Detection (profiles.h)
   -----------------------------------
 
     struct Profile
@@ -1146,7 +1398,7 @@
         ConnectivityGraph buildConnectivityGraph(entities, tolerance)
         QVector<QVector<int>> findCycles(graph, maxCycles)
 
-  9.6  Constraint Solver (solver.h)
+  11.6  Constraint Solver (solver.h)
   ---------------------------------
 
     The solver wraps libslvs for parametric constraint solving.
@@ -1217,7 +1469,7 @@
             }
         }
 
-  9.7  Text Parsing Utilities (parsing.h)
+  11.7  Text Parsing Utilities (parsing.h)
   ---------------------------------------
 
     Text parsing utilities for CLI input, supporting coordinates,
@@ -1271,8 +1523,300 @@
             // Store expression for parametric evaluation
         }
 
+  11.8  Entity Grouping (group.h)
+  ------------------------------
+
+    Groups organize related entities for easier management. Groups support
+    nesting (groups within groups) and hierarchical operations.
+
+    struct Group
+        int id                    Unique group ID
+        QString name              Display name
+        QVector<int> entityIds    Direct entity members
+        QVector<int> childGroupIds Nested group IDs
+        int parentGroupId         Parent group ID (-1 if top-level)
+        bool locked               Lock group for editing
+        bool expanded             UI expansion state
+
+    class GroupManager
+        int createGroup(name)         Create a new group
+        void deleteGroup(id, deleteChildren)
+                                      Delete group (optionally delete children)
+        void addEntityToGroup(entityId, groupId)
+        void removeEntityFromGroup(entityId, groupId)
+        bool addGroupToGroup(childId, parentId)
+                                      Nest a group (with cycle detection)
+        void ungroupFromParent(groupId)
+        Group* groupById(id)
+        QVector<int> topLevelGroupIds() const
+        QSet<int> allEntityIds(groupId) const
+                                      All entities (including nested)
+        QVector<int> groupsContainingEntity(entityId) const
+        bool wouldCreateCycle(childId, parentId) const
+        void clear()
+
+    Utility Functions:
+        int groupDepth(manager, groupId)
+        QVector<int> groupPath(manager, groupId)
+        int commonAncestor(manager, groupId1, groupId2)
+
+    Example Usage:
+        GroupManager groups;
+        int g1 = groups.createGroup("Outline");
+        int g2 = groups.createGroup("Details");
+
+        groups.addEntityToGroup(lineId, g1);
+        groups.addEntityToGroup(circleId, g1);
+
+        // Nest g2 inside g1
+        groups.addGroupToGroup(g2, g1);
+
+        // Get all entities in g1 (including from nested groups)
+        QSet<int> allIds = groups.allEntityIds(g1);
+
+  11.9  Undo/Redo System (undo.h)
+  ------------------------------
+
+    Multi-level undo/redo system supporting compound operations and
+    configurable stack depth.
+
+    enum class CommandType
+        AddEntity, DeleteEntity, ModifyEntity,
+        AddConstraint, DeleteConstraint, ModifyConstraint,
+        AddGroup, DeleteGroup, ModifyGroup,
+        Compound
+
+    struct UndoCommand
+        CommandType type          Command type
+        QString description       Human-readable description
+        Entity entity             Current/new entity state
+        Entity previousEntity     Previous entity state (for modify)
+        Constraint constraint     Current/new constraint state
+        Constraint previousConstraint Previous constraint state
+        Group group               Current/new group state
+        Group previousGroup       Previous group state
+        QVector<UndoCommand> subCommands  Child commands (Compound)
+
+        Static factory methods:
+            addEntity(entity, desc)
+            deleteEntity(entity, desc)
+            modifyEntity(before, after, desc)
+            addConstraint(constraint, desc)
+            deleteConstraint(constraint, desc)
+            modifyConstraint(before, after, desc)
+            addGroup(group, desc)
+            deleteGroup(group, desc)
+            modifyGroup(before, after, desc)
+            compound(commands, desc)
+
+        bool isCompound() const
+        int operationCount() const
+
+    class UndoStack
+        explicit UndoStack(maxSize = 100)
+        void push(command)        Push command (clears redo stack)
+        void pushCompound(commands, description)
+        bool canUndo() const
+        bool canRedo() const
+        int undoLevels() const
+        int redoLevels() const
+        UndoCommand undo()        Pop from undo, push to redo
+        UndoCommand redo()        Pop from redo, push to undo
+        QVector<UndoCommand> undoMultiple(levels)
+        QVector<UndoCommand> redoMultiple(levels)
+        QString undoDescription() const
+        QString redoDescription() const
+        QStringList undoDescriptions() const
+        QStringList redoDescriptions() const
+        void clear()
+        void clearRedo()
+        int maxSize() const
+        void setMaxSize(maxSize)
+        bool isModified() const
+        void setUnmodified()
+        void beginCompound(description)
+        void endCompound()
+        bool isRecordingCompound() const
+
+    enum class TransformType
+        Move, Copy, Rotate, Scale, Mirror
+
+    enum class AlignmentType
+        Left, Right, Top, Bottom,
+        HorizontalCenter, VerticalCenter,
+        DistributeHorizontal, DistributeVertical
+
+    Utility Functions:
+        const char* entityTypeName(EntityType type)
+        QString entityTypeDisplayName(EntityType type)
+
+    Example Usage:
+        UndoStack undoStack(50);  // Max 50 undo levels
+
+        // Single operation
+        undoStack.push(UndoCommand::addEntity(newLine));
+
+        // Compound operation (multiple sub-commands as one undo step)
+        undoStack.beginCompound("Delete Selection");
+        for (const Entity& e : selectedEntities) {
+            undoStack.push(UndoCommand::deleteEntity(e));
+        }
+        undoStack.endCompound();
+
+        // Undo last operation
+        if (undoStack.canUndo()) {
+            UndoCommand cmd = undoStack.undo();
+            // Apply inverse operation based on cmd.type
+        }
+
+  11.10  Sketch Queries (queries.h)
+  ---------------------------------
+
+    Functions for hit testing, selection, validation, and analysis.
+
+    Hit Testing:
+        struct HitTestResult { entityId, distance, closestPoint, pointIndex }
+
+        QVector<int> findEntitiesAtPoint(entities, point, tolerance)
+            Find entities near a point, sorted by distance
+        HitTestResult findNearestEntity(entities, point)
+            Find single nearest entity
+        QVector<int> findEntitiesInRect(entities, rect, mustBeFullyInside)
+            Selection rectangle query
+        QVector<QPair<int, int>> findControlPointsAtPoint(entities, point, tolerance)
+            Find control points (returns entityId, pointIndex pairs)
+
+    Sketch Validation:
+        struct ValidationResult { valid, errors, warnings }
+
+        ValidationResult validateSketch(entities, constraints)
+        bool isSketchFullyConstrained(entities, constraints)
+        QVector<int> findUnconstrainedEntities(entities, constraints)
+        QVector<int> findUnderconstrainedEntities(entities, constraints)
+
+    Sketch Analysis:
+        double sketchArea(entities)         Total area of closed profiles
+        double sketchLength(entities)       Total length of all entities
+        BoundingBox sketchBounds(entities)  Bounding box of entire sketch
+        QMap<EntityType, int> countEntitiesByType(entities)
+
+    Curve Utilities:
+        double entityLength(entity)
+        QPointF pointAtParameter(entity, t)
+        double parameterAtPoint(entity, point)
+        QPointF tangentAtParameter(entity, t)
+        QPointF normalAtParameter(entity, t)
+
+    Tessellation:
+        QVector<QPointF> tessellate(entity, tolerance)
+        QVector<QLineF> tessellateToLines(entities, tolerance)
+
+  11.11  Sketch Export/Import (export.h)
+  --------------------------------------
+
+    SVG Export:
+        struct SVGExportOptions {
+            strokeWidth, strokeColor, fillColor, constructionColor,
+            includeConstraints, includeDimensions, margin, scale
+        }
+
+        QString sketchToSVG(entities, constraints, options)
+        bool exportSketchToSVG(entities, constraints, filePath, options)
+
+    DXF Export:
+        struct DXFExportOptions {
+            layerName, constructionLayer, colorIndex, constructionColorIndex,
+            usePolylines
+        }
+
+        QString sketchToDXF(entities, options)
+        bool exportSketchToDXF(entities, filePath, options)
+
+    SVG Import:
+        struct SVGImportOptions {
+            scale, flipY, tolerance, convertArcsToLines, offset
+        }
+        struct SVGImportResult {
+            success, entities, errorMessage, entityCount, bounds
+        }
+
+        SVGImportResult importSVGPath(svgPathData, startId, options)
+        SVGImportResult importSVGFile(filePath, startId, options)
+        SVGImportResult importSVGString(svgContent, startId, options)
+
+    DXF Import:
+        struct DXFImportOptions {
+            scale, offset, importBlocks, importHatch, layerFilter,
+            ignoreConstructionLayers, splineTolerance
+        }
+        struct DXFImportResult {
+            success, entities, errorMessage, entityCount, bounds,
+            layers, blocks
+        }
+
+        DXFImportResult importDXFFile(filePath, startId, options)
+        DXFImportResult importDXFString(dxfContent, startId, options)
+
+  11.12  Background Images (background.h)
+  ---------------------------------------
+
+    Support for tracing reference images in sketches.
+
+    struct BackgroundImage {
+        enabled                         Whether visible
+        storage                         FilePath or Embedded
+        filePath, imageData, mimeType   Image source
+        position, width, height, rotation
+        opacity, lockAspectRatio
+        flipHorizontal, flipVertical
+        grayscale, contrast, brightness
+        calibrated, calibrationScale
+
+        opacityPercent(), setOpacityPercent(percent)
+        normalizeRotation(), setRotation(degrees)
+        getScaleFactor(), setScaleFactor(scale)
+        bounds(), center(), containsPoint(point)
+    }
+
+    enum class BackgroundStorage { FilePath, Embedded }
+
+    Loading:
+        BackgroundImage loadBackgroundImage(filePath, embed)
+        BackgroundImage loadBackgroundImageFromData(data, mimeType)
+        QImage getBackgroundQImage(background)
+        QImage applyBackgroundAdjustments(image, background)
+
+    Geometry:
+        void calculateAspectRatio(originalWidth, originalHeight, targetWidth,
+                                  &targetHeight, lockAspect)
+        BackgroundImage calibrateBackground(background, point1, point2, realDistance)
+        QPointF sketchToImageCoords(background, sketchPoint)
+        QPointF imageToSketchCoords(background, imagePoint)
+
+    Alignment:
+        double calculateLineAngle(point1, point2)
+        double calculateAlignmentRotation(currentAngle, targetAngle)
+        double normalizeAngle360(degrees)
+        double normalizeAngle180(degrees)
+
+    Project Integration:
+        BackgroundImage exportBackgroundToProject(background, projectDir, sketchName)
+        bool isFileInProject(filePath, projectDir)
+        QString toRelativePath(absolutePath, projectDir)
+        QString toAbsolutePath(relativePath, projectDir)
+        BackgroundImage updateBackgroundFromFile(filePath, projectDir)
+
+    Serialization:
+        QString backgroundToJson(background, includeImageData)
+        BackgroundImage backgroundFromJson(json)
+
+    Format Support:
+        QStringList supportedImageFormats()
+        QString imageFileFilter()
+        bool isImageFormatSupported(filePath)
+
 ================================================================================
-  10. GUI INTEGRATION
+  12. GUI INTEGRATION
 ================================================================================
 
     The SketchCanvas uses a thin wrapper to convert between GUI types

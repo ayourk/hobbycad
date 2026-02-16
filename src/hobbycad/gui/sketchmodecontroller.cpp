@@ -55,7 +55,7 @@ void SketchModeController::setSketchToolbar(SketchToolbar* toolbar)
 
     // Connect to new toolbar
     if (m_toolbar) {
-        connect(m_toolbar, &SketchToolbar::toolSelected,
+        connect(m_toolbar, &SketchToolbar::toolChanged,
                 this, &SketchModeController::onToolSelected);
     }
 }

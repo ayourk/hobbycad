@@ -6,7 +6,7 @@
 #include "reducedviewport.h"
 #include "diagnosticdialog.h"
 #include "gui/clipanel.h"
-#include "gui/viewporttoolbar.h"
+#include "gui/modeltoolbar.h"
 #include "gui/toolbarbutton.h"
 #include "gui/toolbardropdown.h"
 #include "gui/timelinewidget.h"
@@ -44,9 +44,14 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
     // Toolbar stack (normal toolbar vs sketch toolbar)
     m_toolbarStack = new QStackedWidget(container);
 
-    m_toolbar = new ViewportToolbar(m_toolbarStack);
+    m_toolbar = new ModelToolbar(m_toolbarStack);
     m_toolbarStack->addWidget(m_toolbar);
-    createToolbar();
+
+    // Connect ModelToolbar signals
+    connect(m_toolbar, &ModelToolbar::createSketchClicked,
+            this, &ReducedModeWindow::onCreateSketchClicked);
+    connect(m_toolbar, &ModelToolbar::parametersClicked,
+            this, &ReducedModeWindow::showParametersDialog);
 
     m_sketchToolbar = new SketchToolbar(m_toolbarStack);
     m_toolbarStack->addWidget(m_sketchToolbar);
@@ -88,7 +93,7 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
     m_mainLayout->addWidget(m_viewportStack, 1);  // stretch factor 1
 
     // Connect sketch toolbar
-    connect(m_sketchToolbar, &SketchToolbar::toolSelected,
+    connect(m_sketchToolbar, &SketchToolbar::toolChanged,
             this, &ReducedModeWindow::onSketchToolSelected);
 
     // Connect sketch canvas
@@ -207,192 +212,7 @@ void ReducedModeWindow::showDiagnosticDialog()
     }
 }
 
-void ReducedModeWindow::createToolbar()
-{
-    // Buttons with icons above labels
-    // Using standard freedesktop icons as placeholders
-
-    // Create - start a 2D sketch or create construction geometry
-    auto* sketchBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-freehand"),
-                         style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Create"));
-    auto* sketchDrop = sketchBtn->dropdown();
-    sketchDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-freehand"),
-                         style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Sketch"));
-    sketchDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-rectangle"),
-                         style()->standardIcon(QStyle::SP_FileDialogListView)),
-        tr("Construction\nPlane"));
-    sketchDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-polygon"),
-                         style()->standardIcon(QStyle::SP_FileDialogContentsView)),
-        tr("Sketch on\nFace"));
-
-    // Box - create primitive box
-    auto* boxBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cube"),
-                         style()->standardIcon(QStyle::SP_ComputerIcon)),
-        tr("Box"));
-    auto* boxDrop = boxBtn->dropdown();
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cube"),
-                         style()->standardIcon(QStyle::SP_ComputerIcon)),
-        tr("Box"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cylinder"),
-                         style()->standardIcon(QStyle::SP_DriveHDIcon)),
-        tr("Cylinder"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-sphere"),
-                         style()->standardIcon(QStyle::SP_DialogHelpButton)),
-        tr("Sphere"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-donut"),
-                         style()->standardIcon(QStyle::SP_DialogResetButton)),
-        tr("Torus"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cone"),
-                         style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Cone"));
-
-    // Extrude - extrude sketch profiles
-    auto* extrudeBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("go-up"),
-                         style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Extrude"));
-    auto* extrudeDrop = extrudeBtn->dropdown();
-    extrudeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("go-up"),
-                         style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Extrude"));
-    extrudeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("go-down"),
-                         style()->standardIcon(QStyle::SP_ArrowDown)),
-        tr("Cut\nExtrude"));
-
-    // Revolve - revolve sketch profiles around an axis
-    auto* revolveBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("object-rotate-right"),
-                         style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Revolve"));
-    auto* revolveDrop = revolveBtn->dropdown();
-    revolveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("object-rotate-right"),
-                         style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Revolve"));
-    revolveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("object-rotate-left"),
-                         style()->standardIcon(QStyle::SP_BrowserStop)),
-        tr("Cut\nRevolve"));
-
-    m_toolbar->addSeparator();
-
-    // Fillet - round edges
-    auto* filletBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("format-stroke-color"),
-                         style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Fillet"));
-    auto* filletDrop = filletBtn->dropdown();
-    filletDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("format-stroke-color"),
-                         style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Fillet"));
-    filletDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-line"),
-                         style()->standardIcon(QStyle::SP_DialogOkButton)),
-        tr("Chamfer"));
-
-    // Hole - create holes
-    auto* holeBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-donut"),
-                         style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Hole"));
-    auto* holeDrop = holeBtn->dropdown();
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-circle"),
-                         style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Simple\nHole"));
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-ellipse"),
-                         style()->standardIcon(QStyle::SP_DialogNoButton)),
-        tr("Counter-\nbore"));
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-polygon"),
-                         style()->standardIcon(QStyle::SP_DialogYesButton)),
-        tr("Counter-\nsink"));
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-spiral"),
-                         style()->standardIcon(QStyle::SP_DialogSaveButton)),
-        tr("Threaded\nHole"));
-
-    m_toolbar->addSeparator();
-
-    // Move - transform objects
-    auto* moveBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("transform-move"),
-                         style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Move"));
-    auto* moveDrop = moveBtn->dropdown();
-    moveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("transform-move"),
-                         style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Move/\nCopy"));
-    moveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("align-horizontal-center"),
-                         style()->standardIcon(QStyle::SP_ToolBarHorizontalExtensionButton)),
-        tr("Align"));
-
-    // Mirror - mirror bodies or features
-    auto* mirrorBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("object-flip-horizontal"),
-                         style()->standardIcon(QStyle::SP_ArrowBack)),
-        tr("Mirror"));
-    auto* mirrorDrop = mirrorBtn->dropdown();
-    mirrorDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("object-flip-horizontal"),
-                         style()->standardIcon(QStyle::SP_ArrowBack)),
-        tr("Mirror"));
-    mirrorDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("edit-copy"),
-                         style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Pattern"));
-
-    m_toolbar->addSeparator();
-
-    // Parameters - manage object parameters/variables
-    auto* paramsBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("document-properties"),
-                         style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Params"),
-        tr("Parameters"));
-    auto* paramsDrop = paramsBtn->dropdown();
-    paramsDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("document-properties"),
-                         style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Change\nParameters"));
-
-    // Connect Params button to show parameters dialog
-    connect(paramsBtn, &ToolbarButton::clicked,
-            this, &ReducedModeWindow::showParametersDialog);
-
-    // Connect Create button - enters sketch mode in reduced mode
-    connect(sketchBtn, &ToolbarButton::clicked,
-            this, &ReducedModeWindow::onCreateSketchClicked);
-
-    // Most buttons are disabled until functionality is implemented
-    // sketchBtn is now enabled - 2D sketching works without 3D viewport!
-    boxBtn->setEnabled(false);
-    extrudeBtn->setEnabled(false);
-    revolveBtn->setEnabled(false);
-    filletBtn->setEnabled(false);
-    holeBtn->setEnabled(false);
-    moveBtn->setEnabled(false);
-    mirrorBtn->setEnabled(false);
-    // paramsBtn is now enabled!
-}
+// createToolbar() is no longer needed - ModelToolbar handles all button setup internally
 
 void ReducedModeWindow::createTimeline()
 {

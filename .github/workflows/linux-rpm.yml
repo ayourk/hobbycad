@@ -1,0 +1,194 @@
+# .github/workflows/linux-rpm.yml
+#
+# Build HobbyCAD RPM packages for RHEL-compatible and Fedora distros.
+#
+# Uses containers on Ubuntu runners to build native RPMs:
+#   - AlmaLinux 9 (RHEL 9 compatible, 2032 EOL) - matches Ubuntu 22.04 era
+#   - Fedora 40 (current stable, newer packages)
+#
+# Both x86_64 and aarch64 architectures are supported.
+
+name: Linux RPM
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+
+  # ================================================================
+  #  RPM Build Matrix
+  # ================================================================
+  #
+  #  Builds RPM packages using native containers.
+  #  AlmaLinux 9 for enterprise/LTS users, Fedora 40 for latest.
+
+  rpm:
+    name: HobbyCAD RPM (${{ matrix.distro }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # AlmaLinux 9 (RHEL 9 compatible)
+          - distro: almalinux9
+            arch: x86_64
+            runner: ubuntu-22.04
+            container: almalinux:9
+            artifact_name: hobbycad-almalinux9-x64
+          - distro: almalinux9
+            arch: aarch64
+            runner: ubuntu-22.04-arm
+            container: almalinux:9
+            artifact_name: hobbycad-almalinux9-arm64
+          # Fedora 40
+          - distro: fedora40
+            arch: x86_64
+            runner: ubuntu-22.04
+            container: fedora:40
+            artifact_name: hobbycad-fedora40-x64
+          - distro: fedora40
+            arch: aarch64
+            runner: ubuntu-22.04-arm
+            container: fedora:40
+            artifact_name: hobbycad-fedora40-arm64
+
+    steps:
+      - name: Install git (for checkout)
+        run: |
+          if command -v dnf &> /dev/null; then
+            dnf install -y git
+          elif command -v yum &> /dev/null; then
+            yum install -y git
+          fi
+
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (AlmaLinux 9)
+        if: startsWith(matrix.distro, 'almalinux')
+        run: |
+          # Enable EPEL and CRB for additional packages
+          dnf install -y epel-release
+          dnf config-manager --set-enabled crb
+
+          # Build tools
+          dnf install -y \
+            gcc-c++ cmake ninja-build rpm-build \
+            pkg-config
+
+          # Qt6 (from EPEL)
+          dnf install -y \
+            qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel
+
+          # OpenCASCADE (may need to build from source or use EPEL)
+          dnf install -y \
+            opencascade-devel || echo "OpenCASCADE not in repos, will try alternatives"
+
+          # Other dependencies
+          dnf install -y \
+            mesa-libGL-devel mesa-libGLU-devel libxkbcommon-devel \
+            tbb-devel libpng-devel libjpeg-devel \
+            libzip-devel minizip-devel \
+            libgit2-devel \
+            librsvg2-tools
+
+      - name: Install build dependencies (Fedora)
+        if: startsWith(matrix.distro, 'fedora')
+        run: |
+          dnf install -y \
+            gcc-c++ cmake ninja-build rpm-build \
+            pkg-config \
+            qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel \
+            opencascade-devel \
+            mesa-libGL-devel mesa-libGLU-devel mesa-libEGL-devel \
+            libxkbcommon-devel \
+            tbb-devel libpng-devel libjpeg-devel \
+            libzip-devel minizip-devel \
+            libgit2-devel \
+            librsvg2-tools
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Create RPM package structure
+        run: |
+          # Install to a staging directory
+          DESTDIR=$(pwd)/rpm-root cmake --install build
+
+          # Create RPM spec file
+          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
+          VERSION=${VERSION:-0.0.1}
+
+          mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
+
+          cat > rpmbuild/SPECS/hobbycad.spec << EOF
+          Name:           hobbycad
+          Version:        ${VERSION}
+          Release:        1%{?dist}
+          Summary:        Parametric 3D CAD Application
+          License:        GPL-3.0-only
+          URL:            https://github.com/ayourk/hobbycad
+
+          %description
+          HobbyCAD is a Linux-native open-source parametric 3D CAD application
+          built with Qt6 and OpenCASCADE.
+
+          %install
+          cp -a %{_builddir}/rpm-root/* %{buildroot}/
+
+          %files
+          /usr/bin/hobbycad
+          /usr/lib*/libhobbycad*
+          /usr/include/hobbycad/
+          /usr/share/applications/hobbycad.desktop
+          /usr/share/icons/hicolor/*/apps/hobbycad.*
+          /usr/share/pixmaps/hobbycad.xpm
+
+          %changelog
+          * $(date '+%a %b %d %Y') HobbyCAD CI <ci@hobbycad.org> - ${VERSION}-1
+          - Automated build from CI
+          EOF
+
+          # Copy installed files to BUILD directory for rpmbuild
+          cp -a rpm-root rpmbuild/BUILD/
+
+      - name: Build RPM
+        run: |
+          rpmbuild --define "_topdir $(pwd)/rpmbuild" \
+                   --define "_builddir $(pwd)/rpmbuild/BUILD" \
+                   -bb rpmbuild/SPECS/hobbycad.spec
+
+          # Move RPM to workspace root for upload
+          find rpmbuild/RPMS -name "*.rpm" -exec cp {} . \;
+
+      - name: Upload RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-rpm
+          path: "*.rpm"
+          retention-days: 14
+          if-no-files-found: error

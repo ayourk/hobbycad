@@ -1,10 +1,10 @@
 # .github/workflows/linux-build.yml
 #
-# Build HobbyCAD on Ubuntu 24.04 using apt packages.
+# Build HobbyCAD on Ubuntu 22.04 and 24.04 for x86_64 and arm64.
 #
-# Matches the local developer setup from docs/dev_environment_setup.txt §4.
-# All Phase 0 dependencies come from the Ubuntu 24.04 repositories.
-# Ubuntu runners are free for public repositories.
+# Ubuntu 22.04 (glibc 2.35) provides broader compatibility.
+# Ubuntu 24.04 (glibc 2.39) uses newer libraries.
+# Both LTS releases are supported for the duration of their lifecycle.
 
 name: Linux Build
 
@@ -30,15 +30,38 @@ on:
 jobs:
 
   # ================================================================
-  #  Ubuntu 24.04 / GCC / apt
+  #  Ubuntu / GCC / apt
   # ================================================================
   #
-  #  Matches the primary development platform.  All dependencies
-  #  come from the Ubuntu 24.04 repositories (fast).
+  #  Builds on both Ubuntu 22.04 and 24.04 for x86_64 and arm64.
+  #  All dependencies come from Ubuntu repositories.
 
   linux:
-    name: HobbyCAD via apt
-    runs-on: ubuntu-24.04
+    name: HobbyCAD Linux (${{ matrix.os }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04
+          - os: ubuntu-22.04
+            arch: x86_64
+            runner: ubuntu-22.04
+            artifact_name: hobbycad-linux-ubuntu2204-x64
+          - os: ubuntu-22.04
+            arch: aarch64
+            runner: ubuntu-22.04-arm
+            artifact_name: hobbycad-linux-ubuntu2204-arm64
+          # Ubuntu 24.04
+          - os: ubuntu-24.04
+            arch: x86_64
+            runner: ubuntu-24.04
+            artifact_name: hobbycad-linux-ubuntu2404-x64
+          - os: ubuntu-24.04
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            artifact_name: hobbycad-linux-ubuntu2404-arm64
 
     steps:
       - name: Checkout HobbyCAD
@@ -75,7 +98,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hobbycad-linux-x64
+          name: ${{ matrix.artifact_name }}
           path: build/install/
           retention-days: 14
           if-no-files-found: error

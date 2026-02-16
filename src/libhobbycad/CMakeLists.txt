@@ -21,9 +21,12 @@ include(FindPkgConfig OPTIONAL)
 set(HAVE_SLVS FALSE)
 set(SLVS_TARGET "")
 
-# Method 1: pkg-config
+# Method 1: pkg-config (try libslvs first, then slvs)
 if(PKG_CONFIG_FOUND)
-    pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+    pkg_check_modules(SLVS IMPORTED_TARGET libslvs)
+    if(NOT SLVS_FOUND)
+        pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+    endif()
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
         set(SLVS_TARGET PkgConfig::SLVS)
@@ -77,6 +80,8 @@ set(LIBHOBBYCAD_SOURCES
     core.cpp
     document.cpp
     brep_io.cpp
+    step_io.cpp
+    stl_io.cpp
     opengl_info.cpp
     project.cpp
     # Geometry module
@@ -95,6 +100,8 @@ set(LIBHOBBYCAD_SOURCES
     sketch/export.cpp
     sketch/background.cpp
     sketch/parsing.cpp
+    sketch/group.cpp
+    sketch/undo.cpp
     # BREP module
     brep/operations.cpp
 )
@@ -103,6 +110,8 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/core.h
     hobbycad/document.h
     hobbycad/brep_io.h
+    hobbycad/step_io.h
+    hobbycad/stl_io.h
     hobbycad/opengl_info.h
     hobbycad/project.h
     # Geometry module
@@ -120,6 +129,8 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/sketch/queries.h
     hobbycad/sketch/export.h
     hobbycad/sketch/background.h
+    hobbycad/sketch/group.h
+    hobbycad/sketch/undo.h
     # BREP module
     hobbycad/brep/operations.h
 )

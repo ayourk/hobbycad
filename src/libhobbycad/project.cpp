@@ -175,6 +175,77 @@ void Project::clearFeatures()
     setModified(true);
 }
 
+// ---- Foreign Files ----
+
+void Project::addForeignFile(const ForeignFileData& file)
+{
+    // Check if already exists
+    for (const auto& existing : m_foreignFiles) {
+        if (existing.path == file.path) {
+            return;
+        }
+    }
+    m_foreignFiles.append(file);
+    setModified(true);
+}
+
+void Project::addForeignFile(const QString& path, const QString& category,
+                              const QString& description)
+{
+    ForeignFileData file;
+    file.path = path;
+    file.category = category;
+    file.description = description;
+    addForeignFile(file);
+}
+
+void Project::removeForeignFile(const QString& path)
+{
+    for (int i = 0; i < m_foreignFiles.size(); ++i) {
+        if (m_foreignFiles[i].path == path) {
+            m_foreignFiles.removeAt(i);
+            setModified(true);
+            return;
+        }
+    }
+}
+
+void Project::setForeignFiles(const QVector<ForeignFileData>& files)
+{
+    m_foreignFiles = files;
+    setModified(true);
+}
+
+void Project::clearForeignFiles()
+{
+    m_foreignFiles.clear();
+    setModified(true);
+}
+
+bool Project::isForeignFile(const QString& relativePath) const
+{
+    for (const auto& file : m_foreignFiles) {
+        if (file.path == relativePath) {
+            return true;
+        }
+        // Check if path is under a foreign directory (e.g., "docs/" matches "docs/readme.txt")
+        if (file.path.endsWith(QLatin1Char('/')) && relativePath.startsWith(file.path)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const ForeignFileData* Project::foreignFileByPath(const QString& path) const
+{
+    for (const auto& file : m_foreignFiles) {
+        if (file.path == path) {
+            return &file;
+        }
+    }
+    return nullptr;
+}
+
 // ---- Create / Close ----
 
 void Project::createNew(const QString& name)
@@ -200,6 +271,7 @@ void Project::close()
     m_sketches.clear();
     m_parameters.clear();
     m_features.clear();
+    m_foreignFiles.clear();
     m_geometryFiles.clear();
     m_constructionPlaneFiles.clear();
     m_sketchFiles.clear();
@@ -304,6 +376,18 @@ QJsonObject Project::sketchToJson(const SketchData& sketch) const
         }
         if (entity.type == SketchEntityType::Text) {
             ent[QStringLiteral("text")] = entity.text;
+            if (!entity.fontFamily.isEmpty()) {
+                ent[QStringLiteral("font_family")] = entity.fontFamily;
+            }
+            ent[QStringLiteral("font_size")] = entity.fontSize;
+            ent[QStringLiteral("font_bold")] = entity.fontBold;
+            ent[QStringLiteral("font_italic")] = entity.fontItalic;
+            if (!qFuzzyIsNull(entity.textRotation)) {
+                ent[QStringLiteral("text_rotation")] = entity.textRotation;
+            }
+        }
+        if (entity.type == SketchEntityType::Slot && entity.arcFlipped) {
+            ent[QStringLiteral("arc_flipped")] = true;
         }
         ent[QStringLiteral("constrained")] = entity.constrained;
         ent[QStringLiteral("is_construction")] = entity.isConstruction;
@@ -420,6 +504,12 @@ SketchData Project::sketchFromJson(const QJsonObject& json) const
         entity.majorRadius = ent[QStringLiteral("major_radius")].toDouble();
         entity.minorRadius = ent[QStringLiteral("minor_radius")].toDouble();
         entity.text = ent[QStringLiteral("text")].toString();
+        entity.fontFamily = ent[QStringLiteral("font_family")].toString();
+        entity.fontSize = ent[QStringLiteral("font_size")].toDouble(12.0);
+        entity.fontBold = ent[QStringLiteral("font_bold")].toBool();
+        entity.fontItalic = ent[QStringLiteral("font_italic")].toBool();
+        entity.textRotation = ent[QStringLiteral("text_rotation")].toDouble();
+        entity.arcFlipped = ent[QStringLiteral("arc_flipped")].toBool();
         entity.constrained = ent[QStringLiteral("constrained")].toBool();
         entity.isConstruction = ent[QStringLiteral("is_construction")].toBool();
 
@@ -645,6 +735,29 @@ QJsonObject Project::manifestToJson() const
     obj[QStringLiteral("parameters")] = QStringLiteral("features/parameters.json");
     obj[QStringLiteral("features")] = QStringLiteral("features/feature_tree.json");
 
+    // Foreign files (non-CAD content tracked by the project)
+    if (!m_foreignFiles.isEmpty()) {
+        QJsonArray foreignArr;
+        for (const auto& file : m_foreignFiles) {
+            if (file.description.isEmpty() && file.category.isEmpty()) {
+                // Simple string format for minimal entries
+                foreignArr.append(file.path);
+            } else {
+                // Object format with metadata
+                QJsonObject fileObj;
+                fileObj[QStringLiteral("path")] = file.path;
+                if (!file.description.isEmpty()) {
+                    fileObj[QStringLiteral("description")] = file.description;
+                }
+                if (!file.category.isEmpty()) {
+                    fileObj[QStringLiteral("category")] = file.category;
+                }
+                foreignArr.append(fileObj);
+            }
+        }
+        obj[QStringLiteral("foreign_files")] = foreignArr;
+    }
+
     return obj;
 }
 
@@ -682,6 +795,25 @@ bool Project::manifestFromJson(const QJsonObject& json, QString* errorMsg)
     m_sketchFiles.clear();
     for (const auto& val : json[QStringLiteral("sketches")].toArray()) {
         m_sketchFiles.append(val.toString());
+    }
+
+    // Foreign files
+    m_foreignFiles.clear();
+    for (const auto& val : json[QStringLiteral("foreign_files")].toArray()) {
+        ForeignFileData file;
+        if (val.isString()) {
+            // Simple string format
+            file.path = val.toString();
+        } else if (val.isObject()) {
+            // Object format with metadata
+            QJsonObject fileObj = val.toObject();
+            file.path = fileObj[QStringLiteral("path")].toString();
+            file.description = fileObj[QStringLiteral("description")].toString();
+            file.category = fileObj[QStringLiteral("category")].toString();
+        }
+        if (!file.path.isEmpty()) {
+            m_foreignFiles.append(file);
+        }
     }
 
     return true;

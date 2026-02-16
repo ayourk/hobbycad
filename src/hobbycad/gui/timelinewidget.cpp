@@ -4,10 +4,13 @@
 
 #include "timelinewidget.h"
 
+#include <QAction>
 #include <QDrag>
 #include <QEnterEvent>
 #include <QFrame>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
+#include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -28,6 +31,9 @@ public:
     TimelineItem(int index, TimelineWidget* timeline, QWidget* parent = nullptr)
         : QToolButton(parent), m_index(index), m_timeline(timeline)
     {
+        setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(this, &QToolButton::customContextMenuRequested,
+                this, &TimelineItem::showContextMenu);
     }
 
     int index() const { return m_index; }
@@ -68,6 +74,34 @@ protected:
             m_timeline->endDrag();
         }
         QToolButton::mouseReleaseEvent(event);
+    }
+
+    void enterEvent(QEnterEvent* event) override {
+        QToolButton::enterEvent(event);
+        // Highlight dependencies when hovering
+        m_timeline->highlightDependencies(m_index);
+    }
+
+    void leaveEvent(QEvent* event) override {
+        QToolButton::leaveEvent(event);
+        // Clear dependency highlights when leaving
+        m_timeline->clearDependencyHighlights();
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton) {
+            // Double-click sets rollback to this position
+            m_timeline->setRollbackPosition(m_index);
+            emit m_timeline->itemDoubleClicked(m_index);
+            event->accept();
+            return;
+        }
+        QToolButton::mouseDoubleClickEvent(event);
+    }
+
+private slots:
+    void showContextMenu(const QPoint& pos) {
+        m_timeline->showItemContextMenu(m_index, mapToGlobal(pos));
     }
 
 private:
@@ -160,6 +194,87 @@ private:
     bool m_pressed = false;
 };
 
+// ---- RollbackBar (draggable marker) -----------------------------------
+
+class RollbackBar : public QWidget {
+public:
+    explicit RollbackBar(TimelineWidget* timeline, QWidget* parent = nullptr)
+        : QWidget(parent), m_timeline(timeline)
+    {
+        setFixedWidth(8);
+        setCursor(Qt::SplitHCursor);
+        setMouseTracking(true);
+    }
+
+    void setPosition(int x) {
+        move(x - width() / 2, 0);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+
+        int centerX = width() / 2;
+
+        // Draw vertical line
+        p.setPen(QPen(QColor("#ff6b6b"), 2));
+        p.drawLine(centerX, 4, centerX, height() - 4);
+
+        // Draw top triangle handle
+        QPolygonF topTriangle;
+        topTriangle << QPointF(centerX - 4, 0)
+                    << QPointF(centerX + 4, 0)
+                    << QPointF(centerX, 6);
+        p.setBrush(QColor("#ff6b6b"));
+        p.setPen(Qt::NoPen);
+        p.drawPolygon(topTriangle);
+
+        // Draw bottom triangle handle
+        QPolygonF bottomTriangle;
+        bottomTriangle << QPointF(centerX - 4, height())
+                       << QPointF(centerX + 4, height())
+                       << QPointF(centerX, height() - 6);
+        p.drawPolygon(bottomTriangle);
+    }
+
+    void mousePressEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton) {
+            m_dragging = true;
+            m_dragOffset = event->pos().x();
+            setCursor(Qt::ClosedHandCursor);
+        }
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override {
+        if (m_dragging) {
+            // Calculate new position relative to parent
+            QPoint globalPos = mapToGlobal(event->pos());
+            QPoint parentPos = parentWidget()->mapFromGlobal(globalPos);
+            int newX = parentPos.x() - m_dragOffset;
+
+            // Find which item position this corresponds to
+            m_timeline->updateRollbackFromDrag(newX);
+        }
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton) {
+            m_dragging = false;
+            setCursor(Qt::SplitHCursor);
+        }
+    }
+
+    void enterEvent(QEnterEvent*) override {
+        setCursor(m_dragging ? Qt::ClosedHandCursor : Qt::SplitHCursor);
+    }
+
+private:
+    TimelineWidget* m_timeline;
+    bool m_dragging = false;
+    int m_dragOffset = 0;
+};
+
 // ---- ScaleWidget (tick marks below icons) ----------------------------
 
 class TimelineScaleWidget : public QWidget {
@@ -250,6 +365,11 @@ void TimelineWidget::setupUi()
     contentVLayout->addWidget(m_scaleWidget);
 
     m_scrollArea->setWidget(m_contentWidget);
+
+    // Rollback bar (initially hidden, overlays the icon row)
+    m_rollbackBar = new RollbackBar(this, m_iconRowWidget);
+    m_rollbackBar->setFixedHeight(m_iconRowWidget->height() > 0 ? m_iconRowWidget->height() : 36);
+    m_rollbackBar->hide();  // Hidden until rollback position is set
 
     // Right arrow (scroll right / show later items)
     m_rightArrow = new TimelineArrowButton(TimelineArrowButton::Right, this);
@@ -385,6 +505,10 @@ void TimelineWidget::addItem(TimelineFeature feature, const QString& name)
     m_items.append(btn);
     m_features.append(feature);
     m_names.append(name);
+    m_featureIds.append(0);          // Default ID, can be set with setFeatureId()
+    m_dependencies.append(QVector<int>());       // No dependencies by default
+    m_featureStates.append(FeatureState::Normal);
+    m_suppressedStates.append(false);
 
     // Insert before the stretch
     m_contentLayout->insertWidget(m_contentLayout->count() - 1, btn);
@@ -408,6 +532,107 @@ void TimelineWidget::addItem(TimelineFeature feature, const QString& name)
     QMetaObject::invokeMethod(this, &TimelineWidget::scrollToEnd, Qt::QueuedConnection);
 }
 
+void TimelineWidget::insertItem(TimelineFeature feature, const QString& name, int index)
+{
+    if (index < 0)
+        index = 0;
+    if (index > m_items.size())
+        index = m_items.size();
+
+    auto* btn = new TimelineItem(index, this, m_iconRowWidget);
+    btn->setIcon(iconForFeature(feature));
+    btn->setIconSize(QSize(22, 22));
+    btn->setToolTip(name);
+    btn->setFixedSize(32, 32);
+    btn->setAutoRaise(true);
+    btn->setCheckable(true);
+    btn->setStyleSheet(QStringLiteral(
+        "QToolButton {"
+        "  background: #4a4a4a;"
+        "  border: 1px solid #555;"
+        "  border-radius: 2px;"
+        "}"
+        "QToolButton:hover {"
+        "  background: #5a5a5a;"
+        "  border-color: #888;"
+        "}"
+        "QToolButton:checked {"
+        "  background: #6a8fbd;"
+        "  border-color: #8ab4f8;"
+        "}"
+        "QToolTip {"
+        "  background: #ffffcc;"
+        "  color: #000;"
+        "  border: 1px solid #000;"
+        "  padding: 2px;"
+        "}"
+        "QToolButton:disabled {"
+        "  background: #333;"
+        "  border-color: #444;"
+        "}"
+    ));
+
+    // Insert into lists at position
+    m_items.insert(index, btn);
+    m_features.insert(index, feature);
+    m_names.insert(index, name);
+    m_featureIds.insert(index, 0);
+    m_dependencies.insert(index, QVector<int>());
+    m_featureStates.insert(index, FeatureState::Normal);
+    m_suppressedStates.insert(index, false);
+
+    // Insert into layout at position
+    m_contentLayout->insertWidget(index, btn);
+
+    // Update indices for all items
+    for (int i = 0; i < m_items.size(); ++i)
+        m_items[i]->setIndex(i);
+
+    // Update rollback position if inserting before it
+    if (m_rollbackPos >= 0 && index <= m_rollbackPos) {
+        m_rollbackPos++;
+    }
+
+    // Connect click signal
+    connect(btn, &QToolButton::clicked, this, [this, btn]() {
+        int idx = btn->index();
+        if (m_selectedIndex == idx) {
+            setSelectedIndex(-1);
+            emit itemClicked(-1);
+        } else {
+            setSelectedIndex(idx);
+            emit itemClicked(idx);
+        }
+    });
+
+    // Update visuals
+    updateItemStyles();
+    QMetaObject::invokeMethod(this, &TimelineWidget::updateTickMarks, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &TimelineWidget::updateArrows, Qt::QueuedConnection);
+}
+
+int TimelineWidget::addItemAtRollback(TimelineFeature feature, const QString& name)
+{
+    int insertIndex;
+
+    if (m_rollbackPos >= 0 && m_rollbackPos < m_items.size() - 1) {
+        // Insert after rollback position
+        insertIndex = m_rollbackPos + 1;
+        insertItem(feature, name, insertIndex);
+
+        // Move rollback forward to include the new item
+        m_rollbackPos++;
+        updateItemStyles();
+        updateRollbackBarPosition();
+    } else {
+        // No rollback or at end - just append
+        insertIndex = m_items.size();
+        addItem(feature, name);
+    }
+
+    return insertIndex;
+}
+
 void TimelineWidget::removeItem(int index)
 {
     if (index < 0 || index >= m_items.size())
@@ -420,6 +645,14 @@ void TimelineWidget::removeItem(int index)
     m_items.remove(index);
     m_features.remove(index);
     m_names.remove(index);
+    if (index < m_featureIds.size())
+        m_featureIds.remove(index);
+    if (index < m_dependencies.size())
+        m_dependencies.remove(index);
+    if (index < m_featureStates.size())
+        m_featureStates.remove(index);
+    if (index < m_suppressedStates.size())
+        m_suppressedStates.remove(index);
 
     // Update selection index if needed
     if (m_selectedIndex == index) {
@@ -440,6 +673,73 @@ void TimelineWidget::removeItem(int index)
 
     updateTickMarks();
     updateArrows();
+}
+
+void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
+{
+    if (index < 0 || index >= m_items.size())
+        return;
+
+    // Select the item when showing context menu
+    setSelectedIndex(index);
+    emit itemClicked(index);
+
+    TimelineFeature feature = m_features[index];
+    QString name = m_names[index];
+    bool isSuppressed = (m_rollbackPos >= 0 && index > m_rollbackPos);
+
+    QMenu menu(this);
+
+    // Edit action (for sketches and features that can be edited)
+    QAction* editAction = menu.addAction(tr("Edit \"%1\"").arg(name));
+    editAction->setEnabled(feature != TimelineFeature::Origin);
+    connect(editAction, &QAction::triggered, this, [this, index]() {
+        emit editFeatureRequested(index);
+    });
+
+    menu.addSeparator();
+
+    // Rename action
+    QAction* renameAction = menu.addAction(tr("Rename..."));
+    renameAction->setEnabled(feature != TimelineFeature::Origin);
+    connect(renameAction, &QAction::triggered, this, [this, index]() {
+        emit renameFeatureRequested(index);
+    });
+
+    menu.addSeparator();
+
+    // Suppress/Unsuppress action
+    if (isSuppressed) {
+        QAction* unsuppressAction = menu.addAction(tr("Unsuppress"));
+        connect(unsuppressAction, &QAction::triggered, this, [this, index]() {
+            emit suppressFeatureRequested(index, false);
+        });
+    } else {
+        QAction* suppressAction = menu.addAction(tr("Suppress"));
+        suppressAction->setEnabled(feature != TimelineFeature::Origin);
+        connect(suppressAction, &QAction::triggered, this, [this, index]() {
+            emit suppressFeatureRequested(index, true);
+        });
+    }
+
+    // Rollback to here
+    QAction* rollbackAction = menu.addAction(tr("Rollback to Here"));
+    rollbackAction->setEnabled(feature != TimelineFeature::Origin);
+    connect(rollbackAction, &QAction::triggered, this, [this, index]() {
+        setRollbackPosition(index);
+        emit rollbackChanged(index);
+    });
+
+    menu.addSeparator();
+
+    // Delete action
+    QAction* deleteAction = menu.addAction(tr("Delete"));
+    deleteAction->setEnabled(feature != TimelineFeature::Origin);
+    connect(deleteAction, &QAction::triggered, this, [this, index]() {
+        emit deleteFeatureRequested(index);
+    });
+
+    menu.exec(globalPos);
 }
 
 void TimelineWidget::moveItem(int fromIndex, int toIndex)
@@ -467,6 +767,34 @@ void TimelineWidget::moveItem(int fromIndex, int toIndex)
     m_names.remove(fromIndex);
     m_names.insert(toIndex, name);
 
+    // Move feature ID
+    if (fromIndex < m_featureIds.size()) {
+        auto featureId = m_featureIds[fromIndex];
+        m_featureIds.remove(fromIndex);
+        m_featureIds.insert(toIndex, featureId);
+    }
+
+    // Move dependencies
+    if (fromIndex < m_dependencies.size()) {
+        auto deps = m_dependencies[fromIndex];
+        m_dependencies.remove(fromIndex);
+        m_dependencies.insert(toIndex, deps);
+    }
+
+    // Move feature states
+    if (fromIndex < m_featureStates.size()) {
+        auto state = m_featureStates[fromIndex];
+        m_featureStates.remove(fromIndex);
+        m_featureStates.insert(toIndex, state);
+    }
+
+    // Move suppressed states
+    if (fromIndex < m_suppressedStates.size()) {
+        auto suppressed = m_suppressedStates[fromIndex];
+        m_suppressedStates.remove(fromIndex);
+        m_suppressedStates.insert(toIndex, suppressed);
+    }
+
     // Update selection index if needed
     if (m_selectedIndex == fromIndex) {
         m_selectedIndex = toIndex;
@@ -491,6 +819,96 @@ void TimelineWidget::moveItem(int fromIndex, int toIndex)
     emit itemMoved(fromIndex, toIndex);
 }
 
+// ---- Dependency tracking ----
+
+void TimelineWidget::setFeatureId(int index, int featureId)
+{
+    if (index < 0 || index >= m_items.size())
+        return;
+
+    // Ensure vector is large enough
+    while (m_featureIds.size() <= index)
+        m_featureIds.append(0);
+
+    m_featureIds[index] = featureId;
+}
+
+int TimelineWidget::featureIdAt(int index) const
+{
+    if (index < 0 || index >= m_featureIds.size())
+        return 0;
+    return m_featureIds[index];
+}
+
+void TimelineWidget::setDependencies(int index, const QVector<int>& dependsOn)
+{
+    if (index < 0 || index >= m_items.size())
+        return;
+
+    // Ensure vector is large enough
+    while (m_dependencies.size() <= index)
+        m_dependencies.append(QVector<int>());
+
+    m_dependencies[index] = dependsOn;
+}
+
+QVector<int> TimelineWidget::dependenciesAt(int index) const
+{
+    if (index < 0 || index >= m_dependencies.size())
+        return {};
+    return m_dependencies[index];
+}
+
+int TimelineWidget::indexOfFeatureId(int featureId) const
+{
+    for (int i = 0; i < m_featureIds.size(); ++i) {
+        if (m_featureIds[i] == featureId)
+            return i;
+    }
+    return -1;
+}
+
+bool TimelineWidget::canMoveItem(int fromIndex, int toIndex) const
+{
+    if (fromIndex < 0 || fromIndex >= m_items.size())
+        return false;
+    if (toIndex < 0 || toIndex >= m_items.size())
+        return false;
+    if (fromIndex == toIndex)
+        return true;
+
+    // Can't move Origin (index 0)
+    if (fromIndex == 0 || toIndex == 0)
+        return false;
+
+    int featureId = featureIdAt(fromIndex);
+
+    if (fromIndex < toIndex) {
+        // Moving down (later in timeline)
+        // Check if any item between fromIndex+1 and toIndex depends on this feature
+        for (int i = fromIndex + 1; i <= toIndex; ++i) {
+            QVector<int> deps = dependenciesAt(i);
+            if (deps.contains(featureId)) {
+                // Can't move past a dependent feature
+                return false;
+            }
+        }
+    } else {
+        // Moving up (earlier in timeline)
+        // Check if the moved item depends on any feature between toIndex and fromIndex-1
+        QVector<int> myDeps = dependenciesAt(fromIndex);
+        for (int i = toIndex; i < fromIndex; ++i) {
+            int otherId = featureIdAt(i);
+            if (myDeps.contains(otherId)) {
+                // Can't move before a feature this depends on
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 void TimelineWidget::clear()
 {
     for (auto* btn : m_items) {
@@ -500,6 +918,10 @@ void TimelineWidget::clear()
     m_items.clear();
     m_features.clear();
     m_names.clear();
+    m_featureIds.clear();
+    m_dependencies.clear();
+    m_featureStates.clear();
+    m_suppressedStates.clear();
     m_rollbackPos = -1;
     m_selectedIndex = -1;
     updateTickMarks();
@@ -555,6 +977,7 @@ void TimelineWidget::setRollbackPosition(int index)
 
     m_rollbackPos = index;
     updateItemStyles();
+    updateRollbackBarPosition();
     emit rollbackChanged(index);
 }
 
@@ -563,12 +986,156 @@ int TimelineWidget::rollbackPosition() const
     return m_rollbackPos;
 }
 
+void TimelineWidget::updateRollbackBarPosition()
+{
+    if (!m_rollbackBar)
+        return;
+
+    if (m_rollbackPos < 0 || m_rollbackPos >= m_items.size()) {
+        // No rollback position or at end - hide the bar
+        m_rollbackBar->hide();
+        return;
+    }
+
+    // Position the bar after the rollback item
+    auto* item = m_items[m_rollbackPos];
+    int xPos = item->x() + item->width() + 1;  // Right edge of rollback item
+    m_rollbackBar->setPosition(xPos);
+    m_rollbackBar->setFixedHeight(item->height());
+    m_rollbackBar->show();
+    m_rollbackBar->raise();  // Ensure it's on top
+}
+
+void TimelineWidget::updateRollbackFromDrag(int xPos)
+{
+    // Find which item position this corresponds to
+    // The rollback bar should be placed AFTER the item we're rolling back to
+
+    int newRollbackPos = -1;
+
+    for (int i = 0; i < m_items.size(); ++i) {
+        auto* item = m_items[i];
+        int itemCenter = item->x() + item->width() / 2;
+
+        if (xPos < itemCenter) {
+            // We're before this item's center, so rollback to previous item
+            newRollbackPos = i - 1;
+            break;
+        }
+        newRollbackPos = i;
+    }
+
+    // Don't allow rollback before Origin (must be at least 0 or -1 for "no rollback")
+    // If dragged past all items to the right, set to -1 (no rollback)
+    if (newRollbackPos >= m_items.size() - 1) {
+        newRollbackPos = -1;  // Rollback to end = no rollback
+    }
+
+    if (newRollbackPos != m_rollbackPos) {
+        setRollbackPosition(newRollbackPos);
+    }
+}
+
 void TimelineWidget::updateItemStyles()
 {
-    // Items after rollback position are "suppressed" (grayed out)
+    // Items after rollback position are "suppressed" (grayed out with strikethrough effect)
+    QString normalStyle = QStringLiteral(
+        "QToolButton {"
+        "  background: #4a4a4a;"
+        "  border: 1px solid #555;"
+        "  border-radius: 2px;"
+        "}"
+        "QToolButton:hover {"
+        "  background: #5a5a5a;"
+        "  border-color: #888;"
+        "}"
+        "QToolButton:checked {"
+        "  background: #6a8fbd;"
+        "  border-color: #8ab4f8;"
+        "}"
+        "QToolTip {"
+        "  background: #ffffcc;"
+        "  color: #000;"
+        "  border: 1px solid #000;"
+        "  padding: 2px;"
+        "}"
+    );
+
+    QString suppressedStyle = QStringLiteral(
+        "QToolButton {"
+        "  background: #2a2a2a;"
+        "  border: 1px solid #383838;"
+        "  border-radius: 2px;"
+        "  color: #666;"
+        "}"
+        "QToolButton:hover {"
+        "  background: #333;"
+        "  border-color: #444;"
+        "}"
+        "QToolButton:checked {"
+        "  background: #4a5a6a;"
+        "  border-color: #5a6a7a;"
+        "}"
+    );
+
+    // Error state styles
+    QString errorStyle = QStringLiteral(
+        "QToolButton {"
+        "  background: #4a3030;"
+        "  border: 2px solid #ff4444;"
+        "  border-radius: 2px;"
+        "}"
+        "QToolButton:hover {"
+        "  background: #5a4040;"
+        "  border-color: #ff6666;"
+        "}"
+    );
+
+    QString warningStyle = QStringLiteral(
+        "QToolButton {"
+        "  background: #4a4a30;"
+        "  border: 2px solid #ffaa00;"
+        "  border-radius: 2px;"
+        "}"
+        "QToolButton:hover {"
+        "  background: #5a5a40;"
+        "  border-color: #ffcc44;"
+        "}"
+    );
+
     for (int i = 0; i < m_items.size(); ++i) {
-        bool suppressed = (m_rollbackPos >= 0 && i > m_rollbackPos);
-        m_items[i]->setEnabled(!suppressed);
+        // Check individual suppression OR rollback suppression
+        bool individualSuppressed = (i < m_suppressedStates.size() && m_suppressedStates[i]);
+        bool rollbackSuppressed = (m_rollbackPos >= 0 && i > m_rollbackPos);
+        bool suppressed = individualSuppressed || rollbackSuppressed;
+
+        // Check feature state for error/warning
+        FeatureState state = (i < m_featureStates.size()) ? m_featureStates[i] : FeatureState::Normal;
+
+        // Apply appropriate style
+        if (suppressed) {
+            m_items[i]->setEnabled(false);
+            m_items[i]->setStyleSheet(suppressedStyle);
+        } else if (state == FeatureState::Error) {
+            m_items[i]->setEnabled(true);
+            m_items[i]->setStyleSheet(errorStyle);
+        } else if (state == FeatureState::Warning) {
+            m_items[i]->setEnabled(true);
+            m_items[i]->setStyleSheet(warningStyle);
+        } else {
+            m_items[i]->setEnabled(true);
+            m_items[i]->setStyleSheet(normalStyle);
+        }
+
+        // Update icon opacity for suppressed items
+        if (suppressed) {
+            // Dim the icon by setting a semi-transparent effect
+            auto* effect = new QGraphicsOpacityEffect(m_items[i]);
+            effect->setOpacity(0.4);
+            m_items[i]->setGraphicsEffect(effect);
+        } else {
+            m_items[i]->setGraphicsEffect(nullptr);
+        }
     }
 }
 
@@ -584,6 +1151,9 @@ void TimelineWidget::updateTickMarks()
 
     if (m_scaleWidget)
         static_cast<TimelineScaleWidget*>(m_scaleWidget)->setTickPositions(positions);
+
+    // Also update rollback bar position
+    updateRollbackBarPosition();
 }
 
 void TimelineWidget::resizeEvent(QResizeEvent* event)
@@ -592,6 +1162,7 @@ void TimelineWidget::resizeEvent(QResizeEvent* event)
     updateArrows();
     // Delay tick update to allow layout to settle
     QMetaObject::invokeMethod(this, &TimelineWidget::updateTickMarks, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, &TimelineWidget::updateRollbackBarPosition, Qt::QueuedConnection);
 }
 
 void TimelineWidget::wheelEvent(QWheelEvent* event)
@@ -644,6 +1215,10 @@ void TimelineWidget::startDrag(int index)
     if (index < 0 || index >= m_items.size())
         return;
 
+    // Don't allow dragging the Origin (always at index 0)
+    if (index == 0 && m_features[0] == TimelineFeature::Origin)
+        return;
+
     m_dragIndex = index;
     m_dragOrigIndex = index;
 }
@@ -659,28 +1234,43 @@ void TimelineWidget::updateDrag(const QPoint& globalPos)
     // Check if cursor has moved into an adjacent icon's bounds
     // Only swap with immediate neighbors for smooth dragging
 
-    // Check left neighbor
+    // Check left neighbor (but don't swap with Origin at index 0)
     if (m_dragIndex > 0) {
-        auto* leftItem = m_items[m_dragIndex - 1];
-        QRect leftRect(leftItem->x(), leftItem->y(),
-                       leftItem->width(), leftItem->height());
-        if (leftRect.contains(localPos)) {
-            // Swap with left neighbor
-            int targetIndex = m_dragIndex - 1;
-            moveItem(m_dragIndex, targetIndex);
-            m_dragIndex = targetIndex;
-            return;
+        int targetIndex = m_dragIndex - 1;
+
+        // Don't allow moving before Origin
+        if (targetIndex == 0 && m_features[0] == TimelineFeature::Origin) {
+            // Skip - can't move before Origin
+        } else if (!canMoveItem(m_dragIndex, targetIndex)) {
+            // Skip - dependency violation
+        } else {
+            auto* leftItem = m_items[targetIndex];
+            QRect leftRect(leftItem->x(), leftItem->y(),
+                           leftItem->width(), leftItem->height());
+            if (leftRect.contains(localPos)) {
+                // Swap with left neighbor
+                moveItem(m_dragIndex, targetIndex);
+                m_dragIndex = targetIndex;
+                return;
+            }
         }
     }
 
     // Check right neighbor
     if (m_dragIndex < m_items.size() - 1) {
-        auto* rightItem = m_items[m_dragIndex + 1];
+        int targetIndex = m_dragIndex + 1;
+
+        // Check dependency constraints
+        if (!canMoveItem(m_dragIndex, targetIndex)) {
+            // Skip - dependency violation
+            return;
+        }
+
+        auto* rightItem = m_items[targetIndex];
         QRect rightRect(rightItem->x(), rightItem->y(),
                         rightItem->width(), rightItem->height());
         if (rightRect.contains(localPos)) {
             // Swap with right neighbor
-            int targetIndex = m_dragIndex + 1;
             moveItem(m_dragIndex, targetIndex);
             m_dragIndex = targetIndex;
             return;
@@ -699,6 +1289,196 @@ void TimelineWidget::endDrag()
 
     m_dragIndex = -1;
     m_dragOrigIndex = -1;
+}
+
+// ---- Dependency visualization ----
+
+QVector<int> TimelineWidget::getParentIndices(int index) const
+{
+    QVector<int> parents;
+    QVector<int> deps = dependenciesAt(index);
+
+    for (int depId : deps) {
+        int parentIdx = indexOfFeatureId(depId);
+        if (parentIdx >= 0) {
+            parents.append(parentIdx);
+        }
+    }
+
+    return parents;
+}
+
+QVector<int> TimelineWidget::getDependentIndices(int index) const
+{
+    QVector<int> dependents;
+    int featureId = featureIdAt(index);
+
+    if (featureId == 0)
+        return dependents;  // Origin has no dependents tracked explicitly
+
+    // Check all items to see which depend on this feature
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (i == index)
+            continue;
+
+        QVector<int> deps = dependenciesAt(i);
+        if (deps.contains(featureId)) {
+            dependents.append(i);
+        }
+    }
+
+    return dependents;
+}
+
+void TimelineWidget::highlightDependencies(int index)
+{
+    if (index == m_hoveredIndex)
+        return;  // Already highlighted
+
+    clearDependencyHighlights();
+    m_hoveredIndex = index;
+
+    if (index < 0 || index >= m_items.size())
+        return;
+
+    // Get parents (features this depends on)
+    QVector<int> parents = getParentIndices(index);
+    for (int parentIdx : parents) {
+        m_highlightedParents.insert(parentIdx);
+        if (parentIdx >= 0 && parentIdx < m_items.size()) {
+            // Apply parent highlight style (e.g., blue border)
+            m_items[parentIdx]->setStyleSheet(QStringLiteral(
+                "QToolButton {"
+                "  background: #4a4a4a;"
+                "  border: 2px solid #4a90d9;"  // Blue border for parents
+                "  border-radius: 2px;"
+                "}"
+                "QToolButton:hover {"
+                "  background: #5a5a5a;"
+                "  border-color: #6ab0ff;"
+                "}"
+                "QToolButton:checked {"
+                "  background: #6a8fbd;"
+                "  border-color: #8ab4f8;"
+                "}"
+            ));
+        }
+    }
+
+    // Get dependents (features that depend on this)
+    QVector<int> dependents = getDependentIndices(index);
+    for (int depIdx : dependents) {
+        m_highlightedDependents.insert(depIdx);
+        if (depIdx >= 0 && depIdx < m_items.size()) {
+            // Apply dependent highlight style (e.g., orange border)
+            m_items[depIdx]->setStyleSheet(QStringLiteral(
+                "QToolButton {"
+                "  background: #4a4a4a;"
+                "  border: 2px solid #d98a4a;"  // Orange border for dependents
+                "  border-radius: 2px;"
+                "}"
+                "QToolButton:hover {"
+                "  background: #5a5a5a;"
+                "  border-color: #ffab6a;"
+                "}"
+                "QToolButton:checked {"
+                "  background: #6a8fbd;"
+                "  border-color: #8ab4f8;"
+                "}"
+            ));
+        }
+    }
+}
+
+void TimelineWidget::clearDependencyHighlights()
+{
+    // Reset all highlighted items to default style
+    QString defaultStyle = QStringLiteral(
+        "QToolButton {"
+        "  background: #4a4a4a;"
+        "  border: 1px solid #555;"
+        "  border-radius: 2px;"
+        "}"
+        "QToolButton:hover {"
+        "  background: #5a5a5a;"
+        "  border-color: #888;"
+        "}"
+        "QToolButton:checked {"
+        "  background: #6a8fbd;"
+        "  border-color: #8ab4f8;"
+        "}"
+        "QToolTip {"
+        "  background: #ffffcc;"
+        "  color: #000;"
+        "  border: 1px solid #000;"
+        "  padding: 2px;"
+        "}"
+        "QToolButton:disabled {"
+        "  background: #333;"
+        "  border-color: #444;"
+        "}"
+    );
+
+    for (int idx : m_highlightedParents) {
+        if (idx >= 0 && idx < m_items.size()) {
+            m_items[idx]->setStyleSheet(defaultStyle);
+        }
+    }
+
+    for (int idx : m_highlightedDependents) {
+        if (idx >= 0 && idx < m_items.size()) {
+            m_items[idx]->setStyleSheet(defaultStyle);
+        }
+    }
+
+    m_highlightedParents.clear();
+    m_highlightedDependents.clear();
+    m_hoveredIndex = -1;
+}
+
+// ---- Feature state and suppression ----
+
+void TimelineWidget::setFeatureState(int index, FeatureState state)
+{
+    if (index < 0 || index >= m_items.size())
+        return;
+
+    // Ensure vector is large enough
+    while (m_featureStates.size() <= index)
+        m_featureStates.append(FeatureState::Normal);
+
+    m_featureStates[index] = state;
+
+    // Update the item visually - add badge overlay
+    // We'll repaint with error/warning indicator
+    m_items[index]->update();
+}
+
+FeatureState TimelineWidget::featureStateAt(int index) const
+{
+    if (index < 0 || index >= m_featureStates.size())
+        return FeatureState::Normal;
+    return m_featureStates[index];
+}
+
+void TimelineWidget::setFeatureSuppressed(int index, bool suppressed)
+{
+    if (index < 0 || index >= m_items.size())
+        return;
+
+    // Ensure vector is large enough
+    while (m_suppressedStates.size() <= index)
+        m_suppressedStates.append(false);
+
+    m_suppressedStates[index] = suppressed;
+    updateItemStyles();
+}
+
+bool TimelineWidget::isFeatureSuppressed(int index) const
+{
+    if (index < 0 || index >= m_suppressedStates.size())
+        return false;
+    return m_suppressedStates[index];
 }
 
 }  // namespace hobbycad

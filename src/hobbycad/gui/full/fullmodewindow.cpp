@@ -5,7 +5,7 @@
 #include "fullmodewindow.h"
 #include "viewportwidget.h"
 #include "gui/clipanel.h"
-#include "gui/viewporttoolbar.h"
+#include "gui/modeltoolbar.h"
 #include "gui/toolbarbutton.h"
 #include "gui/toolbardropdown.h"
 #include "gui/timelinewidget.h"
@@ -15,9 +15,17 @@
 #include "gui/sketchactionbar.h"
 #include "gui/sketchplanedialog.h"
 #include "gui/constructionplanedialog.h"
+#include "gui/extrudedialog.h"
+#include "gui/revolvedialog.h"
+#include "gui/sketchutils.h"
+
+#include <hobbycad/brep/operations.h>
+#include <hobbycad/sketch/profiles.h>
 
 #include <QComboBox>
+#include <QInputDialog>
 #include <QLabel>
+#include <QMessageBox>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -61,9 +69,18 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     // Toolbar stack (normal toolbar vs sketch toolbar)
     m_toolbarStack = new QStackedWidget(container);
 
-    m_toolbar = new ViewportToolbar(m_toolbarStack);
+    m_toolbar = new ModelToolbar(m_toolbarStack);
     m_toolbarStack->addWidget(m_toolbar);
-    createToolbar();
+
+    // Connect ModelToolbar signals
+    connect(m_toolbar, &ModelToolbar::createSketchClicked,
+            this, &FullModeWindow::onCreateSketchClicked);
+    connect(m_toolbar, &ModelToolbar::createConstructionPlaneClicked,
+            this, &FullModeWindow::onNewConstructionPlane);
+    connect(m_toolbar, &ModelToolbar::parametersClicked,
+            this, &FullModeWindow::showParametersDialog);
+    connect(m_toolbar, &ModelToolbar::toolSelected,
+            this, &FullModeWindow::onModelToolSelected);
 
     m_sketchToolbar = new SketchToolbar(m_toolbarStack);
     m_toolbarStack->addWidget(m_sketchToolbar);
@@ -82,8 +99,13 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     layout->addWidget(m_viewportStack, 1);  // stretch factor 1
 
     // Connect sketch toolbar
-    connect(m_sketchToolbar, &SketchToolbar::toolSelected,
+    connect(m_sketchToolbar, &SketchToolbar::toolChanged,
             this, &FullModeWindow::onSketchToolSelected);
+    connect(m_sketchToolbar, &SketchToolbar::toolSelected,
+            this, [this](SketchTool tool, CreationMode mode) {
+        m_sketchCanvas->setActiveTool(tool);
+        m_sketchCanvas->setCreationMode(mode);
+    });
 
     // Connect sketch canvas
     connect(m_sketchCanvas, &SketchCanvas::selectionChanged,
@@ -107,10 +129,11 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     });
     connect(m_sketchCanvas, &SketchCanvas::sketchDeselected,
             this, [this]() {
-        // Sketch deselected - clear properties panel
+        // Sketch deselected - clear properties panel and reset Create button
         if (QTreeWidget* propsTree = propertiesTree()) {
             propsTree->clear();
         }
+        m_sketchToolbar->resetCreateButton();
     });
     connect(m_sketchCanvas, &SketchCanvas::exitRequested,
             this, [this]() {
@@ -119,6 +142,46 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
             sketchActionBar()->showAndFlash();
         }
     });
+
+    // Connect undo/redo actions
+    if (undoAction()) {
+        connect(undoAction(), &QAction::triggered,
+                m_sketchCanvas, &SketchCanvas::undo);
+        connect(m_sketchCanvas, &SketchCanvas::undoAvailabilityChanged,
+                undoAction(), &QAction::setEnabled);
+    }
+    if (redoAction()) {
+        connect(redoAction(), &QAction::triggered,
+                m_sketchCanvas, &SketchCanvas::redo);
+        connect(m_sketchCanvas, &SketchCanvas::redoAvailabilityChanged,
+                redoAction(), &QAction::setEnabled);
+    }
+
+    // Connect delete action to sketch canvas
+    if (deleteAction()) {
+        connect(deleteAction(), &QAction::triggered,
+                m_sketchCanvas, &SketchCanvas::deleteSelectedEntities);
+        // Enable/disable based on selection
+        connect(m_sketchCanvas, &SketchCanvas::selectionChanged,
+                this, [this](int entityId) {
+            if (deleteAction()) {
+                deleteAction()->setEnabled(entityId >= 0 || !m_sketchCanvas->selectedEntityIds().isEmpty());
+            }
+            if (selectAllAction()) {
+                selectAllAction()->setEnabled(!m_sketchCanvas->entities().isEmpty());
+            }
+        });
+    }
+
+    // Connect select all action
+    if (selectAllAction()) {
+        connect(selectAllAction(), &QAction::triggered,
+                this, [this]() {
+            for (const auto& entity : m_sketchCanvas->entities()) {
+                m_sketchCanvas->selectEntity(entity.id, true);  // Add to selection
+            }
+        });
+    }
 
     // Connect sketch action bar (Save/Cancel buttons in properties panel)
     if (sketchActionBar()) {
@@ -320,201 +383,39 @@ void FullModeWindow::applyPreferences()
     }
 }
 
-void FullModeWindow::createToolbar()
-{
-    // Buttons with icons above labels
-    // Using standard freedesktop icons as placeholders
-
-    // Create - start a 2D sketch or create construction geometry
-    auto* sketchBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-freehand"),
-                         style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Create"));
-    auto* sketchDrop = sketchBtn->dropdown();
-    sketchDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-freehand"),
-                         style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Sketch"));
-    sketchDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-rectangle"),
-                         style()->standardIcon(QStyle::SP_FileDialogListView)),
-        tr("Construction\nPlane"));
-    sketchDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-polygon"),
-                         style()->standardIcon(QStyle::SP_FileDialogContentsView)),
-        tr("Sketch on\nFace"));
-
-    // Box - create primitive box
-    auto* boxBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cube"),
-                         style()->standardIcon(QStyle::SP_ComputerIcon)),
-        tr("Box"));
-    auto* boxDrop = boxBtn->dropdown();
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cube"),
-                         style()->standardIcon(QStyle::SP_ComputerIcon)),
-        tr("Box"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cylinder"),
-                         style()->standardIcon(QStyle::SP_DriveHDIcon)),
-        tr("Cylinder"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-sphere"),
-                         style()->standardIcon(QStyle::SP_DialogHelpButton)),
-        tr("Sphere"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-donut"),
-                         style()->standardIcon(QStyle::SP_DialogResetButton)),
-        tr("Torus"));
-    boxDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-cone"),
-                         style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Cone"));
-
-    // Extrude - extrude sketch profiles
-    auto* extrudeBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("go-up"),
-                         style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Extrude"));
-    auto* extrudeDrop = extrudeBtn->dropdown();
-    extrudeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("go-up"),
-                         style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Extrude"));
-    extrudeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("go-down"),
-                         style()->standardIcon(QStyle::SP_ArrowDown)),
-        tr("Cut\nExtrude"));
-
-    // Revolve - revolve sketch profiles around an axis
-    auto* revolveBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("object-rotate-right"),
-                         style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Revolve"));
-    auto* revolveDrop = revolveBtn->dropdown();
-    revolveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("object-rotate-right"),
-                         style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Revolve"));
-    revolveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("object-rotate-left"),
-                         style()->standardIcon(QStyle::SP_BrowserStop)),
-        tr("Cut\nRevolve"));
-
-    m_toolbar->addSeparator();
-
-    // Fillet - round edges
-    auto* filletBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("format-stroke-color"),
-                         style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Fillet"));
-    auto* filletDrop = filletBtn->dropdown();
-    filletDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("format-stroke-color"),
-                         style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Fillet"));
-    filletDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-line"),
-                         style()->standardIcon(QStyle::SP_DialogOkButton)),
-        tr("Chamfer"));
-
-    // Hole - create holes
-    auto* holeBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-donut"),
-                         style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Hole"));
-    auto* holeDrop = holeBtn->dropdown();
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-circle"),
-                         style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Simple\nHole"));
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-ellipse"),
-                         style()->standardIcon(QStyle::SP_DialogNoButton)),
-        tr("Counter-\nbore"));
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-polygon"),
-                         style()->standardIcon(QStyle::SP_DialogYesButton)),
-        tr("Counter-\nsink"));
-    holeDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("draw-spiral"),
-                         style()->standardIcon(QStyle::SP_DialogSaveButton)),
-        tr("Threaded\nHole"));
-
-    m_toolbar->addSeparator();
-
-    // Move - transform objects
-    auto* moveBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("transform-move"),
-                         style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Move"));
-    auto* moveDrop = moveBtn->dropdown();
-    moveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("transform-move"),
-                         style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Move/\nCopy"));
-    moveDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("align-horizontal-center"),
-                         style()->standardIcon(QStyle::SP_ToolBarHorizontalExtensionButton)),
-        tr("Align"));
-
-    // Mirror - mirror bodies or features
-    auto* mirrorBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("object-flip-horizontal"),
-                         style()->standardIcon(QStyle::SP_ArrowBack)),
-        tr("Mirror"));
-    auto* mirrorDrop = mirrorBtn->dropdown();
-    mirrorDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("object-flip-horizontal"),
-                         style()->standardIcon(QStyle::SP_ArrowBack)),
-        tr("Mirror"));
-    mirrorDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("edit-copy"),
-                         style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Pattern"));
-
-    m_toolbar->addSeparator();
-
-    // Parameters - manage object parameters/variables
-    auto* paramsBtn = m_toolbar->addButton(
-        QIcon::fromTheme(QStringLiteral("document-properties"),
-                         style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Params"),
-        tr("Parameters"));
-    auto* paramsDrop = paramsBtn->dropdown();
-    paramsDrop->addButton(
-        QIcon::fromTheme(QStringLiteral("document-properties"),
-                         style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Change\nParameters"));
-
-    // Connect Params button to show parameters dialog
-    connect(paramsBtn, &ToolbarButton::clicked,
-            this, &FullModeWindow::showParametersDialog);
-
-    // Connect Create button - enters sketch mode
-    connect(sketchBtn, &ToolbarButton::clicked,
-            this, &FullModeWindow::onCreateSketchClicked);
-
-    // Most buttons are disabled until functionality is implemented
-    // sketchBtn is now enabled - 2D sketching works!
-    boxBtn->setEnabled(false);
-    extrudeBtn->setEnabled(false);
-    revolveBtn->setEnabled(false);
-    filletBtn->setEnabled(false);
-    holeBtn->setEnabled(false);
-    moveBtn->setEnabled(false);
-    mirrorBtn->setEnabled(false);
-    // paramsBtn is now enabled!
-}
+// createToolbar() is no longer needed - ModelToolbar handles all button setup internally
 
 void FullModeWindow::createTimeline()
 {
     // Start with just the Origin item - other items added as features are created
     m_timeline->addItem(TimelineFeature::Origin, tr("Origin"));
+    m_timeline->setFeatureId(0, 0);  // Origin has feature ID 0
 
     // Connect timeline item selection to properties panel
     connect(m_timeline, &TimelineWidget::itemClicked,
             this, &FullModeWindow::showFeatureProperties);
+
+    // Connect context menu signals for feature editing
+    connect(m_timeline, &TimelineWidget::editFeatureRequested,
+            this, &FullModeWindow::onEditFeature);
+    connect(m_timeline, &TimelineWidget::renameFeatureRequested,
+            this, &FullModeWindow::onRenameFeature);
+    connect(m_timeline, &TimelineWidget::deleteFeatureRequested,
+            this, &FullModeWindow::onDeleteFeature);
+    connect(m_timeline, &TimelineWidget::suppressFeatureRequested,
+            this, &FullModeWindow::onSuppressFeature);
+
+    // Connect double-click to edit feature
+    connect(m_timeline, &TimelineWidget::itemDoubleClicked,
+            this, &FullModeWindow::onEditFeature);
+
+    // Connect drag reorder to update underlying data
+    connect(m_timeline, &TimelineWidget::itemMoved,
+            this, &FullModeWindow::onFeatureMoved);
+
+    // Connect rollback to show/hide geometry
+    connect(m_timeline, &TimelineWidget::rollbackChanged,
+            this, &FullModeWindow::onRollbackChanged);
 }
 
 void FullModeWindow::showFeatureProperties(int index)
@@ -1246,7 +1147,7 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
 
     QString sketchName;
     if (isNewSketch) {
-        // Add new sketch to timeline
+        // Add new sketch to timeline (at rollback position if active)
         int sketchCount = 0;
         for (int i = 0; i < m_timeline->itemCount(); ++i) {
             if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
@@ -1254,7 +1155,7 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
             }
         }
         sketchName = tr("Sketch%1").arg(sketchCount + 1);
-        m_timeline->addItem(TimelineFeature::Sketch, sketchName);
+        m_pendingSketchTimelineIdx = m_timeline->addItemAtRollback(TimelineFeature::Sketch, sketchName);
 
         // Also add to feature tree - use the pending index (will be added on save)
         int pendingIndex = m_completedSketches.size();
@@ -1262,10 +1163,11 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
     } else {
         // Editing existing sketch - get its name
         sketchName = m_completedSketches[m_currentSketchIndex].name;
+        m_pendingSketchTimelineIdx = timelineIndexFromSketchIndex(m_currentSketchIndex);
     }
 
     // Select the sketch in timeline
-    m_timeline->setSelectedIndex(m_timeline->itemCount() - 1);
+    m_timeline->setSelectedIndex(m_pendingSketchTimelineIdx >= 0 ? m_pendingSketchTimelineIdx : m_timeline->itemCount() - 1);
 
     // Update properties to show sketch settings
     QTreeWidget* propsTree = propertiesTree();
@@ -1443,6 +1345,9 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
     case SketchEntityType::Circle:    typeName = tr("Circle"); break;
     case SketchEntityType::Arc:       typeName = tr("Arc"); break;
     case SketchEntityType::Spline:    typeName = tr("Spline"); break;
+    case SketchEntityType::Polygon:   typeName = tr("Polygon"); break;
+    case SketchEntityType::Slot:      typeName = tr("Slot"); break;
+    case SketchEntityType::Ellipse:   typeName = tr("Ellipse"); break;
     case SketchEntityType::Text:      typeName = tr("Text"); break;
     case SketchEntityType::Dimension: typeName = tr("Dimension"); break;
     }
@@ -1572,6 +1477,121 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
             sweepItem->setText(0, tr("Sweep Angle"));
             sweepItem->setText(1, QStringLiteral("%1°").arg(entity->sweepAngle, 0, 'f', 1));
             sweepItem->setFlags(sweepItem->flags() | Qt::ItemIsEditable);
+        }
+        break;
+
+    case SketchEntityType::Polygon:
+        if (!entity->points.isEmpty()) {
+            auto* centerItem = new QTreeWidgetItem(geomHeader);
+            centerItem->setText(0, tr("Center"));
+            centerItem->setText(1, QStringLiteral("(%1, %2) %3")
+                                .arg(entity->points[0].x(), 0, 'f', 2)
+                                .arg(entity->points[0].y(), 0, 'f', 2)
+                                .arg(units));
+            centerItem->setFlags(centerItem->flags() | Qt::ItemIsEditable);
+
+            auto* sidesItem = new QTreeWidgetItem(geomHeader);
+            sidesItem->setText(0, tr("Sides"));
+            sidesItem->setText(1, QString::number(entity->sides));
+            sidesItem->setFlags(sidesItem->flags() | Qt::ItemIsEditable);
+
+            auto* radiusItem = new QTreeWidgetItem(geomHeader);
+            radiusItem->setText(0, tr("Radius"));
+            radiusItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius, 0, 'f', 2).arg(units));
+            radiusItem->setFlags(radiusItem->flags() | Qt::ItemIsEditable);
+        }
+        break;
+
+    case SketchEntityType::Slot:
+        if (entity->points.size() >= 2) {
+            auto* p1Item = new QTreeWidgetItem(geomHeader);
+            p1Item->setText(0, tr("Center 1"));
+            p1Item->setText(1, QStringLiteral("(%1, %2) %3")
+                             .arg(entity->points[0].x(), 0, 'f', 2)
+                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(units));
+            p1Item->setFlags(p1Item->flags() | Qt::ItemIsEditable);
+
+            auto* p2Item = new QTreeWidgetItem(geomHeader);
+            p2Item->setText(0, tr("Center 2"));
+            p2Item->setText(1, QStringLiteral("(%1, %2) %3")
+                             .arg(entity->points[1].x(), 0, 'f', 2)
+                             .arg(entity->points[1].y(), 0, 'f', 2)
+                             .arg(units));
+            p2Item->setFlags(p2Item->flags() | Qt::ItemIsEditable);
+
+            auto* lenItem = new QTreeWidgetItem(geomHeader);
+            lenItem->setText(0, tr("Length"));
+            double len = QLineF(entity->points[0], entity->points[1]).length();
+            lenItem->setText(1, QStringLiteral("%1 %2").arg(len, 0, 'f', 2).arg(units));
+
+            auto* widthItem = new QTreeWidgetItem(geomHeader);
+            widthItem->setText(0, tr("Width"));
+            widthItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius * 2, 0, 'f', 2).arg(units));
+            widthItem->setFlags(widthItem->flags() | Qt::ItemIsEditable);
+        }
+        break;
+
+    case SketchEntityType::Ellipse:
+        if (!entity->points.isEmpty()) {
+            auto* centerItem = new QTreeWidgetItem(geomHeader);
+            centerItem->setText(0, tr("Center"));
+            centerItem->setText(1, QStringLiteral("(%1, %2) %3")
+                                .arg(entity->points[0].x(), 0, 'f', 2)
+                                .arg(entity->points[0].y(), 0, 'f', 2)
+                                .arg(units));
+            centerItem->setFlags(centerItem->flags() | Qt::ItemIsEditable);
+
+            auto* majorItem = new QTreeWidgetItem(geomHeader);
+            majorItem->setText(0, tr("Major Radius"));
+            majorItem->setText(1, QStringLiteral("%1 %2").arg(entity->majorRadius, 0, 'f', 2).arg(units));
+            majorItem->setFlags(majorItem->flags() | Qt::ItemIsEditable);
+
+            auto* minorItem = new QTreeWidgetItem(geomHeader);
+            minorItem->setText(0, tr("Minor Radius"));
+            minorItem->setText(1, QStringLiteral("%1 %2").arg(entity->minorRadius, 0, 'f', 2).arg(units));
+            minorItem->setFlags(minorItem->flags() | Qt::ItemIsEditable);
+        }
+        break;
+
+    case SketchEntityType::Spline:
+        if (!entity->points.isEmpty()) {
+            auto* pointsItem = new QTreeWidgetItem(geomHeader);
+            pointsItem->setText(0, tr("Control Points"));
+            pointsItem->setText(1, QString::number(entity->points.size()));
+
+            // Show each control point
+            for (int i = 0; i < entity->points.size(); ++i) {
+                auto* ptItem = new QTreeWidgetItem(geomHeader);
+                ptItem->setText(0, tr("Point %1").arg(i + 1));
+                ptItem->setText(1, QStringLiteral("(%1, %2) %3")
+                                 .arg(entity->points[i].x(), 0, 'f', 2)
+                                 .arg(entity->points[i].y(), 0, 'f', 2)
+                                 .arg(units));
+                ptItem->setFlags(ptItem->flags() | Qt::ItemIsEditable);
+            }
+        }
+        break;
+
+    case SketchEntityType::Text:
+        if (!entity->points.isEmpty()) {
+            auto* posItem = new QTreeWidgetItem(geomHeader);
+            posItem->setText(0, tr("Position"));
+            posItem->setText(1, QStringLiteral("(%1, %2) %3")
+                             .arg(entity->points[0].x(), 0, 'f', 2)
+                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(units));
+            posItem->setFlags(posItem->flags() | Qt::ItemIsEditable);
+
+            auto* textItem = new QTreeWidgetItem(geomHeader);
+            textItem->setText(0, tr("Text"));
+            textItem->setText(1, entity->text);
+            textItem->setFlags(textItem->flags() | Qt::ItemIsEditable);
+
+            auto* sizeItem = new QTreeWidgetItem(geomHeader);
+            sizeItem->setText(0, tr("Font Size"));
+            sizeItem->setText(1, QStringLiteral("%1 %2").arg(entity->fontSize, 0, 'f', 1).arg(units));
+            sizeItem->setFlags(sizeItem->flags() | Qt::ItemIsEditable);
         }
         break;
 
@@ -1867,15 +1887,18 @@ void FullModeWindow::hideSketchPlane()
 
 void FullModeWindow::saveCurrentSketch()
 {
-    // Get the sketch name from the timeline
+    // Get the sketch from the timeline at the pending index
     if (m_timeline->itemCount() == 0)
         return;
 
-    int lastIdx = m_timeline->itemCount() - 1;
-    if (m_timeline->featureAt(lastIdx) != TimelineFeature::Sketch)
+    int timelineIdx = m_pendingSketchTimelineIdx;
+    if (timelineIdx < 0 || timelineIdx >= m_timeline->itemCount())
+        timelineIdx = m_timeline->itemCount() - 1;
+
+    if (m_timeline->featureAt(timelineIdx) != TimelineFeature::Sketch)
         return;
 
-    QString sketchName = m_timeline->nameAt(lastIdx);
+    QString sketchName = m_timeline->nameAt(timelineIdx);
     bool isNewSketch = (m_currentSketchIndex < 0);
 
     // Create the completed sketch structure
@@ -1898,14 +1921,40 @@ void FullModeWindow::saveCurrentSketch()
 
     int sketchIndex;
     if (isNewSketch) {
-        // New sketch - add to completed sketches
-        // Tree item was already added in enterSketchMode()
-        sketchIndex = m_completedSketches.size();
-        m_completedSketches.append(sketch);
+        // Assign a new feature ID
+        sketch.featureId = m_nextFeatureId++;
+
+        // New sketch - calculate correct position in sketches array based on timeline position
+        // Count how many sketches come before this timeline index
+        int insertPos = 0;
+        for (int i = 0; i < timelineIdx; ++i) {
+            if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+                ++insertPos;
+            }
+        }
+
+        // Insert at calculated position
+        m_completedSketches.insert(insertPos, sketch);
+        sketchIndex = insertPos;
+
+        // Update feature tree (need to rebuild since indices shifted)
+        clearSketchesInTree();
+        for (int i = 0; i < m_completedSketches.size(); ++i) {
+            addSketchToTree(m_completedSketches[i].name, i);
+        }
+
+        // Set the feature ID in the timeline for dependency tracking
+        m_timeline->setFeatureId(timelineIdx, sketch.featureId);
+        // Sketches don't depend on anything by default (just the Origin, implicitly)
+        m_timeline->setDependencies(timelineIdx, {});
     } else {
         // Editing existing sketch - remove old wireframe, update in place
         sketchIndex = m_currentSketchIndex;
         CompletedSketch& existing = m_completedSketches[sketchIndex];
+
+        // Preserve the feature ID when editing
+        sketch.featureId = existing.featureId;
+
         if (!existing.aisShape.IsNull() && m_viewport) {
             Handle(AIS_InteractiveContext) ctx = m_viewport->context();
             if (!ctx.IsNull()) {
@@ -1918,10 +1967,11 @@ void FullModeWindow::saveCurrentSketch()
     selectSketchInTree(sketchIndex);
 
     // Select the sketch in the timeline
-    m_timeline->setSelectedIndex(lastIdx);
+    m_timeline->setSelectedIndex(timelineIdx);
 
-    // Reset editing index
+    // Reset editing indices
     m_currentSketchIndex = -1;
+    m_pendingSketchTimelineIdx = -1;
 
     statusBar()->showMessage(
         tr("Sketch '%1' saved with %2 entities")
@@ -1968,6 +2018,350 @@ void FullModeWindow::discardCurrentSketch()
 
     // Reset the editing index
     m_currentSketchIndex = -1;
+}
+
+// ---- Timeline Context Menu Handlers ---------------------------------
+
+int FullModeWindow::sketchIndexFromTimelineIndex(int timelineIndex) const
+{
+    // Count how many Sketch items come before this index
+    int sketchCount = 0;
+    for (int i = 0; i <= timelineIndex; ++i) {
+        if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+            if (i == timelineIndex) {
+                return sketchCount;
+            }
+            ++sketchCount;
+        }
+    }
+    return -1;  // Not a sketch
+}
+
+int FullModeWindow::timelineIndexFromSketchIndex(int sketchIndex) const
+{
+    // Find the timeline index for the N-th sketch
+    int sketchCount = 0;
+    for (int i = 0; i < m_timeline->itemCount(); ++i) {
+        if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+            if (sketchCount == sketchIndex) {
+                return i;
+            }
+            ++sketchCount;
+        }
+    }
+    return -1;  // Not found
+}
+
+void FullModeWindow::onEditFeature(int index)
+{
+    if (index < 0 || index >= m_timeline->itemCount())
+        return;
+
+    TimelineFeature feature = m_timeline->featureAt(index);
+
+    switch (feature) {
+    case TimelineFeature::Origin:
+        // Origin cannot be edited
+        statusBar()->showMessage(tr("Origin cannot be edited"), 3000);
+        break;
+
+    case TimelineFeature::Sketch:
+        {
+            int sketchIdx = sketchIndexFromTimelineIndex(index);
+            if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
+                // Set up for editing existing sketch
+                m_currentSketchIndex = sketchIdx;
+                const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+
+                // Store the plane parameters for editing
+                m_pendingSketchOffset = sketch.planeOffset;
+                m_pendingRotationAxis = sketch.rotationAxis;
+                m_pendingRotationAngle = sketch.rotationAngle;
+
+                // Load the sketch entities into the canvas
+                m_sketchCanvas->setEntities(sketch.entities);
+
+                // Enter sketch mode on the same plane
+                enterSketchMode(sketch.plane);
+            }
+        }
+        break;
+
+    default:
+        // TODO: Implement editing for other feature types (Extrude, Revolve, etc.)
+        statusBar()->showMessage(
+            tr("Editing %1 features not yet implemented").arg(m_timeline->nameAt(index)),
+            3000);
+        break;
+    }
+}
+
+void FullModeWindow::onRenameFeature(int index)
+{
+    if (index < 0 || index >= m_timeline->itemCount())
+        return;
+
+    TimelineFeature feature = m_timeline->featureAt(index);
+    QString currentName = m_timeline->nameAt(index);
+
+    // Origin cannot be renamed
+    if (feature == TimelineFeature::Origin) {
+        statusBar()->showMessage(tr("Origin cannot be renamed"), 3000);
+        return;
+    }
+
+    // Show rename dialog
+    bool ok;
+    QString newName = QInputDialog::getText(this,
+        tr("Rename Feature"),
+        tr("New name:"),
+        QLineEdit::Normal,
+        currentName,
+        &ok);
+
+    if (ok && !newName.isEmpty() && newName != currentName) {
+        // Update the timeline item
+        // We need to remove and re-add since TimelineWidget doesn't have a rename API
+        // For now, just update the internal data structures
+
+        if (feature == TimelineFeature::Sketch) {
+            int sketchIdx = sketchIndexFromTimelineIndex(index);
+            if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
+                m_completedSketches[sketchIdx].name = newName;
+
+                // Rebuild the timeline and tree with the new name
+                // (A cleaner approach would be to add a rename method to TimelineWidget)
+                populateTimeline();
+                clearSketchesInTree();
+                for (int i = 0; i < m_completedSketches.size(); ++i) {
+                    addSketchToTree(m_completedSketches[i].name, i);
+                }
+
+                // Mark project as modified
+                m_project.setModified(true);
+
+                statusBar()->showMessage(
+                    tr("Renamed to '%1'").arg(newName), 3000);
+            }
+        }
+        // TODO: Handle other feature types
+    }
+}
+
+void FullModeWindow::onDeleteFeature(int index)
+{
+    if (index < 0 || index >= m_timeline->itemCount())
+        return;
+
+    TimelineFeature feature = m_timeline->featureAt(index);
+    QString featureName = m_timeline->nameAt(index);
+
+    // Origin cannot be deleted
+    if (feature == TimelineFeature::Origin) {
+        statusBar()->showMessage(tr("Origin cannot be deleted"), 3000);
+        return;
+    }
+
+    // Confirm deletion
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        tr("Delete Feature"),
+        tr("Are you sure you want to delete '%1'?\n\n"
+           "This action cannot be undone.").arg(featureName),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (reply != QMessageBox::Yes)
+        return;
+
+    if (feature == TimelineFeature::Sketch) {
+        int sketchIdx = sketchIndexFromTimelineIndex(index);
+        if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
+            // Remove from viewport if displayed
+            const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+            if (!sketch.aisShape.IsNull() && m_viewport && !m_viewport->context().IsNull()) {
+                m_viewport->context()->Remove(sketch.aisShape, false);
+                m_viewport->context()->UpdateCurrentViewer();
+            }
+
+            // Remove from completed sketches
+            m_completedSketches.remove(sketchIdx);
+
+            // Remove from timeline
+            m_timeline->removeItem(index);
+
+            // Rebuild feature tree
+            clearSketchesInTree();
+            for (int i = 0; i < m_completedSketches.size(); ++i) {
+                addSketchToTree(m_completedSketches[i].name, i);
+            }
+
+            // Mark project as modified
+            m_project.setModified(true);
+
+            statusBar()->showMessage(
+                tr("Deleted '%1'").arg(featureName), 3000);
+        }
+    }
+    // TODO: Handle other feature types
+}
+
+void FullModeWindow::onSuppressFeature(int index, bool suppress)
+{
+    if (index < 0 || index >= m_timeline->itemCount())
+        return;
+
+    TimelineFeature feature = m_timeline->featureAt(index);
+    QString featureName = m_timeline->nameAt(index);
+
+    // Origin cannot be suppressed
+    if (feature == TimelineFeature::Origin) {
+        statusBar()->showMessage(tr("Origin cannot be suppressed"), 3000);
+        return;
+    }
+
+    if (feature == TimelineFeature::Sketch) {
+        int sketchIdx = sketchIndexFromTimelineIndex(index);
+        if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
+            CompletedSketch& sketch = m_completedSketches[sketchIdx];
+
+            if (suppress) {
+                // Hide the sketch from viewport
+                if (!sketch.aisShape.IsNull() && m_viewport && !m_viewport->context().IsNull()) {
+                    m_viewport->context()->Erase(sketch.aisShape, false);
+                    m_viewport->context()->UpdateCurrentViewer();
+                }
+                statusBar()->showMessage(
+                    tr("Suppressed '%1'").arg(featureName), 3000);
+            } else {
+                // Show the sketch in viewport
+                if (!sketch.aisShape.IsNull() && m_viewport && !m_viewport->context().IsNull()) {
+                    m_viewport->context()->Display(sketch.aisShape, false);
+                    m_viewport->context()->UpdateCurrentViewer();
+                }
+                statusBar()->showMessage(
+                    tr("Unsuppressed '%1'").arg(featureName), 3000);
+            }
+
+            // Mark project as modified
+            m_project.setModified(true);
+        }
+    }
+    // TODO: Handle other feature types, store suppression state
+}
+
+void FullModeWindow::onFeatureMoved(int fromIndex, int toIndex)
+{
+    // The timeline UI has already been reordered by TimelineWidget::moveItem().
+    // Now we need to update the underlying data structures to match.
+    // Note: Dependencies are validated by TimelineWidget::canMoveItem() before the move.
+
+    if (fromIndex < 0 || toIndex < 0)
+        return;
+
+    // Use feature ID to find the moved item in our data structures
+    int movedFeatureId = m_timeline->featureIdAt(toIndex);
+    TimelineFeature featureType = m_timeline->featureAt(toIndex);
+
+    if (featureType == TimelineFeature::Sketch && movedFeatureId > 0) {
+        // Find the sketch with this feature ID
+        int sketchIdx = -1;
+        for (int i = 0; i < m_completedSketches.size(); ++i) {
+            if (m_completedSketches[i].featureId == movedFeatureId) {
+                sketchIdx = i;
+                break;
+            }
+        }
+
+        if (sketchIdx >= 0) {
+            // Calculate target position based on other sketches' positions
+            // Count how many sketches come before toIndex in the timeline
+            int targetPos = 0;
+            for (int i = 0; i < toIndex; ++i) {
+                if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
+                    ++targetPos;
+                }
+            }
+
+            // Reorder if needed
+            if (sketchIdx != targetPos) {
+                CompletedSketch sketch = m_completedSketches.takeAt(sketchIdx);
+                // Adjust target if we removed from before target
+                if (sketchIdx < targetPos) {
+                    --targetPos;
+                }
+                m_completedSketches.insert(targetPos, sketch);
+
+                // Update the feature tree to match
+                clearSketchesInTree();
+                for (int i = 0; i < m_completedSketches.size(); ++i) {
+                    addSketchToTree(m_completedSketches[i].name, i);
+                }
+
+                // Mark project as modified
+                m_project.setModified(true);
+
+                statusBar()->showMessage(
+                    tr("Moved '%1'").arg(sketch.name), 3000);
+            }
+        }
+    }
+
+    // If the moved item isn't a sketch, we don't need to do anything yet
+    // (no other feature types have backing data structures currently)
+}
+
+void FullModeWindow::onRollbackChanged(int index)
+{
+    // Show/hide 3D geometry based on rollback position
+    // Features after the rollback position should be hidden
+
+    if (!m_viewport || m_viewport->context().IsNull())
+        return;
+
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+
+    // Process all sketches
+    for (int i = 0; i < m_completedSketches.size(); ++i) {
+        CompletedSketch& sketch = m_completedSketches[i];
+
+        if (sketch.aisShape.IsNull())
+            continue;
+
+        // Find this sketch's timeline index
+        int timelineIdx = timelineIndexFromSketchIndex(i);
+        if (timelineIdx < 0)
+            continue;
+
+        // Determine if this sketch should be visible
+        bool shouldBeVisible = (index < 0 || timelineIdx <= index);
+
+        // Also check individual suppression
+        if (sketch.suppressed)
+            shouldBeVisible = false;
+
+        // Show or hide accordingly
+        if (shouldBeVisible) {
+            if (!ctx->IsDisplayed(sketch.aisShape)) {
+                ctx->Display(sketch.aisShape, Standard_False);
+            }
+        } else {
+            if (ctx->IsDisplayed(sketch.aisShape)) {
+                ctx->Erase(sketch.aisShape, Standard_False);
+            }
+        }
+    }
+
+    // TODO: When extrudes, revolves, etc. are implemented, process them here too
+
+    ctx->UpdateCurrentViewer();
+
+    // Update status bar
+    if (index < 0) {
+        statusBar()->showMessage(tr("Rollback cleared - all features active"), 3000);
+    } else {
+        QString featureName = m_timeline->nameAt(index);
+        statusBar()->showMessage(tr("Rolled back to '%1'").arg(featureName), 3000);
+    }
 }
 
 // ---- Project Loading ------------------------------------------------
@@ -2116,8 +2510,18 @@ void FullModeWindow::loadSketchesFromProject()
             entity.radius = entityData.radius;
             entity.startAngle = entityData.startAngle;
             entity.sweepAngle = entityData.sweepAngle;
+            entity.sides = entityData.sides;
+            entity.majorRadius = entityData.majorRadius;
+            entity.minorRadius = entityData.minorRadius;
             entity.text = entityData.text;
+            entity.fontFamily = entityData.fontFamily;
+            entity.fontSize = entityData.fontSize;
+            entity.fontBold = entityData.fontBold;
+            entity.fontItalic = entityData.fontItalic;
+            entity.textRotation = entityData.textRotation;
+            entity.arcFlipped = entityData.arcFlipped;
             entity.constrained = entityData.constrained;
+            entity.isConstruction = entityData.isConstruction;
             entity.selected = false;
 
             sketch.entities.append(entity);
@@ -2214,6 +2618,351 @@ void FullModeWindow::hideConstructionPlane(int planeId)
     Q_UNUSED(planeId);
     // TODO: Track plane visualizations by ID and remove specific one
     // For now, this is a placeholder
+}
+
+// ---- Model Tool Handlers ----
+
+void FullModeWindow::onModelToolSelected(ModelTool tool)
+{
+    switch (tool) {
+    case ModelTool::Extrude:
+    case ModelTool::CutExtrude:
+        performExtrude();
+        break;
+    case ModelTool::Revolve:
+    case ModelTool::CutRevolve:
+        performRevolve();
+        break;
+    default:
+        // Other tools not yet implemented
+        break;
+    }
+}
+
+void FullModeWindow::performExtrude()
+{
+    // Check if we have a sketch selected
+    int selectedIndex = m_timeline->selectedIndex();
+    if (selectedIndex < 0) {
+        QMessageBox::information(this, tr("Extrude"),
+            tr("Please select a sketch in the timeline first."));
+        return;
+    }
+
+    // Check if it's a sketch feature
+    TimelineFeature feature = m_timeline->featureAt(selectedIndex);
+    if (feature != TimelineFeature::Sketch) {
+        QMessageBox::information(this, tr("Extrude"),
+            tr("Please select a sketch to extrude."));
+        return;
+    }
+
+    // Get the sketch data
+    int sketchIdx = sketchIndexFromTimelineIndex(selectedIndex);
+    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size()) {
+        QMessageBox::warning(this, tr("Extrude"),
+            tr("Could not find sketch data."));
+        return;
+    }
+
+    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+
+    // Convert to library entities
+    QVector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
+
+    // Detect profiles (closed loops)
+    sketch::ProfileDetectionOptions options;
+    options.excludeConstruction = true;
+    QVector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
+
+    if (profiles.isEmpty()) {
+        QMessageBox::warning(this, tr("Extrude"),
+            tr("No closed profiles found in the sketch.\n"
+               "Make sure the sketch contains a closed loop."));
+        return;
+    }
+
+    // Show extrude dialog
+    ExtrudeDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    double distance = dialog.distance();
+    ExtrudeDirection direction = dialog.direction();
+    ExtrudeOperation operation = dialog.operation();
+
+    // Determine extrusion direction based on sketch plane
+    gp_Dir extrudeDir(0, 0, 1);  // Default: Z-up for XY plane
+    switch (sketch.plane) {
+    case SketchPlane::XY:
+        extrudeDir = gp_Dir(0, 0, 1);
+        break;
+    case SketchPlane::XZ:
+        extrudeDir = gp_Dir(0, 1, 0);
+        break;
+    case SketchPlane::YZ:
+        extrudeDir = gp_Dir(1, 0, 0);
+        break;
+    case SketchPlane::Custom:
+        // TODO: Calculate normal from rotation parameters
+        extrudeDir = gp_Dir(0, 0, 1);
+        break;
+    }
+
+    if (direction == ExtrudeDirection::NormalReverse) {
+        extrudeDir.Reverse();
+    }
+
+    // Perform extrusion using library
+    brep::OperationResult result;
+
+    if (direction == ExtrudeDirection::TwoSided) {
+        result = brep::extrudeProfileSymmetric(
+            profiles[0], libEntities, extrudeDir, distance, true);
+    } else {
+        result = brep::extrudeProfile(
+            profiles[0], libEntities, extrudeDir, distance);
+    }
+
+    if (!result.success) {
+        QMessageBox::critical(this, tr("Extrude Failed"),
+            tr("Extrusion failed: %1").arg(result.errorMessage));
+        return;
+    }
+
+    // Handle operation type (NewBody, Join, Cut, Intersect)
+    TopoDS_Shape finalShape = result.shape;
+
+    if (operation != ExtrudeOperation::NewBody && !m_solidBodies.isEmpty()) {
+        // Combine with existing body
+        TopoDS_Shape existingBody = m_solidBodies.last();
+        brep::OperationResult boolResult;
+
+        switch (operation) {
+        case ExtrudeOperation::Join:
+            boolResult = brep::fuseShapes(existingBody, finalShape);
+            break;
+        case ExtrudeOperation::Cut:
+            boolResult = brep::cutShape(existingBody, finalShape);
+            break;
+        case ExtrudeOperation::Intersect:
+            boolResult = brep::intersectShapes(existingBody, finalShape);
+            break;
+        default:
+            break;
+        }
+
+        if (boolResult.success) {
+            // Replace the last body
+            m_solidBodies.last() = boolResult.shape;
+            finalShape = boolResult.shape;
+
+            // Update display
+            Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+            ctx->Remove(m_solidAisShapes.last(), Standard_False);
+            m_solidAisShapes.last() = new AIS_Shape(finalShape);
+            ctx->Display(m_solidAisShapes.last(), Standard_True);
+        } else {
+            QMessageBox::warning(this, tr("Boolean Operation Failed"),
+                tr("Boolean operation failed: %1").arg(boolResult.errorMessage));
+        }
+    } else {
+        // Add as new body
+        m_solidBodies.append(finalShape);
+        m_document.addShape(finalShape);  // Add to document for export
+
+        Handle(AIS_Shape) aisShape = new AIS_Shape(finalShape);
+        m_solidAisShapes.append(aisShape);
+
+        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+        ctx->Display(aisShape, Standard_True);
+    }
+
+    // Add extrude feature to timeline
+    int featureId = m_nextFeatureId++;
+    int insertIdx = m_timeline->addItemAtRollback(TimelineFeature::Extrude,
+        tr("Extrude%1").arg(m_solidBodies.size()));
+    m_timeline->setFeatureId(insertIdx, featureId);
+    m_timeline->setDependencies(insertIdx, {sketch.featureId});
+
+    // Fit view to show the new solid
+    m_viewport->fitAll();
+
+    statusBar()->showMessage(tr("Extrusion completed"), 3000);
+}
+
+void FullModeWindow::performRevolve()
+{
+    // Check if we have a sketch selected
+    int selectedIndex = m_timeline->selectedIndex();
+    if (selectedIndex < 0) {
+        QMessageBox::information(this, tr("Revolve"),
+            tr("Please select a sketch in the timeline first."));
+        return;
+    }
+
+    // Check if it's a sketch feature
+    TimelineFeature feature = m_timeline->featureAt(selectedIndex);
+    if (feature != TimelineFeature::Sketch) {
+        QMessageBox::information(this, tr("Revolve"),
+            tr("Please select a sketch to revolve."));
+        return;
+    }
+
+    // Get the sketch data
+    int sketchIdx = sketchIndexFromTimelineIndex(selectedIndex);
+    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size()) {
+        QMessageBox::warning(this, tr("Revolve"),
+            tr("Could not find sketch data."));
+        return;
+    }
+
+    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+
+    // Convert to library entities
+    QVector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
+
+    // Detect profiles
+    sketch::ProfileDetectionOptions options;
+    options.excludeConstruction = true;
+    QVector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
+
+    if (profiles.isEmpty()) {
+        QMessageBox::warning(this, tr("Revolve"),
+            tr("No closed profiles found in the sketch.\n"
+               "Make sure the sketch contains a closed loop."));
+        return;
+    }
+
+    // Show revolve dialog
+    RevolveDialog dialog(this);
+
+    // Find construction lines for potential axis
+    QVector<QPair<int, QString>> axisLines;
+    for (const SketchEntity& e : sketch.entities) {
+        if (e.type == SketchEntityType::Line && e.isConstruction) {
+            axisLines.append({e.id, tr("Line %1").arg(e.id)});
+        }
+    }
+    dialog.setAxisLines(axisLines);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    double angle = dialog.angle();
+    RevolveAxis axisType = dialog.axis();
+    RevolveOperation operation = dialog.operation();
+
+    // Determine revolution axis
+    gp_Ax1 axis;
+    gp_Pnt origin(0, 0, 0);
+
+    switch (axisType) {
+    case RevolveAxis::XAxis:
+        axis = gp_Ax1(origin, gp_Dir(1, 0, 0));
+        break;
+    case RevolveAxis::YAxis:
+        axis = gp_Ax1(origin, gp_Dir(0, 1, 0));
+        break;
+    case RevolveAxis::SketchLine: {
+        int lineId = dialog.axisLineId();
+        if (lineId < 0) {
+            QMessageBox::warning(this, tr("Revolve"),
+                tr("Please select a construction line for the axis."));
+            return;
+        }
+
+        // Find the line entity
+        const SketchEntity* lineEntity = nullptr;
+        for (const SketchEntity& e : sketch.entities) {
+            if (e.id == lineId) {
+                lineEntity = &e;
+                break;
+            }
+        }
+
+        if (!lineEntity || lineEntity->points.size() < 2) {
+            QMessageBox::warning(this, tr("Revolve"),
+                tr("Invalid axis line selected."));
+            return;
+        }
+
+        QPointF p1 = lineEntity->points[0];
+        QPointF p2 = lineEntity->points[1];
+        gp_Pnt pt1(p1.x(), p1.y(), 0);
+        gp_Pnt pt2(p2.x(), p2.y(), 0);
+        gp_Dir dir(pt2.X() - pt1.X(), pt2.Y() - pt1.Y(), 0);
+        axis = gp_Ax1(pt1, dir);
+        break;
+    }
+    }
+
+    // Perform revolution
+    brep::OperationResult result = brep::revolveProfile(
+        profiles[0], libEntities, axis, angle);
+
+    if (!result.success) {
+        QMessageBox::critical(this, tr("Revolve Failed"),
+            tr("Revolution failed: %1").arg(result.errorMessage));
+        return;
+    }
+
+    // Handle operation type
+    TopoDS_Shape finalShape = result.shape;
+
+    if (operation != RevolveOperation::NewBody && !m_solidBodies.isEmpty()) {
+        TopoDS_Shape existingBody = m_solidBodies.last();
+        brep::OperationResult boolResult;
+
+        switch (operation) {
+        case RevolveOperation::Join:
+            boolResult = brep::fuseShapes(existingBody, finalShape);
+            break;
+        case RevolveOperation::Cut:
+            boolResult = brep::cutShape(existingBody, finalShape);
+            break;
+        case RevolveOperation::Intersect:
+            boolResult = brep::intersectShapes(existingBody, finalShape);
+            break;
+        default:
+            break;
+        }
+
+        if (boolResult.success) {
+            m_solidBodies.last() = boolResult.shape;
+            finalShape = boolResult.shape;
+
+            Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+            ctx->Remove(m_solidAisShapes.last(), Standard_False);
+            m_solidAisShapes.last() = new AIS_Shape(finalShape);
+            ctx->Display(m_solidAisShapes.last(), Standard_True);
+        } else {
+            QMessageBox::warning(this, tr("Boolean Operation Failed"),
+                tr("Boolean operation failed: %1").arg(boolResult.errorMessage));
+        }
+    } else {
+        m_solidBodies.append(finalShape);
+        m_document.addShape(finalShape);  // Add to document for export
+
+        Handle(AIS_Shape) aisShape = new AIS_Shape(finalShape);
+        m_solidAisShapes.append(aisShape);
+
+        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+        ctx->Display(aisShape, Standard_True);
+    }
+
+    // Add revolve feature to timeline
+    int featureId = m_nextFeatureId++;
+    int insertIdx = m_timeline->addItemAtRollback(TimelineFeature::Revolve,
+        tr("Revolve%1").arg(m_solidBodies.size()));
+    m_timeline->setFeatureId(insertIdx, featureId);
+    m_timeline->setDependencies(insertIdx, {sketch.featureId});
+
+    m_viewport->fitAll();
+
+    statusBar()->showMessage(tr("Revolution completed"), 3000);
 }
 
 }  // namespace hobbycad

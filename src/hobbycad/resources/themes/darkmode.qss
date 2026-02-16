@@ -415,3 +415,231 @@ QCheckBox::indicator:checked {
     border-color: #4a90d9;
 }
 
+
+/* =====================================================================
+ *  Radio buttons
+ * ===================================================================== */
+
+QRadioButton {
+    color: #cccccc;
+    spacing: 6px;
+}
+
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #4a4d55;
+    border-radius: 7px;
+    background-color: #1a1a1d;
+}
+
+QRadioButton::indicator:checked {
+    background-color: #2d5a8c;
+    border-color: #4a90d9;
+}
+
+
+/* =====================================================================
+ *  Combo boxes (dropdowns)
+ * ===================================================================== */
+
+QComboBox {
+    background-color: #3d4047;
+    color: #cccccc;
+    border: 1px solid #4a4d55;
+    border-radius: 2px;
+    padding: 3px 6px;
+    min-width: 60px;
+}
+
+QComboBox:hover {
+    background-color: #4a4d55;
+    border-color: #5a5d65;
+}
+
+QComboBox:focus {
+    border-color: #4a90d9;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #2b2d30;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+
+/* =====================================================================
+ *  Spin boxes (number inputs)
+ * ===================================================================== */
+
+QSpinBox, QDoubleSpinBox {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    border-radius: 2px;
+    padding: 3px 6px;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+QSpinBox:focus, QDoubleSpinBox:focus {
+    border-color: #4a90d9;
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    background-color: #3d4047;
+    border: none;
+    border-left: 1px solid #3a3f4b;
+    width: 16px;
+}
+
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    background-color: #3d4047;
+    border: none;
+    border-left: 1px solid #3a3f4b;
+    width: 16px;
+}
+
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background-color: #4a4d55;
+}
+
+
+/* =====================================================================
+ *  Group boxes
+ * ===================================================================== */
+
+QGroupBox {
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    border-radius: 4px;
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+QGroupBox::title {
+    color: #cccccc;
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+    background-color: transparent;
+}
+
+
+/* =====================================================================
+ *  Tab widgets
+ * ===================================================================== */
+
+QTabWidget::pane {
+    background-color: #2b2d30;
+    border: 1px solid #3a3f4b;
+}
+
+QTabBar::tab {
+    background-color: #323438;
+    color: #999999;
+    border: 1px solid #3a3f4b;
+    border-bottom: none;
+    padding: 6px 12px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background-color: #2b2d30;
+    color: #cccccc;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #3d4047;
+    color: #cccccc;
+}
+
+
+/* =====================================================================
+ *  Tables
+ * ===================================================================== */
+
+QTableWidget, QTableView {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    gridline-color: #3a3f4b;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+QTableWidget::item, QTableView::item {
+    padding: 3px;
+}
+
+QTableWidget::item:selected, QTableView::item:selected {
+    background-color: #2d5a8c;
+    color: #ffffff;
+}
+
+QTableWidget QHeaderView::section, QTableView QHeaderView::section {
+    background-color: #323438;
+    color: #999999;
+    padding: 4px;
+    border: none;
+    border-right: 1px solid #3a3f4b;
+    border-bottom: 1px solid #3a3f4b;
+}
+
+
+/* =====================================================================
+ *  Lists
+ * ===================================================================== */
+
+QListWidget, QListView {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+QListWidget::item, QListView::item {
+    padding: 3px;
+}
+
+QListWidget::item:selected, QListView::item:selected {
+    background-color: #2d5a8c;
+    color: #ffffff;
+}
+
+QListWidget::item:hover, QListView::item:hover {
+    background-color: #3d4047;
+}
+
+
+/* =====================================================================
+ *  Text editor (QTextEdit)
+ * ===================================================================== */
+
+QTextEdit {
+    background-color: #1a1a1d;
+    color: #cccccc;
+    border: 1px solid #3a3f4b;
+    selection-background-color: #2d5a8c;
+    selection-color: #ffffff;
+}
+
+
+/* =====================================================================
+ *  Generic labels (fallback for any QLabel not otherwise styled)
+ * ===================================================================== */
+
+QLabel {
+    color: #cccccc;
+    background-color: transparent;
+}
+

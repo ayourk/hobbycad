@@ -57,6 +57,15 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         QKeySequence(QKeySequence::Quit).toString()));
 
     // Edit menu actions
+    defaults.insert("edit.undo", ActionBinding(
+        "edit.undo", tr("Undo"), tr("Edit"),
+        QKeySequence(QKeySequence::Undo).toString()));
+
+    defaults.insert("edit.redo", ActionBinding(
+        "edit.redo", tr("Redo"), tr("Edit"),
+        QKeySequence(QKeySequence::Redo).toString() + "," +
+        QKeySequence(Qt::CTRL | Qt::Key_Y).toString()));
+
     defaults.insert("edit.cut", ActionBinding(
         "edit.cut", tr("Cut"), tr("Edit"),
         QKeySequence(QKeySequence::Cut).toString()));
@@ -89,6 +98,9 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
     defaults.insert("view.properties", ActionBinding(
         "view.properties", tr("Toggle Properties"), tr("View"),
         QKeySequence(Qt::CTRL | Qt::Key_P).toString()));
+
+    defaults.insert("view.toolbar", ActionBinding(
+        "view.toolbar", tr("Toggle Toolbar"), tr("View")));
 
     defaults.insert("view.resetView", ActionBinding(
         "view.resetView", tr("Reset View"), tr("View"),
@@ -256,6 +268,10 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
     defaults.insert("viewport.zoom", ActionBinding(
         "viewport.zoom", tr("Zoom View"), tr("Viewport"),
         "Wheel"));
+
+    // Construct menu actions
+    defaults.insert("construct.plane", ActionBinding(
+        "construct.plane", tr("New Construction Plane"), tr("Construct")));
 
     return defaults;
 }
@@ -445,11 +461,14 @@ void BindingsDialog::populateActions()
         "file.new", "file.open", "file.save", "file.saveAs",
         "file.close", "file.quit",
         // Edit
+        "edit.undo", "edit.redo",
         "edit.cut", "edit.copy", "edit.paste", "edit.delete",
         "edit.selectAll",
         // View
-        "view.terminal", "view.project", "view.properties", "view.resetView",
-        "view.rotateLeft", "view.rotateRight", "view.preferences",
+        "view.terminal", "view.project", "view.properties", "view.toolbar",
+        "view.resetView", "view.rotateLeft", "view.rotateRight", "view.preferences",
+        // Construct
+        "construct.plane",
         // Sketch - Tools
         "sketch.select", "sketch.line", "sketch.rectangle", "sketch.circle",
         "sketch.arc", "sketch.point", "sketch.dimension",

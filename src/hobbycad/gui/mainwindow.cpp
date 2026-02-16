@@ -7,13 +7,20 @@
 #include "bindingsdialog.h"
 #include "clipanel.h"
 #include "preferencesdialog.h"
+#include "projectbrowserwidget.h"
 #include "sketchactionbar.h"
+
+#include <hobbycad/step_io.h>
+#include <hobbycad/stl_io.h>
 
 #include <QAction>
 #include <QActionGroup>
 #include <QKeySequence>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QMoveEvent>
+#include <QResizeEvent>
+#include <QWindowStateChangeEvent>
 #include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -147,6 +154,26 @@ QAction* MainWindow::newConstructionPlaneAction() const
     return m_actionNewConstructionPlane;
 }
 
+QAction* MainWindow::undoAction() const
+{
+    return m_actionUndo;
+}
+
+QAction* MainWindow::redoAction() const
+{
+    return m_actionRedo;
+}
+
+QAction* MainWindow::deleteAction() const
+{
+    return m_actionDelete;
+}
+
+QAction* MainWindow::selectAllAction() const
+{
+    return m_actionSelectAll;
+}
+
 QTreeWidget* MainWindow::propertiesTree() const
 {
     return m_propertiesTree;
@@ -202,12 +229,19 @@ void MainWindow::finalizeLayout()
 
     if (restoreSession) {
         if (settings.contains(QStringLiteral("window/geometry"))) {
-            restoreGeometry(
-                settings.value(QStringLiteral("window/geometry")).toByteArray());
+            QByteArray geom = settings.value(
+                QStringLiteral("window/geometry")).toByteArray();
+            restoreGeometry(geom);
+            // Store as normal geometry in case we're not maximized
+            m_normalGeometry = geom;
         }
         if (settings.contains(QStringLiteral("window/state"))) {
             restoreState(
                 settings.value(QStringLiteral("window/state")).toByteArray());
+        }
+        // Restore maximized state if it was saved
+        if (settings.value(QStringLiteral("window/maximized"), false).toBool()) {
+            showMaximized();
         }
     }
 
@@ -254,11 +288,38 @@ void MainWindow::createMenus()
 
     fileMenu->addSeparator();
 
+    // Import submenu
+    auto* importMenu = fileMenu->addMenu(tr("&Import"));
+    m_actionImportStep = importMenu->addAction(tr("STEP File..."),
+        this, &MainWindow::onFileImportStep);
+    m_actionImportStep->setToolTip(tr("Import geometry from STEP file"));
+
+    // Export submenu
+    auto* exportMenu = fileMenu->addMenu(tr("&Export"));
+    m_actionExportStep = exportMenu->addAction(tr("STEP File..."),
+        this, &MainWindow::onFileExportStep);
+    m_actionExportStep->setToolTip(tr("Export geometry to STEP file"));
+
+    m_actionExportStl = exportMenu->addAction(tr("STL File..."),
+        this, &MainWindow::onFileExportStl);
+    m_actionExportStl->setToolTip(tr("Export geometry to STL file for 3D printing"));
+
+    fileMenu->addSeparator();
+
     m_actionQuit = fileMenu->addAction(tr("&Quit"),
         QKeySequence::Quit, this, &MainWindow::onFileQuit);
 
     // Edit menu
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
+
+    m_actionUndo = editMenu->addAction(tr("&Undo"), QKeySequence::Undo);
+    m_actionUndo->setEnabled(false);  // Enabled when undo stack is not empty
+
+    m_actionRedo = editMenu->addAction(tr("&Redo"));
+    m_actionRedo->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+    m_actionRedo->setEnabled(false);  // Enabled when redo stack is not empty
+
+    editMenu->addSeparator();
 
     m_actionCut = editMenu->addAction(tr("Cu&t"),
         QKeySequence::Cut);
@@ -447,12 +508,9 @@ void MainWindow::createDockPanels()
     auto* projectTabs = new QTabWidget();
     projectTabs->setObjectName(QStringLiteral("ProjectTabs"));
 
-    // File tab - shows project file structure
-    auto* fileTree = new QTreeWidget();
-    fileTree->setObjectName(QStringLiteral("FileTree"));
-    fileTree->setHeaderHidden(true);
-    fileTree->setRootIsDecorated(true);
-    projectTabs->addTab(fileTree, tr("File"));
+    // Files tab - shows project file structure with the ProjectBrowserWidget
+    m_projectBrowser = new ProjectBrowserWidget();
+    projectTabs->addTab(m_projectBrowser, tr("Files"));
 
     // Objects tab - shows model objects/features (default)
     auto* objectsTree = new QTreeWidget();
@@ -663,6 +721,21 @@ void MainWindow::createDockPanels()
             this, [this]() {
         close();
     });
+
+    // Connect project browser signals (m_projectBrowser is created above in the Project tabs)
+    connect(m_projectBrowser, &ProjectBrowserWidget::openCadFileRequested,
+            this, [this](const QString& relativePath) {
+        // Handle opening CAD files (sketches, etc.)
+        Q_UNUSED(relativePath);
+        // TODO: Implement opening sketches from the file browser
+    });
+
+    connect(m_projectBrowser, &ProjectBrowserWidget::foreignFilesChanged,
+            this, [this]() {
+        // Mark project as modified when foreign files change
+        m_project.setModified(true);
+        updateTitle();
+    });
 }
 
 // ---- Slots ----------------------------------------------------------
@@ -705,6 +778,11 @@ void MainWindow::onFileOpen()
                 m_document.addShape(shape);
             }
             m_document.setModified(false);
+
+            // Update project browser
+            if (m_projectBrowser) {
+                m_projectBrowser->setProject(&m_project);
+            }
 
             updateTitle();
             onDocumentLoaded();
@@ -808,6 +886,12 @@ void MainWindow::onFileSaveAs()
         QString errorMsg;
         if (m_project.save(path, &errorMsg)) {
             m_document.setModified(false);
+
+            // Update project browser with new path
+            if (m_projectBrowser) {
+                m_projectBrowser->setProject(&m_project);
+            }
+
             updateTitle();
             m_statusLabel->setText(tr("Saved project: %1").arg(m_project.name()));
         } else {
@@ -835,6 +919,117 @@ void MainWindow::onFileQuit()
     close();  // triggers closeEvent()
 }
 
+void MainWindow::onFileImportStep()
+{
+    QString filePath = QFileDialog::getOpenFileName(
+        this,
+        tr("Import STEP File"),
+        QString(),
+        tr("STEP Files (*.step *.stp *.STEP *.STP);;All Files (*)"));
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // Read the STEP file
+    step_io::ReadResult result = step_io::readStep(filePath);
+
+    if (!result.success) {
+        QMessageBox::critical(this, tr("Import Failed"),
+            tr("Failed to import STEP file:\n%1").arg(result.errorMessage));
+        return;
+    }
+
+    // Add shapes to the document
+    for (const TopoDS_Shape& shape : result.shapes) {
+        m_document.addShape(shape);
+    }
+
+    m_document.setModified(true);
+    onDocumentLoaded();
+
+    statusBar()->showMessage(
+        tr("Imported %1 shape(s) from STEP file").arg(result.shapeCount), 5000);
+}
+
+void MainWindow::onFileExportStep()
+{
+    QList<TopoDS_Shape> shapes = m_document.shapes();
+
+    if (shapes.isEmpty()) {
+        QMessageBox::information(this, tr("Export STEP"),
+            tr("No geometry to export.\n"
+               "Create some geometry first using extrude or other operations."));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export STEP File"),
+        QString(),
+        tr("STEP Files (*.step);;All Files (*)"));
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // Ensure .step extension
+    if (!filePath.toLower().endsWith(QLatin1String(".step")) &&
+        !filePath.toLower().endsWith(QLatin1String(".stp"))) {
+        filePath += QStringLiteral(".step");
+    }
+
+    // Write the STEP file
+    step_io::WriteResult result = step_io::writeStep(filePath, shapes);
+
+    if (!result.success) {
+        QMessageBox::critical(this, tr("Export Failed"),
+            tr("Failed to export STEP file:\n%1").arg(result.errorMessage));
+        return;
+    }
+
+    statusBar()->showMessage(
+        tr("Exported %1 shape(s) to STEP file").arg(result.shapeCount), 5000);
+}
+
+void MainWindow::onFileExportStl()
+{
+    QList<TopoDS_Shape> shapes = m_document.shapes();
+
+    if (shapes.isEmpty()) {
+        QMessageBox::information(this, tr("Export STL"),
+            tr("No geometry to export.\n"
+               "Create some geometry first using extrude or other operations."));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export STL File"),
+        QString(),
+        tr("STL Files (*.stl);;All Files (*)"));
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // Ensure .stl extension
+    if (!filePath.toLower().endsWith(QLatin1String(".stl"))) {
+        filePath += QStringLiteral(".stl");
+    }
+
+    // Write the STL file with default quality
+    stl_io::WriteResult result = stl_io::writeStl(filePath, shapes);
+
+    if (!result.success) {
+        QMessageBox::critical(this, tr("Export Failed"),
+            tr("Failed to export STL file:\n%1").arg(result.errorMessage));
+        return;
+    }
+
+    statusBar()->showMessage(tr("Exported geometry to STL file"), 5000);
+}
+
 void MainWindow::onFileClose()
 {
     if (!maybeSave()) return;
@@ -854,11 +1049,41 @@ void MainWindow::closeEvent(QCloseEvent* event)
     if (maybeSave()) {
         // Save window geometry and dock/toolbar state
         QSettings settings;
-        settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
+
+        // If maximized, save the stored normal geometry instead of current
+        if (isMaximized() && !m_normalGeometry.isEmpty()) {
+            settings.setValue(QStringLiteral("window/geometry"), m_normalGeometry);
+        } else {
+            settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
+        }
         settings.setValue(QStringLiteral("window/state"), saveState());
+        settings.setValue(QStringLiteral("window/maximized"), isMaximized());
         event->accept();
     } else {
         event->ignore();
+    }
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    // Save geometry when not maximized (normal window state)
+    if (!isMaximized() && !isMinimized() && !isFullScreen()) {
+        m_normalGeometry = saveGeometry();
+    }
+}
+
+void MainWindow::moveEvent(QMoveEvent* event)
+{
+    QMainWindow::moveEvent(event);
+    // Save geometry when not maximized (normal window state)
+    if (!isMaximized() && !isMinimized() && !isFullScreen()) {
+        m_normalGeometry = saveGeometry();
     }
 }
 
@@ -1005,6 +1230,10 @@ void MainWindow::applyBindings()
     actionMap.insert(QStringLiteral("view.rotateLeft"), m_actionRotateLeft);
     actionMap.insert(QStringLiteral("view.rotateRight"), m_actionRotateRight);
     actionMap.insert(QStringLiteral("view.preferences"), m_actionPreferences);
+    actionMap.insert(QStringLiteral("view.toolbar"), m_actionToggleToolbar);
+    actionMap.insert(QStringLiteral("edit.undo"), m_actionUndo);
+    actionMap.insert(QStringLiteral("edit.redo"), m_actionRedo);
+    actionMap.insert(QStringLiteral("construct.plane"), m_actionNewConstructionPlane);
 
     // Apply keyboard bindings to each action
     for (auto it = bindings.constBegin(); it != bindings.constEnd(); ++it) {
