@@ -352,6 +352,27 @@ Fixed
 
 Added
 -----
+- Unit conversion library (hobbycad/units.h):
+  - LengthUnit enum (Millimeters, Centimeters, Meters, Inches, Feet)
+  - Conversion functions: mmToUnit(), unitToMm(), convertLength()
+  - Formatting: formatValue(), formatValueWithUnit(), formatStorageValue()
+  - Parsing: parseValueWithUnit() - parses "25.4 mm" or "1 in" to mm
+  - Unit checks: isMetric(), isImperial()
+  - Angle utilities: degreesToRadians(), radiansToDegrees(), formatAngle()
+  - Angle normalization: normalizeAngle360(), normalizeAngle180(),
+    normalizeRadians2Pi(), normalizeRadiansPi()
+  - atan2 wrappers: atan2Degrees(), atan2Radians()
+  - Constants: Pi, DisplayPrecision (4), StoragePrecision (15)
+  - All internal storage uses mm; conversion is display-only
+  - Display uses 4 decimal places with trailing zeros trimmed
+- Arc tool improvements:
+  - 3-point arc mode: click three points to define arc
+  - Center-Start-End arc mode: click center, start, end points
+  - Shift modifier flips arc direction for >180° arcs
+  - Arc center point marker on entity and preview
+  - Arc dimension label shows length and angle (degrees)
+- 3-point circle mode: click three points to define circle
+- Dimension labels now show unit suffix with proper conversion
 - Timeline feature management (Fusion 360-style):
   - Rollback bar: draggable red marker to roll back model state
   - Double-click timeline item to set rollback position
@@ -380,6 +401,13 @@ Added
 
 Changed
 -------
+- Refactored arc/circle creation to use library geometry functions:
+  - 3-point arc uses geometry::arcFromThreePoints()
+  - Center-Start-End arc uses geometry::arcFromCenterAndEndpoints()
+  - 3-point circle uses geometry::arcFromThreePoints()
+  - Arc length calculation uses geometry::arcLength()
+- SketchCanvas refactored to use LengthUnit enum instead of string suffix
+- MainWindow uses library unit conversion functions
 - FeatureData struct expanded with state tracking fields
 - API documentation updated to version 0.0.5:
   - Fixed section numbering (sections 10-12)

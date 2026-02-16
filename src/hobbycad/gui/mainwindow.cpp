@@ -12,6 +12,7 @@
 
 #include <hobbycad/step_io.h>
 #include <hobbycad/stl_io.h>
+#include <hobbycad/units.h>
 
 #include <QAction>
 #include <QActionGroup>
@@ -196,12 +197,14 @@ int MainWindow::currentUnits() const
     return m_currentUnits;
 }
 
+LengthUnit MainWindow::currentLengthUnit() const
+{
+    return lengthUnitFromIndex(m_currentUnits);
+}
+
 QString MainWindow::unitSuffix() const
 {
-    static const char* suffixes[] = {"mm", "cm", "m", "in", "ft"};
-    if (m_currentUnits >= 0 && m_currentUnits < 5)
-        return QString::fromLatin1(suffixes[m_currentUnits]);
-    return QStringLiteral("mm");
+    return unitSuffixQ(currentLengthUnit());
 }
 
 void MainWindow::hideDockTerminal()
@@ -1353,19 +1356,7 @@ void MainWindow::clearBodiesInTree()
 
 void MainWindow::setUnitsFromString(const QString& units)
 {
-    QString u = units.toLower();
-    if (u == QLatin1String("mm"))
-        m_currentUnits = 0;
-    else if (u == QLatin1String("cm"))
-        m_currentUnits = 1;
-    else if (u == QLatin1String("m"))
-        m_currentUnits = 2;
-    else if (u == QLatin1String("in"))
-        m_currentUnits = 3;
-    else if (u == QLatin1String("ft"))
-        m_currentUnits = 4;
-    else
-        m_currentUnits = 0;  // default to mm
+    m_currentUnits = lengthUnitToIndex(parseUnitSuffix(units));
 }
 
 void MainWindow::addConstructionPlaneToTree(const QString& name, int id)

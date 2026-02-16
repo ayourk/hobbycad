@@ -27,6 +27,7 @@
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/sketch/group.h>
 #include <hobbycad/sketch/undo.h>
+#include <hobbycad/units.h>
 
 #include <QWidget>
 #include <QPointF>
@@ -132,6 +133,13 @@ public:
     double gridSpacing() const { return m_gridSpacing; }
     void setSnapToGrid(bool snap);
     bool snapToGrid() const { return m_snapToGrid; }
+
+    /// Set display units for dimensions
+    void setDisplayUnit(LengthUnit unit);
+    void setUnitSuffix(const QString& suffix) { setDisplayUnit(parseUnitSuffix(suffix)); }
+    LengthUnit displayUnit() const { return m_displayUnit; }
+    QString unitSuffix() const { return unitSuffixQ(m_displayUnit); }
+    double unitScale() const { return hobbycad::unitScale(m_displayUnit); }
 
     /// Get all entities
     const QVector<SketchEntity>& entities() const { return m_entities; }
@@ -418,6 +426,7 @@ private:
     void drawSnapGuides(QPainter& painter);
     void drawPreviewDimension(QPainter& painter, const QPoint& p1, const QPoint& p2, double value);
     void drawDimensionLabel(QPainter& painter, const QPointF& position, double value);
+    void drawArcDimensionLabel(QPainter& painter, const QPointF& position, double arcLength, double angleDeg);
     void drawSnapIndicator(QPainter& painter, const SnapPoint& snap);
 
     // Constraint drawing helpers
@@ -482,6 +491,7 @@ private:
     double m_gridSpacing = 10.0;     ///< Grid spacing in world units
     bool m_showGrid = true;
     bool m_snapToGrid = false;  ///< Off by default, toggle via View menu
+    LengthUnit m_displayUnit = LengthUnit::Millimeters;  ///< Display units for dimensions
     SketchPlane m_plane = SketchPlane::XY;
     QVector3D m_planeOrigin = {0, 0, 0};  ///< Plane center in absolute 3D coords
 
@@ -495,16 +505,16 @@ private:
     bool m_wasDragged = false;       ///< True if mouse moved significantly during draw
 
     // Arc creation modes
-    enum class ArcMode { ThreePoint, Tangent };
+    enum class ArcMode { ThreePoint, CenterStartEnd, Tangent };
     ArcMode m_arcMode = ArcMode::ThreePoint;
 
     // Circle creation modes
-    enum class CircleMode { CenterRadius, TwoTangent, ThreeTangent };
+    enum class CircleMode { CenterRadius, TwoPoint, ThreePoint, TwoTangent, ThreeTangent };
     CircleMode m_circleMode = CircleMode::CenterRadius;
     QVector<int> m_tangentTargets;  ///< Entity IDs for tangent targets (circle/arc)
 
     // Rectangle creation modes
-    enum class RectMode { Corner, Center, ThreePoint };
+    enum class RectMode { Corner, Center, ThreePoint, Parallelogram };
     RectMode m_rectMode = RectMode::Corner;
 
     // Slot creation modes

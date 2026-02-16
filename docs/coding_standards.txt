@@ -828,6 +828,83 @@
     int count = list.size();              // prefer explicit for primitives
 
 ================================================================================
+  8.1 UNITS AND MEASUREMENTS
+================================================================================
+
+  Storage Convention
+  ------------------
+
+  **All internal length measurements use millimeters (mm) as the base unit.**
+
+  This applies to:
+    - All in-memory data structures (sketches, constraints, entities)
+    - All save file formats (.hcad project files)
+    - All library APIs (libhobbycad functions)
+    - All internal calculations
+
+  The mm convention:
+    - Simplifies internal calculations (no conversion needed)
+    - Provides consistent precision across unit systems
+    - Matches OpenCASCADE's internal unit (mm)
+    - Enables lossless unit switching in the UI
+
+  Display Conversion
+  ------------------
+
+  Unit conversion to the user's preferred display unit happens ONLY at
+  the GUI layer, using the utilities in hobbycad/units.h:
+
+    LengthUnit         Index    Scale Factor
+    ───────────────    ─────    ────────────
+    Millimeters        0        1.0
+    Centimeters        1        10.0
+    Meters             2        1000.0
+    Inches             3        25.4
+    Feet               4        304.8
+
+  Converting for display:
+
+    #include <hobbycad/units.h>
+
+    double mm_value = 25.4;  // Internal value in mm
+    double display = mmToUnit(mm_value, LengthUnit::Inches);  // = 1.0
+
+  Converting user input to storage:
+
+    double user_value = 2.0;  // User entered "2 in"
+    double mm = unitToMm(user_value, LengthUnit::Inches);  // = 50.8
+
+  The Document Settings dialog allows users to select their preferred
+  display unit.  This preference is stored per-project but does NOT
+  affect how values are stored — only how they are displayed.
+
+  Numeric Precision
+  -----------------
+
+  HobbyCAD uses consistent precision for all numeric values:
+
+    Context              Decimal Places    Rationale
+    ─────────────────    ──────────────    ─────────────────────────────
+    File storage         15                Full double precision
+    Display (UI)         up to 4           Trailing zeros trimmed
+
+  Storage precision (15 digits) preserves the full precision of IEEE 754
+  double-precision floating point numbers (~15-16 significant digits).
+  This exceeds OpenCASCADE's internal tolerance (Precision::Confusion =
+  10⁻⁷ mm) and any practical manufacturing tolerance.
+
+  Display values show up to 4 decimal places, with trailing zeros removed
+  for cleaner display (e.g., "1.5000" → "1.5", "45.0000°" → "45°").
+
+  Use the functions from hobbycad/units.h:
+
+    formatValue(value);                    // Numeric display (trims zeros)
+    formatValueWithUnit(mm, unit);         // With unit suffix (e.g., "25.4 mm")
+    formatAngle(degrees);                  // With degree symbol (e.g., "45°")
+    formatStorageValue(value);             // For file I/O (15 decimal places)
+    parseValueWithUnit(input, default);    // Parse user input to mm
+
+================================================================================
   9. INTERNATIONALIZATION (i18n) AND TRANSLATION
 ================================================================================
 

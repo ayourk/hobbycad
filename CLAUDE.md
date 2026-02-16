@@ -82,6 +82,12 @@ Release build sizes (as of 2026-02-14):
 - Commit messages: double-quote safe, no internal double quotes
 - Signed-off-by: Aaron Yourk <ayourk@gmail.com>
 
+## Library Design Philosophy
+
+- Library functions don't need to be used by the main project to justify their existence
+- The library is designed to be useful to third-party developers and plugins
+- Include utility functions that may be helpful even if we use alternatives internally
+
 ## Key Technical Constraints
 
 - **WA_PaintOnScreen:** OCCT owns the GL context. Qt child widgets
@@ -107,6 +113,15 @@ Release build sizes (as of 2026-02-14):
 ### libhobbycad Library
 
 The core library (`src/libhobbycad/`) provides reusable CAD functionality:
+
+**Units** (`hobbycad/units.h`):
+- Length unit conversion (mm, cm, m, in, ft)
+- **Storage Convention**: All internal measurements and save files use millimeters (mm)
+- Display conversion happens only at the GUI layer
+- Formatting: `formatValue()`, `formatValueWithUnit()`, `formatAngle()`
+- Parsing: `parseValueWithUnit()` for user input
+- Angle utilities: degree/radian conversion, normalization, `atan2Degrees()`
+- Precision: DisplayPrecision=4 (trailing zeros trimmed), StoragePrecision=15
 
 **Geometry Module** (`hobbycad/geometry/`):
 - `types.h` — Points, vectors, arcs, bounding boxes, intersection results
@@ -170,10 +185,11 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
     - Endpoints, midpoints, centers, quadrant points
     - Slot centerline points (arc centers, midpoint)
     - Construction geometry provides snap points
+  - **Arc modes**: 3-Point (click start, through, end), Center-Start-End (click center, start, end)
   - **Modifier keys during drawing**:
     - Ctrl: Angle snap (45° increments) for lines/rectangles/linear slots
     - Alt: Disable entity snapping temporarily
-    - Shift: Arc slot flip (>180° arc direction)
+    - Shift: Arc direction flip (>180° arcs) for arc slots and Center-Start-End arcs
 - **Viewport** — ViewCube, orbit rings, scale bar, home button
 - **Bindings dialog** — Keyboard/mouse binding customization
 - **CLI commands** — Sketch geometry commands with natural English syntax

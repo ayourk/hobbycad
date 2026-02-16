@@ -18,6 +18,7 @@
 #include <hobbycad/document.h>
 #include <hobbycad/opengl_info.h>
 #include <hobbycad/project.h>
+#include <hobbycad/units.h>
 
 #include <QMainWindow>
 
@@ -153,6 +154,9 @@ protected:
 
     /// Get the current unit system index (0=mm, 1=cm, 2=m, 3=in, 4=ft).
     int currentUnits() const;
+
+    /// Get the current unit as a LengthUnit enum.
+    LengthUnit currentLengthUnit() const;
 
     /// Get the current unit suffix string (e.g., "mm", "in").
     QString unitSuffix() const;

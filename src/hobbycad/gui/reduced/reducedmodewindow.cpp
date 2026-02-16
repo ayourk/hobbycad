@@ -88,6 +88,7 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
 
     // Sketch mode: 2D canvas
     m_sketchCanvas = new SketchCanvas(m_viewportStack);
+    m_sketchCanvas->setUnitSuffix(unitSuffix());
     m_viewportStack->addWidget(m_sketchCanvas);
 
     m_mainLayout->addWidget(m_viewportStack, 1);  // stretch factor 1

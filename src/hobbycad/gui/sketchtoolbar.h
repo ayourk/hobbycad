@@ -73,6 +73,7 @@ enum class CreationMode {
     RectCorner = 0,       // Corner to corner (default)
     RectCenter,           // Center + corner
     RectThreePoint,       // 3-point (angled)
+    RectParallelogram,    // 3-point parallelogram
 
     // Circle modes
     CircleCenterRadius = 0,  // Center + radius (default)

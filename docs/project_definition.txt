@@ -572,6 +572,32 @@
       }
     }
 
+  The "units" field specifies the user's preferred display unit
+  for this project. Valid values: "mm", "cm", "m", "in", "ft".
+  This controls how dimensions are displayed in the UI but does
+  NOT affect internal storage:
+
+    **All internal measurements are stored in millimeters (mm).**
+
+  This applies to all coordinate values, dimensions, and lengths
+  in the project files (sketches, geometry, constraints, etc.).
+  The "units" field is purely a display preference — changing it
+  does not modify any stored values, only how they are shown to
+  the user. This design ensures:
+    - Lossless unit switching (no rounding errors)
+    - Consistent precision across all unit systems
+    - Compatibility with OpenCASCADE (which uses mm internally)
+    - Simple file format (no per-value unit annotations needed)
+
+  Numeric Precision:
+    - Storage: 15 decimal places (full double precision)
+    - Display: 4 decimal places (all units)
+
+  The 15-digit storage precision preserves the full precision of
+  IEEE 754 double-precision floating point (~15-16 significant
+  digits). This exceeds the precision of OpenCASCADE's internal
+  tolerance (10⁻⁷ mm) and any practical manufacturing tolerance.
+
   The "repository" object is optional. It is added automatically
   when a project is first pushed to a remote (via the version
   control panel or File → Export to GitHub). Fields:

@@ -50,25 +50,31 @@
        7.2  Writing STEP Files
     8. STL I/O Functions
     9. .hcad File Format
-   10. Geometry Module
-       10.1  Geometric Types
-       10.2  Intersection Functions
-       10.3  Geometry Utilities
-       10.4  Geometry Algorithms
-   11. Sketch Module
-       11.1  Entity Types
-       11.2  Constraint Types
-       11.3  Sketch Operations
-       11.4  Pattern Operations
-       11.5  Profile Detection
-       11.6  Constraint Solver
-       11.7  Text Parsing Utilities
-       11.8  Entity Grouping
-       11.9  Undo/Redo System
-       11.10 Sketch Queries
-       11.11 Sketch Export/Import
-       11.12 Background Images
-   12. GUI Integration
+   10. Units Module
+       10.1  Storage Convention
+       10.2  Length Units
+       10.3  Conversion Functions
+       10.4  Angle Utilities
+       10.5  Conversion Factors
+   11. Geometry Module
+       11.1  Geometric Types
+       11.2  Intersection Functions
+       11.3  Geometry Utilities
+       11.4  Geometry Algorithms
+   12. Sketch Module
+       12.1  Entity Types
+       12.2  Constraint Types
+       12.3  Sketch Operations
+       12.4  Pattern Operations
+       12.5  Profile Detection
+       12.6  Constraint Solver
+       12.7  Text Parsing Utilities
+       12.8  Entity Grouping
+       12.9  Undo/Redo System
+       12.10 Sketch Queries
+       12.11 Sketch Export/Import
+       12.12 Background Images
+   13. GUI Integration
 
 ================================================================================
   1. OVERVIEW
@@ -106,7 +112,7 @@
 
     To build an alternative UI (e.g., web-based, terminal, or different
     toolkit), simply link against libhobbycad and use the provided functions.
-    See Section 12 (GUI Integration) for examples of how the Qt-based
+    See Section 13 (GUI Integration) for examples of how the Qt-based
     SketchCanvas converts between its UI types and library types.
 
     Header Files:
@@ -116,6 +122,7 @@
       hobbycad/brep_io.h              BREP file read/write utilities
       hobbycad/step_io.h              STEP file import/export
       hobbycad/stl_io.h               STL mesh export
+      hobbycad/units.h                Length unit conversion (mm base)
       hobbycad/geometry/types.h       Geometric types and transforms
       hobbycad/geometry/intersections.h  Intersection calculations
       hobbycad/geometry/utils.h       Geometry utility functions
@@ -923,7 +930,150 @@
         }
 
 ================================================================================
-  10. GEOMETRY MODULE
+  10. UNITS MODULE
+================================================================================
+
+    The units module provides length unit conversion utilities.
+
+    Header File:
+      hobbycad/units.h
+
+    Namespace:
+      hobbycad
+
+  10.1  Storage Convention
+  ------------------------
+
+    **All internal measurements use millimeters (mm) as the base unit.**
+
+    This includes:
+      - All sketch entity coordinates and dimensions
+      - All constraint values
+      - All project file storage (.hcad format)
+      - All library function parameters and return values
+
+    Unit conversion happens ONLY at the GUI display layer.
+
+  10.2  Length Units
+  ------------------
+
+    enum class LengthUnit {
+        Millimeters = 0,  // mm (base unit)
+        Centimeters = 1,  // cm
+        Meters = 2,       // m
+        Inches = 3,       // in
+        Feet = 4          // ft
+    };
+
+  10.3  Conversion Functions
+  --------------------------
+
+    double unitScale(LengthUnit unit)
+        Returns the conversion factor (mm per unit).
+        Multiply a unit value by this to get mm.
+
+    const char* unitSuffix(LengthUnit unit)
+        Returns the display suffix ("mm", "cm", "m", "in", "ft").
+
+    QString unitSuffixQ(LengthUnit unit)
+        Same as unitSuffix, but returns QString.
+
+    double mmToUnit(double mm, LengthUnit toUnit)
+        Converts a value from mm to the specified unit.
+
+    double unitToMm(double value, LengthUnit fromUnit)
+        Converts a value from the specified unit to mm.
+
+    double convertLength(double value, LengthUnit from, LengthUnit to)
+        Converts between any two units.
+
+    LengthUnit parseUnitSuffix(const QString& suffix)
+        Parses a suffix string to get the unit enum.
+        Returns Millimeters if not recognized.
+
+    LengthUnit lengthUnitFromIndex(int index)
+        Converts an index (0-4) to a LengthUnit.
+
+    int lengthUnitToIndex(LengthUnit unit)
+        Converts a LengthUnit to an index (0-4).
+
+    int unitDisplayPrecision(LengthUnit unit)
+        Returns display precision (4 for all units).
+        Use for manual formatting without trailing zero trimming.
+
+    QString formatValue(double value)
+        Formats a value for display with up to 4 decimal places.
+        Trailing zeros are trimmed (e.g., "1.5000" → "1.5").
+
+    QString formatStorageValue(double value)
+        Formats a value for file storage with 15 decimal places.
+
+    QString formatValueWithUnit(double mm, LengthUnit unit)
+        Converts mm to unit and formats with suffix (e.g., "25.4 mm").
+
+    double parseValueWithUnit(QString input, LengthUnit defaultUnit)
+        Parses "25.4 mm" or "1 in" strings back to mm.
+        Returns value in mm; uses defaultUnit if no suffix present.
+
+    bool isMetric(LengthUnit unit)
+        Returns true for mm, cm, m.
+
+    bool isImperial(LengthUnit unit)
+        Returns true for in, ft.
+
+    constexpr int DisplayPrecision = 4
+        Maximum decimal places for display formatting.
+
+    constexpr int StoragePrecision = 15
+        Decimal places for file serialization (full double precision).
+
+  10.4  Angle Utilities
+  ---------------------
+
+    constexpr double Pi
+        Pi constant (3.14159265358979323846).
+
+    double degreesToRadians(double degrees)
+        Converts degrees to radians.
+
+    double radiansToDegrees(double radians)
+        Converts radians to degrees.
+
+    double normalizeAngle360(double degrees)
+        Normalizes angle to [0, 360).
+
+    double normalizeAngle180(double degrees)
+        Normalizes angle to [-180, 180).
+
+    double normalizeRadians2Pi(double radians)
+        Normalizes angle in radians to [0, 2*Pi).
+
+    double normalizeRadiansPi(double radians)
+        Normalizes angle in radians to [-Pi, Pi).
+
+    double atan2Degrees(double dy, double dx)
+        Computes atan2(dy, dx) and returns result in degrees.
+
+    double atan2Radians(double dy, double dx)
+        Wrapper for std::atan2 (for API consistency).
+
+    QString formatAngle(double degrees)
+        Formats angle with degree symbol (e.g., "45°", "22.5°").
+        Uses formatValue() for consistent trailing zero trimming.
+
+  10.5  Conversion Factors
+  ------------------------
+
+    Unit            Index    Factor (mm per unit)
+    ───────────     ─────    ────────────────────
+    Millimeters     0        1.0
+    Centimeters     1        10.0
+    Meters          2        1000.0
+    Inches          3        25.4
+    Feet            4        304.8
+
+================================================================================
+  11. GEOMETRY MODULE
 ================================================================================
 
     The geometry module provides low-level 2D geometry operations.
@@ -937,8 +1087,8 @@
     Namespace:
       hobbycad::geometry
 
-  10.1  Geometric Types (types.h)
-  ------------------------------
+  11.1  Geometric Types (types.h)
+  -------------------------------
 
     Constants:
 
@@ -1002,7 +1152,7 @@
         Transform2D compose(const Transform2D& other) const
         Transform2D inverse() const
 
-  10.2  Intersection Functions (intersections.h)
+  11.2  Intersection Functions (intersections.h)
   ---------------------------------------------
 
     Line-Line:
@@ -1039,7 +1189,7 @@
         double normalizeAngle(degrees)      Normalize to [0, 360)
         double normalizeAngleSigned(degrees) Normalize to [-180, 180)
 
-  10.3  Geometry Utilities (utils.h)
+  11.3  Geometry Utilities (utils.h)
   ---------------------------------
 
     Vector Operations:
@@ -1089,7 +1239,7 @@
         bool lineEnclosedByRect(p1, p2, rect)
         bool circleEnclosedByRect(center, radius, rect)
 
-  10.4  Geometry Algorithms (algorithms.h)
+  11.4  Geometry Algorithms (algorithms.h)
   ----------------------------------------
 
     Advanced computational geometry algorithms.
@@ -1165,7 +1315,7 @@
         QPointF tangentAtArcLength(points, arcLength)
 
 ================================================================================
-  11. SKETCH MODULE
+  12. SKETCH MODULE
 ================================================================================
 
     The sketch module provides 2D sketch entity types and operations.
@@ -1187,7 +1337,7 @@
     Namespace:
       hobbycad::sketch
 
-  11.1  Entity Types (entity.h)
+  12.1  Entity Types (entity.h)
   ----------------------------
 
     enum class EntityType
@@ -1236,7 +1386,7 @@
         QPointF entityCenter(entity)
         double entityLength(entity)
 
-  11.2  Constraint Types (constraint.h)
+  12.2  Constraint Types (constraint.h)
   ------------------------------------
 
     enum class ConstraintType
@@ -1275,7 +1425,7 @@
         QVector<ConstraintType> suggestConstraints(e1, e2)
         int requiredEntityCount(type)
 
-  11.3  Sketch Operations (operations.h)
+  12.3  Sketch Operations (operations.h)
   -------------------------------------
 
     Intersection Detection:
@@ -1311,7 +1461,7 @@
         QVector<int> findConnectedChain(startId, entities, tolerance)
         bool isChainClosed(chain, entities, tolerance)
 
-  11.4  Pattern Operations (patterns.h)
+  12.4  Pattern Operations (patterns.h)
   ------------------------------------
 
     Rectangular Pattern:
@@ -1357,7 +1507,7 @@
         MirrorPatternResult createMirrorPattern(
             sourceEntities, params, nextIdFunc)
 
-  11.5  Profile Detection (profiles.h)
+  12.5  Profile Detection (profiles.h)
   -----------------------------------
 
     struct Profile
@@ -1398,7 +1548,7 @@
         ConnectivityGraph buildConnectivityGraph(entities, tolerance)
         QVector<QVector<int>> findCycles(graph, maxCycles)
 
-  11.6  Constraint Solver (solver.h)
+  12.6  Constraint Solver (solver.h)
   ---------------------------------
 
     The solver wraps libslvs for parametric constraint solving.
@@ -1469,7 +1619,7 @@
             }
         }
 
-  11.7  Text Parsing Utilities (parsing.h)
+  12.7  Text Parsing Utilities (parsing.h)
   ---------------------------------------
 
     Text parsing utilities for CLI input, supporting coordinates,
@@ -1523,7 +1673,7 @@
             // Store expression for parametric evaluation
         }
 
-  11.8  Entity Grouping (group.h)
+  12.8  Entity Grouping (group.h)
   ------------------------------
 
     Groups organize related entities for easier management. Groups support
@@ -1574,7 +1724,7 @@
         // Get all entities in g1 (including from nested groups)
         QSet<int> allIds = groups.allEntityIds(g1);
 
-  11.9  Undo/Redo System (undo.h)
+  12.9  Undo/Redo System (undo.h)
   ------------------------------
 
     Multi-level undo/redo system supporting compound operations and
@@ -1669,7 +1819,7 @@
             // Apply inverse operation based on cmd.type
         }
 
-  11.10  Sketch Queries (queries.h)
+  12.10  Sketch Queries (queries.h)
   ---------------------------------
 
     Functions for hit testing, selection, validation, and analysis.
@@ -1711,7 +1861,7 @@
         QVector<QPointF> tessellate(entity, tolerance)
         QVector<QLineF> tessellateToLines(entities, tolerance)
 
-  11.11  Sketch Export/Import (export.h)
+  12.11  Sketch Export/Import (export.h)
   --------------------------------------
 
     SVG Export:
@@ -1757,7 +1907,7 @@
         DXFImportResult importDXFFile(filePath, startId, options)
         DXFImportResult importDXFString(dxfContent, startId, options)
 
-  11.12  Background Images (background.h)
+  12.12  Background Images (background.h)
   ---------------------------------------
 
     Support for tracing reference images in sketches.
@@ -1816,7 +1966,7 @@
         bool isImageFormatSupported(filePath)
 
 ================================================================================
-  12. GUI INTEGRATION
+  13. GUI INTEGRATION
 ================================================================================
 
     The SketchCanvas uses a thin wrapper to convert between GUI types
