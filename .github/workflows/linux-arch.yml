@@ -41,7 +41,7 @@ jobs:
   arch:
     name: HobbyCAD Arch (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    container: archlinux:base-devel
+    container: ${{ matrix.container }}
 
     strategy:
       fail-fast: false
@@ -49,9 +49,11 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-22.04
+            container: archlinux:base-devel
             artifact_name: hobbycad-arch-x86_64
           - arch: aarch64
             runner: ubuntu-22.04-arm
+            container: agners/archlinuxarm:latest
             artifact_name: hobbycad-arch-aarch64
 
     steps:
@@ -59,10 +61,10 @@ jobs:
         run: |
           # Initialize pacman keyring
           pacman-key --init
-          pacman-key --populate archlinux
+          pacman-key --populate archlinux || pacman-key --populate archlinuxarm || true
 
-          # Update system and install git
-          pacman -Syu --noconfirm git
+          # Update system and install git and base-devel
+          pacman -Syu --noconfirm git base-devel
 
       - name: Checkout HobbyCAD
         uses: actions/checkout@v4
@@ -70,15 +72,25 @@ jobs:
       - name: Install build dependencies
         run: |
           pacman -S --noconfirm --needed \
-            base-devel cmake ninja pkgconf curl patch \
+            base-devel cmake ninja pkgconf curl patch xz \
             qt6-base qt6-svg qt6-tools \
             opencascade tbb \
             libpng libjpeg-turbo \
             libzip minizip \
             libgit2 \
-            lib3mf openmesh \
+            lib3mf \
             librsvg \
             mesa glu libxkbcommon
+
+          # Build OpenMesh from source (AUR package, not in official repos)
+          curl -L -o /tmp/openmesh.tar.gz "https://www.graphics.rwth-aachen.de/media/openmesh_static/Releases/11.0/OpenMesh-11.0.0.tar.gz"
+          mkdir -p /tmp/openmesh && tar -xzf /tmp/openmesh.tar.gz -C /tmp/openmesh --strip-components=1
+          cd /tmp/openmesh
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_APPS=OFF
+          cmake --build build
+          cmake --install build
 
           # Build libslvs from source (solvespace package is GUI only)
           git clone --depth 1 --recurse-submodules https://github.com/solvespace/solvespace.git /tmp/solvespace
@@ -129,7 +141,6 @@ jobs:
             'libzip'
             'minizip'
             'lib3mf'
-            'openmesh'
           )
           makedepends=(
             'cmake'

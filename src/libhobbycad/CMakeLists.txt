@@ -82,6 +82,8 @@ set(LIBHOBBYCAD_SOURCES
     brep_io.cpp
     step_io.cpp
     stl_io.cpp
+    obj_io.cpp
+    parameters.cpp
     opengl_info.cpp
     project.cpp
     # Geometry module
@@ -112,6 +114,8 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/brep_io.h
     hobbycad/step_io.h
     hobbycad/stl_io.h
+    hobbycad/obj_io.h
+    hobbycad/parameters.h
     hobbycad/opengl_info.h
     hobbycad/project.h
     # Geometry module
@@ -192,6 +196,7 @@ occt_pick_lib(_OCCT_STEP     TKSTEP     TKDESTEP)
 occt_pick_lib(_OCCT_IGES     TKIGES     TKDEIGES)
 occt_pick_lib(_OCCT_STL      TKSTL      TKDESTL)
 occt_pick_lib(_OCCT_XCAF     TKXCAF     TKDEXCAF)
+occt_pick_lib(_OCCT_RWMESH   TKRWMesh   TKDERWMESH)
 
 # TKXDESTEP/TKXDEIGES were merged into TKDESTEP/TKDEIGES in 7.8+.
 # Only link them if they exist as separate libraries.
@@ -212,8 +217,8 @@ endif()
 
 set(HOBBYCAD_OCCT_LIBS
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo
-    TKBRep TKTopAlgo TKPrim TKShHealing TKBO TKFillet TKOffset
-    ${_OCCT_STEP} ${_OCCT_STL} ${_OCCT_IGES}
+    TKBRep TKTopAlgo TKPrim TKShHealing TKBO TKFillet TKOffset TKMesh
+    ${_OCCT_STEP} ${_OCCT_STL} ${_OCCT_IGES} ${_OCCT_RWMESH}
     ${_OCCT_XSBASE} ${_OCCT_XCAF} TKLCAF TKCAF
     ${_OCCT_XDESTEP} ${_OCCT_XDEIGES}
 )

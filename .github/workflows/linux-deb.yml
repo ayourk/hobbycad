@@ -116,22 +116,29 @@ jobs:
             INSTALL_LIBSLVS=""
           fi
 
+          # meshfix-dev only available in Ubuntu PPA, not Debian
+          INSTALL_MESHFIX=""
+          if [ -z "${{ matrix.container }}" ]; then
+            INSTALL_MESHFIX="libmeshfix-dev"
+          fi
+
           $SUDO apt-get install -y \
             $INSTALL_LIBSLVS \
-            build-essential cmake ninja-build pkg-config \
+            $INSTALL_MESHFIX \
+            build-essential cmake ninja-build pkg-config curl xz-utils \
             dpkg-dev debhelper fakeroot \
             libocct-data-exchange-dev libocct-draw-dev \
             libocct-foundation-dev libocct-modeling-algorithms-dev \
             libocct-modeling-data-dev libocct-ocaf-dev \
             libocct-visualization-dev occt-misc libtbb-dev \
             qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-            qt6-tools-dev-tools libqt6opengl6-dev \
+            qt6-tools-dev-tools qt6-l10n-tools libqt6opengl6-dev \
             libqt6openglwidgets6 libqt6svg6-dev qmake6 \
             libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
             libpng-dev libjpeg-dev \
             libzip-dev libminizip-dev \
             libgit2-dev \
-            lib3mf-dev libopenmesh-dev libmeshfix-dev \
+            lib3mf-dev libopenmesh-dev \
             librsvg2-bin
 
       - name: Build libslvs from source (Debian containers only)
@@ -157,6 +164,22 @@ jobs:
             -DENABLE_CLI=OFF \
             -DENABLE_OPENMP=OFF \
             -DENABLE_TESTS=OFF
+          cmake --build build
+          cmake --install build
+
+      - name: Build meshfix from source (Debian containers only)
+        if: matrix.container != ''
+        run: |
+          # Download source and patches from Launchpad PPA
+          curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
+          curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
+          tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
+          cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMESHFIX_BUILD_SHARED=ON \
+            -DMESHFIX_BUILD_CLI=OFF
           cmake --build build
           cmake --install build
 
