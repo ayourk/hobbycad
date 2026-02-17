@@ -271,24 +271,24 @@ void MainWindow::createMenus()
     // File menu
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
 
-    m_actionNew = fileMenu->addAction(tr("&New"),
-        QKeySequence::New, this, &MainWindow::onFileNew);
+    m_actionNew = fileMenu->addAction(tr("&New"), this, &MainWindow::onFileNew);
+    m_actionNew->setShortcut(QKeySequence::New);
 
-    m_actionOpen = fileMenu->addAction(tr("&Open..."),
-        QKeySequence::Open, this, &MainWindow::onFileOpen);
-
-    fileMenu->addSeparator();
-
-    m_actionSave = fileMenu->addAction(tr("&Save"),
-        QKeySequence::Save, this, &MainWindow::onFileSave);
-
-    m_actionSaveAs = fileMenu->addAction(tr("Save &As..."),
-        QKeySequence::SaveAs, this, &MainWindow::onFileSaveAs);
+    m_actionOpen = fileMenu->addAction(tr("&Open..."), this, &MainWindow::onFileOpen);
+    m_actionOpen->setShortcut(QKeySequence::Open);
 
     fileMenu->addSeparator();
 
-    m_actionClose = fileMenu->addAction(tr("&Close"),
-        QKeySequence::Close, this, &MainWindow::onFileClose);
+    m_actionSave = fileMenu->addAction(tr("&Save"), this, &MainWindow::onFileSave);
+    m_actionSave->setShortcut(QKeySequence::Save);
+
+    m_actionSaveAs = fileMenu->addAction(tr("Save &As..."), this, &MainWindow::onFileSaveAs);
+    m_actionSaveAs->setShortcut(QKeySequence::SaveAs);
+
+    fileMenu->addSeparator();
+
+    m_actionClose = fileMenu->addAction(tr("&Close"), this, &MainWindow::onFileClose);
+    m_actionClose->setShortcut(QKeySequence::Close);
 
     fileMenu->addSeparator();
 
@@ -422,8 +422,8 @@ void MainWindow::createMenus()
 
     viewMenu->addSeparator();
 
-    m_actionResetView = viewMenu->addAction(tr("&Reset View"),
-        QKeySequence(Qt::Key_Home));
+    m_actionResetView = viewMenu->addAction(tr("&Reset View"));
+    m_actionResetView->setShortcut(QKeySequence(Qt::Key_Home));
     // Connected in FullModeWindow to viewport->resetCamera()
 
     m_actionRotateLeft = viewMenu->addAction(tr("Rotate &Left 90°"));
@@ -432,13 +432,13 @@ void MainWindow::createMenus()
 
     viewMenu->addSeparator();
 
-    m_actionShowGrid = viewMenu->addAction(tr("Show &Grid"),
-        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
+    m_actionShowGrid = viewMenu->addAction(tr("Show &Grid"));
+    m_actionShowGrid->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
     m_actionShowGrid->setCheckable(true);
     m_actionShowGrid->setChecked(true);  // On by default
 
-    m_actionSnapToGrid = viewMenu->addAction(tr("&Snap to Grid"),
-        QKeySequence(Qt::CTRL | Qt::Key_G));
+    m_actionSnapToGrid = viewMenu->addAction(tr("&Snap to Grid"));
+    m_actionSnapToGrid->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
     m_actionSnapToGrid->setCheckable(true);
     m_actionSnapToGrid->setChecked(false);  // Off by default
 
@@ -464,8 +464,8 @@ void MainWindow::createMenus()
 
     viewMenu->addSeparator();
 
-    m_actionPreferences = viewMenu->addAction(tr("&Preferences..."),
-        QKeySequence::Preferences, this, &MainWindow::onEditPreferences);
+    m_actionPreferences = viewMenu->addAction(tr("&Preferences..."), this, &MainWindow::onEditPreferences);
+    m_actionPreferences->setShortcut(QKeySequence::Preferences);
 }
 
 // ---- Status bar -----------------------------------------------------
