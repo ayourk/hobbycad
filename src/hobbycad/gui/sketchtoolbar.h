@@ -126,6 +126,9 @@ public:
     /// Reset Create button to default state (shows "Create" with dropdown)
     void resetCreateButton();
 
+    /// Revert to the previous creation mode for a tool (when mode selection is rejected)
+    void revertCreationMode(SketchTool tool);
+
 signals:
     /// Emitted when a tool is selected (for basic tool changes)
     void toolChanged(SketchTool tool);
@@ -166,6 +169,10 @@ private:
 
     SketchTool m_lastCreateTool = SketchTool::Select;       // Dropdown-first: must choose
     CreationMode m_lastCreateMode = CreationMode::Default;
+    QString m_lastCreateText;                                // Button text for current tool
+    SketchTool m_prevCreateTool = SketchTool::Select;        // Previous tool (for reverting)
+    CreationMode m_prevCreateMode = CreationMode::Default;   // Previous mode (for reverting)
+    QString m_prevCreateText;                                // Button text for previous tool
     QIcon m_defaultCreateIcon;
     QString m_defaultCreateText;
 

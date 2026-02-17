@@ -1,0 +1,121 @@
+app-id: org.hobbycad.HobbyCAD
+runtime: org.kde.Platform
+runtime-version: '6.6'
+sdk: org.kde.Sdk
+command: hobbycad
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  # OpenCASCADE 7.9.2
+  - name: opencascade
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_LIBRARY_TYPE=Shared
+      - -DBUILD_MODULE_Draw=OFF
+      - -DBUILD_MODULE_Visualization=ON
+      - -DBUILD_MODULE_ApplicationFramework=ON
+      - -DBUILD_MODULE_DataExchange=ON
+      - -DUSE_TBB=ON
+      - -DUSE_FREETYPE=ON
+      - -DUSE_VTK=OFF
+    sources:
+      - type: archive
+        url: https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_2.tar.gz
+        sha256: 3cd080d3fc33ba0c6c157e110afe3e015859524c4694dbb09812ec9d61595639
+
+  # libgit2
+  - name: libgit2
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTS=OFF
+      - -DBUILD_CLI=OFF
+    sources:
+      - type: archive
+        url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.7.2.tar.gz
+        sha256: de384e29d7efc9330c6cdb126ebf88342b5025d920dcb7c645defad85195ea7f
+
+  # libslvs (SolveSpace constraint solver library)
+  - name: libslvs
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_LIB=ON
+      - -DENABLE_GUI=OFF
+      - -DENABLE_CLI=OFF
+      - -DENABLE_OPENMP=OFF
+      - -DENABLE_TESTS=OFF
+    sources:
+      - type: archive
+        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz
+        sha256: 89221ff3a92f9e4d59f61ca86cf82bb38cf313183be660fdd7b628da66790864
+      - type: archive
+        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz
+        sha256: 47ad7bab74b7e9738a4df4b9103f6777846eea5342a8f6f092853d3bc0ba8554
+        dest: debian-patches
+      - type: archive
+        url: https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+        sha256: 8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
+        dest: extlib/eigen
+      - type: shell
+        commands:
+          - patch -p1 < debian-patches/debian/patches/0001-handle-missing-git-directory.patch
+          - for submod in zlib libpng freetype cairo pixman angle; do mkdir -p extlib/$submod && echo "# stub" > extlib/$submod/CMakeLists.txt; done
+
+  # lib3mf (3D Manufacturing Format)
+  - name: lib3mf
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DLIB3MF_TESTS=OFF
+    sources:
+      - type: archive
+        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/lib3mf/2.4.1.git~20260208-1~ppa1~noble1/lib3mf_2.4.1.git~20260208.orig.tar.gz
+        sha256: 469f4b8780ee4c369b695210611d70fc70e8e4b22da6ea97265f69c9a50828b1
+
+  # OpenMesh
+  - name: openmesh
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DOPENMESH_BUILD_SHARED=ON
+      - -DOPENMESH_BUILD_PYTHON_BINDINGS=OFF
+    sources:
+      - type: archive
+        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz
+        sha256: b6f0a3eb3078984ca651b6bf38a781a072049222f77bac1025101371fca18899
+
+  # MeshFix
+  - name: meshfix
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DMESHFIX_BUILD_SHARED=ON
+      - -DMESHFIX_BUILD_CLI=OFF
+    sources:
+      - type: archive
+        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz
+        sha256: 27d135e85e320439df49d96c8de79042d2cbb524f9aa952eb7a8544571131fbf
+      - type: archive
+        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz
+        sha256: cbb3b70289d24c817d55f4cbcdf9a72b20038fe4a88cd711394042a669705a32
+        dest: debian-patches
+      - type: shell
+        commands:
+          - patch -p1 < debian-patches/debian/patches/0001-build-shared-library.patch
+
+  # HobbyCAD
+  - name: hobbycad
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: .

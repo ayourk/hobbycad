@@ -114,10 +114,10 @@ void SketchToolbar::createTools()
         QIcon::fromTheme(QStringLiteral("draw-arc"),
                          style()->standardIcon(QStyle::SP_BrowserReload)),
         tr("Arc"), tr("Draw arc (A)"));
-    createDropdown->addVariant(tr("3-Point"), static_cast<int>(CreationMode::ArcThreePoint));
     createDropdown->addVariant(tr("Center + Start + End"), static_cast<int>(CreationMode::ArcCenterStartEnd));
     createDropdown->addVariant(tr("Start + End + Radius"), static_cast<int>(CreationMode::ArcStartEndRadius));
     createDropdown->addVariant(tr("Tangent"), static_cast<int>(CreationMode::ArcTangent));
+    createDropdown->addVariant(tr("3-Point"), static_cast<int>(CreationMode::ArcThreePoint));
 
     // Spline - with variants
     createDropdown->addButton(
@@ -322,12 +322,18 @@ void SketchToolbar::onCreateDropdownClicked(int index)
         SketchTool tool = tools[index];
         CreationMode mode = CreationMode::Default;
 
+        // Save previous before updating (for potential revert)
+        m_prevCreateTool = m_lastCreateTool;
+        m_prevCreateMode = m_lastCreateMode;
+        m_prevCreateText = m_lastCreateText;
+
         // Store as last selected create tool
         m_lastCreateTool = tool;
         m_lastCreateMode = mode;
+        m_lastCreateText = tr(names[index]);
 
         // Update button text to show selected tool
-        m_createBtn->setText(tr(names[index]));
+        m_createBtn->setText(m_lastCreateText);
 
         setActiveToolInternal(tool, mode, m_createBtn);
     }
@@ -342,19 +348,19 @@ void SketchToolbar::onCreateVariantClicked(int index, int variantId)
         SketchTool::Arc, SketchTool::Spline, SketchTool::Polygon,
         SketchTool::Slot, SketchTool::Ellipse, SketchTool::Point
     };
-    static const char* names[] = {
-        "Line", "Rectangle", "Circle", "Arc", "Spline",
-        "Polygon", "Slot", "Ellipse", "Point"
-    };
     if (index >= 0 && index < static_cast<int>(sizeof(tools)/sizeof(tools[0]))) {
         SketchTool tool = tools[index];
         CreationMode mode = static_cast<CreationMode>(variantId);
 
+        // Save previous before updating (for potential revert)
+        m_prevCreateTool = m_lastCreateTool;
+        m_prevCreateMode = m_lastCreateMode;
+        m_prevCreateText = m_lastCreateText;
+
         // Store as last selected create tool
         m_lastCreateTool = tool;
         m_lastCreateMode = mode;
-
-        // Button text will be updated by onCreateVariantSelected
+        // m_lastCreateText will be updated by onCreateVariantSelected
 
         setActiveToolInternal(tool, mode, m_createBtn);
     }
@@ -365,6 +371,7 @@ void SketchToolbar::onCreateVariantSelected(int index, int variantId, const QStr
     Q_UNUSED(index)
     Q_UNUSED(variantId)
     // Update button text to show the specific variant name
+    m_lastCreateText = variantName;
     m_createBtn->setText(variantName);
 }
 
@@ -490,6 +497,29 @@ void SketchToolbar::resetCreateButton()
     m_lastPatternTool = SketchTool::RectPattern;
     m_patternBtn->setIcon(m_defaultPatternIcon);
     m_patternBtn->setText(m_defaultPatternText);
+}
+
+void SketchToolbar::revertCreationMode(SketchTool tool)
+{
+    Q_UNUSED(tool)  // Currently only used for Arc, but parameter allows future extension
+
+    // Revert to previous tool/mode
+    m_lastCreateTool = m_prevCreateTool;
+    m_lastCreateMode = m_prevCreateMode;
+    m_lastCreateText = m_prevCreateText;
+    m_activeTool = m_prevCreateTool;
+    m_creationMode = m_prevCreateMode;
+
+    // Update button appearance
+    if (m_prevCreateTool == SketchTool::Select || m_prevCreateText.isEmpty()) {
+        // No previous tool - reset to default
+        m_createBtn->setIcon(m_defaultCreateIcon);
+        m_createBtn->setText(m_defaultCreateText);
+        m_createBtn->setChecked(false);
+    } else {
+        // Restore previous button text
+        m_createBtn->setText(m_prevCreateText);
+    }
 }
 
 }  // namespace hobbycad
