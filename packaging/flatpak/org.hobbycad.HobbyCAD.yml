@@ -22,7 +22,7 @@ modules:
       - -DBUILD_MODULE_Visualization=ON
       - -DBUILD_MODULE_ApplicationFramework=ON
       - -DBUILD_MODULE_DataExchange=ON
-      - -DUSE_TBB=ON
+      - -DUSE_TBB=OFF
       - -DUSE_FREETYPE=ON
       - -DUSE_VTK=OFF
     sources:
