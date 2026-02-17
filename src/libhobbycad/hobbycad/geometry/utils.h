@@ -100,6 +100,64 @@ HOBBYCAD_EXPORT bool linesPerpendicular(
     double tolerance = DEFAULT_TOLERANCE);
 
 // =====================================================================
+//  Ray Operations
+// =====================================================================
+
+/// Project a point onto an infinite ray (origin + direction)
+/// @param point The point to project
+/// @param rayOrigin Start point of the ray
+/// @param rayDirection Direction vector of the ray (will be normalized internally)
+/// @return The projected point on the ray
+HOBBYCAD_EXPORT QPointF projectPointOntoRay(
+    const QPointF& point,
+    const QPointF& rayOrigin,
+    const QPointF& rayDirection);
+
+/// Calculate the distance from a point to an infinite ray
+/// @param point The point to measure from
+/// @param rayOrigin Start point of the ray
+/// @param rayDirection Direction vector of the ray (will be normalized internally)
+/// @return Distance from point to the ray
+HOBBYCAD_EXPORT double distanceFromRay(
+    const QPointF& point,
+    const QPointF& rayOrigin,
+    const QPointF& rayDirection);
+
+/// Check if a point lies on a ray within tolerance
+/// @param point The point to check
+/// @param rayOrigin Start point of the ray
+/// @param rayDirection Direction vector of the ray (will be normalized internally)
+/// @param tolerance Distance tolerance (default: essentially exact)
+/// @return true if point is on the ray within tolerance
+HOBBYCAD_EXPORT bool pointOnRay(
+    const QPointF& point,
+    const QPointF& rayOrigin,
+    const QPointF& rayDirection,
+    double tolerance = 0.001);
+
+/// Snap a point to the nearest angle increment from an origin
+/// @param origin The origin point
+/// @param target The point to snap
+/// @param incrementDegrees The angle increment in degrees (default: 45°)
+/// @return The snapped point at the same distance from origin but at a snapped angle
+HOBBYCAD_EXPORT QPointF snapToAngleIncrement(
+    const QPointF& origin,
+    const QPointF& target,
+    double incrementDegrees = 45.0);
+
+/// Snap a point to the nearest angle increment and return the snapped angle
+/// @param origin The origin point
+/// @param target The point to snap
+/// @param incrementDegrees The angle increment in degrees (default: 45°)
+/// @param[out] snappedAngle The resulting snapped angle in degrees
+/// @return The snapped point at the same distance from origin but at a snapped angle
+HOBBYCAD_EXPORT QPointF snapToAngleIncrementWithAngle(
+    const QPointF& origin,
+    const QPointF& target,
+    double incrementDegrees,
+    double& snappedAngle);
+
+// =====================================================================
 //  Arc Operations
 // =====================================================================
 

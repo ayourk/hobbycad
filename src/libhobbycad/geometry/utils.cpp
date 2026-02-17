@@ -189,6 +189,77 @@ bool linesPerpendicular(
 }
 
 // =====================================================================
+//  Ray Operations
+// =====================================================================
+
+QPointF projectPointOntoRay(
+    const QPointF& point,
+    const QPointF& rayOrigin,
+    const QPointF& rayDirection)
+{
+    QPointF dir = normalize(rayDirection);
+    if (lengthSquared(dir) < DEFAULT_TOLERANCE) {
+        return rayOrigin;
+    }
+
+    QPointF toPoint = point - rayOrigin;
+    double projection = dot(toPoint, dir);
+    return rayOrigin + dir * projection;
+}
+
+double distanceFromRay(
+    const QPointF& point,
+    const QPointF& rayOrigin,
+    const QPointF& rayDirection)
+{
+    QPointF projected = projectPointOntoRay(point, rayOrigin, rayDirection);
+    return length(point - projected);
+}
+
+bool pointOnRay(
+    const QPointF& point,
+    const QPointF& rayOrigin,
+    const QPointF& rayDirection,
+    double tolerance)
+{
+    return distanceFromRay(point, rayOrigin, rayDirection) < tolerance;
+}
+
+QPointF snapToAngleIncrement(
+    const QPointF& origin,
+    const QPointF& target,
+    double incrementDegrees)
+{
+    double snappedAngle;
+    return snapToAngleIncrementWithAngle(origin, target, incrementDegrees, snappedAngle);
+}
+
+QPointF snapToAngleIncrementWithAngle(
+    const QPointF& origin,
+    const QPointF& target,
+    double incrementDegrees,
+    double& snappedAngle)
+{
+    QPointF delta = target - origin;
+    double distance = length(delta);
+
+    if (distance < DEFAULT_TOLERANCE) {
+        snappedAngle = 0.0;
+        return target;
+    }
+
+    // Calculate current angle in degrees
+    double angle = qAtan2(delta.y(), delta.x()) * 180.0 / M_PI;
+
+    // Snap to nearest increment
+    snappedAngle = qRound(angle / incrementDegrees) * incrementDegrees;
+
+    // Calculate new position at snapped angle
+    double snappedRad = snappedAngle * M_PI / 180.0;
+    return origin + QPointF(distance * qCos(snappedRad), distance * qSin(snappedRad));
+}
+
+// =====================================================================
 //  Arc Operations
 // =====================================================================
 

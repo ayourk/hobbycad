@@ -61,6 +61,9 @@ void SketchCanvas::setActiveTool(SketchTool tool)
             finishConstraintCreation();
         }
 
+        // Clear tangent targets when switching tools
+        m_tangentTargets.clear();
+
         m_activeTool = tool;
 
         // Initialize constraint creation state for Dimension tool
@@ -86,7 +89,7 @@ void SketchCanvas::setActiveTool(SketchTool tool)
         case SketchTool::Polygon:
         case SketchTool::Slot:
         case SketchTool::Ellipse:
-            setCursor(Qt::CrossCursor);
+            setCursor(Qt::ArrowCursor);
             break;
         case SketchTool::Dimension:
         case SketchTool::Constraint:
@@ -98,7 +101,7 @@ void SketchCanvas::setActiveTool(SketchTool tool)
         case SketchTool::Offset:
         case SketchTool::Fillet:
         case SketchTool::Chamfer:
-            setCursor(Qt::CrossCursor);
+            setCursor(Qt::ArrowCursor);
             break;
         case SketchTool::RectPattern:
         case SketchTool::CircPattern:
@@ -118,14 +121,33 @@ void SketchCanvas::setCreationMode(CreationMode mode)
 
     int modeValue = static_cast<int>(mode);
 
+    // Clear any in-progress state when switching modes
+    m_tangentTargets.clear();
+    if (m_isDrawing) {
+        cancelEntity();
+    }
+
     // Check based on active tool to interpret the mode correctly
     switch (m_activeTool) {
+    case SketchTool::Line:
+        // Line modes: 0=TwoPoint, 1=Horizontal, 2=Vertical, 3=Tangent, 4=Construction
+        switch (modeValue) {
+        case 0: m_lineMode = LineMode::TwoPoint; break;
+        case 1: m_lineMode = LineMode::Horizontal; break;
+        case 2: m_lineMode = LineMode::Vertical; break;
+        case 3: m_lineMode = LineMode::Tangent; break;
+        case 4: m_lineMode = LineMode::Construction; break;
+        default: m_lineMode = LineMode::TwoPoint; break;
+        }
+        break;
+
     case SketchTool::Arc:
         // Arc modes: 0=ThreePoint, 1=CenterStartEnd, 2=StartEndRadius, 3=Tangent
+        // Note: Tangent arc validation is done in FullModeWindow before this is called
         switch (modeValue) {
         case 0: m_arcMode = ArcMode::ThreePoint; break;
         case 1: m_arcMode = ArcMode::CenterStartEnd; break;
-        // case 2: StartEndRadius not yet implemented
+        case 2: m_arcMode = ArcMode::StartEndRadius; break;
         case 3: m_arcMode = ArcMode::Tangent; break;
         default: m_arcMode = ArcMode::ThreePoint; break;
         }
@@ -985,27 +1007,19 @@ QPointF SketchCanvas::snapToAngle(const QPointF& origin, const QPointF& target) 
     // Snap to nearest 45-degree increment (0, 45, 90, 135, 180, 225, 270, 315)
     auto* self = const_cast<SketchCanvas*>(this);
 
-    double dx = target.x() - origin.x();
-    double dy = target.y() - origin.y();
-    double distance = std::sqrt(dx * dx + dy * dy);
-
+    double distance = QLineF(origin, target).length();
     if (distance < 0.001) {
         self->m_angleSnapActive = false;
         return target;
     }
 
-    // Calculate current angle in degrees
-    double angle = std::atan2(dy, dx) * 180.0 / M_PI;
-
-    // Snap to nearest 45 degrees
-    double snappedAngle = std::round(angle / 45.0) * 45.0;
+    double snappedAngle;
+    QPointF result = geometry::snapToAngleIncrementWithAngle(origin, target, 45.0, snappedAngle);
 
     self->m_angleSnapActive = true;
     self->m_snappedAngle = snappedAngle;
 
-    // Calculate new position at snapped angle
-    double snappedRad = snappedAngle * M_PI / 180.0;
-    return origin + QPointF(distance * std::cos(snappedRad), distance * std::sin(snappedRad));
+    return result;
 }
 
 void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
@@ -1039,6 +1053,61 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
     // Draw preview of entity being created
     if (m_isDrawing) {
         drawPreview(painter);
+    }
+
+    // Draw pre-click preview dot for entity creation tools (before first click)
+    if (!m_isDrawing && m_activeTool != SketchTool::Select) {
+        // Get current cursor position
+        QPoint cursorPos = mapFromGlobal(QCursor::pos());
+        if (rect().contains(cursorPos)) {
+            QPointF cursorWorld = screenToWorld(cursorPos);
+
+            // For tangent arc, project onto entity
+            if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent && m_tangentTargets.isEmpty()) {
+                int hitId = const_cast<SketchCanvas*>(this)->hitTest(cursorWorld);
+                if (hitId >= 0) {
+                    const SketchEntity* hoverEntity = nullptr;
+                    for (const auto& e : m_entities) {
+                        if (e.id == hitId) {
+                            hoverEntity = &e;
+                            break;
+                        }
+                    }
+                    if (hoverEntity && (hoverEntity->type == SketchEntityType::Line ||
+                                        hoverEntity->type == SketchEntityType::Rectangle)) {
+                        QPointF projectedPoint = cursorWorld;
+                        bool altHeld = QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier;
+
+                        if (hoverEntity->type == SketchEntityType::Line && hoverEntity->points.size() >= 2) {
+                            QPointF p1 = hoverEntity->points[0];
+                            QPointF p2 = hoverEntity->points[1];
+                            projectedPoint = geometry::closestPointOnLine(cursorWorld, p1, p2);
+                            if (!altHeld) {
+                                QPointF midpoint = (p1 + p2) / 2.0;
+                                double snapDist = 10.0 / m_zoom;
+                                if (QLineF(projectedPoint, p1).length() < snapDist) {
+                                    projectedPoint = p1;
+                                } else if (QLineF(projectedPoint, p2).length() < snapDist) {
+                                    projectedPoint = p2;
+                                } else if (QLineF(projectedPoint, midpoint).length() < snapDist) {
+                                    projectedPoint = midpoint;
+                                }
+                            }
+                        }
+                        cursorWorld = projectedPoint;
+                    }
+                }
+            } else {
+                // For other tools, apply snapping
+                cursorWorld = snapPoint(cursorWorld);
+            }
+
+            // Draw the preview dot
+            QPoint screenPoint = worldToScreen(cursorWorld);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(0, 120, 215));
+            painter.drawEllipse(screenPoint, 5, 5);
+        }
     }
 
     // Draw active snap point indicator
@@ -1580,6 +1649,10 @@ void SketchCanvas::drawEntity(QPainter& painter, const SketchEntity& entity)
 void SketchCanvas::drawPreview(QPainter& painter)
 {
     QPen pen(QColor(0, 120, 215), 2, Qt::DashLine);
+    // Construction line mode uses construction geometry color
+    if (m_activeTool == SketchTool::Line && m_lineMode == LineMode::Construction) {
+        pen.setColor(QColor(180, 100, 50));  // Construction geometry color
+    }
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
 
@@ -2572,11 +2645,285 @@ void SketchCanvas::drawPreview(QPainter& painter)
                     painter.drawText(textPos.x(), textPos.y(), line1);
                     painter.drawText(textPos.x(), textPos.y() + fm.height() + 2, line2);
                 }
-            } else {
-                // Tangent arc - show line from start to cursor
-                QPoint sp1 = worldToScreen(m_previewPoints[0]);
-                QPoint sp2 = worldToScreen(m_currentMouseWorld);
-                painter.drawLine(sp1, sp2);
+            } else if (m_arcMode == ArcMode::StartEndRadius) {
+                // Start-End-Radius arc: start is first click, end is second click, then set radius
+                if (m_previewPoints.size() == 1) {
+                    // Only start placed - draw line from start to mouse (chord preview)
+                    QPoint startScreen = worldToScreen(m_previewPoints[0]);
+                    QPoint mouseScreen = worldToScreen(m_currentMouseWorld);
+                    painter.drawLine(startScreen, mouseScreen);
+
+                    // Draw start point
+                    painter.setBrush(QColor(0, 120, 215));
+                    painter.drawEllipse(startScreen, 3, 3);
+
+                    // Show chord length
+                    double chordLength = QLineF(m_previewPoints[0], m_currentMouseWorld).length();
+                    if (chordLength > 0.1) {
+                        QPointF labelPos = (QPointF(startScreen) + QPointF(mouseScreen)) / 2.0;
+                        labelPos += QPointF(10, -10);
+                        drawDimensionLabel(painter, labelPos, chordLength);
+                    }
+                } else if (m_previewPoints.size() >= 2) {
+                    // Start and end placed - mouse controls arc center (constrained to perpendicular bisector)
+                    QPointF start = m_previewPoints[0];
+                    QPointF end = m_previewPoints[1];
+                    QPointF midChord = (start + end) / 2.0;
+                    double chordLength = QLineF(start, end).length();
+
+                    if (chordLength > 0.001) {
+                        // Calculate perpendicular direction from chord midpoint
+                        QPointF chordDir = (end - start) / chordLength;
+                        QPointF perpDir(-chordDir.y(), chordDir.x());
+
+                        // Project mouse onto perpendicular bisector to get arc center
+                        QPointF toMouse = m_currentMouseWorld - midChord;
+                        double projDist = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
+
+                        // Ctrl snaps to midpoint (semicircle - exactly 180°)
+                        bool ctrlHeld = (QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier);
+                        if (ctrlHeld) {
+                            projDist = 0.0;
+                        }
+
+                        // Apply flip (Shift key) - move center to opposite side of chord
+                        if (m_arcSlotFlipped) {
+                            projDist = -projDist;
+                        }
+
+                        // Arc center is on the perpendicular bisector
+                        QPointF center = midChord + perpDir * projDist;
+
+                        // Calculate radius from center to endpoints (equidistant)
+                        double radius = QLineF(center, start).length();
+
+                        // Minimum radius to avoid degenerate arcs (skip if Ctrl for exact 180°)
+                        double halfChord = chordLength / 2.0;
+                        if (!ctrlHeld) {
+                            double minRadius = halfChord * 1.01;  // Just slightly larger than half chord
+                            if (radius < minRadius) {
+                                // Push center out to minimum distance
+                                double minDist = std::sqrt(minRadius * minRadius - halfChord * halfChord);
+                                double sign = (projDist >= 0) ? 1.0 : -1.0;
+                                center = midChord + perpDir * sign * minDist;
+                                radius = minRadius;
+                                // Update projDist after adjustment
+                                projDist = sign * minDist;
+                            }
+                        }
+
+                        // Convert to screen for drawing
+                        QPoint centerScreen = worldToScreen(center);
+                        QPoint startScreen = worldToScreen(start);
+                        QPoint endScreen = worldToScreen(end);
+                        int rPx = static_cast<int>(radius * m_zoom);
+                        QRect arcRect(centerScreen.x() - rPx, centerScreen.y() - rPx, rPx * 2, rPx * 2);
+
+                        // Calculate angles in screen space
+                        double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
+                                                              startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
+                        double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
+                                                            endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
+
+                        // Calculate sweep from start to end
+                        double sweep = endAngleScreen - startAngleScreen;
+                        // Normalize to [-180, 180]
+                        while (sweep > 180) sweep -= 360;
+                        while (sweep < -180) sweep += 360;
+
+                        // The arc length is determined by center position:
+                        // - Center far from chord (|projDist| > halfChord) = small arc (< 180°) because radius is large
+                        // - Center close to chord (|projDist| < halfChord) = large arc (> 180°) because radius is small
+                        // When |projDist| = halfChord, the arc is exactly 90° (radius = halfChord * sqrt(2))
+                        bool wantLongArc = (std::abs(projDist) < halfChord);
+
+                        // After normalization, sweep is in [-180, 180] (always "short" path)
+                        // If we want the long arc, flip to get > 180 or < -180
+                        if (wantLongArc) {
+                            if (sweep > 0) sweep -= 360;
+                            else sweep += 360;
+                        }
+                        // Note: m_arcSlotFlipped was already applied to projDist above,
+                        // which changed the center position and wantLongArc calculation.
+                        // We do NOT apply it again here.
+
+                        // For Ctrl (exact 180°), force sweep to exactly 180 or -180 degrees
+                        if (ctrlHeld) {
+                            sweep = (sweep > 0) ? 180.0 : -180.0;
+                        }
+
+                        painter.drawArc(arcRect, static_cast<int>(-startAngleScreen * 16),
+                                        static_cast<int>(-sweep * 16));
+
+                        // Draw center marker (this is where the cursor is constrained to)
+                        int crossSize = ctrlHeld ? 6 : 4;  // Larger when snapped
+                        painter.drawLine(centerScreen.x() - crossSize, centerScreen.y(),
+                                         centerScreen.x() + crossSize, centerScreen.y());
+                        painter.drawLine(centerScreen.x(), centerScreen.y() - crossSize,
+                                         centerScreen.x(), centerScreen.y() + crossSize);
+
+                        // When Ctrl is held, also draw a circle at the snap point for visibility
+                        if (ctrlHeld) {
+                            painter.setBrush(Qt::NoBrush);
+                            painter.drawEllipse(centerScreen, 8, 8);
+                        }
+
+                        // Draw start and end points (fixed)
+                        painter.setBrush(QColor(0, 120, 215));
+                        painter.drawEllipse(startScreen, 4, 4);
+                        painter.drawEllipse(endScreen, 4, 4);
+
+                        // Draw arc length and angle dimension at midpoint of arc
+                        double arcLength = radius * std::abs(sweep * M_PI / 180.0);
+                        if (arcLength > 0.1) {
+                            double midAngle = (startAngleScreen + sweep / 2.0) * M_PI / 180.0;
+                            double offsetDist = rPx + 25;
+                            QPointF labelCenter = QPointF(centerScreen) + QPointF(offsetDist * std::cos(midAngle),
+                                                                                   offsetDist * std::sin(midAngle));
+                            drawArcDimensionLabel(painter, labelCenter, arcLength, sweep);
+                        }
+
+                        // Draw hint message (positioned well below arc to avoid dimension overlap)
+                        QString line1 = tr("Arc: Start → End → Center");
+                        QString line2 = tr("(Shift to flip, Ctrl for 180°)");
+                        QFontMetrics fm(painter.font());
+                        int textWidth = std::max(fm.horizontalAdvance(line1), fm.horizontalAdvance(line2));
+                        QPoint textPos(centerScreen.x() - textWidth / 2, centerScreen.y() + rPx + 60);
+                        painter.setPen(QColor(80, 80, 80));
+                        painter.drawText(textPos.x(), textPos.y(), line1);
+                        painter.drawText(textPos.x(), textPos.y() + fm.height() + 2, line2);
+                    }
+                }
+            } else if (m_arcMode == ArcMode::Tangent) {
+                // Tangent arc preview (after first click)
+                if (!m_tangentTargets.isEmpty() && !m_previewPoints.isEmpty()) {
+                    // Find the tangent entity
+                    const SketchEntity* tangentEntity = nullptr;
+                    for (const auto& e : m_entities) {
+                        if (e.id == m_tangentTargets[0]) {
+                            tangentEntity = &e;
+                            break;
+                        }
+                    }
+
+                    if (tangentEntity) {
+                        QPointF clickPoint = m_previewPoints[0];
+                        QPointF endPoint = m_currentMouseWorld;
+
+                        // Project click point onto the entity to get the actual tangent point
+                        QPointF tangentPoint = clickPoint;
+                        if (tangentEntity->type == SketchEntityType::Line && tangentEntity->points.size() >= 2) {
+                            tangentPoint = geometry::closestPointOnLine(clickPoint,
+                                tangentEntity->points[0], tangentEntity->points[1]);
+                        } else if (tangentEntity->type == SketchEntityType::Rectangle && tangentEntity->points.size() >= 2) {
+                            // Find closest edge and project onto it
+                            QPointF corners[4];
+                            if (tangentEntity->points.size() >= 4) {
+                                for (int i = 0; i < 4; ++i) corners[i] = tangentEntity->points[i];
+                            } else {
+                                corners[0] = tangentEntity->points[0];
+                                corners[1] = QPointF(tangentEntity->points[1].x(), tangentEntity->points[0].y());
+                                corners[2] = tangentEntity->points[1];
+                                corners[3] = QPointF(tangentEntity->points[0].x(), tangentEntity->points[1].y());
+                            }
+                            double minDist = std::numeric_limits<double>::max();
+                            for (int i = 0; i < 4; ++i) {
+                                QPointF edgeStart = corners[i];
+                                QPointF edgeEnd = corners[(i + 1) % 4];
+                                QPointF projected = geometry::closestPointOnLine(clickPoint, edgeStart, edgeEnd);
+                                double dist = QLineF(clickPoint, projected).length();
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    tangentPoint = projected;
+                                }
+                            }
+                        }
+
+                        // Calculate the tangent arc
+                        TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, endPoint);
+
+                        if (ta.valid) {
+                            // Draw the arc preview
+                            QPoint centerScreen = worldToScreen(ta.center);
+                            QPoint startScreen = worldToScreen(tangentPoint);
+                            QPoint endScreen = worldToScreen(endPoint);
+                            int rPx = static_cast<int>(ta.radius * m_zoom);
+                            QRect arcRect(centerScreen.x() - rPx, centerScreen.y() - rPx, rPx * 2, rPx * 2);
+
+                            // Calculate angles in screen space (Y is inverted)
+                            double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
+                                                                  startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
+                            double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
+                                                                endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
+
+                            // Use the world-space sweep angle from calculateTangentArc.
+                            // Screen Y is inverted from world Y, so we negate the sweep.
+                            double sweep = -ta.sweepAngle;
+
+                            // Apply flip with Shift key
+                            if (m_arcSlotFlipped) {
+                                if (sweep > 0) sweep -= 360;
+                                else sweep += 360;
+                            }
+
+                            // Qt uses 1/16th degree units
+                            painter.drawArc(arcRect,
+                                static_cast<int>(-startAngleScreen * 16),
+                                static_cast<int>(-sweep * 16));
+
+                            // Draw center marker
+                            int crossSize = 4;
+                            painter.drawLine(centerScreen.x() - crossSize, centerScreen.y(),
+                                             centerScreen.x() + crossSize, centerScreen.y());
+                            painter.drawLine(centerScreen.x(), centerScreen.y() - crossSize,
+                                             centerScreen.x(), centerScreen.y() + crossSize);
+
+                            // Draw start and end points
+                            painter.setBrush(QColor(0, 120, 215));
+                            painter.drawEllipse(startScreen, 3, 3);
+                            painter.drawEllipse(endScreen, 3, 3);
+
+                            // Draw arc length dimension
+                            double arcLength = ta.radius * std::abs(sweep * M_PI / 180.0);
+                            if (arcLength > 0.1) {
+                                double midAngle = (startAngleScreen + sweep / 2.0) * M_PI / 180.0;
+                                double offsetDist = rPx + 20;
+                                QPointF labelCenter = QPointF(centerScreen) + QPointF(offsetDist * std::cos(midAngle),
+                                                                                       offsetDist * std::sin(midAngle));
+                                drawArcDimensionLabel(painter, labelCenter, arcLength, sweep);
+                            }
+
+                            // Draw hint message
+                            QString hint = tr("(Shift to flip arc direction)");
+                            QFontMetrics fm(painter.font());
+                            int textWidth = fm.horizontalAdvance(hint);
+                            QPoint textPos(centerScreen.x() - textWidth / 2, centerScreen.y() + rPx + 30);
+                            painter.setPen(QColor(80, 80, 80));
+                            painter.drawText(textPos.x(), textPos.y(), hint);
+                        } else {
+                            // Arc not valid yet - just draw a line from start to cursor
+                            QPoint sp1 = worldToScreen(tangentPoint);
+                            QPoint sp2 = worldToScreen(endPoint);
+                            painter.drawLine(sp1, sp2);
+
+                            // Draw start point
+                            painter.setBrush(QColor(0, 120, 215));
+                            painter.drawEllipse(sp1, 3, 3);
+                        }
+                    } else {
+                        // Tangent entity not found - draw fallback line
+                        QPoint sp1 = worldToScreen(m_previewPoints[0]);
+                        QPoint sp2 = worldToScreen(m_currentMouseWorld);
+                        painter.drawLine(sp1, sp2);
+                        painter.setBrush(QColor(0, 120, 215));
+                        painter.drawEllipse(sp1, 3, 3);
+                    }
+                } else if (!m_previewPoints.isEmpty()) {
+                    // No tangent target yet - just show start point
+                    QPoint sp1 = worldToScreen(m_previewPoints[0]);
+                    QPoint sp2 = worldToScreen(m_currentMouseWorld);
+                    painter.drawLine(sp1, sp2);
+                }
             }
         }
         break;
@@ -3543,24 +3890,51 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
                     return;
                 }
 
+                // Start-End-Radius arc: add points on click
+                // First click = start (fixed), second click = end (fixed), third click defines radius
+                bool isStartEndRadiusArc = (m_activeTool == SketchTool::Arc &&
+                                            m_arcMode == ArcMode::StartEndRadius);
+                if (isStartEndRadiusArc) {
+                    // Reset drag detection for this click
+                    m_drawStartPos = event->pos();
+                    m_wasDragged = false;
+
+                    QPointF snapped = snapPoint(worldPos);
+
+                    // First two clicks are start and end points (fixed)
+                    // Third click defines the radius via mouse position
+                    m_pendingEntity.points.append(snapped);
+                    m_previewPoints.append(snapped);
+                    if (m_pendingEntity.points.size() >= 3) {
+                        // Third point defines the arc bulge/radius - finalize
+                        finishEntity();
+                    } else {
+                        update();
+                    }
+                    return;
+                }
+
                 // For two-point tools, second click finishes the entity
                 // (Arc and Spline have their own multi-click logic in mouseReleaseEvent)
                 // (Arc slots and 3-point rectangles are handled above and return early)
                 // (Point finishes on release, not second click)
-                bool isMultiClickTool = (m_activeTool == SketchTool::Arc) ||
+                // Note: Tangent arc is a two-click tool (tangent point + end point)
+                // Note: Tangent line needs special handling to constrain endpoint
+                bool isMultiClickTool = (m_activeTool == SketchTool::Arc && m_arcMode != ArcMode::Tangent) ||
                                         (m_activeTool == SketchTool::Spline) ||
                                         (m_activeTool == SketchTool::Point);
                 if (!isMultiClickTool) {
-                    // Update the endpoint to clicked position and finish
-                    updateEntity(snapPoint(worldPos));
+                    // Update the endpoint to the constrained position and finish
+                    // m_currentMouseWorld already has angle snap and other constraints applied
+                    updateEntity(m_currentMouseWorld);
                     finishEntity();
                     return;
                 }
             }
 
-            // 3-point arc or Center-Start-End arc: if not drawing yet, start entity on first click
+            // 3-point arc, Center-Start-End arc, or Start-End-Radius arc: if not drawing yet, start entity on first click
             if (m_activeTool == SketchTool::Arc &&
-                (m_arcMode == ArcMode::ThreePoint || m_arcMode == ArcMode::CenterStartEnd) &&
+                (m_arcMode == ArcMode::ThreePoint || m_arcMode == ArcMode::CenterStartEnd || m_arcMode == ArcMode::StartEndRadius) &&
                 !m_isDrawing) {
                 m_drawStartPos = event->pos();
                 m_wasDragged = false;
@@ -3587,17 +3961,111 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
             } else if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent) {
                 // For tangent arc, first click selects the entity to be tangent to
                 if (m_tangentTargets.isEmpty()) {
+                    // Check if there are any entities to be tangent to
+                    if (m_entities.isEmpty()) {
+                        QMessageBox::information(this, tr("Tangent Arc"),
+                            tr("There are no entities to create a tangent arc from.\n"
+                               "Please draw a line first."));
+                        return;
+                    }
+
                     int hitId = hitTest(worldPos);
                     if (hitId >= 0) {
-                        m_tangentTargets.append(hitId);
-                        // Start the arc with the tangent point
-                        startEntity(snapPoint(worldPos));
-                        update();
+                        // Check if the entity type is supported for tangent arcs
+                        SketchEntity* entity = entityById(hitId);
+                        if (entity) {
+                            if (entity->type == SketchEntityType::Line ||
+                                entity->type == SketchEntityType::Rectangle) {
+                                m_tangentTargets.append(hitId);
+
+                                // Project click point onto the entity to get the tangent point
+                                QPointF clickPoint = snapPoint(worldPos);
+                                QPointF tangentPoint = clickPoint;
+                                bool altHeld = event->modifiers() & Qt::AltModifier;
+                                QPointF closestEdgeStart, closestEdgeEnd;
+
+                                if (entity->type == SketchEntityType::Line && entity->points.size() >= 2) {
+                                    QPointF p1 = entity->points[0];
+                                    QPointF p2 = entity->points[1];
+                                    tangentPoint = geometry::closestPointOnLine(clickPoint, p1, p2);
+
+                                    // Snap to endpoints or midpoint (unless Alt is held)
+                                    if (!altHeld) {
+                                        QPointF midpoint = (p1 + p2) / 2.0;
+                                        double snapDist = 10.0 / m_zoom;
+
+                                        if (QLineF(tangentPoint, p1).length() < snapDist) {
+                                            tangentPoint = p1;
+                                        } else if (QLineF(tangentPoint, p2).length() < snapDist) {
+                                            tangentPoint = p2;
+                                        } else if (QLineF(tangentPoint, midpoint).length() < snapDist) {
+                                            tangentPoint = midpoint;
+                                        }
+                                    }
+                                } else if (entity->type == SketchEntityType::Rectangle && entity->points.size() >= 2) {
+                                    // Find closest edge and project onto it
+                                    QPointF corners[4];
+                                    if (entity->points.size() >= 4) {
+                                        for (int i = 0; i < 4; ++i) corners[i] = entity->points[i];
+                                    } else {
+                                        corners[0] = entity->points[0];
+                                        corners[1] = QPointF(entity->points[1].x(), entity->points[0].y());
+                                        corners[2] = entity->points[1];
+                                        corners[3] = QPointF(entity->points[0].x(), entity->points[1].y());
+                                    }
+                                    double minDist = std::numeric_limits<double>::max();
+                                    for (int i = 0; i < 4; ++i) {
+                                        QPointF edgeStart = corners[i];
+                                        QPointF edgeEnd = corners[(i + 1) % 4];
+                                        QPointF projected = geometry::closestPointOnLine(clickPoint, edgeStart, edgeEnd);
+                                        double dist = QLineF(clickPoint, projected).length();
+                                        if (dist < minDist) {
+                                            minDist = dist;
+                                            tangentPoint = projected;
+                                            closestEdgeStart = edgeStart;
+                                            closestEdgeEnd = edgeEnd;
+                                        }
+                                    }
+
+                                    // Snap to corners or edge midpoint (unless Alt is held)
+                                    if (!altHeld) {
+                                        QPointF midpoint = (closestEdgeStart + closestEdgeEnd) / 2.0;
+                                        double snapDist = 10.0 / m_zoom;
+
+                                        if (QLineF(tangentPoint, closestEdgeStart).length() < snapDist) {
+                                            tangentPoint = closestEdgeStart;
+                                        } else if (QLineF(tangentPoint, closestEdgeEnd).length() < snapDist) {
+                                            tangentPoint = closestEdgeEnd;
+                                        } else if (QLineF(tangentPoint, midpoint).length() < snapDist) {
+                                            tangentPoint = midpoint;
+                                        }
+                                    }
+                                }
+
+                                // Start the arc with the projected tangent point
+                                startEntity(tangentPoint);
+                                update();
+                            } else {
+                                // Entity type not supported (yet)
+                                QMessageBox::information(this, tr("Tangent Arc"),
+                                    tr("Tangent arcs can currently only be created from lines or rectangles.\n"
+                                       "Please click on a line or rectangle edge."));
+                            }
+                        }
+                    } else {
+                        // User clicked but didn't hit any entity
+                        QMessageBox::information(this, tr("Tangent Arc"),
+                            tr("Please click on a line or rectangle edge to create a tangent arc from."));
                     }
                 } else {
-                    // Second click is the end point
-                    startEntity(snapPoint(worldPos));
+                    // Second click is the end point - update and finish the entity
+                    updateEntity(snapPoint(worldPos));
+                    finishEntity();
                 }
+            } else if (m_activeTool == SketchTool::Line && m_lineMode == LineMode::Tangent && !m_tangentTargets.isEmpty()) {
+                // Tangent line second click: finish the entity
+                updateEntity(snapPoint(worldPos));
+                finishEntity();
             } else if (m_activeTool == SketchTool::Dimension && m_isCreatingConstraint) {
                 // Dimension tool: 3-click workflow
                 if (m_constraintTargetEntities.size() < 2) {
@@ -3905,6 +4373,83 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
                        "• Other sketches in this document\n"
                        "• 3D model edges onto this sketch plane\n\n"
                        "Select geometry in the model tree or another sketch to project it here."));
+            } else if (m_activeTool == SketchTool::Line && m_lineMode == LineMode::Tangent && m_tangentTargets.isEmpty()) {
+                // Tangent line: first click selects a circle or arc to be tangent to
+                int hitId = hitTest(worldPos);
+                if (hitId >= 0) {
+                    SketchEntity* entity = entityById(hitId);
+                    if (entity && (entity->type == SketchEntityType::Circle ||
+                                   entity->type == SketchEntityType::Arc)) {
+                        m_tangentTargets.append(hitId);
+
+                        // Project click point onto the circle/arc perimeter
+                        QPointF center = entity->points[0];
+                        double radius = entity->radius;
+                        QPointF toClick = worldPos - center;
+                        double dist = std::sqrt(toClick.x() * toClick.x() + toClick.y() * toClick.y());
+
+                        QPointF tangentPoint;
+                        if (dist > 0.001) {
+                            tangentPoint = center + toClick * (radius / dist);
+                        } else {
+                            tangentPoint = center + QPointF(radius, 0);
+                        }
+
+                        // For arcs, clamp to the arc's angular range
+                        if (entity->type == SketchEntityType::Arc) {
+                            double angle = std::atan2(tangentPoint.y() - center.y(),
+                                                      tangentPoint.x() - center.x()) * 180.0 / M_PI;
+                            double startAngle = entity->startAngle;
+                            double endAngle = startAngle + entity->sweepAngle;
+
+                            // Check if on arc, if not clamp to nearest endpoint
+                            auto normalizeAngle = [](double a) {
+                                while (a < 0) a += 360;
+                                while (a >= 360) a -= 360;
+                                return a;
+                            };
+
+                            double normAngle = normalizeAngle(angle);
+                            double normStart = normalizeAngle(startAngle);
+                            double normEnd = normalizeAngle(endAngle);
+
+                            bool onArc = false;
+                            if (entity->sweepAngle > 0) {
+                                onArc = (normStart <= normEnd) ?
+                                    (normAngle >= normStart && normAngle <= normEnd) :
+                                    (normAngle >= normStart || normAngle <= normEnd);
+                            } else {
+                                onArc = (normEnd <= normStart) ?
+                                    (normAngle <= normStart && normAngle >= normEnd) :
+                                    (normAngle <= normStart || normAngle >= normEnd);
+                            }
+
+                            if (!onArc) {
+                                QPointF startPt = center + QPointF(
+                                    radius * std::cos(startAngle * M_PI / 180.0),
+                                    radius * std::sin(startAngle * M_PI / 180.0));
+                                QPointF endPt = center + QPointF(
+                                    radius * std::cos(endAngle * M_PI / 180.0),
+                                    radius * std::sin(endAngle * M_PI / 180.0));
+
+                                tangentPoint = (QLineF(worldPos, startPt).length() < QLineF(worldPos, endPt).length())
+                                    ? startPt : endPt;
+                            }
+                        }
+
+                        // Start the line entity
+                        m_drawStartPos = event->pos();
+                        m_wasDragged = false;
+                        startEntity(tangentPoint);
+                        update();
+                    } else {
+                        QMessageBox::information(this, tr("Tangent Line"),
+                            tr("Please click on a circle or arc to create a tangent line from."));
+                    }
+                } else {
+                    QMessageBox::information(this, tr("Tangent Line"),
+                        tr("Please click on a circle or arc to create a tangent line from."));
+                }
             } else {
                 // Start drawing normally
                 m_drawStartPos = event->pos();
@@ -3940,12 +4485,131 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
     }
 
     // Ctrl enables angle snapping (45° increments) during line-based entity creation
+    // Skip for constrained line modes (Horizontal, Vertical, Tangent) - they have their own constraints
     if (ctrlHeld && m_isDrawing && !m_previewPoints.isEmpty()) {
-        if (m_activeTool == SketchTool::Line ||
-            m_activeTool == SketchTool::Rectangle ||
-            (m_activeTool == SketchTool::Slot &&
-             (m_slotMode == SlotMode::CenterToCenter || m_slotMode == SlotMode::Overall))) {
-            m_currentMouseWorld = snapToAngle(m_previewPoints[0], m_currentMouseWorld);
+        bool isConstrainedLineMode = (m_activeTool == SketchTool::Line &&
+                                      (m_lineMode == LineMode::Horizontal ||
+                                       m_lineMode == LineMode::Vertical ||
+                                       m_lineMode == LineMode::Tangent));
+        if (!isConstrainedLineMode &&
+            (m_activeTool == SketchTool::Line ||
+             m_activeTool == SketchTool::Rectangle ||
+             (m_activeTool == SketchTool::Slot &&
+              (m_slotMode == SlotMode::CenterToCenter || m_slotMode == SlotMode::Overall)))) {
+            // Calculate the angle-snapped position
+            QPointF startPoint = m_previewPoints[0];
+            QPointF snappedPos = snapToAngle(startPoint, m_currentMouseWorld);
+
+            // Get the direction of the snapped angle ray
+            QPointF rayDir = snappedPos - startPoint;
+
+            if (geometry::length(rayDir) > 0.001) {
+                // Check if the entity snap point lies exactly on the angle ray
+                if (geometry::pointOnRay(m_currentMouseWorld, startPoint, rayDir) &&
+                    m_activeSnap.has_value() && !altHeld) {
+                    // Snap point is on the angle ray - keep it
+                } else {
+                    // Snap point not on ray - use the angle-snapped position
+                    m_currentMouseWorld = snappedPos;
+                    m_activeSnap.reset();
+                }
+            } else {
+                m_currentMouseWorld = snappedPos;
+            }
+        }
+    }
+
+    // Horizontal/Vertical line mode constrains movement to that axis
+    if (m_isDrawing && !m_previewPoints.isEmpty() && m_activeTool == SketchTool::Line) {
+        if (m_lineMode == LineMode::Horizontal) {
+            // Horizontal line: Y must equal start point's Y
+            double targetY = m_previewPoints[0].y();
+            double tolerance = 0.001;  // World units - essentially exact
+            if (std::abs(m_currentMouseWorld.y() - targetY) < tolerance && m_activeSnap.has_value() && !altHeld) {
+                // Snap point is on the horizontal line - keep it
+            } else {
+                // Project to horizontal line
+                m_currentMouseWorld.setY(targetY);
+                m_activeSnap.reset();
+            }
+        } else if (m_lineMode == LineMode::Vertical) {
+            // Vertical line: X must equal start point's X
+            double targetX = m_previewPoints[0].x();
+            double tolerance = 0.001;  // World units - essentially exact
+            if (std::abs(m_currentMouseWorld.x() - targetX) < tolerance && m_activeSnap.has_value() && !altHeld) {
+                // Snap point is on the vertical line - keep it
+            } else {
+                // Project to vertical line
+                m_currentMouseWorld.setX(targetX);
+                m_activeSnap.reset();
+            }
+        } else if (m_lineMode == LineMode::Tangent && !m_tangentTargets.isEmpty()) {
+            // Tangent line: constrain to tangent direction (perpendicular to radius)
+            SketchEntity* entity = entityById(m_tangentTargets[0]);
+            if (entity && (entity->type == SketchEntityType::Circle ||
+                          entity->type == SketchEntityType::Arc)) {
+                QPointF center = entity->points[0];
+                QPointF tangentPoint = m_previewPoints[0];
+
+                // Tangent direction is perpendicular to radius
+                QPointF tangentDir = geometry::perpendicular(tangentPoint - center);
+
+                if (geometry::length(tangentDir) > 0.001) {
+                    // Check if the snapped point lies exactly on the tangent ray
+                    if (geometry::pointOnRay(m_currentMouseWorld, tangentPoint, tangentDir) &&
+                        m_activeSnap.has_value()) {
+                        // Snap point is on the tangent ray - keep it
+                    } else {
+                        // Snap point not on tangent ray - project mouse position onto tangent
+                        QPointF rawMouse = screenToWorld(mapFromGlobal(QCursor::pos()));
+                        m_currentMouseWorld = geometry::projectPointOntoRay(rawMouse, tangentPoint, tangentDir);
+                        m_activeSnap.reset();
+                    }
+                }
+            }
+        }
+    }
+
+    // Tangent arc: constrain second click to lie on the arc path
+    // Constraint always applies; Alt only disables entity snapping (handled above)
+    if (m_isDrawing && !m_previewPoints.isEmpty() &&
+        m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent &&
+        !m_tangentTargets.isEmpty()) {
+        // Find the tangent entity
+        SketchEntity* tangentEntity = entityById(m_tangentTargets[0]);
+        if (tangentEntity) {
+            QPointF tangentPoint = m_previewPoints[0];
+            QPointF endPoint = m_currentMouseWorld;
+
+            // Calculate the tangent arc to get its center and radius
+            TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, endPoint);
+
+            if (ta.valid && ta.radius > 0.001) {
+                // Check if the snapped point lies exactly on the arc (at radius distance from center)
+                double distFromCenter = QLineF(m_currentMouseWorld, ta.center).length();
+                double distFromArc = std::abs(distFromCenter - ta.radius);
+
+                // Snap point must be exactly ON the arc path (within floating point tolerance)
+                double tolerance = 0.001;  // World units - essentially exact
+                if (distFromArc < tolerance && m_activeSnap.has_value() && !altHeld) {
+                    // Snap point is on the arc path and snapping is enabled - keep it
+                    // (m_currentMouseWorld is already the snap point)
+                } else {
+                    // Either: snap not on arc, no snap, or Alt held (snapping disabled)
+                    // Project mouse position onto the arc path
+                    QPointF rawMouse = screenToWorld(mapFromGlobal(QCursor::pos()));
+                    TangentArc rawTa = calculateTangentArc(*tangentEntity, tangentPoint, rawMouse);
+                    if (rawTa.valid && rawTa.radius > 0.001) {
+                        // Project the raw mouse onto the arc (point on circle at radius from center)
+                        QPointF toMouse = rawMouse - rawTa.center;
+                        double dist = std::sqrt(toMouse.x() * toMouse.x() + toMouse.y() * toMouse.y());
+                        if (dist > 0.001) {
+                            m_currentMouseWorld = rawTa.center + toMouse * (rawTa.radius / dist);
+                        }
+                    }
+                    m_activeSnap.reset();  // Clear snap indicator since we're not using it
+                }
+            }
         }
     }
 
@@ -4401,7 +5065,7 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::MiddleButton) {
         m_isPanning = false;
-        setCursor(m_activeTool == SketchTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        setCursor(Qt::ArrowCursor);
         return;
     }
 
@@ -4465,9 +5129,9 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
                 return;
             }
 
-            // Multi-click tools: arc (3-point, center-start-end), 3-point rectangle, arc slot, and spline
+            // Multi-click tools: arc (3-point, center-start-end, start-end-radius), 3-point rectangle, arc slot, and spline
             if (m_activeTool == SketchTool::Arc &&
-                (m_arcMode == ArcMode::ThreePoint || m_arcMode == ArcMode::CenterStartEnd)) {
+                (m_arcMode == ArcMode::ThreePoint || m_arcMode == ArcMode::CenterStartEnd || m_arcMode == ArcMode::StartEndRadius)) {
                 // Only add point on release if user dragged (click already added point in mousePressEvent)
                 if (m_wasDragged) {
                     QPointF worldPos = screenToWorld(event->pos());
@@ -4481,6 +5145,8 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
                         double angle = std::atan2(snapped.y() - center.y(), snapped.x() - center.x());
                         snapped = center + QPointF(radius * std::cos(angle), radius * std::sin(angle));
                     }
+                    // For StartEndRadius, 3rd point is just mouse position (defines bulge)
+                    // No constraints needed - it determines the arc radius
 
                     m_pendingEntity.points.append(snapped);
                     m_previewPoints.append(snapped);
@@ -4592,6 +5258,10 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
                 m_previewPoints.append(snapped);  // Also update preview points
                 update();
                 // Don't finish - user needs to right-click or press Enter
+            } else if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent) {
+                // Tangent arc: first click selects target, second click sets endpoint
+                // Don't finish on drag-release after first click - wait for second click
+                // The second click is handled in mousePressEvent
             } else {
                 // Two-point tools (Line, Rectangle, Circle, Slot, Ellipse, Polygon)
                 // Support both click-drag and click-click modes
@@ -4778,14 +5448,27 @@ void SketchCanvas::mouseDoubleClickEvent(QMouseEvent* event)
 
 void SketchCanvas::keyPressEvent(QKeyEvent* event)
 {
-    // Shift key during arc slot or Center-Start-End arc drawing - toggle flip state and update preview
-    if (event->key() == Qt::Key_Shift && m_isDrawing && m_previewPoints.size() >= 2) {
+    // Shift key during arc slot or arc drawing - toggle flip state and update preview
+    if (event->key() == Qt::Key_Shift && m_isDrawing) {
         bool isArcSlot = (m_activeTool == SketchTool::Slot &&
-                          (m_slotMode == SlotMode::ArcRadius || m_slotMode == SlotMode::ArcEnds));
-        bool isCenterStartEndArc = (m_activeTool == SketchTool::Arc &&
-                                     m_arcMode == ArcMode::CenterStartEnd);
-        if (isArcSlot || isCenterStartEndArc) {
+                          (m_slotMode == SlotMode::ArcRadius || m_slotMode == SlotMode::ArcEnds) &&
+                          m_previewPoints.size() >= 2);
+        bool isFlippableArc = (m_activeTool == SketchTool::Arc &&
+                               (m_arcMode == ArcMode::CenterStartEnd || m_arcMode == ArcMode::StartEndRadius) &&
+                               m_previewPoints.size() >= 2);
+        bool isTangentArc = (m_activeTool == SketchTool::Arc &&
+                             m_arcMode == ArcMode::Tangent &&
+                             !m_previewPoints.isEmpty());
+        if (isArcSlot || isFlippableArc || isTangentArc) {
             m_arcSlotFlipped = !m_arcSlotFlipped;
+            update();
+            return;
+        }
+    }
+
+    // Ctrl key during StartEndRadius arc - update preview for 180° snap
+    if (event->key() == Qt::Key_Control && m_isDrawing && m_previewPoints.size() >= 2) {
+        if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::StartEndRadius) {
             update();
             return;
         }
@@ -5008,6 +5691,11 @@ void SketchCanvas::keyReleaseEvent(QKeyEvent* event)
             m_snapAxis = SnapAxis::None;  // Reset axis lock
             // Recompute position without axis constraint (but keep snap if Shift still held)
             applyCtrlSnapToHandle();
+        }
+        // Ctrl released during StartEndRadius arc - update preview
+        if (m_isDrawing && m_previewPoints.size() >= 2 &&
+            m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::StartEndRadius) {
+            update();
         }
     }
     QWidget::keyReleaseEvent(event);
@@ -6349,6 +7037,9 @@ void SketchCanvas::startEntity(const QPointF& pos)
         break;
     case SketchTool::Line:
         m_pendingEntity.type = SketchEntityType::Line;
+        if (m_lineMode == LineMode::Construction) {
+            m_pendingEntity.isConstruction = true;
+        }
         break;
     case SketchTool::Rectangle:
         // Parallelogram mode creates a Parallelogram entity, others create Rectangle
@@ -6500,8 +7191,10 @@ void SketchCanvas::updateEntity(const QPointF& pos)
             } else {
                 m_pendingEntity.points.append(pos);
             }
-        } else if (m_arcMode == ArcMode::ThreePoint) {
-            // 3-point arc: points are added on click, here we just update m_currentMouseWorld
+        } else if (m_arcMode == ArcMode::ThreePoint ||
+                   m_arcMode == ArcMode::CenterStartEnd ||
+                   m_arcMode == ArcMode::StartEndRadius) {
+            // Multi-click arcs: points are added on click, here we just update m_currentMouseWorld
             // which is used by drawPreview() to show where the next point will be placed.
             // Don't modify m_pendingEntity.points here - that breaks click-click mode.
         }
@@ -6554,6 +7247,10 @@ void SketchCanvas::finishEntity()
     case SketchEntityType::Line:
         valid = m_pendingEntity.points.size() >= 2 &&
                 QLineF(m_pendingEntity.points[0], m_pendingEntity.points[1]).length() > 0.1;
+        // Clear tangent targets if this was a tangent line
+        if (m_lineMode == LineMode::Tangent) {
+            m_tangentTargets.clear();
+        }
         break;
     case SketchEntityType::Rectangle:
         // For center mode, we have 3 points: [center, corner1, corner2]
@@ -6724,12 +7421,19 @@ void SketchCanvas::finishEntity()
                 QPointF endPoint = m_pendingEntity.points[1];
                 TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, endPoint);
                 if (ta.valid) {
+                    // Apply flip if Shift was held
+                    double sweepAngle = ta.sweepAngle;
+                    if (m_arcSlotFlipped) {
+                        if (sweepAngle > 0) sweepAngle -= 360;
+                        else sweepAngle += 360;
+                    }
+
                     m_pendingEntity.points.clear();
                     m_pendingEntity.points.append(ta.center);
                     m_pendingEntity.points.append(QPointF(ta.center.x() + ta.radius, ta.center.y()));
                     m_pendingEntity.radius = ta.radius;
                     m_pendingEntity.startAngle = ta.startAngle;
-                    m_pendingEntity.sweepAngle = ta.sweepAngle;
+                    m_pendingEntity.sweepAngle = sweepAngle;
                     valid = true;
                 }
             }
@@ -6783,6 +7487,104 @@ void SketchCanvas::finishEntity()
             m_pendingEntity.startAngle = arc.startAngle;
             m_pendingEntity.sweepAngle = arc.sweepAngle;
             valid = arc.radius > 0.1;
+        } else if (m_arcMode == ArcMode::StartEndRadius && m_pendingEntity.points.size() >= 3) {
+            // Start-End-Radius arc: points[0] = start, points[1] = end, points[2] = center point
+            // Third click defines arc center (constrained to perpendicular bisector)
+            QPointF start = m_pendingEntity.points[0];
+            QPointF end = m_pendingEntity.points[1];
+            QPointF centerPoint = m_pendingEntity.points[2];
+            QPointF midChord = (start + end) / 2.0;
+            double chordLength = QLineF(start, end).length();
+
+            if (chordLength > 0.001) {
+                // Calculate perpendicular direction from chord midpoint
+                QPointF chordDir = (end - start) / chordLength;
+                QPointF perpDir(-chordDir.y(), chordDir.x());
+
+                // Project center point onto perpendicular bisector
+                QPointF toCenter = centerPoint - midChord;
+                double projDist = toCenter.x() * perpDir.x() + toCenter.y() * perpDir.y();
+
+                // Ctrl snaps to midpoint (semicircle - exactly 180°)
+                bool ctrlHeld = (QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier);
+                if (ctrlHeld) {
+                    projDist = 0.0;
+                }
+
+                // Apply flip (Shift key) - move center to opposite side of chord
+                if (m_arcSlotFlipped) {
+                    projDist = -projDist;
+                }
+
+                // Arc center is on the perpendicular bisector
+                QPointF center = midChord + perpDir * projDist;
+
+                // Calculate radius from center to endpoints
+                double radius = QLineF(center, start).length();
+
+                // Minimum radius to avoid degenerate arcs (skip if Ctrl for exact 180°)
+                double halfChord = chordLength / 2.0;
+                if (!ctrlHeld) {
+                    double minRadius = halfChord * 1.01;
+                    if (radius < minRadius) {
+                        double minDist = std::sqrt(minRadius * minRadius - halfChord * halfChord);
+                        double sign = (projDist >= 0) ? 1.0 : -1.0;
+                        center = midChord + perpDir * sign * minDist;
+                        radius = minRadius;
+                        // Recalculate projDist after adjustment
+                        projDist = sign * minDist;
+                    }
+                }
+
+                // Match the preview's sweep calculation exactly.
+                // The preview uses screen-space angles with Qt's drawArc.
+                // We need to compute the same sweep and convert to world-space for the library.
+
+                // Calculate angles in screen space (same as preview)
+                QPoint centerScreen = worldToScreen(center);
+                QPoint startScreen = worldToScreen(start);
+                QPoint endScreen = worldToScreen(end);
+
+                double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
+                                                      startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
+                double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
+                                                    endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
+
+                // Calculate sweep from start to end (same as preview)
+                double sweep = endAngleScreen - startAngleScreen;
+                // Normalize to [-180, 180] to get the "short" path
+                while (sweep > 180) sweep -= 360;
+                while (sweep < -180) sweep += 360;
+
+                // Determine if we want the long arc based on center position
+                // When center is close to chord (small |projDist|), we want the long arc
+                bool wantLongArc = (std::abs(projDist) < halfChord);
+
+                // If we want long arc, flip to the complementary sweep
+                if (wantLongArc) {
+                    if (sweep > 0) sweep -= 360;
+                    else sweep += 360;
+                }
+
+                // Now convert screen sweep to world sweep direction.
+                // Screen Y is inverted from world Y, so:
+                // - Positive screen sweep (CCW on screen) = CW in world = negative world sweep
+                // - Negative screen sweep (CW on screen) = CCW in world = positive world sweep
+                // The library's sweepCCW=true means positive sweep in world coords.
+                bool sweepCCW = (sweep < 0);  // negative screen sweep = CCW in world
+
+                // Use library function to create the arc
+                auto arc = geometry::arcFromCenterAndEndpoints(center, start, end, sweepCCW);
+
+                // Store final arc parameters
+                m_pendingEntity.points.clear();
+                m_pendingEntity.points.append(arc.center);
+                m_pendingEntity.points.append(QPointF(arc.center.x() + arc.radius, arc.center.y()));  // radius handle
+                m_pendingEntity.radius = arc.radius;
+                m_pendingEntity.startAngle = arc.startAngle;
+                m_pendingEntity.sweepAngle = arc.sweepAngle;
+                valid = arc.radius > 0.1;
+            }
         } else {
             // Center-point arc (original behavior)
             valid = m_pendingEntity.radius > 0.1;
@@ -6952,6 +7754,7 @@ void SketchCanvas::cancelEntity()
 {
     m_isDrawing = false;
     m_previewPoints.clear();
+    m_tangentTargets.clear();  // Clear any tangent arc targets
     update();
 }
 
@@ -7116,6 +7919,55 @@ SketchCanvas::TangentArc SketchCanvas::calculateTangentArc(
     if (tangentEntity.type == SketchEntityType::Line && tangentEntity.points.size() >= 2) {
         auto libResult = geometry::arcTangentToLine(
             tangentEntity.points[0], tangentEntity.points[1],
+            tangentPoint, endPoint);
+
+        result.valid = libResult.valid;
+        result.center = libResult.center;
+        result.radius = libResult.radius;
+        result.startAngle = libResult.startAngle;
+        result.sweepAngle = libResult.sweepAngle;
+    }
+    // Handle rectangle - find closest edge to tangent point
+    else if (tangentEntity.type == SketchEntityType::Rectangle && tangentEntity.points.size() >= 2) {
+        // Get rectangle corners
+        QPointF p1 = tangentEntity.points[0];
+        QPointF p2 = tangentEntity.points[1];
+
+        // Calculate all 4 corners
+        QPointF corners[4];
+        if (tangentEntity.points.size() >= 4) {
+            // Rotated rectangle with 4 corners stored
+            for (int i = 0; i < 4; ++i) {
+                corners[i] = tangentEntity.points[i];
+            }
+        } else {
+            // Axis-aligned rectangle: 2 opposite corners
+            corners[0] = p1;
+            corners[1] = QPointF(p2.x(), p1.y());
+            corners[2] = p2;
+            corners[3] = QPointF(p1.x(), p2.y());
+        }
+
+        // Find which edge is closest to the tangent point
+        double minDist = std::numeric_limits<double>::max();
+        QPointF closestEdgeStart, closestEdgeEnd;
+
+        for (int i = 0; i < 4; ++i) {
+            QPointF edgeStart = corners[i];
+            QPointF edgeEnd = corners[(i + 1) % 4];
+
+            // Calculate distance from tangent point to this edge
+            double dist = geometry::pointToLineDistance(tangentPoint, edgeStart, edgeEnd);
+            if (dist < minDist) {
+                minDist = dist;
+                closestEdgeStart = edgeStart;
+                closestEdgeEnd = edgeEnd;
+            }
+        }
+
+        // Use the closest edge as the tangent line
+        auto libResult = geometry::arcTangentToLine(
+            closestEdgeStart, closestEdgeEnd,
             tangentPoint, endPoint);
 
         result.valid = libResult.valid;
@@ -8390,7 +9242,7 @@ void SketchCanvas::setBackgroundCalibrationMode(bool enabled)
         }
         // Clear entity selection
         clearSelection();
-        setCursor(Qt::CrossCursor);
+        setCursor(Qt::ArrowCursor);
     } else {
         setCursor(Qt::ArrowCursor);
     }

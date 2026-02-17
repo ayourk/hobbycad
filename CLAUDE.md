@@ -8,7 +8,7 @@ viewer, BREP I/O, tiered startup.
 
 ## Tech Stack
 
-- **Kernel:** OpenCASCADE (OCCT) 7.6 — B-Rep modeling, AIS viewer
+- **Kernel:** OpenCASCADE (OCCT) 7.9 — B-Rep modeling, AIS viewer
 - **GUI:** Qt 6 — widgets, no QML
 - **3D Viewport:** OCCT AIS + OpenGL 3.3+ (WA_PaintOnScreen, not QOpenGLWidget)
 - **Build:** CMake 3.20+ / Ninja / C++17 (C++20 preferred)
@@ -81,6 +81,7 @@ Release build sizes (as of 2026-02-14):
 - Source files: `.cpp` / `.h` (not `.cxx` / `.hxx`)
 - Commit messages: double-quote safe, no internal double quotes
 - Signed-off-by: Aaron Yourk <ayourk@gmail.com>
+- No Co-Authored-By trailers
 
 ## Library Design Philosophy
 
@@ -98,9 +99,8 @@ Release build sizes (as of 2026-02-14):
 - **Do NOT suggest QOpenGLWidget** — it conflicts with OCCT's viewer.
 - **Platform-specific casts:** WId→Aspect_Drawable requires
   `#ifdef _WIN32` with reinterpret_cast (Windows) vs static_cast (Linux).
-- **OCCT version differences:** Ubuntu has 7.6.3, MSYS2 has 7.9.2.
-  Library names changed in 7.8+ (TKSTEP→TKDESTEP, etc.).
-  Use occt_pick_lib() macro in CMake for compatibility.
+- **OCCT library names:** Changed in 7.8+ (TKSTEP→TKDESTEP, etc.).
+  Use occt_pick_lib() macro in CMake for compatibility with older versions.
 
 ## CI Workflows
 
@@ -126,7 +126,7 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
 **Geometry Module** (`hobbycad/geometry/`):
 - `types.h` — Points, vectors, arcs, bounding boxes, intersection results
 - `intersections.h` — Line-line, line-circle, line-arc, circle-circle, arc-arc intersections
-- `utils.h` — Vector ops, angle functions, polygon utilities, tangent circle/arc construction
+- `utils.h` — Vector ops, angle functions, polygon utilities, tangent circle/arc construction, ray operations (project/distance/pointOnRay), angle snapping
 - `algorithms.h` — Advanced computational geometry:
   - Convex hull (Andrew's monotone chain)
   - Polygon simplification (Douglas-Peucker, Visvalingam-Whyatt)
@@ -185,11 +185,16 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
     - Endpoints, midpoints, centers, quadrant points
     - Slot centerline points (arc centers, midpoint)
     - Construction geometry provides snap points
-  - **Arc modes**: 3-Point (click start, through, end), Center-Start-End (click center, start, end)
+  - **Line modes**: Two-Point, Horizontal (Y-constrained), Vertical (X-constrained), Tangent, Construction
+  - **Arc modes**: 3-Point, Center-Start-End, Start-End-Radius, Tangent
+  - **Tangent tools** (line and arc):
+    - First click: Snap to circle/arc perimeter to set tangent point
+    - Second click: Constrained to tangent ray (line) or arc path (arc)
+    - Entity snaps only used if snap point lies exactly on the constrained path
   - **Modifier keys during drawing**:
     - Ctrl: Angle snap (45° increments) for lines/rectangles/linear slots
-    - Alt: Disable entity snapping temporarily
-    - Shift: Arc direction flip (>180° arcs) for arc slots and Center-Start-End arcs
+    - Alt: Disable entity snapping (constraint still applies for tangent tools)
+    - Shift: Arc direction flip (>180° arcs) for arc slots, tangent arcs, and Center-Start-End arcs
 - **Viewport** — ViewCube, orbit rings, scale bar, home button
 - **Bindings dialog** — Keyboard/mouse binding customization
 - **CLI commands** — Sketch geometry commands with natural English syntax
@@ -215,3 +220,13 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
 - **Build command:** `tools/linux/build-dev.sh clean run` for clean build + run
   - Note: `run` alone skips rebuild if binary exists
   - Use `clean run` to force rebuild after code changes
+- **Debug logging:** Write to `build/DEBUG.log` using fprintf:
+  ```cpp
+  {
+      static FILE* logFile = fopen("build/DEBUG.log", "w");  // "w" for first call, "a" for subsequent
+      if (logFile) {
+          fprintf(logFile, "label: value=%.2f\n", value);
+          fflush(logFile);
+      }
+  }
+  ```

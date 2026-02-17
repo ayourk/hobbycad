@@ -348,6 +348,10 @@ signals:
     /// Emitted when the canvas requests a tool change (e.g., Escape to Select)
     void toolChangeRequested(SketchTool tool);
 
+    /// Emitted when a creation mode is rejected (e.g., Tangent arc with no valid entities)
+    /// The toolbar should revert to the previous mode for that tool
+    void creationModeRejected(SketchTool tool);
+
     /// Emitted when Escape is pressed with no entity selected (deselect sketch)
     void sketchDeselected();
 
@@ -504,8 +508,12 @@ private:
     QPointF m_drawStartPos;          ///< Screen position when drawing started
     bool m_wasDragged = false;       ///< True if mouse moved significantly during draw
 
+    // Line creation modes
+    enum class LineMode { TwoPoint, Horizontal, Vertical, Tangent, Construction };
+    LineMode m_lineMode = LineMode::TwoPoint;
+
     // Arc creation modes
-    enum class ArcMode { ThreePoint, CenterStartEnd, Tangent };
+    enum class ArcMode { ThreePoint, CenterStartEnd, StartEndRadius, Tangent };
     ArcMode m_arcMode = ArcMode::ThreePoint;
 
     // Circle creation modes
