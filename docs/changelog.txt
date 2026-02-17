@@ -477,3 +477,50 @@ Fixed
   - Drag preview shows correct arc slot shape during drag
   - ArcRadius mode properly constrains dragged points to arc
 
+================================================================================
+2026-02-17
+================================================================================
+
+Added
+-----
+- Tangent line tool:
+  - First click snaps to circle/arc perimeter to set tangent point
+  - Second click constrained to tangent ray (perpendicular to radius)
+  - Entity snaps only used if snap point lies exactly on the tangent ray
+- Tangent arc direction flip with Shift key
+- Tangent arc second click constrained to arc path:
+  - Entity snaps only used if snap point lies exactly on the arc curve
+  - Alt disables snapping but constraint still applies
+- Construction line mode:
+  - Lines created in Construction mode automatically marked as construction geometry
+  - Preview shows in construction color (orange/brown) with dashed style
+- Angle snap constraint enforcement:
+  - Ctrl+angle snap now enforces constraint on second click
+  - Entity snaps only used if snap point lies exactly on the angle ray
+- Horizontal/Vertical line mode constraints:
+  - Lines constrained to respective axis during drawing
+  - Entity snaps only used if snap point lies exactly on the constrained axis
+- Smart plane selection for Create Sketch:
+  - If origin plane (XY/XZ/YZ) selected in Objects tree, uses that plane directly
+  - If construction plane selected, uses its parameters
+  - If no plane selected, shows plane selection dialog
+- Library geometry functions (hobbycad/geometry/utils.h):
+  - projectPointOntoRay() - Project point onto infinite ray
+  - distanceFromRay() - Distance from point to ray
+  - pointOnRay() - Check if point lies on ray within tolerance
+  - snapToAngleIncrement() - Snap to nearest angle increment
+  - snapToAngleIncrementWithAngle() - Snap with angle output
+
+Changed
+-------
+- Refactored sketchcanvas.cpp to use library geometry functions:
+  - snapToAngle() now uses geometry::snapToAngleIncrementWithAngle()
+  - Angle snap constraint uses geometry::length() and geometry::pointOnRay()
+  - Tangent line constraint uses geometry::perpendicular(), geometry::pointOnRay(),
+    geometry::projectPointOntoRay()
+
+Fixed
+-----
+- Tangent arc preview/final arc direction mismatch
+- Two-point line second click now uses constrained position (was recalculating snap)
+

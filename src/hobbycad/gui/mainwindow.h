@@ -192,6 +192,9 @@ protected:
     Document   m_document;
     Project    m_project;
 
+    // Objects tree (protected for subclass access)
+    QTreeWidget* m_objectsTree = nullptr;
+
 private slots:
     void onFileNew();
     void onFileOpen();

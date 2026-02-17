@@ -104,6 +104,45 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
             this, &FullModeWindow::onSketchToolSelected);
     connect(m_sketchToolbar, &SketchToolbar::toolSelected,
             this, [this](SketchTool tool, CreationMode mode) {
+        // Validate mode before applying
+        if (tool == SketchTool::Arc && mode == CreationMode::ArcTangent) {
+            // Check if there are supported entities for tangent arc
+            bool hasSupportedEntity = false;
+            for (const auto& entity : m_sketchCanvas->entities()) {
+                if (entity.type == SketchEntityType::Line ||
+                    entity.type == SketchEntityType::Rectangle) {
+                    hasSupportedEntity = true;
+                    break;
+                }
+            }
+            if (!hasSupportedEntity) {
+                QMessageBox::information(this, tr("Tangent Arc"),
+                    tr("There are no lines or rectangles to create a tangent arc from.\n"
+                       "Please draw a line or rectangle first."));
+                m_sketchToolbar->revertCreationMode(tool);
+                return;
+            }
+        }
+
+        if (tool == SketchTool::Line && mode == CreationMode::LineTangent) {
+            // Check if there are supported entities for tangent line (circles, arcs)
+            bool hasSupportedEntity = false;
+            for (const auto& entity : m_sketchCanvas->entities()) {
+                if (entity.type == SketchEntityType::Circle ||
+                    entity.type == SketchEntityType::Arc) {
+                    hasSupportedEntity = true;
+                    break;
+                }
+            }
+            if (!hasSupportedEntity) {
+                QMessageBox::information(this, tr("Tangent Line"),
+                    tr("There are no circles or arcs to create a tangent line from.\n"
+                       "Please draw a circle or arc first."));
+                m_sketchToolbar->revertCreationMode(tool);
+                return;
+            }
+        }
+
         m_sketchCanvas->setActiveTool(tool);
         m_sketchCanvas->setCreationMode(mode);
     });
@@ -910,10 +949,40 @@ void FullModeWindow::onParametersChanged(const QList<Parameter>& params)
 
 void FullModeWindow::onCreateSketchClicked()
 {
-    // Show plane selection dialog
-    SketchPlaneDialog dialog(this);
+    // Check if a plane is selected in the objects tree
+    if (m_objectsTree) {
+        QTreeWidgetItem* current = m_objectsTree->currentItem();
+        if (current) {
+            QString itemType = current->data(0, Qt::UserRole).toString();
 
-    // Provide available construction planes
+            if (itemType == QStringLiteral("origin_plane")) {
+                // Origin plane (XY/XZ/YZ) selected - use that plane
+                int planeValue = current->data(0, Qt::UserRole + 1).toInt();
+                SketchPlane plane = static_cast<SketchPlane>(planeValue);
+                m_pendingSketchOffset = 0.0;
+                m_pendingRotationAxis = PlaneRotationAxis::X;
+                m_pendingRotationAngle = 0.0;
+                enterSketchMode(plane);
+                return;
+            }
+
+            if (itemType == QStringLiteral("construction_plane")) {
+                // Construction plane selected - use its parameters
+                int planeId = current->data(0, Qt::UserRole + 1).toInt();
+                const ConstructionPlaneData* cpData = m_project.constructionPlaneById(planeId);
+                if (cpData) {
+                    m_pendingSketchOffset = cpData->offset;
+                    m_pendingRotationAxis = cpData->primaryAxis;
+                    m_pendingRotationAngle = cpData->primaryAngle;
+                    enterSketchMode(SketchPlane::Custom);
+                    return;
+                }
+            }
+        }
+    }
+
+    // No plane selected - show plane selection dialog
+    SketchPlaneDialog dialog(this);
     dialog.setAvailableConstructionPlanes(m_project.constructionPlanes());
 
     if (dialog.exec() != QDialog::Accepted) {
@@ -921,11 +990,9 @@ void FullModeWindow::onCreateSketchClicked()
     }
 
     SketchPlane plane = dialog.selectedPlane();
-    double offset = dialog.offset();
     int constructionPlaneId = dialog.constructionPlaneId();
 
-    // Store parameters for use in 3D wireframe generation
-    m_pendingSketchOffset = offset;
+    m_pendingSketchOffset = dialog.offset();
     m_pendingRotationAxis = dialog.rotationAxis();
     m_pendingRotationAngle = dialog.rotationAngle();
 
@@ -933,12 +1000,10 @@ void FullModeWindow::onCreateSketchClicked()
     if (constructionPlaneId >= 0) {
         const ConstructionPlaneData* cpData = m_project.constructionPlaneById(constructionPlaneId);
         if (cpData) {
-            // Set plane to Custom and use the construction plane's parameters
             plane = SketchPlane::Custom;
-            m_pendingSketchOffset = offset + cpData->offset;
+            m_pendingSketchOffset = dialog.offset() + cpData->offset;
             m_pendingRotationAxis = cpData->primaryAxis;
             m_pendingRotationAngle = cpData->primaryAngle;
-            // TODO: Support secondary axis rotation
         }
     }
 

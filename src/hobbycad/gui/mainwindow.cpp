@@ -10,6 +10,7 @@
 #include "projectbrowserwidget.h"
 #include "sketchactionbar.h"
 
+#include <hobbycad/project.h>
 #include <hobbycad/step_io.h>
 #include <hobbycad/stl_io.h>
 #include <hobbycad/units.h>
@@ -516,13 +517,13 @@ void MainWindow::createDockPanels()
     projectTabs->addTab(m_projectBrowser, tr("Files"));
 
     // Objects tab - shows model objects/features (default)
-    auto* objectsTree = new QTreeWidget();
-    objectsTree->setObjectName(QStringLiteral("ObjectsTree"));
-    objectsTree->setHeaderHidden(true);
-    objectsTree->setRootIsDecorated(true);
+    m_objectsTree = new QTreeWidget();
+    m_objectsTree->setObjectName(QStringLiteral("ObjectsTree"));
+    m_objectsTree->setHeaderHidden(true);
+    m_objectsTree->setRootIsDecorated(true);
 
     // Document Settings section
-    auto* docSettings = new QTreeWidgetItem(objectsTree);
+    auto* docSettings = new QTreeWidgetItem(m_objectsTree);
     docSettings->setText(0, tr("Document Settings"));
     docSettings->setExpanded(true);
 
@@ -531,13 +532,13 @@ void MainWindow::createDockPanels()
     unitsItem->setData(0, Qt::UserRole, QStringLiteral("units"));
 
     // Double-click on units shows a combobox dropdown
-    connect(objectsTree, &QTreeWidget::itemDoubleClicked,
-            this, [this, objectsTree](QTreeWidgetItem* item, int column) {
+    connect(m_objectsTree, &QTreeWidget::itemDoubleClicked,
+            this, [this](QTreeWidgetItem* item, int column) {
         Q_UNUSED(column);
         if (item->data(0, Qt::UserRole).toString() != QStringLiteral("units"))
             return;
 
-        auto* combo = new QComboBox(objectsTree);
+        auto* combo = new QComboBox(m_objectsTree);
         combo->addItems({tr("mm"), tr("cm"), tr("m"), tr("in"), tr("ft")});
 
         // Select current unit
@@ -549,33 +550,39 @@ void MainWindow::createDockPanels()
             if (idx >= 0) combo->setCurrentIndex(idx);
         }
 
-        objectsTree->setItemWidget(item, 0, combo);
+        m_objectsTree->setItemWidget(item, 0, combo);
         combo->showPopup();
 
         // When user selects an item, update and remove the widget
         connect(combo, &QComboBox::activated, this,
-                [this, item, combo, objectsTree](int index) {
+                [this, item, combo](int index) {
             item->setText(0, tr("Units: %1").arg(combo->currentText()));
             m_currentUnits = index;
             // Defer widget removal to avoid deleting during signal
-            QTimer::singleShot(0, this, [objectsTree, item, index, this]() {
-                objectsTree->setItemWidget(item, 0, nullptr);
+            QTimer::singleShot(0, this, [this, item, index]() {
+                m_objectsTree->setItemWidget(item, 0, nullptr);
                 emit unitsChanged(index);
             });
         });
     });
 
     // Origin section
-    auto* origin = new QTreeWidgetItem(objectsTree);
+    auto* origin = new QTreeWidgetItem(m_objectsTree);
     origin->setText(0, tr("Origin"));
     origin->setExpanded(false);
 
     auto* originXY = new QTreeWidgetItem(origin);
     originXY->setText(0, tr("XY Plane"));
+    originXY->setData(0, Qt::UserRole, QStringLiteral("origin_plane"));
+    originXY->setData(0, Qt::UserRole + 1, static_cast<int>(SketchPlane::XY));
     auto* originXZ = new QTreeWidgetItem(origin);
     originXZ->setText(0, tr("XZ Plane"));
+    originXZ->setData(0, Qt::UserRole, QStringLiteral("origin_plane"));
+    originXZ->setData(0, Qt::UserRole + 1, static_cast<int>(SketchPlane::XZ));
     auto* originYZ = new QTreeWidgetItem(origin);
     originYZ->setText(0, tr("YZ Plane"));
+    originYZ->setData(0, Qt::UserRole, QStringLiteral("origin_plane"));
+    originYZ->setData(0, Qt::UserRole + 1, static_cast<int>(SketchPlane::YZ));
     auto* originX = new QTreeWidgetItem(origin);
     originX->setText(0, tr("X Axis"));
     auto* originY = new QTreeWidgetItem(origin);
@@ -586,19 +593,19 @@ void MainWindow::createDockPanels()
     originPt->setText(0, tr("Origin Point"));
 
     // Bodies section
-    m_bodiesTreeItem = new QTreeWidgetItem(objectsTree);
+    m_bodiesTreeItem = new QTreeWidgetItem(m_objectsTree);
     m_bodiesTreeItem->setText(0, tr("Bodies"));
     m_bodiesTreeItem->setData(0, Qt::UserRole, QStringLiteral("container.bodies"));
     m_bodiesTreeItem->setExpanded(true);
 
     // Sketches section
-    m_sketchesTreeItem = new QTreeWidgetItem(objectsTree);
+    m_sketchesTreeItem = new QTreeWidgetItem(m_objectsTree);
     m_sketchesTreeItem->setText(0, tr("Sketches"));
     m_sketchesTreeItem->setData(0, Qt::UserRole, QStringLiteral("container.sketches"));
     m_sketchesTreeItem->setExpanded(true);
 
     // Construction section
-    m_constructionTreeItem = new QTreeWidgetItem(objectsTree);
+    m_constructionTreeItem = new QTreeWidgetItem(m_objectsTree);
     m_constructionTreeItem->setText(0, tr("Construction"));
     m_constructionTreeItem->setData(0, Qt::UserRole, QStringLiteral("container.construction"));
     m_constructionTreeItem->setExpanded(false);
@@ -606,22 +613,22 @@ void MainWindow::createDockPanels()
     // Bodies, Sketches, and Construction containers are empty by default
     // Items are added as the user creates features
 
-    projectTabs->addTab(objectsTree, tr("Objects"));
+    projectTabs->addTab(m_objectsTree, tr("Objects"));
 
     // Select Objects tab by default
     projectTabs->setCurrentIndex(1);
 
     // F2 to edit selected item in objects tree
-    auto* objectsF2 = new QShortcut(QKeySequence(Qt::Key_F2), objectsTree);
-    connect(objectsF2, &QShortcut::activated, this, [objectsTree]() {
-        QTreeWidgetItem* item = objectsTree->currentItem();
+    auto* objectsF2 = new QShortcut(QKeySequence(Qt::Key_F2), m_objectsTree);
+    connect(objectsF2, &QShortcut::activated, this, [this]() {
+        QTreeWidgetItem* item = m_objectsTree->currentItem();
         if (item && (item->flags() & Qt::ItemIsEditable)) {
-            objectsTree->editItem(item, 0);
+            m_objectsTree->editItem(item, 0);
         }
     });
 
     // Handle item selection in objects tree
-    connect(objectsTree, &QTreeWidget::currentItemChanged,
+    connect(m_objectsTree, &QTreeWidget::currentItemChanged,
             this, [this](QTreeWidgetItem* current, QTreeWidgetItem*) {
         if (!current) return;
 

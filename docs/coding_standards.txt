@@ -402,7 +402,7 @@
       hobbycad_pirate.ts           Pirate English (fun language)
 
     vcpkg-overlay-ports/           vcpkg port overrides
-      opencascade/                 OCCT 7.6.2 MSVC fix
+      opencascade/                 OCCT 7.9.2 MSVC fix
         portfile.cmake
         vcpkg.json
         fix-msvc-unsigned-char.patch
@@ -532,7 +532,7 @@
     README.md
     populate-sha256.sh             SHA256 hash population script
     Formula/
-      opencascade@7.6.3.rb
+      opencascade@7.9.2.rb
       libzip@1.7.3.rb
       libgit2@1.7.2.rb
 
@@ -737,10 +737,9 @@
     - "Unverified" on GitHub: The GPG key email must match a
       verified email on your GitHub account.
 
-    - Commits with Co-Authored-By trailers referencing emails
-      not associated with verified GitHub accounts will show as
-      "Unverified".  Avoid Co-Authored-By lines with external
-      or bot email addresses.
+    - Co-Authored-By trailers are not allowed.  They cause commits
+      to show as "Unverified" when referencing emails not associated
+      with verified GitHub accounts (including AI assistants).
 
     - If gpg-agent isn't caching your passphrase, add to ~/.bashrc:
 
