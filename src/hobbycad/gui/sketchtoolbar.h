@@ -24,6 +24,7 @@
 #define HOBBYCAD_SKETCHTOOLBAR_H
 
 #include <QWidget>
+#include <QIcon>
 
 class QHBoxLayout;
 class QToolButton;
