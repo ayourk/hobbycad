@@ -301,7 +301,7 @@ if ($DO_UNINSTALL) then
                 "$answer" == "Y") then
                 info_msg "Removing tap formulas..."
                 "$BREW" uninstall --force \
-                    ayourk/hobbycad/opencascade@7.6.3 \
+                    ayourk/hobbycad/opencascade@7.9.2 \
                     ayourk/hobbycad/libzip@1.7.3 \
                     ayourk/hobbycad/libgit2@1.7.2 \
                     >& /dev/null
@@ -611,7 +611,7 @@ if ("$BREW" != "" && -x "$BREW") then
     set PINNED_MISSING = ""
 
     foreach formula ( \
-        ayourk/hobbycad/opencascade@7.6.3 \
+        ayourk/hobbycad/opencascade@7.9.2 \
         ayourk/hobbycad/libzip@1.7.3 \
         ayourk/hobbycad/libgit2@1.7.2 \
     )
@@ -827,9 +827,9 @@ header "6/7  CMAKE_PREFIX_PATH"
 
 if ("$BREW" != "" && -x "$BREW") then
     set OCCT_PFX = `"$BREW" --prefix \
-        ayourk/hobbycad/opencascade@7.6.3 >& /dev/null \
+        ayourk/hobbycad/opencascade@7.9.2 >& /dev/null \
         && "$BREW" --prefix \
-        ayourk/hobbycad/opencascade@7.6.3`
+        ayourk/hobbycad/opencascade@7.9.2`
     set LZIP_PFX = `"$BREW" --prefix \
         ayourk/hobbycad/libzip@1.7.3 >& /dev/null \
         && "$BREW" --prefix \

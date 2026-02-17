@@ -89,8 +89,8 @@ jobs:
           dnf install -y epel-release
           dnf config-manager --set-enabled crb
 
-          # Build tools
-          dnf install -y \
+          # Build tools (use --allowerasing to handle curl-minimal conflict)
+          dnf install -y --allowerasing \
             gcc-c++ cmake ninja-build rpm-build \
             pkg-config git
 

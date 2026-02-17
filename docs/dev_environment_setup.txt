@@ -310,7 +310,8 @@
   4.2  OPENCASCADE TECHNOLOGY (OCCT)
   ------------------------------------
 
-  The 3D modeling kernel. Ubuntu 24.04 provides OCCT 7.6.3:
+  The 3D modeling kernel. The HobbyCAD PPA provides OCCT 7.9.2
+  (Ubuntu 24.04 system packages provide 7.6.3, but the PPA is preferred):
 
     sudo apt-get install -y \
       libocct-data-exchange-dev \
@@ -585,16 +586,17 @@
   | CMake               | 3.22.x       | 3.28.x       | (system)     | (system)     | Low       |
   | Python              | 3.10.x       | 3.12.x       | (system)     | (system)     | Medium    |
   | Qt 6                | 6.2.4        | 6.4.2        | 6.4.2        | (not pinned) | Medium    |
-  | OCCT                | 7.5.x        | 7.6.3        | 7.6.2 *      | 7.6.3        | Medium    |
+  | OCCT (system)       | 7.5.x        | 7.6.3        | —            | —            | —         |
+  | OCCT (PPA/pinned)   | 7.9.2 *      | 7.9.2 *      | 7.9.2        | 7.9.2        | Medium    |
   | pybind11            | 2.9.x        | 2.11.1       | (not pinned) | (not pinned) | Low       |
   | Ninja               | 1.10.x       | 1.11.x       | (system)     | (system)     | None      |
   | libzip              | 1.7.3        | 1.7.3        | 1.7.3        | 1.7.3        | Low       |
   | libgit2             | 1.4.x        | 1.7.2        | 1.8.0 **     | 1.7.2        | Low       |
   +---------------------+--------------+--------------+--------------+--------------+-----------+
 
-  *  OCCT 7.6.3 is not available in vcpkg; 7.6.2 is the nearest
-     version in the 7.6.x series. The API is identical between
-     7.6.2 and 7.6.3 (patch-level bugfixes only).
+  *  OCCT 7.9.2 is provided by the HobbyCAD PPA for Ubuntu and pinned
+     in vcpkg/Homebrew. The PPA packages take precedence over system
+     packages. Minimum supported version is 7.6.3.
 
   ** libgit2 1.7.x does not exist in vcpkg (jumps from 1.6.4 to
      1.8.0). We pin to 1.8.0 as the nearest version above 24.04's
@@ -605,24 +607,34 @@
   (Section 16.2), or brew install qt@6 for a rolling-latest Qt 6.x
   which is source-compatible.
 
-  6.1  OCCT 7.5 vs 7.6 NOTES
-  -----------------------------
+  6.1  OCCT VERSION NOTES
+  -------------------------
 
-  OCCT 7.6 includes:
-    - Improved STEP reader performance
-    - New AIS_ViewController for mouse/keyboard interaction
-    - Mesh quality improvements in BRepMesh
-    - Various API additions and deprecations
+  HobbyCAD targets OCCT 7.9.2 (provided via PPA, vcpkg, and Homebrew).
+  Minimum supported version is 7.6.3 (Ubuntu 24.04 system packages).
 
-  Code should be developed against OCCT 7.6 (24.04) and then tested
-  on OCCT 7.5 (22.04). Use CMake version detection:
+  OCCT 7.8+ library name changes:
+    - TKSTEP → TKDESTEP
+    - TKIGES → TKDEIGES
+    - TKSTL  → TKDESTL
+    - etc.
+
+  The CMake build uses occt_pick_lib() macro to handle both old and
+  new library names automatically.
+
+  OCCT 7.9.2 includes:
+    - Improved STEP/IGES performance
+    - Enhanced mesh algorithms
+    - Better OpenGL rendering
+    - Various bug fixes
+
+  Code should be developed against OCCT 7.9.2. Use CMake version
+  detection if supporting older versions:
 
     find_package(OpenCASCADE REQUIRED)
-    if(OpenCASCADE_VERSION VERSION_LESS "7.6.0")
-      target_compile_definitions(hobbycad PRIVATE OCCT_VERSION_75)
+    if(OpenCASCADE_VERSION VERSION_LESS "7.8.0")
+      target_compile_definitions(hobbycad PRIVATE OCCT_PRE_78)
     endif()
-
-  Wrap any 7.6-only API calls in #ifdef OCCT_VERSION_75 guards.
 
   6.2  QT 6.2 vs 6.4 NOTES
   ---------------------------
@@ -674,7 +686,7 @@
     the current vcpkg baseline would normally resolve to:
 
       "overrides": [
-        { "name": "opencascade", "version": "7.6.2" },
+        { "name": "opencascade", "version": "7.9.2" },
         { "name": "qtbase",      "version": "6.4.2" },
         { "name": "qtsvg",       "version": "6.4.2" },
         { "name": "libzip",      "version": "1.7.3" },
@@ -691,7 +703,7 @@
     version-pinned formulas that download directly from upstream
     GitHub release tarballs:
 
-      brew install ayourk/hobbycad/opencascade@7.6.3
+      brew install ayourk/hobbycad/opencascade@7.9.2
       brew install ayourk/hobbycad/libzip@1.7.3
       brew install ayourk/hobbycad/libgit2@1.7.2
 
@@ -954,9 +966,9 @@
     meshfix     2.1.git~20260208-1~ppa1~noble1      (custom package)
     meshfix     2.1.git~20260208-1~ppa1~jammy1      (custom package)
 
-  Examples (future — tagged release backports):
-    opencascade 7.9.3-1~ppa1~noble1                (backport to 24.04)
-    opencascade 7.9.3-1~ppa1~jammy1                (backport to 22.04)
+  OpenCASCADE (current PPA version):
+    opencascade 7.9.2+dfsg-4~ppa1~noble1           (backport to 24.04)
+    opencascade 7.9.2+dfsg-4~ppa1~jammy1           (backport to 22.04)
 
   The ~ppa<N>~ infix ensures:
     - The package sorts lower than any future distro package with
@@ -1794,7 +1806,7 @@
         "libgit2"
       ],
       "overrides": [
-        { "name": "opencascade", "version": "7.6.2" },
+        { "name": "opencascade", "version": "7.9.2" },
         { "name": "qtbase",      "version": "6.4.2" },
         { "name": "qtsvg",       "version": "6.4.2" },
         { "name": "libzip",      "version": "1.7.3" },
@@ -1804,8 +1816,8 @@
 
   The "overrides" section forces vcpkg to install the exact version
   specified, regardless of the current vcpkg baseline. This ensures
-  Windows and macOS builds use the same library versions as Ubuntu
-  24.04 (see Section 6 for the full version comparison table).
+  all platforms use the same library versions (see Section 6 for the
+  full version comparison table).
 
   vcpkg-configuration.json — configures the custom registry for
   packages not available in the main vcpkg registry:
@@ -1864,9 +1876,9 @@
   GitHub:         https://github.com/Open-Cascade-SAS/OCCT
   Releases:       https://github.com/Open-Cascade-SAS/OCCT/releases
 
-  Pinned version: 7.6.2 (matching Ubuntu 24.04's 7.6.3; nearest
-  version available in vcpkg — see Section 6.4). In manifest mode,
-  the vcpkg.json "overrides" section pins this automatically.
+  Pinned version: 7.9.2 (via vcpkg overlay port in vcpkg-overlay-ports/).
+  In manifest mode, the vcpkg.json "overrides" section pins this
+  automatically.
 
   Note: The vcpkg port disables the Draw module (which requires
   Tcl/Tk). This is fine for HobbyCAD — Draw is only needed for
@@ -1875,7 +1887,7 @@
   Pre-built Windows binaries are also available directly from
   OpenCASCADE if the vcpkg port is insufficient:
     https://dev.opencascade.org/release
-  Download: opencascade-7.6.3-vc14-64.zip (to match Ubuntu 24.04)
+  Download: opencascade-7.9.2-vc14-64.zip
 
   16.2  QT 6
   ------------
@@ -2435,16 +2447,12 @@
   22.1  OPENCASCADE TECHNOLOGY (OCCT)
   -------------------------------------
 
-    brew install ayourk/hobbycad/opencascade@7.6.3
+    brew install ayourk/hobbycad/opencascade@7.9.2
 
-  This installs OCCT 7.6.3 (pinned to match Ubuntu 24.04) as a
+  This installs OCCT 7.9.2 (matching the PPA and vcpkg versions) as a
   keg-only formula. It does not conflict with the Homebrew core
   opencascade formula. Because it is keg-only, you must pass
   CMAKE_PREFIX_PATH to CMake — see Section 22.5.
-
-  If you prefer the rolling-latest version from Homebrew core
-  (currently 7.8.x or newer), use `brew install opencascade`
-  instead, but note the version mismatch with the Linux build.
 
   22.2  QT 6
   ------------
@@ -2510,7 +2518,7 @@
     brew tap ayourk/hobbycad
 
     # Pinned formulas (keg-only, matching Ubuntu 24.04)
-    brew install ayourk/hobbycad/opencascade@7.6.3 \
+    brew install ayourk/hobbycad/opencascade@7.9.2 \
       ayourk/hobbycad/libzip@1.7.3 \
       ayourk/hobbycad/libgit2@1.7.2
 
@@ -2529,7 +2537,7 @@
   (e.g. ~/.zshrc):
 
     export CMAKE_PREFIX_PATH="\
-    $(brew --prefix ayourk/hobbycad/opencascade@7.6.3):\
+    $(brew --prefix ayourk/hobbycad/opencascade@7.9.2):\
     $(brew --prefix ayourk/hobbycad/libzip@1.7.3):\
     $(brew --prefix ayourk/hobbycad/libgit2@1.7.2):\
     $(brew --prefix qt@6)"
@@ -2758,7 +2766,7 @@
 
     cmake -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_PREFIX_PATH="$(brew --prefix ayourk/hobbycad/opencascade@7.6.3);$(brew --prefix ayourk/hobbycad/libzip@1.7.3);$(brew --prefix ayourk/hobbycad/libgit2@1.7.2);$(brew --prefix qt@6)"
+      -DCMAKE_PREFIX_PATH="$(brew --prefix ayourk/hobbycad/opencascade@7.9.2);$(brew --prefix ayourk/hobbycad/libzip@1.7.3);$(brew --prefix ayourk/hobbycad/libgit2@1.7.2);$(brew --prefix qt@6)"
 
   Note: use semicolons (;) inside the -D argument, not colons.
   CMake interprets the value as a CMake list (semicolon-separated).
@@ -2806,9 +2814,9 @@
   -------------------------------------
 
     If using the pinned formula (recommended):
-    - Verify: brew list ayourk/hobbycad/opencascade@7.6.3
+    - Verify: brew list ayourk/hobbycad/opencascade@7.9.2
     - Ensure CMAKE_PREFIX_PATH is set (see Section 22.5)
-    - Or pass: -DOpenCASCADE_DIR=$(brew --prefix ayourk/hobbycad/opencascade@7.6.3)/lib/cmake/opencascade
+    - Or pass: -DOpenCASCADE_DIR=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)/lib/cmake/opencascade
 
     If using the Homebrew core formula:
     - Verify: brew list opencascade

@@ -109,6 +109,10 @@ jobs:
           if [ -z "${{ matrix.container }}" ]; then
             $SUDO add-apt-repository -y ppa:ayourk/hobbycad
             $SUDO apt-get update
+            # Pin PPA packages to take priority over system packages
+            echo 'Package: *
+          Pin: release o=LP-PPA-ayourk-hobbycad
+          Pin-Priority: 1001' | $SUDO tee /etc/apt/preferences.d/hobbycad-ppa
             INSTALL_LIBSLVS="libslvs-dev"
           else
             # For Debian containers, we'll build libslvs from source after deps
