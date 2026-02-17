@@ -310,13 +310,14 @@ void MainWindow::createMenus()
 
     fileMenu->addSeparator();
 
-    m_actionQuit = fileMenu->addAction(tr("&Quit"),
-        QKeySequence::Quit, this, &MainWindow::onFileQuit);
+    m_actionQuit = fileMenu->addAction(tr("&Quit"), this, &MainWindow::onFileQuit);
+    m_actionQuit->setShortcut(QKeySequence::Quit);
 
     // Edit menu
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
 
-    m_actionUndo = editMenu->addAction(tr("&Undo"), QKeySequence::Undo);
+    m_actionUndo = editMenu->addAction(tr("&Undo"));
+    m_actionUndo->setShortcut(QKeySequence::Undo);
     m_actionUndo->setEnabled(false);  // Enabled when undo stack is not empty
 
     m_actionRedo = editMenu->addAction(tr("&Redo"));
@@ -325,26 +326,26 @@ void MainWindow::createMenus()
 
     editMenu->addSeparator();
 
-    m_actionCut = editMenu->addAction(tr("Cu&t"),
-        QKeySequence::Cut);
+    m_actionCut = editMenu->addAction(tr("Cu&t"));
+    m_actionCut->setShortcut(QKeySequence::Cut);
     m_actionCut->setEnabled(false);  // Enabled when selection exists
 
-    m_actionCopy = editMenu->addAction(tr("&Copy"),
-        QKeySequence::Copy);
+    m_actionCopy = editMenu->addAction(tr("&Copy"));
+    m_actionCopy->setShortcut(QKeySequence::Copy);
     m_actionCopy->setEnabled(false);  // Enabled when selection exists
 
-    m_actionPaste = editMenu->addAction(tr("&Paste"),
-        QKeySequence::Paste);
+    m_actionPaste = editMenu->addAction(tr("&Paste"));
+    m_actionPaste->setShortcut(QKeySequence::Paste);
     m_actionPaste->setEnabled(false);  // Enabled when clipboard has compatible data
 
-    m_actionDelete = editMenu->addAction(tr("&Delete"),
-        QKeySequence::Delete);
+    m_actionDelete = editMenu->addAction(tr("&Delete"));
+    m_actionDelete->setShortcut(QKeySequence::Delete);
     m_actionDelete->setEnabled(false);  // Enabled when selection exists
 
     editMenu->addSeparator();
 
-    m_actionSelectAll = editMenu->addAction(tr("Select &All"),
-        QKeySequence::SelectAll);
+    m_actionSelectAll = editMenu->addAction(tr("Select &All"));
+    m_actionSelectAll->setShortcut(QKeySequence::SelectAll);
     m_actionSelectAll->setEnabled(false);  // Enabled when document has selectable items
 
     // Construct menu
@@ -364,18 +365,18 @@ void MainWindow::createMenus()
     auto* viewMenu = new QMenu(tr("&View"), this);
     menuBar()->insertMenu(helpMenu->menuAction(), viewMenu);
 
-    m_actionToggleTerminal = viewMenu->addAction(tr("&Terminal"),
-        QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft));
+    m_actionToggleTerminal = viewMenu->addAction(tr("&Terminal"));
+    m_actionToggleTerminal->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft));
     m_actionToggleTerminal->setCheckable(true);
     m_actionToggleTerminal->setChecked(false);
 
-    m_actionToggleFeatureTree = viewMenu->addAction(tr("P&roject"),
-        QKeySequence(Qt::CTRL | Qt::Key_R));
+    m_actionToggleFeatureTree = viewMenu->addAction(tr("P&roject"));
+    m_actionToggleFeatureTree->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
     m_actionToggleFeatureTree->setCheckable(true);
     m_actionToggleFeatureTree->setChecked(true);
 
-    m_actionToggleProperties = viewMenu->addAction(tr("&Properties"),
-        QKeySequence(Qt::CTRL | Qt::Key_P));
+    m_actionToggleProperties = viewMenu->addAction(tr("&Properties"));
+    m_actionToggleProperties->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
     m_actionToggleProperties->setCheckable(true);
     m_actionToggleProperties->setChecked(true);
 
