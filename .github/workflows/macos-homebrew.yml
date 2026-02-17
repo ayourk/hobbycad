@@ -69,7 +69,7 @@ jobs:
       - name: Install HobbyCAD dependencies
         run: |
           # Install dependencies from tap (keg-only, pinned versions)
-          brew install ayourk/hobbycad/opencascade@7.6.3
+          brew install ayourk/hobbycad/opencascade@7.9.2
           brew install ayourk/hobbycad/libzip@1.7.3
           brew install ayourk/hobbycad/libgit2@1.7.2
           brew install ayourk/hobbycad/libslvs
@@ -82,7 +82,7 @@ jobs:
 
       - name: Set CMAKE_PREFIX_PATH
         run: |
-          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.6.3)
+          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)
           LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
           LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
           SLVS_PFX=$(brew --prefix ayourk/hobbycad/libslvs)

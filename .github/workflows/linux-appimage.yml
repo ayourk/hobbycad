@@ -67,6 +67,13 @@ jobs:
           sudo add-apt-repository -y ppa:ayourk/hobbycad
           sudo apt-get update
 
+      # Pin PPA packages to take priority over system packages
+      - name: Configure PPA priority
+        run: |
+          echo 'Package: *
+          Pin: release o=LP-PPA-ayourk-hobbycad
+          Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/hobbycad-ppa
+
       - name: Install dependencies
         run: |
           sudo apt-get install -y \

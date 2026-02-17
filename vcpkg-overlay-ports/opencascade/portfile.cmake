@@ -1,39 +1,18 @@
 # vcpkg-overlay-ports/opencascade/portfile.cmake
 #
-# Overlay port for OpenCASCADE 7.6.2 with MSVC compilation fix.
-#
-# This overlay port applies a source fix for a compilation error
-# with MSVC 14.44+ where an implicit unsigned char* -> const char*
-# conversion in StdPrs_BRepFont.cxx is rejected.  The fix uses
-# vcpkg_replace_string() instead of a patch file for robustness
-# across platforms.  Based on upstream commit 7236e83dcc1e.
+# Overlay port for OpenCASCADE 7.9.2.
 #
 # SETUP:
-#   1. Compute the SHA512 of the OCCT V7_6_2 source tarball:
-#
-#        curl -sL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_6_2.tar.gz \
-#          | sha512sum
-#
-#   2. Replace the SHA512 placeholder below with the computed hash.
-#
-#   3. Pass --overlay-ports=vcpkg-overlay-ports to vcpkg install,
-#      or set VCPKG_OVERLAY_PORTS in vcpkg-configuration.json.
+#   Pass --overlay-ports=vcpkg-overlay-ports to vcpkg install,
+#   or set VCPKG_OVERLAY_PORTS in vcpkg-configuration.json.
 #
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO Open-Cascade-SAS/OCCT
-    REF V7_6_2
-    SHA512 1339889bb721ff43af00ba0048f0ca41fd5e424339ca6ff147436f67629ce360cfb0a623896608554872a1cfab67e8bcb8df066f4d1458da914aef70ffed0960
+    REF V7_9_2
+    SHA512 58f9ab91c5119e0a99fb7599bce574f17ce3e3a802a9c503fa0464228d5b2141e3f5557ef68355b4921b572bd10d99bec0f31836a103d5e5fa98cd0d685610a2
     HEAD_REF master
-)
-
-# Fix MSVC compilation error: implicit unsigned char* -> const char*
-# conversion in StdPrs_BRepFont.cxx rejected by MSVC 14.44+.
-# Upstream fix: commit 7236e83dcc1e.
-vcpkg_replace_string("${SOURCE_PATH}/src/StdPrs/StdPrs_BRepFont.cxx"
-    "const char* aTags      = &anOutline->tags[aStartIndex];"
-    "const auto* aTags      = &anOutline->tags[aStartIndex];"
 )
 
 vcpkg_cmake_configure(
@@ -97,8 +76,5 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/share/opencascade/samples"
 )
 
-# OCCT 7.6.2 ships LICENSE_LGPL_21.txt (not COPYING.md which
-# was added in a later version).
-file(INSTALL "${SOURCE_PATH}/LICENSE_LGPL_21.txt"
-     DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
-     RENAME copyright)
+# Install license file
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE_LGPL_21.txt")

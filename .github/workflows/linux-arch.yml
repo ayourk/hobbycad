@@ -59,6 +59,10 @@ jobs:
     steps:
       - name: Setup pacman and install git
         run: |
+          # Disable Landlock sandbox for pacman (Docker container compatibility)
+          mkdir -p /etc/pacman.d
+          echo 'DisableSandbox' >> /etc/pacman.conf || true
+
           # Initialize pacman keyring
           pacman-key --init
           pacman-key --populate archlinux || pacman-key --populate archlinuxarm || true
@@ -110,8 +114,10 @@ jobs:
           curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
           tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
           cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
+          # Use CMAKE_POLICY_VERSION_MINIMUM for newer CMake compatibility
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DMESHFIX_BUILD_SHARED=ON \
             -DMESHFIX_BUILD_CLI=OFF
           cmake --build build

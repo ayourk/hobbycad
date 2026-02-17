@@ -411,7 +411,7 @@ if [ "$UNINSTALL" = "1" ]; then
             if confirm "Uninstall tap formulas and remove tap?"; then
                 info "Removing tap formulas..."
                 "$BREW" uninstall --force \
-                    ayourk/hobbycad/opencascade@7.6.3 \
+                    ayourk/hobbycad/opencascade@7.9.2 \
                     ayourk/hobbycad/libzip@1.7.3 \
                     ayourk/hobbycad/libgit2@1.7.2 \
                     2>/dev/null || true
@@ -635,7 +635,7 @@ if [ -x "$BREW" ]; then
 
     # Pinned keg-only formulas
     PINNED_FORMULAS=(
-        "ayourk/hobbycad/opencascade@7.6.3"
+        "ayourk/hobbycad/opencascade@7.9.2"
         "ayourk/hobbycad/libzip@1.7.3"
         "ayourk/hobbycad/libgit2@1.7.2"
     )
@@ -817,7 +817,7 @@ header "6/7  CMAKE_PREFIX_PATH"
 if [ -x "$BREW" ]; then
     # Build the expected value
     OCCT_PFX="$("$BREW" --prefix \
-        ayourk/hobbycad/opencascade@7.6.3 2>/dev/null || true)"
+        ayourk/hobbycad/opencascade@7.9.2 2>/dev/null || true)"
     LZIP_PFX="$("$BREW" --prefix \
         ayourk/hobbycad/libzip@1.7.3 2>/dev/null || true)"
     LGIT_PFX="$("$BREW" --prefix \
