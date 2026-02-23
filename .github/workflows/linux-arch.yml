@@ -88,7 +88,8 @@ jobs:
             libgit2 \
             lib3mf \
             librsvg \
-            mesa glu libxkbcommon
+            mesa glu libxkbcommon \
+            eigen
 
           # Build OpenMesh from PPA source (AUR package, not in official repos)
           curl -L -o /tmp/openmesh.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz"
@@ -107,11 +108,13 @@ jobs:
           tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
           cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
 
-          # Stub empty submodule directories
+          # Stub empty submodule directories and populate Eigen from system package
           for submod in zlib libpng freetype cairo pixman angle; do
             mkdir -p extlib/$submod
             echo "# stub" > extlib/$submod/CMakeLists.txt
           done
+          mkdir -p extlib/eigen
+          cp -r /usr/include/eigen3/. extlib/eigen/
 
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \

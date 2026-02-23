@@ -114,11 +114,12 @@ jobs:
             lib3mf-devel \
             librsvg2-tools \
             freetype-devel fontconfig-devel \
-            libX11-devel libXmu-devel libXi-devel libXext-devel
+            libX11-devel libXmu-devel libXi-devel libXext-devel \
+            eigen3-devel
 
           # Build OpenCASCADE 7.9.2 from PPA source (not in EPEL for AlmaLinux 9)
-          curl -L -o /tmp/occt.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/opencascade/7.9.2+dfsg-4~ppa1~noble1/opencascade_7.9.2+dfsg.orig.tar.gz"
-          mkdir -p /tmp/occt && tar -xzf /tmp/occt.tar.gz -C /tmp/occt --strip-components=1
+          curl -L -o /tmp/occt.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/opencascade/7.9.2+dfsg-4~ppa1~noble1/opencascade_7.9.2+dfsg.orig.tar.xz"
+          mkdir -p /tmp/occt && tar -xJf /tmp/occt.tar.xz -C /tmp/occt --strip-components=1
           cmake -B /tmp/occt/build -S /tmp/occt -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_LIBRARY_TYPE=Shared \
@@ -149,11 +150,13 @@ jobs:
           tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
           cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
 
-          # Stub empty submodule directories
+          # Stub empty submodule directories and populate Eigen from system package
           for submod in zlib libpng freetype cairo pixman angle; do
             mkdir -p extlib/$submod
             echo "# stub" > extlib/$submod/CMakeLists.txt
           done
+          mkdir -p extlib/eigen
+          cp -r /usr/include/eigen3/. extlib/eigen/
 
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -192,7 +195,8 @@ jobs:
             libzip-devel minizip-devel \
             libgit2-devel \
             lib3mf-devel OpenMesh-devel \
-            librsvg2-tools
+            librsvg2-tools \
+            eigen3-devel
 
           # Build libslvs from PPA source (solvespace package is GUI only)
           curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
@@ -201,11 +205,13 @@ jobs:
           tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
           cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
 
-          # Stub empty submodule directories
+          # Stub empty submodule directories and populate Eigen from system package
           for submod in zlib libpng freetype cairo pixman angle; do
             mkdir -p extlib/$submod
             echo "# stub" > extlib/$submod/CMakeLists.txt
           done
+          mkdir -p extlib/eigen
+          cp -r /usr/include/eigen3/. extlib/eigen/
 
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
