@@ -83,6 +83,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ntldd
             mingw-w64-ucrt-x86_64-eigen3
             git
+            patch
 
       # libslvs is not available as an MSYS2 package - build from PPA source
       - name: Build libslvs from source

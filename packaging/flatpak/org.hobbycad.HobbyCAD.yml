@@ -45,6 +45,7 @@ modules:
   # libslvs (SolveSpace constraint solver library)
   - name: libslvs
     buildsystem: cmake-ninja
+    builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
       - -DBUILD_LIB=ON

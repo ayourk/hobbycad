@@ -163,71 +163,76 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
 
-          @"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-            <Package Name="HobbyCAD"
-                     Manufacturer="HobbyCAD Project"
-                     Version="$version"
-                     UpgradeCode="E8F5A231-7B3C-4D5E-9F1A-2B3C4D5E6F7A"
-                     Scope="perMachine">
+          # Enumerate DLLs dynamically - <Files> glob not valid inside <Component>
+          $dllComponents = (Get-ChildItem "staging\bin\*.dll" | ForEach-Object {
+            $id = "Dll" + ($_.Name -replace '[^a-zA-Z0-9]', '')
+            "            <Component Id=`"$id`" Guid=`"*`"><File Source=`"staging\bin\$($_.Name)`" /></Component>"
+          }) -join "`n"
 
-              <MajorUpgrade DowngradeErrorMessage="A newer version of HobbyCAD is already installed." />
-              <MediaTemplate EmbedCab="yes" />
+          $platComponents = (Get-ChildItem "staging\bin\platforms\*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+            $id = "Plat" + ($_.Name -replace '[^a-zA-Z0-9]', '')
+            "            <Component Id=`"$id`" Guid=`"*`"><File Source=`"staging\bin\platforms\$($_.Name)`" /></Component>"
+          }) -join "`n"
 
-              <StandardDirectory Id="ProgramFiles6432Folder">
-                <Directory Id="INSTALLFOLDER" Name="HobbyCAD">
-                  <Directory Id="BinFolder" Name="bin">
-                    <Directory Id="PlatformsFolder" Name="platforms" />
-                  </Directory>
-                </Directory>
-              </StandardDirectory>
+          $wxs = @"
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="HobbyCAD"
+           Manufacturer="HobbyCAD Project"
+           Version="$version"
+           UpgradeCode="E8F5A231-7B3C-4D5E-9F1A-2B3C4D5E6F7A"
+           Scope="perMachine">
 
-              <StandardDirectory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="HobbyCAD" />
-              </StandardDirectory>
+    <MajorUpgrade DowngradeErrorMessage="A newer version of HobbyCAD is already installed." />
+    <MediaTemplate EmbedCab="yes" />
 
-              <ComponentGroup Id="ProductComponents" Directory="BinFolder">
-                <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
-                  <File Id="HobbyCADExe" Source="staging\bin\hobbycad.exe" KeyPath="yes">
-                    <Shortcut Id="StartMenuShortcut"
-                              Directory="ApplicationProgramsFolder"
-                              Name="HobbyCAD"
-                              WorkingDirectory="BinFolder"
-                              Icon="HobbyCADIcon"
-                              IconIndex="0"
-                              Advertise="yes" />
-                  </File>
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="HobbyCAD">
+        <Directory Id="BinFolder" Name="bin">
+          <Directory Id="PlatformsFolder" Name="platforms" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
 
-                  <!-- File association for .hcad -->
-                  <ProgId Id="HobbyCAD.Project" Description="HobbyCAD Project">
-                    <Extension Id="hcad" ContentType="application/x-hobbycad">
-                      <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument='"%1"' />
-                    </Extension>
-                  </ProgId>
-                </Component>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="HobbyCAD" />
+    </StandardDirectory>
 
-                <Component Id="RuntimeDLLs" Guid="B2C3D4E5-F6A7-8901-BCDE-F23456789012">
-                  <Files Include="staging\bin\*.dll" />
-                </Component>
-              </ComponentGroup>
+    <ComponentGroup Id="ProductComponents" Directory="BinFolder">
+      <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+        <File Id="HobbyCADExe" Source="staging\bin\hobbycad.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ApplicationProgramsFolder"
+                    Name="HobbyCAD"
+                    WorkingDirectory="BinFolder"
+                    Icon="HobbyCADIcon"
+                    IconIndex="0"
+                    Advertise="yes" />
+        </File>
+        <ProgId Id="HobbyCAD.Project" Description="HobbyCAD Project">
+          <Extension Id="hcad" ContentType="application/x-hobbycad">
+            <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument='`"%1`"' />
+          </Extension>
+        </ProgId>
+      </Component>
+$dllComponents
+    </ComponentGroup>
 
-              <ComponentGroup Id="PlatformPlugins" Directory="PlatformsFolder">
-                <Component Id="QtPlatformPlugin" Guid="C3D4E5F6-A7B8-9012-CDEF-345678901234">
-                  <Files Include="staging\bin\platforms\*.dll" />
-                </Component>
-              </ComponentGroup>
+    <ComponentGroup Id="PlatformPlugins" Directory="PlatformsFolder">
+$platComponents
+    </ComponentGroup>
 
-              <Icon Id="HobbyCADIcon" SourceFile="staging\bin\hobbycad.exe" />
+    <Icon Id="HobbyCADIcon" SourceFile="staging\bin\hobbycad.exe" />
 
-              <Feature Id="ProductFeature" Title="HobbyCAD" Level="1">
-                <ComponentGroupRef Id="ProductComponents" />
-                <ComponentGroupRef Id="PlatformPlugins" />
-              </Feature>
+    <Feature Id="ProductFeature" Title="HobbyCAD" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="PlatformPlugins" />
+    </Feature>
 
-            </Package>
-          </Wix>
-          "@ | Out-File -FilePath "hobbycad.wxs" -Encoding UTF8
+  </Package>
+</Wix>
+"@
+          $wxs | Out-File -FilePath "hobbycad.wxs" -Encoding UTF8
 
       - name: Build MSI
         run: |

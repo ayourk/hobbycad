@@ -200,7 +200,6 @@ jobs:
           ArchitecturesAllowed=$archAllowed
           ArchitecturesInstallIn64BitMode=$arch64BitMode
           UninstallDisplayIcon={app}\bin\{#MyAppExeName}
-          SetupIconFile=resources\icons\hobbycad.ico
           PrivilegesRequired=lowest
           PrivilegesRequiredOverridesAllowed=dialog
 
