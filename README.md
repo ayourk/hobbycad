@@ -7,7 +7,7 @@
   <br><br>
   <img src="https://img.shields.io/badge/License-GPL_3.0--only-blue.svg" alt="License: GPL 3.0">
   <img src="https://img.shields.io/github/last-commit/ayourk/hobbycad" alt="Last Commit">
-  <img src="https://img.shields.io/badge/Phase-0_(Foundation)-green.svg" alt="Phase 0">
+  <img src="https://img.shields.io/badge/Phase-2_(Parametric_Features)-green.svg" alt="Phase 2">
   <img src="https://img.shields.io/badge/Platform-Linux-orange.svg" alt="Platform: Linux">
   <img src="https://img.shields.io/badge/PPA-ayourk%2Fhobbycad-purple.svg" alt="PPA">
   <br>
