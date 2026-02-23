@@ -29,6 +29,10 @@ class QTreeWidget;
 class QTreeWidgetItem;
 
 namespace hobbycad {
+namespace sketch {
+struct Entity;
+struct Constraint;
+}  // namespace sketch
 
 class CliPanel;
 class ProjectBrowserWidget;
@@ -63,6 +67,19 @@ protected:
 
     /// Override to apply changed preferences to the viewport.
     virtual void applyPreferences();
+
+    /// Override to provide the active sketch canvas (for sketch export).
+    virtual class SketchCanvas* activeSketchCanvas() const { return nullptr; }
+
+    /// Override to provide sketch entities for export when no active canvas.
+    /// Used when a completed sketch is selected in the 3D view.
+    /// Returns true if entities are available for export.
+    virtual bool getSelectedSketchForExport(
+        QVector<sketch::Entity>& outEntities,
+        QVector<sketch::Constraint>& outConstraints) const;
+
+    /// Enable or disable sketch export actions (DXF/SVG).
+    void setSketchExportEnabled(bool enabled);
 
     /// Intercept window close to prompt for unsaved changes.
     void closeEvent(QCloseEvent* event) override;
@@ -205,6 +222,8 @@ private slots:
     void onFileImportStep();
     void onFileExportStep();
     void onFileExportStl();
+    void onFileExportDXF();
+    void onFileExportSVG();
     void onEditPreferences();
     void onHelpAbout();
 
@@ -230,6 +249,8 @@ private:
     QAction* m_actionImportStep = nullptr;
     QAction* m_actionExportStep = nullptr;
     QAction* m_actionExportStl = nullptr;
+    QAction* m_actionExportDXF = nullptr;
+    QAction* m_actionExportSVG = nullptr;
     QAction* m_actionQuit   = nullptr;
     QAction* m_actionUndo   = nullptr;
     QAction* m_actionRedo   = nullptr;

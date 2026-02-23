@@ -26,6 +26,7 @@
 #include <hobbycad/sketch/background.h>
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/sketch/group.h>
+#include <hobbycad/sketch/snap.h>
 #include <hobbycad/sketch/undo.h>
 #include <hobbycad/units.h>
 
@@ -42,8 +43,26 @@ class QContextMenuEvent;
 
 namespace hobbycad {
 
+class ParameterEngine;  // Forward declaration (defined in parameters.h)
+
 // Use types from project.h for consistency
 // SketchEntityType and SketchPlane are defined in hobbycad/project.h
+
+/// Describes one dimension input field (e.g., "Length", "Angle")
+struct DimFieldDef {
+    QString label;        ///< Display name: "Length", "Angle", "Width", etc.
+    bool isAngle;         ///< true = angle in degrees, false = length in mm
+    double currentValue;  ///< Live value from mouse position (updated each frame)
+};
+
+/// Runtime state for each dimension input field
+struct DimFieldState {
+    QString inputBuffer;  ///< Characters typed so far (empty = not typing)
+    bool locked;          ///< Enter was pressed — value is locked
+    double lockedValue;   ///< The locked value (mm or degrees)
+    int cursorPos = 0;    ///< Cursor position within inputBuffer (0..length)
+    bool selectAll = false; ///< Entire buffer is selected (next char replaces all)
+};
 
 /// A single sketch entity (GUI version with selection state)
 /// Inherits all geometry data and methods from sketch::Entity,
@@ -59,19 +78,16 @@ struct SketchEntity : public sketch::Entity {
         : sketch::Entity(e), selected(false) {}
 };
 
-/// A parametric constraint (GUI version with selection and solver state)
-struct SketchConstraint {
-    int id = 0;
-    ConstraintType type = ConstraintType::Distance;
-    QVector<int> entityIds;        ///< IDs of entities involved in constraint
-    QVector<int> pointIndices;     ///< Point indices within entities (for multi-point entities)
-    double value = 0.0;            ///< Constraint value (distance in mm, angle in degrees, etc.)
-    bool isDriving = true;         ///< True = driving constraint, False = reference (display only)
-    QPointF labelPosition;         ///< Where to display the dimension label in 2D sketch space
-    bool labelVisible = true;      ///< Show/hide dimension text
-    bool satisfied = true;         ///< Whether constraint is currently satisfied (for solver feedback)
-    bool enabled = true;           ///< Whether constraint is active
+/// A parametric constraint (GUI version — inherits library Constraint, adds selection state)
+struct SketchConstraint : public sketch::Constraint {
     bool selected = false;         ///< UI selection state
+
+    // Default constructor
+    SketchConstraint() = default;
+
+    // Construct from library constraint
+    explicit SketchConstraint(const sketch::Constraint& c)
+        : sketch::Constraint(c), selected(false) {}
 };
 
 /// A closed profile (loop) detected in the sketch
@@ -90,30 +106,15 @@ using SketchGroup = sketch::Group;
 using TransformType = sketch::TransformType;
 using AlignmentType = sketch::AlignmentType;
 
-/// Undo command types (GUI-specific, uses GUI entity/constraint types)
-enum class UndoCommandType {
-    AddEntity,
-    DeleteEntity,
-    ModifyEntity,
-    AddConstraint,
-    DeleteConstraint,
-    ModifyConstraint
-};
-
-/// A single undo command (GUI-specific, stores GUI entity/constraint types)
-struct UndoCommand {
-    UndoCommandType type;
-    SketchEntity entity;           ///< Entity state (for add/delete/modify)
-    SketchEntity previousEntity;   ///< Previous entity state (for modify)
-    SketchConstraint constraint;   ///< Constraint state (for add/delete/modify)
-    SketchConstraint previousConstraint; ///< Previous constraint state (for modify)
-};
+// Undo command types and UndoCommand struct are provided by the library (sketch::UndoCommand)
+// GUI uses the library types directly — no GUI-specific undo types needed.
 
 class SketchCanvas : public QWidget {
     Q_OBJECT
 
 public:
     explicit SketchCanvas(QWidget* parent = nullptr);
+    ~SketchCanvas() override;
 
     /// Set the active drawing tool
     void setActiveTool(SketchTool tool);
@@ -144,6 +145,9 @@ public:
     /// Get all entities
     const QVector<SketchEntity>& entities() const { return m_entities; }
 
+    /// Get all constraints
+    const QVector<SketchConstraint>& constraints() const { return m_constraints; }
+
     /// Set all entities (replaces current entities, used for loading)
     void setEntities(const QVector<SketchEntity>& entities);
 
@@ -157,7 +161,11 @@ public:
     QSet<int> selectedEntityIds() const { return m_selectedIds; }
     bool isEntitySelected(int entityId) const { return m_selectedIds.contains(entityId); }
     void clearSelection();
-    void selectEntity(int entityId, bool addToSelection = false);
+    /// Select an entity.  When individualOnly is false (default) the
+    /// entire decomposition group is selected; when true only the single
+    /// entity is selected (Alt+click behaviour).
+    void selectEntity(int entityId, bool addToSelection = false,
+                      bool individualOnly = false);
 
     /// Select entities within a rectangular region
     /// If crossing is true, selects entities that intersect the region
@@ -166,6 +174,17 @@ public:
 
     /// Select chain of connected entities starting from the given entity
     void selectConnectedChain(int startEntityId);
+
+    /// Expand selection to include all entities in decomposition groups
+    /// that have at least one selected member
+    void expandSelectionToGroups();
+
+    /// Enter a group — subsequent clicks select individual members.
+    /// Pass -1 or call leaveGroup() to exit.
+    void enterGroup(int groupId);
+    void leaveGroup();
+    bool isInsideGroup() const { return m_enteredGroupId >= 0; }
+    int enteredGroupId() const { return m_enteredGroupId; }
 
     /// Sketch selection state (for Escape key progression)
     void setSketchSelected(bool selected) { m_sketchSelected = selected; }
@@ -230,6 +249,17 @@ public:
     /// Split entity at a specific point
     QVector<int> splitEntityAt(int entityId, const QPointF& splitPoint);
 
+    /// Smart split: split an entity only at the two intersections that
+    /// bracket @a clickPoint (nearest before and after along the entity).
+    /// Returns IDs of the new segments, or empty if nothing was split.
+    QVector<int> splitEntityNearClick(int entityId, const QPointF& clickPoint);
+
+    /// Rejoin collinear line segments back into a single line.
+    /// All selected entities must be lines that are collinear (same ray)
+    /// and form a contiguous chain sharing endpoints.
+    /// Returns the ID of the merged line, or -1 on failure.
+    int rejoinCollinearSegments();
+
     // Apply geometric constraints to selected entities
     void applyHorizontalConstraint();
     void applyVerticalConstraint();
@@ -291,10 +321,10 @@ public:
     void redo();
 
     /// Check if undo is available
-    bool canUndo() const { return !m_undoStack.isEmpty(); }
+    bool canUndo() const { return m_libUndoStack.canUndo(); }
 
     /// Check if redo is available
-    bool canRedo() const { return !m_redoStack.isEmpty(); }
+    bool canRedo() const { return m_libUndoStack.canRedo(); }
 
     // Background image support
     /// Set background image for the sketch
@@ -390,35 +420,23 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    bool event(QEvent* event) override;  // Intercept Tab before Qt focus navigation
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
-    // Snap point types for entity snapping
-    enum class SnapType {
-        Endpoint,       // Line/arc/spline endpoints
-        Midpoint,       // Midpoint of line/arc/slot centerline
-        Center,         // Circle/arc/ellipse/polygon center
-        Quadrant,       // Circle/ellipse quadrant points
-        Intersection,   // Entity intersections (future)
-        ArcEndCenter    // Arc slot end semicircle centers
-    };
-
-    struct SnapPoint {
-        QPointF position;
-        SnapType type;
-        int entityId;
-    };
+    // Snap types from the library (aliased for convenience)
+    using SnapType = sketch::SnapType;
+    using SnapPoint = sketch::SnapPoint;
 
     // Coordinate transforms
     QPointF screenToWorld(const QPoint& screen) const;
     QPoint worldToScreen(const QPointF& world) const;
+    QPointF worldToScreenF(const QPointF& world) const;
     QPointF snapPoint(const QPointF& world) const;
     QPointF snapToAngle(const QPointF& origin, const QPointF& target) const;
-    QVector<SnapPoint> collectEntitySnapPoints() const;
-    void collectSnapPointsForEntity(const SketchEntity& entity, QVector<SnapPoint>& points) const;
 
     // Drawing helpers
     void drawGrid(QPainter& painter);
@@ -443,12 +461,15 @@ private:
     void drawArrow(QPainter& painter, const QPointF& pos, const QPointF& dir, double size);
 
     // Constraint helpers
-    void createConstraint(ConstraintType type, double value, const QPointF& labelPos);
+    void createConstraint(ConstraintType type, double value, const QPointF& labelPos,
+                          bool skipOverConstrainCheck = false);
     void createGeometricConstraint(ConstraintType type);  // For non-dimensional constraints
     void editConstraintValue(int constraintId);
     void finishConstraintCreation();
     void solveConstraints();
-    void updateDrivenDimensions();  // Update Driven dimension values from geometry
+    void refreshConstrainedFlags();  // Recompute entity.constrained from remaining constraints
+    void updateDrivenDimensions();   // Update Driven dimension values from geometry
+    void updateConstraintLabelPositions(); // Reposition labels to track geometry after solving
     ConstraintType detectConstraintType(int entityId1, int entityId2) const;
     double calculateConstraintValue(ConstraintType type, const QVector<int>& entityIds,
                                      const QVector<QPointF>& points) const;
@@ -462,6 +483,7 @@ private:
     // Hit testing
     int hitTest(const QPointF& worldPos) const;
     bool hitTestEntity(const SketchEntity& entity, const QPointF& worldPos) const;
+    bool hitTestTextEntity(const SketchEntity& entity, const QPointF& worldPos, double tolerance) const;
     int hitTestConstraintLabel(const QPointF& worldPos) const;
 
     // Rectangle selection helpers
@@ -483,6 +505,15 @@ private:
     void finishEntity();
     void cancelEntity();
     int nextEntityId();
+    /// Decompose a compound entity (Rectangle, Parallelogram) into lines + constraints + group.
+    /// Returns true if decomposition occurred. Populates compoundCmd for undo.
+    bool decomposeCompoundEntity(const SketchEntity& pendingEntity,
+                                 const QVector<QPair<QString, double>>& lockedDims,
+                                 sketch::UndoCommand& compoundCmd);
+
+    // Undo/redo single-command helpers (used by Compound undo)
+    void undoSingleCommand(const sketch::UndoCommand& cmd);
+    void redoSingleCommand(const sketch::UndoCommand& cmd);
 
     // Handle dragging helpers
     void applyCtrlSnapToHandle();
@@ -525,10 +556,35 @@ private:
     enum class RectMode { Corner, Center, ThreePoint, Parallelogram };
     RectMode m_rectMode = RectMode::Corner;
 
+    // Corner rect rotation state (when both W+H are locked)
+    bool m_rectBothLocked = false;       // true once both dims locked
+    double m_rectLockRefAngle = 0.0;     // mouse angle at the moment both locked
+    double m_rectLockWidthAngle = 0.0;   // initial width direction (0 or π)
+    double m_rectLockHeightAngle = 0.0;  // initial height direction (π/2 or -π/2)
+
+    // Polygon creation modes
+    enum class PolygonMode { Inscribed, Circumscribed, Freeform };
+    PolygonMode m_polygonMode = PolygonMode::Inscribed;
+
     // Slot creation modes
     enum class SlotMode { CenterToCenter, Overall, ArcRadius, ArcEnds };
     SlotMode m_slotMode = SlotMode::CenterToCenter;
     bool m_arcSlotFlipped = false;  // For > 180 degree arc slots (Shift key)
+
+    // Inline dimension input during entity creation
+    QVector<DimFieldDef> m_dimFields;       ///< Available dimension fields for current tool/stage
+    QVector<DimFieldState> m_dimStates;     ///< Per-field input state
+    int m_dimActiveIndex = -1;              ///< Currently active field (-1 = none)
+    QVector<QPair<QString, double>> m_dimLockedForConstraints;  ///< Accumulates across stages
+    ParameterEngine* m_paramEngine = nullptr;  ///< Expression evaluator for formula input in dim fields
+
+    void initDimFields();                   ///< Populate fields based on tool/mode/stage
+    void clearDimFields();                  ///< Reset all dim input state
+    double getLockedDim(int fieldIndex) const;  ///< Returns locked value or -1.0
+    void createLockedConstraints(int entityId); ///< Create constraints from locked dims
+    void prefillDimField(int fieldIndex);   ///< Pre-fill field with current value, select all
+    void drawDimInputField(QPainter& painter, const QPointF& position,
+                           int fieldIndex, double rotation = 0.0);
 
     // Pan state
     bool m_isPanning = false;
@@ -549,6 +605,7 @@ private:
     // Groups
     QVector<SketchGroup> m_groups;
     int m_nextGroupId = 1;
+    int m_enteredGroupId = -1;          ///< Currently "entered" group (-1 = none)
 
     // Entity being created
     SketchEntity m_pendingEntity;
@@ -595,6 +652,11 @@ private:
 
     // Handle hit testing
     int hitTestHandle(const QPointF& worldPos) const;
+
+    /// Hit-test handles across all entities in the primary entity's group.
+    /// Returns the point index via handleIdx and the owning entity ID via
+    /// entityId.  Returns true if a handle was hit.
+    bool hitTestGroupHandle(const QPointF& worldPos, int& entityId, int& handleIdx) const;
 
     // Tangent circle helpers
     struct TangentCircle {
@@ -653,12 +715,10 @@ private:
     void updateCursorForBackgroundHandle(BackgroundHandle handle);
 
     // Undo/Redo support
-    QVector<UndoCommand> m_undoStack;
-    QVector<UndoCommand> m_redoStack;
-    static const int MaxUndoStackSize = 100;
+    sketch::UndoStack m_libUndoStack{100};
 
     /// Push an undo command and clear redo stack
-    void pushUndoCommand(const UndoCommand& cmd);
+    void pushUndoCommand(const sketch::UndoCommand& cmd);
 
     /// Update undo/redo action availability
     void updateUndoRedoState();

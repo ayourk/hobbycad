@@ -10,3 +10,4 @@ Categories=Graphics;3DGraphics;Engineering;
 MimeType=application/x-brep;
 Keywords=CAD;3D;modeling;parametric;BREP;STEP;
 StartupNotify=true
+StartupWMClass=hobbycad

@@ -35,6 +35,10 @@ on:
       - '*.md'
   workflow_dispatch:
 
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
 jobs:
 
   # ================================================================
@@ -80,26 +84,37 @@ jobs:
             mingw-w64-ucrt-x86_64-eigen3
             git
 
-      # libslvs is not available as an MSYS2 package - build from source
+      # libslvs is not available as an MSYS2 package - build from PPA source
       - name: Build libslvs from source
+        shell: msys2 {0}
         run: |
-          git clone --depth 1 --branch v3.2 https://github.com/solvespace/solvespace.git /tmp/solvespace
-          cd /tmp/solvespace
-          git submodule update --init extlib/mimalloc
-          mkdir build && cd build
-          cmake .. -G Ninja \
+          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
+          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
+          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
+          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+
+          # Stub empty submodule directories
+          for submod in zlib libpng freetype cairo pixman angle mimalloc; do
+            mkdir -p extlib/$submod
+            echo "# stub" > extlib/$submod/CMakeLists.txt
+          done
+
+          cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/ucrt64 \
+            -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \
-            -DENABLE_TESTS=OFF \
-            -DBUILD_LIB=ON
-          ninja slvs
+            -DENABLE_OPENMP=OFF \
+            -DENABLE_TESTS=OFF
+          cmake --build build
+
           # Install libslvs to MSYS2 prefix
-          cp libslvs.dll.a /ucrt64/lib/
-          cp libslvs.dll /ucrt64/bin/
+          cp build/libslvs.dll.a /ucrt64/lib/
+          cp build/libslvs.dll /ucrt64/bin/
           mkdir -p /ucrt64/include/slvs
-          cp ../include/slvs.h /ucrt64/include/slvs/
+          cp include/slvs.h /ucrt64/include/slvs/
 
       - name: Configure CMake
         run: cmake --preset msys2-release

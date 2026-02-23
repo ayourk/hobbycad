@@ -13,6 +13,8 @@
 #ifndef HOBBYCAD_PARAMETERSDIALOG_H
 #define HOBBYCAD_PARAMETERSDIALOG_H
 
+#include <hobbycad/parameters.h>
+
 #include <QDialog>
 #include <QMap>
 #include <QSet>
@@ -26,15 +28,7 @@ class QLabel;
 
 namespace hobbycad {
 
-/// Represents a single parameter in the document
-struct Parameter {
-    QString name;           ///< Parameter name (e.g., "width")
-    QString expression;     ///< Expression (number or formula)
-    double value = 0.0;     ///< Evaluated value
-    QString unit;           ///< Unit type (e.g., "mm", "deg", "")
-    QString comment;        ///< User comment/description
-    bool isUserParam = true; ///< true = user param, false = model param
-};
+// Parameter struct is now in <hobbycad/parameters.h>
 
 class ParametersDialog : public QDialog {
     Q_OBJECT

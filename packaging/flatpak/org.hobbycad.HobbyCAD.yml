@@ -66,7 +66,7 @@ modules:
         dest: extlib/eigen
       - type: shell
         commands:
-          - patch -p1 < debian-patches/debian/patches/0001-handle-missing-git-directory.patch
+          - patch -p1 < debian-patches/patches/0001-handle-missing-git-directory.patch
           - for submod in zlib libpng freetype cairo pixman angle; do mkdir -p extlib/$submod && echo "# stub" > extlib/$submod/CMakeLists.txt; done
 
   # lib3mf (3D Manufacturing Format)
@@ -109,7 +109,7 @@ modules:
         dest: debian-patches
       - type: shell
         commands:
-          - patch -p1 < debian-patches/debian/patches/0001-build-shared-library.patch
+          - patch -p1 < debian-patches/patches/0001-build-shared-library.patch
 
   # HobbyCAD
   - name: hobbycad

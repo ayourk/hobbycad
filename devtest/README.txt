@@ -94,7 +94,7 @@
     Platform: linux
 
       -- Phase 0: Foundation --
-      [PASS] OCCT 7.6.3 — BRep + STEP/STL/IGES writers OK
+      [PASS] OCCT 7.9.2 — BRep + STEP/STL/IGES writers OK
       [PASS] Qt 6 6.4.2 — QApplication + OpenGLWidgets OK
       [PASS] libgit2 1.7.2 — init + version query OK
       [PASS] libzip 1.10.1 — version query OK

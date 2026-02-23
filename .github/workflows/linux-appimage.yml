@@ -34,6 +34,10 @@ on:
       - '*.md'
   workflow_dispatch:
 
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
 jobs:
 
   # ================================================================
@@ -73,6 +77,16 @@ jobs:
           echo 'Package: *
           Pin: release o=LP-PPA-ayourk-hobbycad
           Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/hobbycad-ppa
+
+      # Install Qt 6.4.2 from PPA first (Ubuntu 22.04 only has Qt 6.2)
+      # This ensures we get Qt 6.4.2 with full API support
+      - name: Install Qt 6.4.2 from PPA
+        run: |
+          sudo apt-get install -y \
+            qt6-base-dev qt6-base-dev-tools libqt6opengl6-dev \
+            libqt6openglwidgets6 qmake6 \
+            qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+            libqt6svg6-dev
 
       - name: Install dependencies
         run: |

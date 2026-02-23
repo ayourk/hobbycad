@@ -42,15 +42,18 @@ hobbycad [options] [file]
     Options:
       --no-gui              Start in interactive command-line mode
       --theme <file.qss>    Load custom Qt stylesheet theme
+      --exec "command"       Execute a command on GUI startup
 
     Arguments:
       [file]                File or project directory to open (.hcad, .brep)
 
     Examples:
-      hobbycad                         Start GUI (auto-detect mode)
-      hobbycad myproject/              Open project directory
-      hobbycad model.brep              Open BREP file in GUI
-      hobbycad --no-gui                Start interactive CLI
+      hobbycad                                             Start GUI (auto-detect)
+      hobbycad myproject/                                  Open project directory
+      hobbycad model.brep                                  Open BREP file in GUI
+      hobbycad --no-gui                                    Start interactive CLI
+      hobbycad --exec "create sketch on plane XY"          GUI + open XY sketch
+      hobbycad --exec "create sketch XZ"                   GUI + open XZ sketch
 
 --------------------------------------------------------------------------------
 Subcommand: convert
@@ -238,21 +241,40 @@ select <type> <name>
       select body Body1
       select face Face1
 
-create <type> [name]
-    Create a new object.
+create sketch [<plane>] [name]
+create sketch on [plane] <named-plane> [name]
+create sketch "name" on [plane] <plane-name>
+    Create a new 2D sketch on a specified plane.
 
-    Supported types:
-      sketch    Create a new 2D sketch
+    Built-in planes (recognized directly):
+      XY        XY plane, normal along Z (default)
+      XZ        XZ plane, normal along Y
+      YZ        YZ plane, normal along X
+
+    Named planes (require 'on' keyword):
+      on [plane] <name>   Use a named construction plane (e.g., on plane Front)
 
     Arguments:
-      <type>    Object type to create (sketch)
-      [name]    Optional name (default: auto-named Sketch1, Sketch2, etc.)
+      [plane]   Built-in plane: XY, XZ, or YZ (default: XY)
+      [name]    Optional sketch name (default: auto-named Sketch1, Sketch2, etc.)
 
     Examples:
-      create sketch              Creates "Sketch1" (or next available)
-      create sketch MySketch     Creates "MySketch"
+      create sketch                               XY plane, auto-named
+      create sketch XZ                            XZ plane, auto-named
+      create sketch XZ MySketch                   XZ plane, named "MySketch"
+      create sketch on plane Front                Named construction plane
+      create sketch on Front                      Same, 'plane' keyword optional
+      create sketch on plane Front MySketch       Named plane, named sketch
+      create sketch "MySketch" on plane XZ        Name first, then plane
+      create sketch "Base Profile" on plane Front Quoted name with spaces
+      create sketch MySketch                      XY plane (default), named
 
     Notes:
+      - Built-in plane names (XY, XZ, YZ) are recognized directly after 'sketch'
+      - Named construction planes require 'on' to distinguish from sketch names
+      - The word 'plane' after 'on' is optional: 'on plane XZ' and 'on XZ' are equal
+      - Use quotes around names containing spaces: "My Sketch"
+      - The name can appear before or after the plane specification
       - Entering sketch mode changes the prompt to show the sketch context
       - Use 'finish' or 'discard' to exit sketch mode
 

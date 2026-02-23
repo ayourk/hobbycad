@@ -191,6 +191,12 @@ signals:
     /// Emitted when user requests to suppress/unsuppress a feature.
     void suppressFeatureRequested(int index, bool suppress);
 
+    /// Emitted when user requests to export a sketch as DXF.
+    void exportDXFRequested(int index);
+
+    /// Emitted when user requests to export a sketch as SVG.
+    void exportSVGRequested(int index);
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;

@@ -32,6 +32,10 @@ on:
       - '*.md'
   workflow_dispatch:
 
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
 jobs:
 
   # ================================================================

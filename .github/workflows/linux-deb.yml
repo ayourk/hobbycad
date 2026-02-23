@@ -30,6 +30,10 @@ on:
       - '*.md'
   workflow_dispatch:
 
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
 jobs:
 
   # ================================================================
@@ -105,7 +109,7 @@ jobs:
             SUDO="sudo"
           fi
 
-          # Add HobbyCAD PPA for libslvs (Ubuntu only, not Debian containers)
+          # Add HobbyCAD PPA for libslvs and Qt 6.4.2 (Ubuntu only, not Debian containers)
           if [ -z "${{ matrix.container }}" ]; then
             $SUDO add-apt-repository -y ppa:ayourk/hobbycad
             $SUDO apt-get update
@@ -114,6 +118,14 @@ jobs:
           Pin: release o=LP-PPA-ayourk-hobbycad
           Pin-Priority: 1001' | $SUDO tee /etc/apt/preferences.d/hobbycad-ppa
             INSTALL_LIBSLVS="libslvs-dev"
+            # Install Qt 6.4.2 from PPA first (Ubuntu 22.04 only has Qt 6.2)
+            if [ "${{ matrix.distro }}" = "ubuntu2204" ]; then
+              $SUDO apt-get install -y \
+                qt6-base-dev qt6-base-dev-tools libqt6opengl6-dev \
+                libqt6openglwidgets6 qmake6 \
+                qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+                libqt6svg6-dev
+            fi
           else
             # For Debian containers, we'll build libslvs from source after deps
             apt-get update

@@ -11,6 +11,8 @@
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/geometry/utils.h>
 
+#include <QLineF>
+
 namespace hobbycad {
 namespace sketch {
 
@@ -468,6 +470,76 @@ bool getConstraintEndpoints(
     }
 
     return false;
+}
+
+// =====================================================================
+//  Constraint Utility Functions
+// =====================================================================
+
+QSet<int> getConstrainedEntityIds(const QVector<Constraint>& constraints)
+{
+    QSet<int> ids;
+    for (const Constraint& c : constraints) {
+        if (c.enabled && c.isDriving) {
+            for (int eid : c.entityIds) {
+                ids.insert(eid);
+            }
+        }
+    }
+    return ids;
+}
+
+double computeDrivenValue(const Constraint& constraint,
+                          const QVector<Entity>& entities)
+{
+    switch (constraint.type) {
+    case ConstraintType::Distance: {
+        QPointF p1, p2;
+        if (getConstraintEndpoints(constraint, entities, p1, p2)) {
+            return QLineF(p1, p2).length();
+        }
+        break;
+    }
+    case ConstraintType::Radius: {
+        if (!constraint.entityIds.isEmpty()) {
+            const Entity* entity = findEntityById(entities, constraint.entityIds[0]);
+            if (entity && (entity->type == EntityType::Circle ||
+                           entity->type == EntityType::Arc)) {
+                return entity->radius;
+            }
+        }
+        break;
+    }
+    case ConstraintType::Diameter: {
+        if (!constraint.entityIds.isEmpty()) {
+            const Entity* entity = findEntityById(entities, constraint.entityIds[0]);
+            if (entity && (entity->type == EntityType::Circle ||
+                           entity->type == EntityType::Arc)) {
+                return entity->radius * 2.0;
+            }
+        }
+        break;
+    }
+    case ConstraintType::Angle: {
+        if (constraint.entityIds.size() >= 2) {
+            const Entity* e1 = findEntityById(entities, constraint.entityIds[0]);
+            const Entity* e2 = findEntityById(entities, constraint.entityIds[1]);
+            if (e1 && e2 && e1->type == EntityType::Line &&
+                e2->type == EntityType::Line &&
+                e1->points.size() >= 2 && e2->points.size() >= 2) {
+                QLineF line1(e1->points[0], e1->points[1]);
+                QLineF line2(e2->points[0], e2->points[1]);
+                double angle = qAbs(line1.angleTo(line2));
+                if (angle > 180) angle = 360 - angle;
+                return angle;
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return constraint.value;  // Return existing value if no computation possible
 }
 
 }  // namespace sketch

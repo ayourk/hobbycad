@@ -31,6 +31,7 @@ struct HOBBYCAD_EXPORT Group {
     int id = 0;                        ///< Unique group ID
     QString name;                      ///< Display name
     QVector<int> entityIds;            ///< Direct entity members
+    QVector<int> constraintIds;        ///< Direct constraint members
     QVector<int> childGroupIds;        ///< Nested group IDs
     int parentGroupId = -1;            ///< Parent group ID (-1 if top-level)
     bool locked = false;               ///< Prevent modification of members
@@ -41,14 +42,19 @@ struct HOBBYCAD_EXPORT Group {
         return entityIds.contains(entityId);
     }
 
+    /// Check if this group directly contains a constraint
+    bool containsConstraint(int constraintId) const {
+        return constraintIds.contains(constraintId);
+    }
+
     /// Check if this group directly contains a child group
     bool containsGroup(int groupId) const {
         return childGroupIds.contains(groupId);
     }
 
-    /// Check if this group is empty (no entities or child groups)
+    /// Check if this group is empty (no entities, constraints, or child groups)
     bool isEmpty() const {
-        return entityIds.isEmpty() && childGroupIds.isEmpty();
+        return entityIds.isEmpty() && constraintIds.isEmpty() && childGroupIds.isEmpty();
     }
 };
 

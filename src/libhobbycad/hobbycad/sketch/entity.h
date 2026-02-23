@@ -76,6 +76,7 @@ struct HOBBYCAD_EXPORT Entity {
     // State
     bool isConstruction = false;          ///< Construction geometry flag
     bool constrained = false;             ///< Has constraints applied
+    int groupId = -1;                     ///< Owning decomposition group (-1 if none)
 
     // ---- Convenience Methods ----
 

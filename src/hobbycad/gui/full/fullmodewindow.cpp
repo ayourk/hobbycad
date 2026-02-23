@@ -20,9 +20,12 @@
 #include "gui/sketchutils.h"
 
 #include <hobbycad/brep/operations.h>
+#include <hobbycad/sketch/export.h>
 #include <hobbycad/sketch/profiles.h>
 
+#include <QAction>
 #include <QComboBox>
+#include <QFileDialog>
 #include <QInputDialog>
 #include <QLabel>
 #include <QMessageBox>
@@ -374,6 +377,47 @@ void FullModeWindow::onDocumentClosed()
     m_viewport->resetCamera();
 }
 
+SketchCanvas* FullModeWindow::activeSketchCanvas() const
+{
+    return m_inSketchMode ? m_sketchCanvas : nullptr;
+}
+
+bool FullModeWindow::getSelectedSketchForExport(
+    QVector<sketch::Entity>& outEntities,
+    QVector<sketch::Constraint>& outConstraints) const
+{
+    // When in sketch mode, the base class uses activeSketchCanvas() instead
+    if (m_inSketchMode)
+        return false;
+
+    // Check if a sketch is selected in the timeline
+    int selectedIndex = m_timeline->selectedIndex();
+    if (selectedIndex < 0)
+        return false;
+
+    TimelineFeature feature = m_timeline->featureAt(selectedIndex);
+    if (feature != TimelineFeature::Sketch)
+        return false;
+
+    int sketchIdx = sketchIndexFromTimelineIndex(selectedIndex);
+    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size())
+        return false;
+
+    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+    if (sketch.entities.isEmpty())
+        return false;
+
+    // Convert GUI entities to library entities
+    outEntities = toLibraryEntities(sketch.entities);
+
+    // Completed sketches don't store constraints separately, so
+    // outConstraints remains empty (constraints are already baked
+    // into the entity positions)
+    Q_UNUSED(outConstraints);
+
+    return true;
+}
+
 void FullModeWindow::applyPreferences()
 {
     QSettings s;
@@ -445,6 +489,12 @@ void FullModeWindow::createTimeline()
     connect(m_timeline, &TimelineWidget::suppressFeatureRequested,
             this, &FullModeWindow::onSuppressFeature);
 
+    // Connect export signals for sketch context menu
+    connect(m_timeline, &TimelineWidget::exportDXFRequested,
+            this, &FullModeWindow::onExportSketchDXF);
+    connect(m_timeline, &TimelineWidget::exportSVGRequested,
+            this, &FullModeWindow::onExportSketchSVG);
+
     // Connect double-click to edit feature
     connect(m_timeline, &TimelineWidget::itemDoubleClicked,
             this, &FullModeWindow::onEditFeature);
@@ -469,10 +519,27 @@ void FullModeWindow::showFeatureProperties(int index)
     // Hide any existing plane visualization
     hideSketchPlane();
 
-    if (index < 0 || index >= m_timeline->itemCount())
+    if (index < 0 || index >= m_timeline->itemCount()) {
+        // Nothing selected — disable sketch export unless in sketch mode
+        if (!m_inSketchMode)
+            setSketchExportEnabled(false);
         return;
+    }
 
     TimelineFeature feature = m_timeline->featureAt(index);
+
+    // Enable sketch export when a sketch with entities is selected
+    if (!m_inSketchMode) {
+        bool enableExport = false;
+        if (feature == TimelineFeature::Sketch) {
+            int sketchIdx = sketchIndexFromTimelineIndex(index);
+            if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()
+                && !m_completedSketches[sketchIdx].entities.isEmpty()) {
+                enableExport = true;
+            }
+        }
+        setSketchExportEnabled(enableExport);
+    }
     QString featureName = m_timeline->nameAt(index);
     QString units = unitSuffix();
 
@@ -1183,6 +1250,9 @@ void FullModeWindow::enterSketchMode(SketchPlane plane)
 
     m_inSketchMode = true;
 
+    // Enable sketch export actions
+    setSketchExportEnabled(true);
+
     // Notify CLI panel that viewport commands won't work in sketch mode
     if (cliPanel()) {
         cliPanel()->setSketchModeActive(true);
@@ -1281,6 +1351,9 @@ void FullModeWindow::exitSketchMode()
     if (!m_inSketchMode) return;
 
     m_inSketchMode = false;
+
+    // Disable sketch export actions
+    setSketchExportEnabled(false);
 
     // Notify CLI panel that viewport commands are available again
     if (cliPanel()) {
@@ -2313,6 +2386,89 @@ void FullModeWindow::onSuppressFeature(int index, bool suppress)
         }
     }
     // TODO: Handle other feature types, store suppression state
+}
+
+void FullModeWindow::onExportSketchDXF(int index)
+{
+    int sketchIdx = sketchIndexFromTimelineIndex(index);
+    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size())
+        return;
+
+    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+    if (sketch.entities.isEmpty()) {
+        QMessageBox::information(this, tr("Export DXF"),
+            tr("The sketch '%1' is empty.").arg(sketch.name));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export DXF File"),
+        sketch.name + QStringLiteral(".dxf"),
+        tr("DXF Files (*.dxf);;All Files (*)"));
+
+    if (filePath.isEmpty()) return;
+
+    if (!filePath.toLower().endsWith(QLatin1String(".dxf"))) {
+        filePath += QStringLiteral(".dxf");
+    }
+
+    QVector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
+
+    sketch::DXFExportOptions options;
+    bool success = sketch::exportSketchToDXF(entities, filePath, options);
+
+    if (!success) {
+        QMessageBox::critical(this, tr("Export Failed"),
+            tr("Failed to export DXF file."));
+        return;
+    }
+
+    statusBar()->showMessage(
+        tr("Exported '%1' (%2 entities) to DXF file")
+            .arg(sketch.name).arg(entities.size()), 5000);
+}
+
+void FullModeWindow::onExportSketchSVG(int index)
+{
+    int sketchIdx = sketchIndexFromTimelineIndex(index);
+    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size())
+        return;
+
+    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
+    if (sketch.entities.isEmpty()) {
+        QMessageBox::information(this, tr("Export SVG"),
+            tr("The sketch '%1' is empty.").arg(sketch.name));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export SVG File"),
+        sketch.name + QStringLiteral(".svg"),
+        tr("SVG Files (*.svg);;All Files (*)"));
+
+    if (filePath.isEmpty()) return;
+
+    if (!filePath.toLower().endsWith(QLatin1String(".svg"))) {
+        filePath += QStringLiteral(".svg");
+    }
+
+    QVector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
+    QVector<sketch::Constraint> constraints;  // No constraints for completed sketches
+
+    sketch::SVGExportOptions options;
+    bool success = sketch::exportSketchToSVG(entities, constraints, filePath, options);
+
+    if (!success) {
+        QMessageBox::critical(this, tr("Export Failed"),
+            tr("Failed to export SVG file."));
+        return;
+    }
+
+    statusBar()->showMessage(
+        tr("Exported '%1' (%2 entities) to SVG file")
+            .arg(sketch.name).arg(entities.size()), 5000);
 }
 
 void FullModeWindow::onFeatureMoved(int fromIndex, int toIndex)

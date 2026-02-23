@@ -23,6 +23,7 @@ SketchActionBar::SketchActionBar(QWidget* parent)
 
     // Finish Sketch button (prominent, full width)
     m_finishButton = new QPushButton(this);
+    m_finishButton->setAutoDefault(false);
     m_finishButton->setText(tr("Finish Sketch"));
     m_finishButton->setIcon(style()->standardIcon(QStyle::SP_DialogApplyButton));
     m_finishButton->setToolTip(tr("Finish editing sketch and choose to save or discard"));
@@ -55,6 +56,7 @@ SketchActionBar::SketchActionBar(QWidget* parent)
 
     // Discard button (left side)
     m_discardButton = new QPushButton(m_saveDiscardWidget);
+    m_discardButton->setAutoDefault(false);
     m_discardButton->setText(tr("Discard"));
     m_discardButton->setIcon(style()->standardIcon(QStyle::SP_DialogDiscardButton));
     m_discardButton->setToolTip(tr("Discard changes and exit sketch (Escape)"));
@@ -68,7 +70,10 @@ SketchActionBar::SketchActionBar(QWidget* parent)
     m_saveButton->setText(tr("Save"));
     m_saveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     m_saveButton->setToolTip(tr("Save sketch and exit"));
-    m_saveButton->setDefault(true);
+    // NOTE: Do NOT set this as the default button — pressing Enter during
+    // entity creation (dim input lock, spline finish, etc.) would otherwise
+    // propagate to this button and save/exit the sketch unexpectedly.
+    m_saveButton->setAutoDefault(false);
 
     // Style the save button to be more prominent
     m_saveButton->setStyleSheet(QStringLiteral(

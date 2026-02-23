@@ -29,6 +29,10 @@ on:
       - '*.md'
   workflow_dispatch:
 
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
 jobs:
 
   # ================================================================
@@ -89,18 +93,17 @@ jobs:
           dnf install -y epel-release
           dnf config-manager --set-enabled crb
 
-          # Build tools (use --allowerasing to handle curl-minimal conflict)
+          # Swap curl-minimal for full curl to avoid conflicts
+          dnf swap -y curl-minimal curl || true
+
+          # Build tools
           dnf install -y --allowerasing \
             gcc-c++ cmake ninja-build rpm-build \
-            pkg-config git
+            pkg-config git curl xz patch
 
           # Qt6 (from EPEL)
           dnf install -y \
             qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel
-
-          # OpenCASCADE (may need to build from source or use EPEL)
-          dnf install -y \
-            opencascade-devel || echo "OpenCASCADE not in repos, will try alternatives"
 
           # Other dependencies
           dnf install -y \
@@ -109,10 +112,28 @@ jobs:
             libzip-devel minizip-devel \
             libgit2-devel \
             lib3mf-devel \
-            librsvg2-tools curl xz patch
+            librsvg2-tools \
+            freetype-devel fontconfig-devel \
+            libX11-devel libXmu-devel libXi-devel libXext-devel
 
-          # Build OpenMesh from source (not in EPEL for AlmaLinux 9)
-          curl -L -o /tmp/openmesh.tar.gz "https://www.graphics.rwth-aachen.de/media/openmesh_static/Releases/11.0/OpenMesh-11.0.0.tar.gz"
+          # Build OpenCASCADE 7.9.2 from PPA source (not in EPEL for AlmaLinux 9)
+          curl -L -o /tmp/occt.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/opencascade/7.9.2+dfsg-4~ppa1~noble1/opencascade_7.9.2+dfsg.orig.tar.gz"
+          mkdir -p /tmp/occt && tar -xzf /tmp/occt.tar.gz -C /tmp/occt --strip-components=1
+          cmake -B /tmp/occt/build -S /tmp/occt -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIBRARY_TYPE=Shared \
+            -DBUILD_MODULE_Draw=OFF \
+            -DBUILD_MODULE_Visualization=ON \
+            -DBUILD_MODULE_ApplicationFramework=ON \
+            -DBUILD_MODULE_DataExchange=ON \
+            -DUSE_TBB=OFF \
+            -DUSE_VTK=OFF \
+            -DUSE_FREETYPE=ON
+          cmake --build /tmp/occt/build
+          cmake --install /tmp/occt/build
+
+          # Build OpenMesh from PPA source (not in EPEL for AlmaLinux 9)
+          curl -L -o /tmp/openmesh.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz"
           mkdir -p /tmp/openmesh && tar -xzf /tmp/openmesh.tar.gz -C /tmp/openmesh --strip-components=1
           cd /tmp/openmesh
           cmake -B build -G Ninja \
@@ -121,19 +142,30 @@ jobs:
           cmake --build build
           cmake --install build
 
-          # Build libslvs from source (not packaged for RHEL)
-          git clone --depth 1 --recurse-submodules https://github.com/solvespace/solvespace.git /tmp/solvespace
-          cd /tmp/solvespace
+          # Build libslvs from PPA source (not packaged for RHEL)
+          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
+          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
+          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
+          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+
+          # Stub empty submodule directories
+          for submod in zlib libpng freetype cairo pixman angle; do
+            mkdir -p extlib/$submod
+            echo "# stub" > extlib/$submod/CMakeLists.txt
+          done
+
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_COVERAGE=OFF
-          cmake --build build --target slvs
-          cmake --install build --component slvs
+            -DENABLE_OPENMP=OFF \
+            -DENABLE_TESTS=OFF
+          cmake --build build
+          cmake --install build
 
-          # Build meshfix from source (not packaged for RHEL)
+          # Build meshfix from PPA source (not packaged for RHEL)
           curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
           mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
           curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
@@ -162,19 +194,30 @@ jobs:
             lib3mf-devel OpenMesh-devel \
             librsvg2-tools
 
-          # Build libslvs from source (solvespace package is GUI only)
-          git clone --depth 1 --recurse-submodules https://github.com/solvespace/solvespace.git /tmp/solvespace
-          cd /tmp/solvespace
+          # Build libslvs from PPA source (solvespace package is GUI only)
+          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
+          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
+          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
+          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+
+          # Stub empty submodule directories
+          for submod in zlib libpng freetype cairo pixman angle; do
+            mkdir -p extlib/$submod
+            echo "# stub" > extlib/$submod/CMakeLists.txt
+          done
+
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_COVERAGE=OFF
-          cmake --build build --target slvs
-          cmake --install build --component slvs
+            -DENABLE_OPENMP=OFF \
+            -DENABLE_TESTS=OFF
+          cmake --build build
+          cmake --install build
 
-          # Build meshfix from source (not packaged for Fedora)
+          # Build meshfix from PPA source (not packaged for Fedora)
           curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
           mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
           curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"

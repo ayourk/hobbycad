@@ -80,6 +80,7 @@ Release build sizes (as of 2026-02-14):
 - `namespace hobbycad {}` for all project code
 - Source files: `.cpp` / `.h` (not `.cxx` / `.hxx`)
 - Commit messages: double-quote safe, no internal double quotes
+- Commit messages must be approved by user before committing
 - Signed-off-by: Aaron Yourk <ayourk@gmail.com>
 - No Co-Authored-By trailers
 

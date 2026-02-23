@@ -17,34 +17,10 @@ namespace hobbycad {
 //  Constraint Conversion Utilities
 // =====================================================================
 
+// Constraint conversion functions (toLibraryConstraint, toLibraryConstraints)
+// are provided by sketchutils.h
+
 namespace {
-
-/// Convert GUI SketchConstraint to library Constraint
-sketch::Constraint toLibraryConstraint(const SketchConstraint& gui)
-{
-    sketch::Constraint lib;
-    lib.id = gui.id;
-    lib.type = static_cast<sketch::ConstraintType>(static_cast<int>(gui.type));
-    lib.entityIds = gui.entityIds;
-    lib.pointIndices = gui.pointIndices;
-    lib.value = gui.value;
-    lib.isDriving = gui.isDriving;
-    lib.labelPosition = gui.labelPosition;
-    lib.labelVisible = gui.labelVisible;
-    lib.enabled = gui.enabled;
-    return lib;
-}
-
-/// Convert a vector of GUI constraints to library constraints
-QVector<sketch::Constraint> toLibraryConstraints(const QVector<SketchConstraint>& guiConstraints)
-{
-    QVector<sketch::Constraint> libConstraints;
-    libConstraints.reserve(guiConstraints.size());
-    for (const SketchConstraint& gui : guiConstraints) {
-        libConstraints.append(toLibraryConstraint(gui));
-    }
-    return libConstraints;
-}
 
 /// Update GUI entities from solved library entities
 void updateGuiEntitiesFromSolution(

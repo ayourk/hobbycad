@@ -15,17 +15,134 @@
 
 #include <algorithm>
 #include <cmath>
+#include <QRegularExpression>
+
 #include <stack>
 #include <stdexcept>
 
 namespace hobbycad {
 
+// ---- ParametricValue ------------------------------------------------
+
+ParametricValue::ParametricValue(double value)
+    : m_type(Type::Number)
+    , m_expression(QString::number(value))
+    , m_value(value)
+    , m_valid(true)
+{
+}
+
+ParametricValue::ParametricValue(const QString& expression)
+    : m_expression(expression.trimmed())
+{
+    parse();
+}
+
+void ParametricValue::setExpression(const QString& expr)
+{
+    m_expression = expr.trimmed();
+    parse();
+}
+
+void ParametricValue::parse()
+{
+    m_valid = true;
+    m_errorMessage.clear();
+    m_usedParams.clear();
+
+    if (m_expression.isEmpty()) {
+        m_type = Type::Number;
+        m_value = 0.0;
+        return;
+    }
+
+    // Try to parse as a plain number first
+    bool ok;
+    double num = m_expression.toDouble(&ok);
+    if (ok) {
+        m_type = Type::Number;
+        m_value = num;
+        return;
+    }
+
+    // Check if it's a single parameter name (identifier only)
+    static QRegularExpression identifierRx(QStringLiteral("^[a-zA-Z_][a-zA-Z0-9_]*$"));
+    if (identifierRx.match(m_expression).hasMatch()) {
+        m_type = Type::Parameter;
+        m_usedParams.append(m_expression);
+        // Value will be resolved when evaluate() is called
+        return;
+    }
+
+    // Otherwise it's a formula - extract parameter names
+    m_type = Type::Formula;
+    static QRegularExpression paramRx(QStringLiteral("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b"));
+    auto it = paramRx.globalMatch(m_expression);
+    while (it.hasNext()) {
+        auto match = it.next();
+        QString name = match.captured(1);
+        // Skip known function names
+        static QStringList functions = {
+            QStringLiteral("sin"), QStringLiteral("cos"), QStringLiteral("tan"),
+            QStringLiteral("asin"), QStringLiteral("acos"), QStringLiteral("atan"),
+            QStringLiteral("atan2"), QStringLiteral("sinr"), QStringLiteral("cosr"),
+            QStringLiteral("tanr"), QStringLiteral("sqrt"), QStringLiteral("abs"),
+            QStringLiteral("floor"), QStringLiteral("ceil"), QStringLiteral("round"),
+            QStringLiteral("min"), QStringLiteral("max"), QStringLiteral("pow"),
+            QStringLiteral("log"), QStringLiteral("log10"), QStringLiteral("log2"),
+            QStringLiteral("exp"), QStringLiteral("sign"), QStringLiteral("mod"),
+            QStringLiteral("if"), QStringLiteral("pi"), QStringLiteral("e"),
+            QStringLiteral("tau")
+        };
+        if (!functions.contains(name.toLower()) && !m_usedParams.contains(name)) {
+            m_usedParams.append(name);
+        }
+    }
+}
+
+bool ParametricValue::containsParameters() const
+{
+    return !m_usedParams.isEmpty();
+}
+
+QStringList ParametricValue::usedParameters() const
+{
+    return m_usedParams;
+}
+
+bool ParametricValue::evaluate(const QMap<QString, double>& parameters)
+{
+    if (m_type == Type::Number) {
+        // Already a plain number
+        return true;
+    }
+
+    double result;
+    QString error;
+
+    if (evaluateExpression(m_expression, result, parameters, &error)) {
+        m_value = result;
+        m_valid = true;
+        m_errorMessage.clear();
+        return true;
+    } else {
+        m_valid = false;
+        m_errorMessage = error;
+        return false;
+    }
+}
+
 // ---- Expression Evaluator ----
+// In anonymous namespace — implementation detail of this translation unit.
+
+namespace {
 
 class ExpressionEvaluator {
 public:
-    explicit ExpressionEvaluator(const QMap<QString, double>& params)
-        : m_params(params)
+    explicit ExpressionEvaluator(const QMap<QString, double>& params,
+                                 LengthUnit defaultUnit = LengthUnit::Millimeters,
+                                 bool unitAware = false)
+        : m_params(params), m_defaultUnit(defaultUnit), m_unitAware(unitAware)
     {
     }
 
@@ -205,6 +322,55 @@ private:
         if (!ok)
             throw std::runtime_error(
                 QStringLiteral("Invalid number '%1'").arg(numStr).toStdString());
+
+        // Unit-aware mode: check for unit suffix after the number.
+        // "Convert final result" approach: bare numbers stay as-is (in display
+        // units). Numbers with explicit unit suffixes are converted TO the
+        // default display unit so they integrate correctly in the expression.
+        // The caller converts the final result from display units to mm.
+        if (m_unitAware && m_pos < m_expr.length() && m_expr[m_pos].isLetter()) {
+            int suffixStart = m_pos;
+            // Read potential suffix (letters only)
+            while (m_pos < m_expr.length() && m_expr[m_pos].isLetter())
+                ++m_pos;
+            QString suffix = m_expr.mid(suffixStart, m_pos - suffixStart).toLower();
+
+            // Check if it's a known unit suffix
+            // Must NOT be followed by more alphanumeric chars (to avoid eating function names)
+            bool nextIsAlphaNum = (m_pos < m_expr.length() &&
+                                   (m_expr[m_pos].isLetterOrNumber() || m_expr[m_pos] == '_'));
+            if (!nextIsAlphaNum) {
+                LengthUnit suffixUnit;
+                bool knownSuffix = true;
+                if (suffix == QStringLiteral("mm")) {
+                    suffixUnit = LengthUnit::Millimeters;
+                } else if (suffix == QStringLiteral("cm")) {
+                    suffixUnit = LengthUnit::Centimeters;
+                } else if (suffix == QStringLiteral("m")) {
+                    suffixUnit = LengthUnit::Meters;
+                } else if (suffix == QStringLiteral("in") || suffix == QStringLiteral("inch") ||
+                           suffix == QStringLiteral("inches")) {
+                    suffixUnit = LengthUnit::Inches;
+                } else if (suffix == QStringLiteral("ft") || suffix == QStringLiteral("foot") ||
+                           suffix == QStringLiteral("feet")) {
+                    suffixUnit = LengthUnit::Feet;
+                } else {
+                    knownSuffix = false;
+                }
+                if (knownSuffix) {
+                    // Convert from explicit unit to default display unit
+                    num = convertLength(num, suffixUnit, m_defaultUnit);
+                } else {
+                    // Not a known unit suffix — restore position, no conversion
+                    m_pos = suffixStart;
+                }
+            } else {
+                // Followed by alphanumeric — not a unit suffix, restore position
+                m_pos = suffixStart;
+            }
+        }
+        // else: no suffix, bare number stays as-is in display units
+
         return num;
     }
 
@@ -360,10 +526,14 @@ private:
     }
 
     QMap<QString, double> m_params;
+    LengthUnit m_defaultUnit = LengthUnit::Millimeters;
+    bool m_unitAware = false;
     QString m_expr;
     int m_pos = 0;
     QString m_error;
 };
+
+}  // anonymous namespace
 
 // ---- ParameterEngine Implementation ----
 
@@ -655,6 +825,29 @@ bool ParameterEngine::evaluateExpression(const QString& expression, double& resu
     return ok;
 }
 
+bool ParameterEngine::evaluateExpression(const QString& expression, double& result,
+                                          LengthUnit defaultUnit,
+                                          QString* errorMsg) const
+{
+    // Build values map from current parameters
+    QMap<QString, double> values;
+    for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
+        if (it->isValid) {
+            values[it->name] = it->value;
+        }
+    }
+
+    QString error;
+    ExpressionEvaluator eval(values, defaultUnit, /*unitAware=*/true);
+    bool ok = eval.evaluate(expression, result, error);
+
+    if (errorMsg && !ok) {
+        *errorMsg = error;
+    }
+
+    return ok;
+}
+
 QStringList ParameterEngine::evaluationOrder() const
 {
     return d->evaluationOrder;
@@ -795,6 +988,23 @@ bool ParameterEngine::fromJson(const QJsonObject& json, QString* errorMsg)
 
     d->buildDependencyGraph();
     return true;
+}
+
+// ---- Standalone expression evaluation ----
+
+bool evaluateExpression(const QString& expression, double& result,
+                        const QMap<QString, double>& params,
+                        QString* errorMsg)
+{
+    QString error;
+    ExpressionEvaluator eval(params);
+    bool ok = eval.evaluate(expression, result, error);
+
+    if (errorMsg && !ok) {
+        *errorMsg = error;
+    }
+
+    return ok;
 }
 
 }  // namespace hobbycad

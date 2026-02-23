@@ -98,6 +98,7 @@ enum class CreationMode {
     // Polygon modes
     PolygonInscribed = 0,    // Inscribed in circle (default)
     PolygonCircumscribed,    // Circumscribed around circle
+    PolygonFreeform,         // Click each vertex, close by clicking start
 
     // Slot modes
     SlotCenterToCenter = 0,  // Center to center (default)

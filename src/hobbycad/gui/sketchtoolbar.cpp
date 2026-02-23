@@ -80,13 +80,12 @@ void SketchToolbar::createTools()
     createDropdown->setIconSize(16);
 
     // Line - with variants
+    // Note: Horizontal/Vertical modes removed - use constraints instead
     createDropdown->addButton(
         QIcon::fromTheme(QStringLiteral("draw-line"),
                          style()->standardIcon(QStyle::SP_ArrowForward)),
         tr("Line"), tr("Draw line (L)"));
     createDropdown->addVariant(tr("Two Point"), static_cast<int>(CreationMode::LineTwoPoint));
-    createDropdown->addVariant(tr("Horizontal"), static_cast<int>(CreationMode::LineHorizontal));
-    createDropdown->addVariant(tr("Vertical"), static_cast<int>(CreationMode::LineVertical));
     createDropdown->addVariant(tr("Tangent"), static_cast<int>(CreationMode::LineTangent));
     createDropdown->addVariant(tr("Construction"), static_cast<int>(CreationMode::LineConstruction));
 
@@ -134,6 +133,7 @@ void SketchToolbar::createTools()
         tr("Polygon"), tr("Draw polygon"));
     createDropdown->addVariant(tr("Inscribed"), static_cast<int>(CreationMode::PolygonInscribed));
     createDropdown->addVariant(tr("Circumscribed"), static_cast<int>(CreationMode::PolygonCircumscribed));
+    createDropdown->addVariant(tr("Freeform"), static_cast<int>(CreationMode::PolygonFreeform));
 
     // Slot - with variants
     createDropdown->addButton(
