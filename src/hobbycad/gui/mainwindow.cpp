@@ -10,7 +10,10 @@
 #include "projectbrowserwidget.h"
 #include "sketchactionbar.h"
 
+#include "sketchcanvas.h"
+
 #include <hobbycad/project.h>
+#include <hobbycad/sketch/export.h>
 #include <hobbycad/step_io.h>
 #include <hobbycad/stl_io.h>
 #include <hobbycad/units.h>
@@ -307,6 +310,18 @@ void MainWindow::createMenus()
     m_actionExportStl = exportMenu->addAction(tr("STL File..."),
         this, &MainWindow::onFileExportStl);
     m_actionExportStl->setToolTip(tr("Export geometry to STL file for 3D printing"));
+
+    exportMenu->addSeparator();
+
+    m_actionExportDXF = exportMenu->addAction(tr("DXF File (Sketch)..."),
+        this, &MainWindow::onFileExportDXF);
+    m_actionExportDXF->setToolTip(tr("Export sketch to DXF file"));
+    m_actionExportDXF->setEnabled(false);
+
+    m_actionExportSVG = exportMenu->addAction(tr("SVG File (Sketch)..."),
+        this, &MainWindow::onFileExportSVG);
+    m_actionExportSVG->setToolTip(tr("Export sketch to SVG file"));
+    m_actionExportSVG->setEnabled(false);
 
     fileMenu->addSeparator();
 
@@ -1039,6 +1054,147 @@ void MainWindow::onFileExportStl()
     }
 
     statusBar()->showMessage(tr("Exported geometry to STL file"), 5000);
+}
+
+void MainWindow::setSketchExportEnabled(bool enabled)
+{
+    if (m_actionExportDXF) m_actionExportDXF->setEnabled(enabled);
+    if (m_actionExportSVG) m_actionExportSVG->setEnabled(enabled);
+}
+
+bool MainWindow::getSelectedSketchForExport(
+    QVector<sketch::Entity>& /*outEntities*/,
+    QVector<sketch::Constraint>& /*outConstraints*/) const
+{
+    return false;  // Base class has no selected sketch support
+}
+
+void MainWindow::onFileExportDXF()
+{
+    QVector<sketch::Entity> entities;
+    QVector<sketch::Constraint> constraints;
+
+    // Try active sketch canvas first (sketch edit mode)
+    SketchCanvas* canvas = activeSketchCanvas();
+    if (canvas) {
+        const auto& guiEntities = canvas->entities();
+        if (guiEntities.isEmpty()) {
+            QMessageBox::information(this, tr("Export DXF"),
+                tr("The sketch is empty. Add some geometry first."));
+            return;
+        }
+        entities.reserve(guiEntities.size());
+        for (const auto& e : guiEntities) {
+            entities.append(static_cast<const sketch::Entity&>(e));
+        }
+    } else if (!getSelectedSketchForExport(entities, constraints)) {
+        // No active canvas and no selected sketch
+        QMessageBox::information(this, tr("Export DXF"),
+            tr("No sketch available for export.\n"
+               "Enter sketch mode or select a completed sketch in the timeline."));
+        return;
+    }
+
+    if (entities.isEmpty()) {
+        QMessageBox::information(this, tr("Export DXF"),
+            tr("The sketch is empty. Add some geometry first."));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export DXF File"),
+        QString(),
+        tr("DXF Files (*.dxf);;All Files (*)"));
+
+    if (filePath.isEmpty()) return;
+
+    if (!filePath.toLower().endsWith(QLatin1String(".dxf"))) {
+        filePath += QStringLiteral(".dxf");
+    }
+
+    sketch::DXFExportOptions options;
+    bool success = sketch::exportSketchToDXF(entities, filePath, options);
+
+    if (!success) {
+        QMessageBox::critical(this, tr("Export Failed"),
+            tr("Failed to export DXF file."));
+        return;
+    }
+
+    statusBar()->showMessage(
+        tr("Exported %1 entities to DXF file").arg(entities.size()), 5000);
+}
+
+void MainWindow::onFileExportSVG()
+{
+    QVector<sketch::Entity> entities;
+    QVector<sketch::Constraint> constraints;
+
+    // Try active sketch canvas first (sketch edit mode)
+    SketchCanvas* canvas = activeSketchCanvas();
+    if (canvas) {
+        const auto& guiEntities = canvas->entities();
+        if (guiEntities.isEmpty()) {
+            QMessageBox::information(this, tr("Export SVG"),
+                tr("The sketch is empty. Add some geometry first."));
+            return;
+        }
+        entities.reserve(guiEntities.size());
+        for (const auto& e : guiEntities) {
+            entities.append(static_cast<const sketch::Entity&>(e));
+        }
+        // Convert constraints from canvas
+        for (const auto& c : canvas->constraints()) {
+            sketch::Constraint lc;
+            lc.id = c.id;
+            lc.type = static_cast<sketch::ConstraintType>(c.type);
+            lc.entityIds = c.entityIds;
+            lc.pointIndices = c.pointIndices;
+            lc.value = c.value;
+            lc.isDriving = c.isDriving;
+            lc.labelPosition = c.labelPosition;
+            lc.labelVisible = c.labelVisible;
+            lc.enabled = c.enabled;
+            constraints.append(lc);
+        }
+    } else if (!getSelectedSketchForExport(entities, constraints)) {
+        // No active canvas and no selected sketch
+        QMessageBox::information(this, tr("Export SVG"),
+            tr("No sketch available for export.\n"
+               "Enter sketch mode or select a completed sketch in the timeline."));
+        return;
+    }
+
+    if (entities.isEmpty()) {
+        QMessageBox::information(this, tr("Export SVG"),
+            tr("The sketch is empty. Add some geometry first."));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        tr("Export SVG File"),
+        QString(),
+        tr("SVG Files (*.svg);;All Files (*)"));
+
+    if (filePath.isEmpty()) return;
+
+    if (!filePath.toLower().endsWith(QLatin1String(".svg"))) {
+        filePath += QStringLiteral(".svg");
+    }
+
+    sketch::SVGExportOptions options;
+    bool success = sketch::exportSketchToSVG(entities, constraints, filePath, options);
+
+    if (!success) {
+        QMessageBox::critical(this, tr("Export Failed"),
+            tr("Failed to export SVG file."));
+        return;
+    }
+
+    statusBar()->showMessage(
+        tr("Exported %1 entities to SVG file").arg(entities.size()), 5000);
 }
 
 void MainWindow::onFileClose()

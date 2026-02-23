@@ -177,6 +177,8 @@ QStringList CliEngine::completeArguments(const QStringList& tokens,
 
     // ---- create command ----
     if (cmd == QLatin1String("create")) {
+        QString type = tokens.size() > 1 ? tokens[1].toLower() : QString();
+
         if (argIndex == 1) {
             // First argument: object type to create
             QStringList types = { QStringLiteral("sketch") };
@@ -195,9 +197,95 @@ QStringList CliEngine::completeArguments(const QStringList& tokens,
                 ? QStringList{ QStringLiteral("?<type>  Object type to create (sketch)") }
                 : matches;
         }
-        else if (argIndex == 2) {
-            QString type = tokens.size() > 1 ? tokens[1].toLower() : QString();
-            if (type == QLatin1String("sketch")) {
+        else if (argIndex == 2 && type == QLatin1String("sketch")) {
+            // After "create sketch": plane name, "on", or sketch name
+            QStringList completions = {
+                QStringLiteral("XY"),
+                QStringLiteral("XZ"),
+                QStringLiteral("YZ"),
+                QStringLiteral("on")
+            };
+            if (prefix.isEmpty()) {
+                return { QStringLiteral("?[XY|XZ|YZ|on <plane>|name]  Plane or sketch name") };
+            }
+            QStringList matches;
+            for (const auto& c : completions) {
+                if (c.startsWith(prefix, Qt::CaseInsensitive)) {
+                    matches.append(c);
+                }
+            }
+            return matches;  // Empty if typing a sketch name — fine
+        }
+        else if (argIndex == 3 && type == QLatin1String("sketch")) {
+            QString arg2 = tokens.size() > 2 ? tokens[2] : QString();
+            QString arg2Lower = arg2.toLower();
+            QString arg2Upper = arg2.toUpper();
+
+            if (arg2Lower == QLatin1String("on")) {
+                // After "create sketch on": "plane" keyword or plane name
+                QStringList completions = {
+                    QStringLiteral("plane"),
+                    QStringLiteral("XY"),
+                    QStringLiteral("XZ"),
+                    QStringLiteral("YZ")
+                };
+                if (prefix.isEmpty()) {
+                    return { QStringLiteral("?[plane] <name>  XY, XZ, YZ, or construction plane name") };
+                }
+                QStringList matches;
+                for (const auto& c : completions) {
+                    if (c.startsWith(prefix, Qt::CaseInsensitive)) {
+                        matches.append(c);
+                    }
+                }
+                // TODO: Also complete named construction planes from document
+                return matches.isEmpty()
+                    ? QStringList{ QStringLiteral("?[plane] <name>  XY, XZ, YZ, or construction plane name") }
+                    : matches;
+            }
+            if (arg2Upper == QLatin1String("XY") || arg2Upper == QLatin1String("XZ")
+                || arg2Upper == QLatin1String("YZ")) {
+                // After "create sketch XZ": optional sketch name
+                return { QStringLiteral("?[name]  Optional sketch name (default: auto-named)") };
+            }
+            return {};  // arg2 was a sketch name — nothing more to complete
+        }
+        else if (argIndex == 4 && type == QLatin1String("sketch")) {
+            QString arg2Lower = tokens.size() > 2 ? tokens[2].toLower() : QString();
+            if (arg2Lower == QLatin1String("on")) {
+                QString arg3 = tokens.size() > 3 ? tokens[3] : QString();
+                QString arg3Lower = arg3.toLower();
+                QString arg3Upper = arg3.toUpper();
+
+                if (arg3Lower == QLatin1String("plane")) {
+                    // After "create sketch on plane": complete plane name
+                    QStringList planes = {
+                        QStringLiteral("XY"),
+                        QStringLiteral("XZ"),
+                        QStringLiteral("YZ")
+                    };
+                    if (prefix.isEmpty()) {
+                        return { QStringLiteral("?<name>  XY, XZ, YZ, or construction plane name") };
+                    }
+                    QStringList matches;
+                    for (const auto& p : planes) {
+                        if (p.startsWith(prefix, Qt::CaseInsensitive)) {
+                            matches.append(p);
+                        }
+                    }
+                    return matches.isEmpty()
+                        ? QStringList{ QStringLiteral("?<name>  XY, XZ, YZ, or construction plane name") }
+                        : matches;
+                }
+                // After "create sketch on <plane-name>": optional sketch name
+                return { QStringLiteral("?[name]  Optional sketch name (default: auto-named)") };
+            }
+        }
+        else if (argIndex == 5 && type == QLatin1String("sketch")) {
+            // After "create sketch on plane <name>": optional sketch name
+            QString arg2Lower = tokens.size() > 2 ? tokens[2].toLower() : QString();
+            QString arg3Lower = tokens.size() > 3 ? tokens[3].toLower() : QString();
+            if (arg2Lower == QLatin1String("on") && arg3Lower == QLatin1String("plane")) {
                 return { QStringLiteral("?[name]  Optional sketch name (default: auto-named)") };
             }
         }
@@ -562,50 +650,11 @@ QStringList CliEngine::completeArguments(const QStringList& tokens,
 
 // Helper to tokenize a command line, keeping parenthesized expressions intact
 // e.g., "circle (a + b),(c * d) radius (r * 2)" -> ["circle", "(a + b),(c * d)", "radius", "(r * 2)"]
-static QStringList tokenizeLine(const QString& line)
-{
-    QStringList tokens;
-    QString current;
-    int parenDepth = 0;
-    bool inToken = false;
-
-    for (int i = 0; i < line.length(); ++i) {
-        QChar c = line[i];
-
-        if (c == '(') {
-            parenDepth++;
-            current += c;
-            inToken = true;
-        } else if (c == ')') {
-            parenDepth--;
-            current += c;
-            inToken = true;
-        } else if (c.isSpace() && parenDepth == 0) {
-            // End of token (unless inside parentheses)
-            if (inToken && !current.isEmpty()) {
-                tokens.append(current);
-                current.clear();
-                inToken = false;
-            }
-        } else {
-            current += c;
-            inToken = true;
-        }
-    }
-
-    // Don't forget the last token
-    if (!current.isEmpty()) {
-        tokens.append(current);
-    }
-
-    return tokens;
-}
-
 // ---- Main dispatch --------------------------------------------------
 
 CliResult CliEngine::execute(const QString& line)
 {
-    QStringList tokens = tokenizeLine(line);
+    QStringList tokens = sketch::tokenizeLine(line);
 
     if (tokens.isEmpty()) return {};
 
@@ -686,7 +735,7 @@ CliResult CliEngine::cmdHelp() const
         "\n"
         "Selection & Creation:\n"
         "  select <type> <name>    Select an object (e.g., select sketch Sketch1)\n"
-        "  create sketch [name]    Create a new sketch (auto-named if no name given)\n"
+        "  create sketch [plane] [name]   Create a sketch (XY, XZ, YZ, on [plane] <name>)\n"
         "\n"
         "Viewport (full mode only):\n"
         "  zoom <percent>          Set zoom level (e.g., zoom 200)\n"
@@ -1251,24 +1300,116 @@ CliResult CliEngine::cmdCreate(const QStringList& args)
     if (args.isEmpty()) {
         r.exitCode = 1;
         r.error = QStringLiteral(
-            "Usage: create <type> [name]\n"
+            "Usage: create sketch [<plane>] [name]\n"
+            "       create sketch on [plane] <name> [sketch-name]\n"
+            "       create sketch \"name\" on [plane] <plane-name>\n"
             "\n"
-            "Types: sketch\n"
+            "Built-in planes: XY (default), XZ, YZ\n"
+            "Named planes:    use 'on [plane] <name>' for construction planes\n"
             "\n"
             "Examples:\n"
-            "  create sketch           (auto-named Sketch1, Sketch2, etc.)\n"
-            "  create sketch MySketch");
+            "  create sketch                             (XY, auto-named)\n"
+            "  create sketch XZ                          (XZ, auto-named)\n"
+            "  create sketch XZ MySketch                 (XZ, named)\n"
+            "  create sketch on plane Front              (construction plane)\n"
+            "  create sketch on Front                    (same, 'plane' optional)\n"
+            "  create sketch \"MySketch\" on plane XZ      (name first)\n"
+            "  create sketch MySketch                    (XY, named)");
         return r;
     }
 
     QString type = args[0].toLower();
 
     if (type == QLatin1String("sketch")) {
-        // Generate name or use provided name
+        // Accepted forms (args after "sketch"):
+        //
+        //   (nothing)                        → XY, auto-named
+        //   XZ [name]                        → built-in plane, optional name
+        //   on [plane] Front [name]          → named plane, optional name
+        //   "name" on [plane] XZ             → name first, then plane
+        //   name                             → XY, named (if not a plane keyword)
+
+        SketchPlane plane = SketchPlane::XY;
+        QString planeName = QStringLiteral("XY");
         QString sketchName;
+
+        // Helper: resolve a plane argument string to SketchPlane + planeName
+        auto resolvePlane = [&](const QString& arg) {
+            QString upper = arg.toUpper();
+            if (upper == QLatin1String("XY")) {
+                planeName = QStringLiteral("XY");
+            } else if (upper == QLatin1String("XZ")) {
+                plane = SketchPlane::XZ;
+                planeName = QStringLiteral("XZ");
+            } else if (upper == QLatin1String("YZ")) {
+                plane = SketchPlane::YZ;
+                planeName = QStringLiteral("YZ");
+            } else {
+                plane = SketchPlane::Custom;
+                planeName = arg;  // Preserve original case
+            }
+        };
+
+        // Helper: find "on [plane] <name>" starting at args[idx], returns
+        // the index after the plane specification (for any trailing name)
+        auto parseOnPlane = [&](int idx) -> int {
+            // args[idx] == "on"
+            int planeIdx = idx + 1;
+            if (planeIdx < args.size()
+                && args[planeIdx].toLower() == QLatin1String("plane")) {
+                planeIdx++;  // Skip optional "plane" keyword
+            }
+            if (planeIdx < args.size()) {
+                resolvePlane(args[planeIdx]);
+                return planeIdx + 1;
+            }
+            return idx + 1;  // "on" with nothing after — ignore
+        };
+
         if (args.size() >= 2) {
-            sketchName = args.mid(1).join(QStringLiteral(" "));
-        } else {
+            QString arg1 = args[1];
+            QString arg1Upper = arg1.toUpper();
+            QString arg1Lower = arg1.toLower();
+
+            if (arg1Upper == QLatin1String("XY") || arg1Upper == QLatin1String("XZ")
+                || arg1Upper == QLatin1String("YZ")) {
+                // Built-in plane: create sketch XZ [name]
+                resolvePlane(arg1);
+                if (args.size() > 2) {
+                    sketchName = args.mid(2).join(QStringLiteral(" "));
+                }
+            } else if (arg1Lower == QLatin1String("on") && args.size() >= 3) {
+                // Plane first: create sketch on [plane] <name> [sketch-name]
+                int afterPlane = parseOnPlane(1);
+                if (args.size() > afterPlane) {
+                    sketchName = args.mid(afterPlane).join(QStringLiteral(" "));
+                }
+            } else {
+                // arg1 is not a plane keyword — it's either a sketch name
+                // or could be "name" followed by "on [plane] ..."
+                //
+                // Check if "on" follows: create sketch "name" on [plane] XZ
+                int onIdx = -1;
+                for (int i = 2; i < args.size(); ++i) {
+                    if (args[i].toLower() == QLatin1String("on")) {
+                        onIdx = i;
+                        break;
+                    }
+                }
+
+                if (onIdx >= 0 && onIdx + 1 < args.size()) {
+                    // Name is everything from arg1 up to "on"
+                    sketchName = args.mid(1, onIdx - 1).join(QStringLiteral(" "));
+                    parseOnPlane(onIdx);
+                } else {
+                    // No "on" — everything is the sketch name, default XY
+                    sketchName = args.mid(1).join(QStringLiteral(" "));
+                }
+            }
+        }
+
+        // Auto-name if none was provided
+        if (sketchName.isEmpty()) {
             m_sketchCounter++;
             sketchName = QStringLiteral("Sketch%1").arg(m_sketchCounter);
         }
@@ -1276,10 +1417,12 @@ CliResult CliEngine::cmdCreate(const QStringList& args)
         // Enter sketch mode
         m_inSketchMode = true;
         m_currentSketchName = sketchName;
+        m_currentSketchPlane = plane;
+        m_currentSketchPlaneName = planeName;
 
-        r.output = QStringLiteral("Created sketch '%1'. Entering sketch mode.\n"
+        r.output = QStringLiteral("Created sketch '%1' on %2 plane. Entering sketch mode.\n"
                                   "Use 'finish' to save or 'discard' to cancel.")
-                       .arg(sketchName);
+                       .arg(sketchName, planeName);
         return r;
     }
 

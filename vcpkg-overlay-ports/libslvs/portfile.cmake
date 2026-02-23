@@ -9,12 +9,7 @@ vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 
 set(VERSION 3.2)
 
-# Download Eigen (required for constraint solver)
-vcpkg_download_distfile(EIGEN_ARCHIVE
-    URLS "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz"
-    FILENAME "eigen-3.4.0.tar.gz"
-    SHA512 ba75ecb760e32acf4ceaf27115468e65d4f77c44f8d519b5765941e6be8238444f7395a4c1826e0492f5c631a3486e34085a91a8c7165e5c4ae5b9e2a84cc42b
-)
+# Eigen is provided by the eigen3 vcpkg dependency
 
 vcpkg_download_distfile(ARCHIVE
     URLS
@@ -39,17 +34,13 @@ foreach(SUBMOD zlib libpng freetype cairo pixman angle)
     endif()
 endforeach()
 
-# Extract Eigen into the source tree (required for constraint solver)
-# NOTE: vcpkg_extract_source_archive returns the path to the .clean copy for
-# incremental builds. We extract Eigen directly to this path so it's always present.
+# Copy Eigen headers from vcpkg installed dir into the solvespace extlib path
 set(EIGEN_DIR "${SOURCE_PATH}/extlib/eigen")
 if(NOT EXISTS "${EIGEN_DIR}/Eigen/Core")
-    # Extract Eigen to extlib
-    file(ARCHIVE_EXTRACT INPUT "${EIGEN_ARCHIVE}" DESTINATION "${SOURCE_PATH}/extlib")
-    # Rename from eigen-3.4.0 to eigen
-    if(EXISTS "${SOURCE_PATH}/extlib/eigen-3.4.0" AND NOT EXISTS "${EIGEN_DIR}")
-        file(RENAME "${SOURCE_PATH}/extlib/eigen-3.4.0" "${EIGEN_DIR}")
-    endif()
+    file(COPY "${CURRENT_INSTALLED_DIR}/include/eigen3/Eigen"
+         DESTINATION "${EIGEN_DIR}")
+    file(COPY "${CURRENT_INSTALLED_DIR}/include/eigen3/unsupported"
+         DESTINATION "${EIGEN_DIR}")
 endif()
 
 # Verify Eigen is present before proceeding

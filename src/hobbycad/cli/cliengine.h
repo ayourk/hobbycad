@@ -19,6 +19,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <hobbycad/project.h>
+
 namespace hobbycad {
 
 class CliHistory;
@@ -112,6 +114,8 @@ private:
     // Sketch mode state
     bool    m_inSketchMode = false;
     QString m_currentSketchName;
+    QString m_currentSketchPlaneName;          // Display name (e.g. "XY", "MyPlane")
+    SketchPlane m_currentSketchPlane = SketchPlane::XY;
     int     m_sketchCounter = 0;  // For auto-naming sketches
 
     // TODO: These will come from the document later

@@ -18,6 +18,8 @@
 #                                                   #   else build + run
 #    ./tools/linux/build-dev.sh run-reduced         # Run in Reduced Mode
 #    ./tools/linux/build-dev.sh run-cli             # Run in CLI mode
+#    ./tools/linux/build-dev.sh run-script file.txt                      # CLI script
+#    ./tools/linux/build-dev.sh run-script "create sketch on plane XZ"  # GUI + exec
 #    ./tools/linux/build-dev.sh clean run           # Clean + build + run
 #    ./tools/linux/build-dev.sh clean release run   # Clean + Release + run
 #
@@ -57,24 +59,37 @@ fi
 BUILD_TYPE="Debug"
 LINKAGE="STATIC"
 ACTIONS=()
+SCRIPT_FILE=""
 
-for arg in "$@"; do
-    case "${arg,,}" in
-        release)  BUILD_TYPE="Release" ;;
-        debug)    BUILD_TYPE="Debug" ;;
-        shared)   LINKAGE="SHARED" ;;
-        static)   LINKAGE="STATIC" ;;
-        clean)    ACTIONS+=("clean") ;;
-        run)      ACTIONS+=("run") ;;
-        run-cli)  ACTIONS+=("run-cli") ;;
+while [ $# -gt 0 ]; do
+    case "${1,,}" in
+        release)     BUILD_TYPE="Release" ;;
+        debug)       BUILD_TYPE="Debug" ;;
+        shared)      LINKAGE="SHARED" ;;
+        static)      LINKAGE="STATIC" ;;
+        clean)       ACTIONS+=("clean") ;;
+        run)         ACTIONS+=("run") ;;
+        run-cli)     ACTIONS+=("run-cli") ;;
         run-reduced) ACTIONS+=("run-reduced") ;;
+        run-script)
+            ACTIONS+=("run-script")
+            shift
+            if [ $# -eq 0 ]; then
+                echo "Error: run-script requires a file or command argument"
+                echo ""
+                echo "Usage: $0 run-script <file.txt | \"command\">"
+                exit 1
+            fi
+            SCRIPT_FILE="$1"
+            ;;
         *)
-            echo "Usage: $0 [debug|release] [static|shared] [clean] [run|run-reduced|run-cli]"
+            echo "Usage: $0 [debug|release] [static|shared] [clean] [run|run-reduced|run-cli|run-script <file>]"
             echo ""
             echo "Log written to ${LOG}"
             exit 1
             ;;
     esac
+    shift
 done
 
 # Default action: build
@@ -296,15 +311,46 @@ do_run_cli() {
     return $?
 }
 
+do_run_script() {
+    local arg="$1"
+
+    # Build if binary is missing
+    if [ ! -f "${BINARY}" ]; then
+        echo "--- Binary not found — building first ---"
+        echo ""
+        if ! do_build; then
+            return 1
+        fi
+    fi
+
+    if [ -f "${arg}" ]; then
+        # Argument is a file — run it as a CLI script (headless)
+        echo "--- Running script: ${arg} ---"
+        echo ""
+        "${BINARY}" script "${arg}"
+    else
+        # Argument is an inline command — launch the GUI with --exec
+        echo "--- Launching GUI with: ${arg} ---"
+        echo ""
+        "${BINARY}" --exec "${arg}" &
+        BGPID=$!
+        echo "  PID    : ${BGPID}"
+        echo "  Stop   : kill ${BGPID}"
+        echo ""
+    fi
+    return $?
+}
+
 # ---- Execute actions left to right -----------------------------------
 
 for action in "${ACTIONS[@]}"; do
     case "${action}" in
-        clean)       do_clean       || EXIT_CODE=$? ;;
-        build)       do_build       || EXIT_CODE=$? ;;
-        run)         do_run         || EXIT_CODE=$? ;;
-        run-reduced) do_run_reduced || EXIT_CODE=$? ;;
-        run-cli)     do_run_cli     || EXIT_CODE=$? ;;
+        clean)       do_clean                    || EXIT_CODE=$? ;;
+        build)       do_build                    || EXIT_CODE=$? ;;
+        run)         do_run                      || EXIT_CODE=$? ;;
+        run-reduced) do_run_reduced              || EXIT_CODE=$? ;;
+        run-cli)     do_run_cli                  || EXIT_CODE=$? ;;
+        run-script)  do_run_script "${SCRIPT_FILE}" || EXIT_CODE=$? ;;
     esac
 
     # Stop processing further actions on failure
@@ -319,7 +365,7 @@ if [ "${EXIT_CODE}" -eq 0 ]; then
     # If no run was requested, show usage hints
     has_run=false
     for action in "${ACTIONS[@]}"; do
-        if [ "${action}" = "run" ] || [ "${action}" = "run-reduced" ] || [ "${action}" = "run-cli" ]; then has_run=true; fi
+        if [ "${action}" = "run" ] || [ "${action}" = "run-reduced" ] || [ "${action}" = "run-cli" ] || [ "${action}" = "run-script" ]; then has_run=true; fi
     done
 
     if [ "${has_run}" = false ] && [ -f "${BINARY}" ]; then

@@ -137,8 +137,19 @@ QPointF Entity::closestPoint(const QPointF& point) const
         break;
 
     case EntityType::Rectangle:
-        if (points.size() >= 2) {
-            // Find closest point on rectangle edges
+        if (points.size() >= 4) {
+            // 4-point rotated rectangle: find closest point on any edge
+            QPointF closest = points[0];
+            double minDist = QLineF(point, points[0]).length();
+            for (int i = 0; i < 4; ++i) {
+                int j = (i + 1) % 4;
+                QPointF cp = closestPointOnLine(point, points[i], points[j]);
+                double d = QLineF(point, cp).length();
+                if (d < minDist) { minDist = d; closest = cp; }
+            }
+            return closest;
+        } else if (points.size() >= 2) {
+            // Axis-aligned rectangle from 2 corner points
             QPointF corners[4] = {
                 points[0],
                 QPointF(points[1].x(), points[0].y()),
@@ -158,6 +169,70 @@ QPointF Entity::closestPoint(const QPointF& point) const
                 }
             }
             return closest;
+        }
+        break;
+
+    case EntityType::Parallelogram:
+        if (points.size() >= 4) {
+            QPointF closest = points[0];
+            double minDist = QLineF(point, points[0]).length();
+            for (int i = 0; i < 4; ++i) {
+                int j = (i + 1) % 4;
+                QPointF cp = closestPointOnLine(point, points[i], points[j]);
+                double d = QLineF(point, cp).length();
+                if (d < minDist) { minDist = d; closest = cp; }
+            }
+            return closest;
+        }
+        break;
+
+    case EntityType::Ellipse:
+        if (!points.isEmpty()) {
+            double a = majorRadius;
+            double b = minorRadius;
+            if (a < 0.001 || b < 0.001) break;
+            double dx = point.x() - points[0].x();
+            double dy = point.y() - points[0].y();
+            double angle = std::atan2(dy, dx);
+            // Approximate: point on ellipse at same angle from center
+            return QPointF(points[0].x() + a * std::cos(angle),
+                           points[0].y() + b * std::sin(angle));
+        }
+        break;
+
+    case EntityType::Spline:
+        if (points.size() >= 2) {
+            if (points.size() == 2) {
+                return closestPointOnLine(point, points[0], points[1]);
+            }
+            // Sample Catmull-Rom spline and find closest point on sub-segments
+            QPointF bestPoint = points[0];
+            double minDist = QLineF(point, points[0]).length();
+            const int samplesPerSegment = 20;
+
+            for (int i = 0; i < points.size() - 1; ++i) {
+                QPointF cp0 = (i == 0) ? points[i] : points[i - 1];
+                QPointF cp1 = points[i];
+                QPointF cp2 = points[i + 1];
+                QPointF cp3 = (i == points.size() - 2) ? points[i + 1] : points[i + 2];
+
+                QPointF b0 = cp1;
+                QPointF b1 = cp1 + (cp2 - cp0) / 6.0;
+                QPointF b2 = cp2 - (cp3 - cp1) / 6.0;
+                QPointF b3 = cp2;
+
+                QPointF prev = b0;
+                for (int s = 1; s <= samplesPerSegment; ++s) {
+                    double st = static_cast<double>(s) / samplesPerSegment;
+                    double u = 1.0 - st;
+                    QPointF cur = u*u*u*b0 + 3.0*u*u*st*b1 + 3.0*u*st*st*b2 + st*st*st*b3;
+                    QPointF cp = closestPointOnLine(point, prev, cur);
+                    double d = QLineF(point, cp).length();
+                    if (d < minDist) { minDist = d; bestPoint = cp; }
+                    prev = cur;
+                }
+            }
+            return bestPoint;
         }
         break;
 
@@ -284,9 +359,82 @@ double Entity::distanceTo(const QPointF& point) const
         break;
 
     case EntityType::Rectangle:
-        if (points.size() >= 2) {
+        if (points.size() >= 4) {
+            // 4-point rotated rectangle: test all 4 edges
+            double minDist = std::numeric_limits<double>::max();
+            for (int i = 0; i < 4; ++i) {
+                int j = (i + 1) % 4;
+                double d = pointToLineDistance(point, points[i], points[j]);
+                if (d < minDist) minDist = d;
+            }
+            return minDist;
+        } else if (points.size() >= 2) {
             QPointF cp = closestPoint(point);
             return QLineF(point, cp).length();
+        }
+        break;
+
+    case EntityType::Parallelogram:
+        if (points.size() >= 4) {
+            // Test distance to all 4 edges
+            double minDist = std::numeric_limits<double>::max();
+            for (int i = 0; i < 4; ++i) {
+                int j = (i + 1) % 4;
+                double d = pointToLineDistance(point, points[i], points[j]);
+                if (d < minDist) minDist = d;
+            }
+            return minDist;
+        }
+        break;
+
+    case EntityType::Ellipse:
+        if (!points.isEmpty()) {
+            double a = majorRadius;
+            double b = minorRadius;
+            if (a < 0.001 || b < 0.001) break;
+            double dx = point.x() - points[0].x();
+            double dy = point.y() - points[0].y();
+            // Normalized ellipse equation: (dx/a)^2 + (dy/b)^2 = 1 on the outline
+            double normalized = (dx * dx) / (a * a) + (dy * dy) / (b * b);
+            // Approximate distance: |normalized - 1| * min(a,b)
+            // This matches the GUI hit-testing tolerance calculation
+            return std::abs(normalized - 1.0) * std::min(a, b);
+        }
+        break;
+
+    case EntityType::Spline:
+        if (points.size() >= 2) {
+            if (points.size() == 2) {
+                // Just two points - distance to line segment
+                return pointToLineDistance(point, points[0], points[1]);
+            }
+            // Sample Catmull-Rom spline and find minimum distance to sub-segments
+            const int samplesPerSegment = 20;
+            double minDist = std::numeric_limits<double>::max();
+            for (int i = 0; i < points.size() - 1; ++i) {
+                QPointF cp0 = (i == 0) ? points[i] : points[i - 1];
+                QPointF cp1 = points[i];
+                QPointF cp2 = points[i + 1];
+                QPointF cp3 = (i == points.size() - 2) ? points[i + 1] : points[i + 2];
+
+                // Convert Catmull-Rom to cubic Bezier control points (tension = 0.5)
+                QPointF b0 = cp1;
+                QPointF b1 = cp1 + (cp2 - cp0) / 6.0;
+                QPointF b2 = cp2 - (cp3 - cp1) / 6.0;
+                QPointF b3 = cp2;
+
+                // Sample the cubic Bezier and test each sub-segment
+                QPointF prev = b0;
+                for (int s = 1; s <= samplesPerSegment; ++s) {
+                    double st = static_cast<double>(s) / samplesPerSegment;
+                    double u = 1.0 - st;
+                    QPointF cur = u*u*u*b0 + 3.0*u*u*st*b1 + 3.0*u*st*st*b2 + st*st*st*b3;
+                    double d = pointToLineDistance(point, prev, cur);
+                    if (d < minDist) minDist = d;
+                    prev = cur;
+                }
+            }
+            return minDist;
         }
         break;
 

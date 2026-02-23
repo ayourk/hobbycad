@@ -730,6 +730,21 @@ void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
         emit rollbackChanged(index);
     });
 
+    // Export actions (only for sketches)
+    if (feature == TimelineFeature::Sketch) {
+        menu.addSeparator();
+
+        QAction* exportDXFAction = menu.addAction(tr("Export as DXF..."));
+        connect(exportDXFAction, &QAction::triggered, this, [this, index]() {
+            emit exportDXFRequested(index);
+        });
+
+        QAction* exportSVGAction = menu.addAction(tr("Export as SVG..."));
+        connect(exportSVGAction, &QAction::triggered, this, [this, index]() {
+            emit exportSVGRequested(index);
+        });
+    }
+
     menu.addSeparator();
 
     // Delete action

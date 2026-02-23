@@ -318,6 +318,95 @@ inline QString formatAngle(double degrees)
     return formatValue(degrees) + QStringLiteral("°");
 }
 
+/// Parse a degrees-minutes-seconds string into decimal degrees.
+/// Supported formats: 45°30'15", 45°30', 45°, -45°30'15.5"
+/// Also accepts Unicode prime ′ (U+2032) and double prime ″ (U+2033).
+/// The input must contain at least one DMS indicator (°, ', or ") to be
+/// recognized. Returns false if the input is not valid DMS format, allowing
+/// callers to fall through to other parsers (expression evaluator, toDouble).
+/// @param input  The string to parse
+/// @param degrees Output: the angle in decimal degrees
+/// @return true if parsed successfully
+inline bool parseDMS(const QString& input, double& degrees)
+{
+    QString s = input.trimmed();
+    if (s.isEmpty())
+        return false;
+
+    // Must contain at least one DMS indicator to be recognized as DMS
+    bool hasDeg = s.contains(QChar(0x00B0));                                  // °
+    bool hasMin = s.contains(QLatin1Char('\'')) || s.contains(QChar(0x2032)); // ' or ′
+    bool hasSec = s.contains(QLatin1Char('"')) || s.contains(QChar(0x2033));  // " or ″
+    if (!hasDeg && !hasMin && !hasSec)
+        return false;
+
+    int pos = 0;
+
+    // Optional sign
+    double sign = 1.0;
+    if (pos < s.length() && s[pos] == QLatin1Char('-')) {
+        sign = -1.0;
+        ++pos;
+    } else if (pos < s.length() && s[pos] == QLatin1Char('+')) {
+        ++pos;
+    }
+
+    auto skipSpaces = [&]() {
+        while (pos < s.length() && s[pos].isSpace())
+            ++pos;
+    };
+
+    auto readNumber = [&]() -> double {
+        skipSpaces();
+        int numStart = pos;
+        while (pos < s.length() && (s[pos].isDigit() || s[pos] == QLatin1Char('.')))
+            ++pos;
+        if (pos == numStart)
+            return 0.0;
+        return s.mid(numStart, pos - numStart).toDouble();
+    };
+
+    auto skipChar = [&](auto... chars) -> bool {
+        if (pos >= s.length())
+            return false;
+        QChar c = s[pos];
+        bool match = ((c == chars) || ...);
+        if (match) {
+            ++pos;
+            return true;
+        }
+        return false;
+    };
+
+    // Parse degrees
+    double deg = readNumber();
+    skipChar(QChar(0x00B0));  // ° (optional — might be absent if only ' or " used)
+
+    // Parse minutes
+    skipSpaces();
+    double min = 0.0;
+    if (pos < s.length() && (s[pos].isDigit() || s[pos] == QLatin1Char('.'))) {
+        min = readNumber();
+    }
+    skipChar(QLatin1Char('\''), QChar(0x2032));  // ' or ′
+
+    // Parse seconds
+    skipSpaces();
+    double sec = 0.0;
+    if (pos < s.length() && (s[pos].isDigit() || s[pos] == QLatin1Char('.'))) {
+        sec = readNumber();
+    }
+    skipChar(QLatin1Char('"'), QChar(0x2033));  // " or ″
+
+    // Should be at end of string (after optional whitespace)
+    skipSpaces();
+    if (pos != s.length())
+        return false;  // Trailing junk — not a clean DMS value
+
+    degrees = sign * (deg + min / 60.0 + sec / 3600.0);
+    return true;
+}
+
 /// Normalize an angle in radians to the range [0, 2*Pi).
 /// @param radians Angle in radians (any value)
 /// @return Angle normalized to [0, 2*Pi)
@@ -356,6 +445,55 @@ inline double atan2Degrees(double dy, double dx)
 inline double atan2Radians(double dy, double dx)
 {
     return std::atan2(dy, dx);
+}
+
+// ============================================================================
+// Display-friendly number rounding (1-2-5 sequence)
+// ============================================================================
+
+/// Round a value up to the nearest "nice" number in the 1-2-5 sequence.
+/// Useful for scale bars, grid spacing, axis labels, and dimension rounding.
+/// @param value The value to round (must be positive)
+/// @return The nearest nice number >= value
+inline double niceNumber(double value)
+{
+    double exponent = std::floor(std::log10(value));
+    double fraction = value / std::pow(10.0, exponent);
+
+    double nice;
+    if (fraction < 1.5)
+        nice = 1.0;
+    else if (fraction < 3.5)
+        nice = 2.0;
+    else if (fraction < 7.5)
+        nice = 5.0;
+    else
+        nice = 10.0;
+
+    return nice * std::pow(10.0, exponent);
+}
+
+/// Step down to the next smaller "nice" number in the 1-2-5 sequence.
+/// @param value The value to step down from (must be positive)
+/// @return The largest nice number < value
+inline double niceNumberBelow(double value)
+{
+    double exponent = std::floor(std::log10(value));
+    double fraction = value / std::pow(10.0, exponent);
+
+    double nice;
+    if (fraction > 5.5)
+        nice = 5.0;
+    else if (fraction > 2.5)
+        nice = 2.0;
+    else if (fraction > 1.5)
+        nice = 1.0;
+    else {
+        nice = 5.0;
+        exponent -= 1.0;
+    }
+
+    return nice * std::pow(10.0, exponent);
 }
 
 }  // namespace hobbycad

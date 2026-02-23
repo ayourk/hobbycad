@@ -65,6 +65,10 @@ protected:
     void onDocumentLoaded() override;
     void onDocumentClosed() override;
     void applyPreferences() override;
+    SketchCanvas* activeSketchCanvas() const override;
+    bool getSelectedSketchForExport(
+        QVector<sketch::Entity>& outEntities,
+        QVector<sketch::Constraint>& outConstraints) const override;
 
 private slots:
     void showParametersDialog();
@@ -84,6 +88,8 @@ private slots:
     void onSuppressFeature(int index, bool suppress);
     void onFeatureMoved(int fromIndex, int toIndex);
     void onRollbackChanged(int index);
+    void onExportSketchDXF(int index);
+    void onExportSketchSVG(int index);
 
     // Model tool handlers
     void onModelToolSelected(ModelTool tool);

@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/libhobbycad_api.txt
-  Document Version : 0.0.5
-  Date             : 2026-02-16
+  Document Version : 0.0.6
+  Date             : 2026-02-20
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -74,6 +74,7 @@
        12.10 Sketch Queries
        12.11 Sketch Export/Import
        12.12 Background Images
+       12.13 Snap Point Detection
    13. GUI Integration
 
 ================================================================================
@@ -91,6 +92,7 @@
     - 2D geometry operations (intersections, transforms)
     - Sketch operations (offset, fillet, chamfer, trim, patterns)
     - Profile detection for closed loops
+    - Snap point detection with weighted priority system
 
     The library is designed to be used by both GUI and CLI applications.
 
@@ -108,6 +110,7 @@
     - Geometric operations like fillet, chamfer, offset (sketch/operations.h)
     - Pattern creation (sketch/patterns.h)
     - Profile/loop detection for extrusion (sketch/profiles.h)
+    - Snap point detection with weighted priority (sketch/snap.h)
     - Low-level geometry calculations (geometry/*.h)
 
     To build an alternative UI (e.g., web-based, terminal, or different
@@ -139,6 +142,7 @@
       hobbycad/sketch/queries.h       Hit testing and analysis
       hobbycad/sketch/export.h        SVG/DXF export/import
       hobbycad/sketch/background.h    Background images for tracing
+      hobbycad/sketch/snap.h          Snap point detection and evaluation
 
     Namespaces:
       hobbycad           Core types (Document, Project)
@@ -1333,6 +1337,7 @@
       hobbycad/sketch/queries.h     Hit testing and analysis
       hobbycad/sketch/export.h      SVG/DXF export/import
       hobbycad/sketch/background.h  Background images
+      hobbycad/sketch/snap.h        Snap point detection
 
     Namespace:
       hobbycad::sketch
@@ -1965,6 +1970,155 @@
         QString imageFileFilter()
         bool isImageFormatSupported(filePath)
 
+  12.13  Snap Point Detection (snap.h)
+  -------------------------------------
+
+    Snap point detection for cursor snapping during sketch editing.
+    Uses a weighted distance competition system where all snap
+    candidates compete, with higher-weight types having stronger pull.
+
+    Snap Types:
+
+        enum class SnapType {
+            Endpoint,       // Line/arc/spline endpoints, rectangle corners
+            Point,          // Standalone sketch point (stronger pull)
+            Midpoint,       // Line/arc midpoints, edge midpoints
+            Center,         // Circle/arc/ellipse/polygon centers
+            Quadrant,       // Circle/ellipse axis points (0/90/180/270)
+            Intersection,   // Entity-entity or entity-axis crossings
+            ArcEndCenter,   // Slot endpoint arc centers
+            Nearest,        // Nearest point on entity perimeter
+            Origin,         // Origin point (0,0)
+            AxisX,          // Point on X axis (Y=0)
+            AxisY           // Point on Y axis (X=0)
+        };
+
+    Snap Point:
+
+        struct SnapPoint {
+            QPointF position;   // World-space position
+            SnapType type;      // Type of snap point
+            int entityId;       // Source entity ID (-1 for origin/axis)
+        };
+
+    Snap Result:
+
+        struct SnapResult {
+            bool found;         // Whether a snap point was found
+            SnapPoint snap;     // The winning snap point
+        };
+
+    Snap Weight:
+
+        double defaultSnapWeight(SnapType type)
+            Returns default priority weight for a snap type.
+            Higher weight = stronger pull.
+
+            Snap Type       Weight    Description
+            ─────────────   ──────    ──────────────────────────────
+            Origin          4.0       Strongest pull
+            Point           3.0       Standalone sketch points
+            Endpoint        2.5       Line/arc/spline endpoints
+            Center          2.5       Circle/arc/polygon centers
+            Intersection    2.2       Entity and axis crossings
+            Midpoint        2.0       Line/arc midpoints
+            Quadrant        2.0       Circle/ellipse axis points
+            ArcEndCenter    2.0       Slot end arc centers
+            AxisX / AxisY   1.25      Nearest point on X or Y axis
+            Nearest         1.0       Weakest — perimeter snap
+
+            Formula: effectiveDist = rawDist / weight
+
+    Snap Point Collection:
+
+        QVector<SnapPoint> collectSnapPoints(const Entity& entity)
+            Collect all explicit snap points from a single entity.
+            Returns endpoints, midpoints, centers, quadrants, etc.
+            depending on entity type.  Does not include intersections
+            or nearest-on-perimeter.
+
+        QVector<SnapPoint> collectAllSnapPoints(
+            const QVector<Entity>& entities,
+            int excludeEntityId = -1)
+            Collect all snap points from all entities, plus entity-
+            entity intersection points and axis-crossing points.
+            Pass excludeEntityId to skip a specific entity (e.g.,
+            the entity being dragged).
+
+        QVector<SnapPoint> collectIntersectionSnapPoints(
+            const QVector<Entity>& entities,
+            int excludeEntityId = -1)
+            Collect intersection points between all entity pairs
+            plus axis-crossing points.
+
+        QVector<SnapPoint> collectAxisCrossingSnapPoints(
+            const QVector<Entity>& entities,
+            int excludeEntityId = -1)
+            Collect points where entities cross X axis (Y=0) or
+            Y axis (X=0).  Handles Line, Rectangle, Parallelogram,
+            Circle, Arc, Polygon, and Ellipse.  Skips origin (0,0).
+
+    Nearest on Perimeter:
+
+        SnapPoint findNearestOnPerimeter(
+            const QVector<Entity>& entities,
+            const QPointF& point,
+            double tolerance,
+            int excludeEntityId = -1)
+            Find the nearest point on any entity perimeter.
+            Handles Line, Circle, Arc, Rectangle, Parallelogram,
+            Polygon, and Slot.  Returns SnapPoint with type=Nearest
+            if found, or entityId=-1 if nothing within tolerance.
+
+    Best Snap Evaluation:
+
+        SnapResult findBestSnap(
+            const QVector<Entity>& entities,
+            const QPointF& worldPos,
+            double worldTolerance,
+            int excludeEntityId = -1)
+            Find the best snap point using weighted distance.
+            Checks origin, all explicit snap points, intersections,
+            axis crossings, nearest-on-perimeter, and axis proximity.
+            Does NOT handle grid snapping (GUI responsibility).
+
+    Entity Intersection Utility:
+
+        QVector<QPointF> computeEntityIntersectionPoints(
+            const Entity& e1, const Entity& e2)
+            Compute intersection points between two entities.
+            Handles Line, Circle, Arc, Rectangle, Parallelogram,
+            and Polygon in all pairwise combinations.  Rectangles,
+            parallelograms, and polygons are decomposed into edges.
+
+    Example Usage:
+
+        #include <hobbycad/sketch/snap.h>
+
+        // Simple: find best snap near cursor
+        QVector<Entity> entities = getSketchEntities();
+        double tolerance = 10.0 / zoomLevel;  // pixels to world
+
+        SnapResult result = sketch::findBestSnap(
+            entities, cursorWorldPos, tolerance);
+        if (result.found) {
+            cursorPos = result.snap.position;
+            showSnapIndicator(result.snap.type);
+        }
+
+        // Exclude entity being dragged
+        SnapResult result = sketch::findBestSnap(
+            entities, cursorWorldPos, tolerance,
+            draggedEntityId);
+
+        // Collect snap points for custom evaluation
+        auto points = sketch::collectAllSnapPoints(entities);
+        for (const auto& sp : points) {
+            double dist = QLineF(cursorPos, sp.position).length();
+            double effective = dist / sketch::defaultSnapWeight(sp.type);
+            // ... custom evaluation logic ...
+        }
+
 ================================================================================
   13. GUI INTEGRATION
 ================================================================================
@@ -1999,6 +2153,17 @@
             sketch::createRectangularPattern(source, params, idGenerator);
         for (const sketch::Entity& e : result.entities) {
             m_entities.append(toGuiEntity(e));
+        }
+
+        // Snap point evaluation using library
+        QVector<sketch::Entity> libEntities = toLibraryEntities(m_entities);
+        double tolerance = m_entitySnapTolerance / m_zoom;
+        int excludeId = m_isDraggingHandle ? m_selectedId : -1;
+        sketch::SnapResult result = sketch::findBestSnap(
+            libEntities, world, tolerance, excludeId);
+        if (result.found) {
+            m_activeSnap = result.snap;   // Store for visual indicator
+            return result.snap.position;
         }
 
 ================================================================================

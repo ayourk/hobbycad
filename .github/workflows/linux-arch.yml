@@ -29,6 +29,10 @@ on:
       - '*.md'
   workflow_dispatch:
 
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
 jobs:
 
   # ================================================================
@@ -86,8 +90,8 @@ jobs:
             librsvg \
             mesa glu libxkbcommon
 
-          # Build OpenMesh from source (AUR package, not in official repos)
-          curl -L -o /tmp/openmesh.tar.gz "https://www.graphics.rwth-aachen.de/media/openmesh_static/Releases/11.0/OpenMesh-11.0.0.tar.gz"
+          # Build OpenMesh from PPA source (AUR package, not in official repos)
+          curl -L -o /tmp/openmesh.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz"
           mkdir -p /tmp/openmesh && tar -xzf /tmp/openmesh.tar.gz -C /tmp/openmesh --strip-components=1
           cd /tmp/openmesh
           cmake -B build -G Ninja \
@@ -96,19 +100,30 @@ jobs:
           cmake --build build
           cmake --install build
 
-          # Build libslvs from source (solvespace package is GUI only)
-          git clone --depth 1 --recurse-submodules https://github.com/solvespace/solvespace.git /tmp/solvespace
-          cd /tmp/solvespace
+          # Build libslvs from PPA source (solvespace package is GUI only)
+          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
+          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
+          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
+          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+
+          # Stub empty submodule directories
+          for submod in zlib libpng freetype cairo pixman angle; do
+            mkdir -p extlib/$submod
+            echo "# stub" > extlib/$submod/CMakeLists.txt
+          done
+
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_COVERAGE=OFF
-          cmake --build build --target slvs
-          cmake --install build --component slvs
+            -DENABLE_OPENMP=OFF \
+            -DENABLE_TESTS=OFF
+          cmake --build build
+          cmake --install build
 
-          # Build meshfix from source (not packaged for Arch)
+          # Build meshfix from PPA source (not packaged for Arch)
           curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
           mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
           curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"

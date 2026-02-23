@@ -659,7 +659,12 @@
 
   All commits to HobbyCAD repositories must include a Signed-off-by
   trailer certifying that the contributor has the right to submit
-  the code under the project's license.  This follows the Developer
+  the code under the project's license.
+
+  Commit Message Approval:  When working with AI assistants (e.g.,
+  Claude Code), commit messages must be presented to and approved
+  by the user before any commit is made.  The AI assistant should
+  not commit changes without explicit user approval of the message.  This follows the Developer
   Certificate of Origin (https://developercertificate.org/), the
   same mechanism used by the Linux kernel.
 

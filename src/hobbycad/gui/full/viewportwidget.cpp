@@ -945,7 +945,7 @@ void ViewportWidget::setSnapParams(int stepDeg, int intervalMs)
 void ViewportWidget::setUnitSystem(int units)
 {
     if (m_scaleBar.IsNull()) return;
-    m_scaleBar->setUnitSystem(static_cast<UnitSystem>(units));
+    m_scaleBar->setUnitSystem(static_cast<LengthUnit>(units));
     m_scaleBar->updateScale();
     if (!m_context.IsNull())
         m_context->Redisplay(m_scaleBar, true);

@@ -43,7 +43,7 @@ ScaleBarWidget::ScaleBarWidget()
 
 // ---- setUnitSystem --------------------------------------------------
 
-void ScaleBarWidget::setUnitSystem(UnitSystem units)
+void ScaleBarWidget::setUnitSystem(LengthUnit units)
 {
     m_unitSystem = units;
 }
@@ -86,7 +86,7 @@ void ScaleBarWidget::buildLabel()
     const char* unitStr = "mm";
 
     switch (m_unitSystem) {
-    case UnitSystem::Millimeters:
+    case LengthUnit::Millimeters:
         // Already in mm, but show m for large values
         if (value >= 1000.0) {
             value /= 1000.0;
@@ -96,7 +96,7 @@ void ScaleBarWidget::buildLabel()
             unitStr = "um";
         }
         break;
-    case UnitSystem::Centimeters:
+    case LengthUnit::Centimeters:
         value /= 10.0;  // mm to cm
         unitStr = "cm";
         if (value >= 100.0) {
@@ -104,7 +104,7 @@ void ScaleBarWidget::buildLabel()
             unitStr = "m";
         }
         break;
-    case UnitSystem::Meters:
+    case LengthUnit::Meters:
         value /= 1000.0;  // mm to m
         unitStr = "m";
         if (value < 0.01) {
@@ -112,7 +112,7 @@ void ScaleBarWidget::buildLabel()
             unitStr = "cm";
         }
         break;
-    case UnitSystem::Inches:
+    case LengthUnit::Inches:
         value /= 25.4;  // mm to inches
         unitStr = "in";
         if (value >= 12.0) {
@@ -120,7 +120,7 @@ void ScaleBarWidget::buildLabel()
             unitStr = "ft";
         }
         break;
-    case UnitSystem::Feet:
+    case LengthUnit::Feet:
         value /= 304.8;  // mm to feet
         unitStr = "ft";
         if (value < 1.0) {
@@ -183,48 +183,6 @@ void ScaleBarWidget::onPaint()
 
     // ---- Value label (right of bar) ----
     drawText(x1 + kTextGap, textY, m_label.c_str(), bar, kFontHeight);
-}
-
-// ---- niceNumber -----------------------------------------------------
-
-double ScaleBarWidget::niceNumber(double value) const
-{
-    double exponent = std::floor(std::log10(value));
-    double fraction = value / std::pow(10.0, exponent);
-
-    double nice;
-    if (fraction < 1.5)
-        nice = 1.0;
-    else if (fraction < 3.5)
-        nice = 2.0;
-    else if (fraction < 7.5)
-        nice = 5.0;
-    else
-        nice = 10.0;
-
-    return nice * std::pow(10.0, exponent);
-}
-
-// ---- niceNumberBelow ------------------------------------------------
-
-double ScaleBarWidget::niceNumberBelow(double value) const
-{
-    double exponent = std::floor(std::log10(value));
-    double fraction = value / std::pow(10.0, exponent);
-
-    double nice;
-    if (fraction > 5.5)
-        nice = 5.0;
-    else if (fraction > 2.5)
-        nice = 2.0;
-    else if (fraction > 1.5)
-        nice = 1.0;
-    else {
-        nice = 5.0;
-        exponent -= 1.0;
-    }
-
-    return nice * std::pow(10.0, exponent);
 }
 
 }  // namespace hobbycad

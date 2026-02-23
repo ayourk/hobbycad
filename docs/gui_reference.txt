@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/gui_reference.txt
-  Document Version : 0.0.4
-  Date             : 2026-02-15
+  Document Version : 0.0.5
+  Date             : 2026-02-20
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -730,6 +730,55 @@
         Spline:     All control points
 
       Construction geometry provides snap points just like regular geometry.
+
+    Intersection Snap Points:
+      In addition to per-entity snap points, snap points are generated
+      at intersections:
+
+      Entity–Entity Intersections:
+        Where two entities cross (e.g. two lines, a line and a circle),
+        an intersection snap point is created at each crossing.
+
+      Axis–Entity Intersections:
+        Where an entity crosses the X axis (Y=0) or Y axis (X=0),
+        an intersection snap point is created.  Supported entity types:
+        Line, Rectangle, Parallelogram, Circle, and Arc.
+        The origin (0,0) is excluded since it has its own snap type.
+
+    Snap Priority (Weighted Distance):
+      All snap candidates compete using weighted distance.  The formula
+      is:  effectiveDistance = rawDistance / weight.  The candidate with
+      the smallest effective distance wins, provided the raw distance
+      is within the snap tolerance radius.
+
+      Higher weight means stronger pull — exact geometric points beat
+      perimeter snaps even when slightly farther from the cursor.
+
+        Snap Type         Weight    Description
+        ───────────────   ──────    ──────────────────────────────────
+        Origin            4.0       Origin point (0,0) — strongest
+        Endpoint          2.5       Line/arc/spline endpoints
+        Center            2.5       Circle/arc/ellipse/polygon centers
+        Intersection      2.2       Entity–entity and axis crossings
+        Midpoint          2.0       Line/arc midpoints
+        Quadrant          2.0       Circle/ellipse axis points
+        Arc End Center    2.0       Slot endpoint arc centers
+        Axis (X/Y)        1.25      Nearest point on X or Y axis
+        Nearest           1.0       Nearest point on entity perimeter
+
+      Example: The cursor is 8px from the origin and 5px from the
+      nearest point on a line.
+        Origin:   8 / 4.0 = 2.0  (effective)
+        Nearest:  5 / 1.0 = 5.0  (effective)
+        → Origin wins despite being farther in raw pixels.
+
+      Example: The cursor is 8px from a midpoint and 1px from the
+      nearest point on a line.
+        Midpoint: 8 / 2.0 = 4.0  (effective)
+        Nearest:  1 / 1.0 = 1.0  (effective)
+        → Nearest-on-entity wins because it is much closer.
+
+      If no entity snap is found, grid snap is used (when enabled).
 
     Snapping Behaviors:
 

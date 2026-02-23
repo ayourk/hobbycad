@@ -15,6 +15,7 @@
 #include "../core.h"
 
 #include <QPointF>
+#include <QSet>
 #include <QVector>
 
 namespace hobbycad {
@@ -69,6 +70,7 @@ struct HOBBYCAD_EXPORT Constraint {
     // State
     bool isDriving = true;                 ///< Driving vs reference (display only)
     bool enabled = true;                   ///< Whether constraint is active
+    bool satisfied = true;                 ///< Whether constraint is currently satisfied (solver feedback)
 
     // Display properties
     QPointF labelPosition;                 ///< Where to display dimension label
@@ -137,6 +139,20 @@ HOBBYCAD_EXPORT bool getConstraintEndpoints(
 /// @return Pointer to entity, or nullptr if not found
 HOBBYCAD_EXPORT const struct Entity* findEntityById(
     const QVector<struct Entity>& entities, int id);
+
+// =====================================================================
+//  Constraint Utility Functions
+// =====================================================================
+
+/// Get the set of entity IDs that have at least one enabled driving constraint
+HOBBYCAD_EXPORT QSet<int> getConstrainedEntityIds(const QVector<Constraint>& constraints);
+
+/// Compute the current geometric value of a driven (non-driving) constraint
+/// by inspecting the referenced entity geometry.
+/// Returns the value (distance in mm, radius in mm, angle in degrees, etc.)
+HOBBYCAD_EXPORT double computeDrivenValue(
+    const Constraint& constraint,
+    const QVector<Entity>& entities);
 
 }  // namespace sketch
 }  // namespace hobbycad

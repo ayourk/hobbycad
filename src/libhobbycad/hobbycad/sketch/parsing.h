@@ -111,6 +111,65 @@ HOBBYCAD_EXPORT bool looksNumeric(const QString& str);
 /// @return True if starts with '(' and ends with ')'
 HOBBYCAD_EXPORT bool isParenthesizedExpression(const QString& str);
 
+// =====================================================================
+//  Command Tokenization
+// =====================================================================
+
+/// Tokenize a command line while respecting parenthesized expressions.
+/// Splits on whitespace but keeps parenthesized sub-expressions intact.
+///
+/// Example: "circle (a + b),(c * d) radius (r * 2)"
+///       -> ["circle", "(a + b),(c * d)", "radius", "(r * 2)"]
+///
+/// @param line Input command string
+/// @return List of tokens
+inline QStringList tokenizeLine(const QString& line)
+{
+    QStringList tokens;
+    QString current;
+    int parenDepth = 0;
+    bool inQuote = false;
+    bool inToken = false;
+
+    for (int i = 0; i < line.length(); ++i) {
+        QChar c = line[i];
+
+        if (c == QLatin1Char('"') && parenDepth == 0) {
+            // Toggle quote mode — quotes are stripped, content kept as one token
+            inQuote = !inQuote;
+            inToken = true;
+        } else if (inQuote) {
+            // Inside quotes: everything is part of the current token
+            current += c;
+        } else if (c == QLatin1Char('(')) {
+            parenDepth++;
+            current += c;
+            inToken = true;
+        } else if (c == QLatin1Char(')')) {
+            parenDepth--;
+            current += c;
+            inToken = true;
+        } else if (c.isSpace() && parenDepth == 0) {
+            // End of token (unless inside parentheses)
+            if (inToken && !current.isEmpty()) {
+                tokens.append(current);
+                current.clear();
+                inToken = false;
+            }
+        } else {
+            current += c;
+            inToken = true;
+        }
+    }
+
+    // Don't forget the last token
+    if (!current.isEmpty()) {
+        tokens.append(current);
+    }
+
+    return tokens;
+}
+
 }  // namespace sketch
 }  // namespace hobbycad
 

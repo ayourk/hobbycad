@@ -110,21 +110,34 @@ inline QVector<SketchProfile> toGuiProfiles(const QVector<sketch::Profile>& libP
 }
 
 // =====================================================================
-//  Constraint Type Conversion (already same enum, but for completeness)
+//  Constraint Conversion
 // =====================================================================
 
-/// Both GUI and library use the same ConstraintType enum from project.h,
-/// so no conversion is needed. These are here for API consistency.
+/// ConstraintType is now a using alias for sketch::ConstraintType
+/// (unified in project.h), so no type conversion is needed.
 
-inline sketch::ConstraintType toLibraryConstraintType(ConstraintType guiType)
+/// Convert GUI SketchConstraint to library Constraint
+/// Since SketchConstraint inherits from sketch::Constraint, this is a simple slice
+inline const sketch::Constraint& toLibraryConstraint(const SketchConstraint& gui)
 {
-    // The enums are identical - direct cast is safe
-    return static_cast<sketch::ConstraintType>(static_cast<int>(guiType));
+    return static_cast<const sketch::Constraint&>(gui);
 }
 
-inline ConstraintType toGuiConstraintType(sketch::ConstraintType libType)
+/// Convert library Constraint to GUI SketchConstraint
+inline SketchConstraint toGuiConstraint(const sketch::Constraint& lib)
 {
-    return static_cast<ConstraintType>(static_cast<int>(libType));
+    return SketchConstraint(lib);
+}
+
+/// Convert a vector of GUI constraints to library constraints
+inline QVector<sketch::Constraint> toLibraryConstraints(const QVector<SketchConstraint>& guiConstraints)
+{
+    QVector<sketch::Constraint> libConstraints;
+    libConstraints.reserve(guiConstraints.size());
+    for (const SketchConstraint& gui : guiConstraints) {
+        libConstraints.append(toLibraryConstraint(gui));
+    }
+    return libConstraints;
 }
 
 // =====================================================================

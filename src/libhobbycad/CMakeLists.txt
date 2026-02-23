@@ -84,6 +84,7 @@ set(LIBHOBBYCAD_SOURCES
     stl_io.cpp
     obj_io.cpp
     parameters.cpp
+    crashhandler.cpp
     opengl_info.cpp
     project.cpp
     # Geometry module
@@ -104,6 +105,8 @@ set(LIBHOBBYCAD_SOURCES
     sketch/parsing.cpp
     sketch/group.cpp
     sketch/undo.cpp
+    sketch/snap.cpp
+    sketch/decomposition.cpp
     # BREP module
     brep/operations.cpp
 )
@@ -116,6 +119,7 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/stl_io.h
     hobbycad/obj_io.h
     hobbycad/parameters.h
+    hobbycad/crashhandler.h
     hobbycad/opengl_info.h
     hobbycad/project.h
     # Geometry module
@@ -135,6 +139,8 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/sketch/background.h
     hobbycad/sketch/group.h
     hobbycad/sketch/undo.h
+    hobbycad/sketch/snap.h
+    hobbycad/sketch/decomposition.h
     # BREP module
     hobbycad/brep/operations.h
 )

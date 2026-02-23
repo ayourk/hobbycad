@@ -47,6 +47,17 @@
   <!-- === PENCIL (in front) ===
        Eraser at ~(5,5), tip at ~(111,111). Sharp point. -->
   <g id="pencil" transform="rotate(-45, 64, 64)">
+    <!-- Unified 4px outline around entire pencil silhouette.
+         Placed first so detail fills cover the inner half of the 8px stroke,
+         leaving 4px visible on the outside. -->
+    <path fill="none" stroke="black" stroke-width="8"
+          stroke-linejoin="round" stroke-linecap="round"
+          d="M 62,-19.5 L 66,-19.5 A 2,2 0 0,1 68,-17.5
+             L 68,-12 L 69,-12 L 69,-4 L 68,-4
+             L 68,114 L 64,130.5 L 60,114
+             L 60,-4 L 59,-4 L 59,-12 L 60,-12
+             L 60,-17.5 A 2,2 0 0,1 62,-19.5 Z"/>
+
     <!-- Eraser (pink) -->
     <rect x="60" y="-19.5" width="8" height="7.5" rx="2" fill="#ef9a9a" stroke="#e57373" stroke-width="0.8"/>
 

@@ -15,6 +15,7 @@
 // =====================================================================
 
 #include <hobbycad/core.h>
+#include <hobbycad/crashhandler.h>
 #include <hobbycad/opengl_info.h>
 
 #include "cli/climode.h"
@@ -25,13 +26,19 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QIcon>
 #include <QLocale>
 #include <QMessageBox>
+#include <QTimer>
 #include <QTranslator>
+
+#include <hobbycad/project.h>
+#include <hobbycad/sketch/parsing.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 
 // ---- Helper: check for CLI-only flags --------------------------------
 
@@ -54,6 +61,9 @@ struct StartupFlags {
     bool scriptHelp = false;
     bool scriptCheck = false;   // --dry-run for syntax validation
     QString scriptPath;
+
+    // GUI startup command: --exec "command"
+    QString execCommand;
 };
 
 static bool isHelpFlag(const QString& arg)
@@ -112,6 +122,9 @@ static StartupFlags parseFlags(int argc, char* argv[])
         }
         else if (arg == QLatin1String("--theme") && i + 1 < argc) {
             flags.themePath = QString::fromLocal8Bit(argv[++i]);
+        }
+        else if (arg == QLatin1String("--exec") && i + 1 < argc) {
+            flags.execCommand = QString::fromLocal8Bit(argv[++i]);
         }
         // Subcommand: convert
         else if (arg == QLatin1String("convert") && !flags.convertCmd && !flags.scriptCmd) {
@@ -191,6 +204,7 @@ static void printHelp(const char* programPath)
 #endif
               << "  --no-gui                 Start in interactive command-line mode\n"
               << "  --theme <file.qss>       Load custom Qt stylesheet theme\n"
+              << "  --exec \"command\"          Execute a command on GUI startup\n"
               << "\n"
               << "Commands:\n"
               << "  convert <in> <out>       Convert between file formats\n"
@@ -336,6 +350,29 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    // Install crash handler early — catches SIGABRT/SIGSEGV from
+    // third-party libraries (e.g., libslvs assertion failures) and
+    // exits gracefully with a diagnostic message instead of a raw crash.
+    hobbycad::CrashHandler::install();
+
+    // Set crash log path to user's config directory
+    {
+        std::string logPath;
+        const char* home = std::getenv("HOME");
+        if (home) {
+            logPath = std::string(home) + "/.config/HobbyCAD/crash.log";
+        }
+#ifdef _WIN32
+        const char* appdata = std::getenv("APPDATA");
+        if (appdata) {
+            logPath = std::string(appdata) + "\\HobbyCAD\\crash.log";
+        }
+#endif
+        if (!logPath.empty()) {
+            hobbycad::CrashHandler::setCrashLogPath(logPath.c_str());
+        }
+    }
+
     // Initialize the core library
     if (!hobbycad::initialize()) {
         std::cerr << "Fatal: failed to initialize HobbyCAD core library."
@@ -395,6 +432,12 @@ int main(int argc, char* argv[])
     app.setApplicationName(QStringLiteral("HobbyCAD"));
     app.setApplicationVersion(QString::fromLatin1(hobbycad::version()));
     app.setOrganizationName(QStringLiteral("HobbyCAD"));
+
+    // Set application icon for taskbar/dock/window decorations
+    // This enables the icon to display like Chrome/Firefox on Linux
+    app.setWindowIcon(QIcon::fromTheme(
+        QStringLiteral("hobbycad"),
+        QIcon(QStringLiteral(":/icons/hobbycad.svg"))));
 
     // Step 3a: Load translations
     //   Priority: user preference > system locale > English (built-in)
@@ -498,6 +541,59 @@ int main(int argc, char* argv[])
         }
     }
 
+    // Helper: parse an --exec command and resolve the sketch plane.
+    // Returns the SketchPlane to enter, or std::nullopt if invalid.
+    using hobbycad::SketchPlane;
+
+    auto resolveExecSketchPlane = [](const QString& cmd) -> std::optional<SketchPlane> {
+        QStringList tokens = hobbycad::sketch::tokenizeLine(cmd);
+        // Expect: create sketch [XY|XZ|YZ | on [plane] <name>]
+        if (tokens.size() < 2
+            || tokens[0].toLower() != QLatin1String("create")
+            || tokens[1].toLower() != QLatin1String("sketch")) {
+            return std::nullopt;
+        }
+
+        if (tokens.size() == 2)
+            return SketchPlane::XY;  // bare "create sketch"
+
+        // Check for built-in plane name at tokens[2]
+        QString arg = tokens[2].toUpper();
+        if (arg == QLatin1String("XY")) return SketchPlane::XY;
+        if (arg == QLatin1String("XZ")) return SketchPlane::XZ;
+        if (arg == QLatin1String("YZ")) return SketchPlane::YZ;
+
+        // Check for "on [plane] <name>"
+        if (tokens[2].toLower() == QLatin1String("on") && tokens.size() >= 4) {
+            int idx = 3;
+            if (tokens[idx].toLower() == QLatin1String("plane") && tokens.size() >= 5)
+                idx = 4;
+            QString pArg = tokens[idx].toUpper();
+            if (pArg == QLatin1String("XY")) return SketchPlane::XY;
+            if (pArg == QLatin1String("XZ")) return SketchPlane::XZ;
+            if (pArg == QLatin1String("YZ")) return SketchPlane::YZ;
+            // TODO: named construction planes
+            return SketchPlane::Custom;
+        }
+
+        return SketchPlane::XY;  // name-only, default plane
+    };
+
+    // Helper: schedule --exec command to run after the event loop starts
+    auto scheduleExec = [&](auto* window) {
+        if (!flags.execCommand.isEmpty()) {
+            auto plane = resolveExecSketchPlane(flags.execCommand);
+            if (plane.has_value()) {
+                QTimer::singleShot(0, window, [window, p = *plane]() {
+                    window->enterSketchMode(p);
+                });
+            } else {
+                std::cerr << "Warning: unrecognized --exec command: "
+                          << flags.execCommand.toStdString() << std::endl;
+            }
+        }
+    };
+
     int result = 0;
 
     if (glInfo.meetsMinimum() && !forceReduced) {
@@ -506,6 +602,7 @@ int main(int argc, char* argv[])
         if (forceWidth > 0 && forceHeight > 0)
             window.resize(forceWidth, forceHeight);
         window.show();
+        scheduleExec(&window);
         result = app.exec();
     } else {
         // Step 6b: Reduced Mode — OpenGL insufficient or forced
@@ -513,6 +610,7 @@ int main(int argc, char* argv[])
         if (forceWidth > 0 && forceHeight > 0)
             window.resize(forceWidth, forceHeight);
         window.show();
+        scheduleExec(&window);
         result = app.exec();
     }
 

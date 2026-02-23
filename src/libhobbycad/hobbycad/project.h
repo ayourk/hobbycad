@@ -23,6 +23,7 @@
 
 #include "core.h"
 #include "sketch/background.h"
+#include "sketch/constraint.h"
 #include "sketch/entity.h"
 
 #include <TopoDS_Shape.hxx>
@@ -41,25 +42,8 @@ namespace hobbycad {
 // Use the canonical entity type from the sketch library
 using SketchEntityType = sketch::EntityType;
 
-/// Constraint type for parametric sketching
-enum class ConstraintType {
-    // Dimensional constraints
-    Distance,      ///< Linear distance between two points or point-to-line
-    Radius,        ///< Circle/arc radius
-    Diameter,      ///< Circle/arc diameter
-    Angle,         ///< Angle between two lines
-
-    // Geometric constraints
-    Horizontal,    ///< Line is horizontal
-    Vertical,      ///< Line is vertical
-    Parallel,      ///< Two lines are parallel
-    Perpendicular, ///< Two lines are perpendicular
-    Coincident,    ///< Two points share same position
-    Tangent,       ///< Arc/circle tangent to line or arc/circle
-    Equal,         ///< Two entities have equal length/radius
-    Midpoint,      ///< Point at midpoint of line
-    Symmetric      ///< Two points symmetric about a line
-};
+// Use the canonical constraint type from the sketch library
+using ConstraintType = sketch::ConstraintType;
 
 /// Sketch plane orientation (for sketches referencing origin planes)
 enum class SketchPlane {
