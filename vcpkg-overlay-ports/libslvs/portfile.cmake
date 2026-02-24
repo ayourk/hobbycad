@@ -48,10 +48,15 @@ if(NOT EXISTS "${EIGEN_DIR}/Eigen/Core")
     message(FATAL_ERROR "Eigen headers not found at ${EIGEN_DIR}/Eigen/Core")
 endif()
 
+# Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
+# override a normal variable, so we must patch the source directly
+file(READ "${SOURCE_PATH}/CMakeLists.txt" _cmakelists)
+string(REPLACE "set(CMAKE_CXX_STANDARD 11)" "set(CMAKE_CXX_STANDARD 14)" _cmakelists "${_cmakelists}")
+file(WRITE "${SOURCE_PATH}/CMakeLists.txt" "${_cmakelists}")
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        -DCMAKE_CXX_STANDARD=14
         -DBUILD_LIB=ON
         -DBUILD_GUI=OFF
         -DENABLE_GUI=OFF
