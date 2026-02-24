@@ -48,7 +48,6 @@ modules:
     builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
-      - -DCMAKE_CXX_STANDARD=14
       - -DBUILD_LIB=ON
       - -DENABLE_GUI=OFF
       - -DENABLE_CLI=OFF
@@ -70,6 +69,7 @@ modules:
         commands:
           - patch -p1 < debian-patches/patches/0001-handle-missing-git-directory.patch
           - for submod in zlib libpng freetype cairo pixman angle; do mkdir -p extlib/$submod && echo "# stub" > extlib/$submod/CMakeLists.txt; done
+          - sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
 
   # lib3mf (3D Manufacturing Format)
   - name: lib3mf

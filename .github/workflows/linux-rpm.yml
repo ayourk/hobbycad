@@ -158,9 +158,12 @@ jobs:
           mkdir -p extlib/eigen
           cp -r /usr/include/eigen3/. extlib/eigen/
 
+          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
+          # override a normal variable, so we must patch the source directly
+          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
+
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_STANDARD=14 \
             -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \
@@ -214,9 +217,12 @@ jobs:
           mkdir -p extlib/eigen
           cp -r /usr/include/eigen3/. extlib/eigen/
 
+          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
+          # override a normal variable, so we must patch the source directly
+          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
+
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_STANDARD=14 \
             -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \

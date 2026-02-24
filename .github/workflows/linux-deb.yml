@@ -122,10 +122,10 @@ jobs:
               $SUDO apt-get remove -y 'libqt6*' 'qt6-*' 2>/dev/null || true
               $SUDO apt-get autoremove -y
               $SUDO apt-get install -y \
-                qt6-base-dev qt6-base-dev-tools libqt6opengl6-dev \
+                qt6-base-dev qt6-base-dev-tools \
                 libqt6openglwidgets6 qmake6 \
                 qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-                libqt6svg6-dev
+                qt6-svg-dev
             fi
           else
             # For Debian containers, we'll build libslvs from source after deps
@@ -139,6 +139,15 @@ jobs:
             INSTALL_MESHFIX="libmeshfix-dev"
           fi
 
+          # Qt OpenGL/SVG dev package names differ between PPA (Jammy) and stock repos
+          QT_OPENGL_DEV="libqt6opengl6-dev"
+          QT_SVG_DEV="libqt6svg6-dev"
+          if [ "${{ matrix.distro }}" = "ubuntu2204" ]; then
+            # PPA Qt 6.4.2 folds OpenGL into qt6-base-dev, SVG is qt6-svg-dev
+            QT_OPENGL_DEV=""
+            QT_SVG_DEV="qt6-svg-dev"
+          fi
+
           $SUDO apt-get install -y \
             $INSTALL_LIBSLVS \
             $INSTALL_MESHFIX \
@@ -149,8 +158,8 @@ jobs:
             libocct-modeling-data-dev libocct-ocaf-dev \
             libocct-visualization-dev occt-misc libtbb-dev \
             qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-            qt6-tools-dev-tools qt6-l10n-tools libqt6opengl6-dev \
-            libqt6openglwidgets6 libqt6svg6-dev qmake6 \
+            qt6-tools-dev-tools qt6-l10n-tools $QT_OPENGL_DEV \
+            libqt6openglwidgets6 $QT_SVG_DEV qmake6 \
             libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
             libpng-dev libjpeg-dev \
             libzip-dev libminizip-dev \
@@ -177,9 +186,12 @@ jobs:
           mkdir -p extlib/eigen
           cp -r /usr/include/eigen3/. extlib/eigen/
 
+          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
+          # override a normal variable, so we must patch the source directly
+          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
+
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_STANDARD=14 \
             -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \
