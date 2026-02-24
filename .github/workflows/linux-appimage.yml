@@ -69,17 +69,18 @@ jobs:
       - name: Add HobbyCAD PPA
         run: |
           sudo add-apt-repository -y ppa:ayourk/hobbycad
-          sudo apt-get update
-
-      # Pin PPA packages to take priority over system packages
-      - name: Configure PPA priority
-        run: |
           echo 'Package: *
           Pin: release o=LP-PPA-ayourk-hobbycad
           Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/hobbycad-ppa
+          sudo apt-get update
 
-      # Install Qt 6.4.2 from PPA first (Ubuntu 22.04 only has Qt 6.2)
-      # This ensures we get Qt 6.4.2 with full API support
+      # Remove stock Qt 6.2 packages that conflict with PPA's Qt 6.4.2
+      - name: Remove stock Qt 6.2
+        run: |
+          sudo apt-get remove -y 'libqt6*' 'qt6-*' 2>/dev/null || true
+          sudo apt-get autoremove -y
+
+      # Install Qt 6.4.2 from PPA
       - name: Install Qt 6.4.2 from PPA
         run: |
           sudo apt-get install -y \

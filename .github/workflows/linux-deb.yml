@@ -112,14 +112,15 @@ jobs:
           # Add HobbyCAD PPA for libslvs and Qt 6.4.2 (Ubuntu only, not Debian containers)
           if [ -z "${{ matrix.container }}" ]; then
             $SUDO add-apt-repository -y ppa:ayourk/hobbycad
-            $SUDO apt-get update
-            # Pin PPA packages to take priority over system packages
             echo 'Package: *
           Pin: release o=LP-PPA-ayourk-hobbycad
           Pin-Priority: 1001' | $SUDO tee /etc/apt/preferences.d/hobbycad-ppa
+            $SUDO apt-get update
             INSTALL_LIBSLVS="libslvs-dev"
-            # Install Qt 6.4.2 from PPA first (Ubuntu 22.04 only has Qt 6.2)
+            # Remove stock Qt 6.2 and install Qt 6.4.2 from PPA (Jammy only)
             if [ "${{ matrix.distro }}" = "ubuntu2204" ]; then
+              $SUDO apt-get remove -y 'libqt6*' 'qt6-*' 2>/dev/null || true
+              $SUDO apt-get autoremove -y
               $SUDO apt-get install -y \
                 qt6-base-dev qt6-base-dev-tools libqt6opengl6-dev \
                 libqt6openglwidgets6 qmake6 \
@@ -155,6 +156,7 @@ jobs:
             libzip-dev libminizip-dev \
             libgit2-dev \
             lib3mf-dev libopenmesh-dev \
+            libeigen3-dev \
             librsvg2-bin
 
       - name: Build libslvs from source (Debian containers only)
@@ -167,14 +169,17 @@ jobs:
           tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
           cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
 
-          # Stub empty submodule directories
+          # Stub empty submodule directories and populate Eigen from system package
           for submod in zlib libpng freetype cairo pixman angle; do
             mkdir -p extlib/$submod
             echo "# stub" > extlib/$submod/CMakeLists.txt
           done
+          mkdir -p extlib/eigen
+          cp -r /usr/include/eigen3/. extlib/eigen/
 
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=14 \
             -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \

@@ -58,9 +58,13 @@ if(NOT HOBBYCAD_CORE_LINKAGE MATCHES "^(STATIC|SHARED|OBJECT)$")
         "Must be STATIC, SHARED, or OBJECT.")
 endif()
 
+option(HOBBYCAD_BUILD_APP
+    "Build the HobbyCAD application (requires Qt6::Widgets)" ON)
+
 message(STATUS "HobbyCAD ${PROJECT_VERSION}")
 message(STATUS "Core library linkage: ${HOBBYCAD_CORE_LINKAGE}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Build application: ${HOBBYCAD_BUILD_APP}")
 
 # ---- Platform: silence macOS OpenGL deprecation warnings ------------
 
@@ -79,5 +83,8 @@ endif()
 # ---- Subdirectories -------------------------------------------------
 
 add_subdirectory(src/libhobbycad)
-add_subdirectory(src/hobbycad)
+
+if(HOBBYCAD_BUILD_APP)
+    add_subdirectory(src/hobbycad)
+endif()
 

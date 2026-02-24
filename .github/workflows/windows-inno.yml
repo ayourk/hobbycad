@@ -73,6 +73,28 @@ jobs:
       - name: Checkout HobbyCAD
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        shell: pwsh
+        run: |
+          # Remove large pre-installed components to free disk for vcpkg builds
+          $dirs = @(
+            "C:\Android",
+            "C:\Program Files\dotnet\sdk",
+            "C:\Program Files\dotnet\shared",
+            "C:\Program Files\LLVM",
+            "C:\Program Files (x86)\Microsoft SDKs\Azure",
+            "C:\Program Files\MongoDB",
+            "C:\Program Files\PostgreSQL"
+          )
+          foreach ($d in $dirs) {
+            if (Test-Path $d) {
+              Write-Host "Removing $d ..."
+              Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
+            }
+          }
+          # Show available space
+          Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
+
       - name: Export GitHub Actions cache variables
         uses: actions/github-script@v7
         with:
