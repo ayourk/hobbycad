@@ -1,0 +1,148 @@
+# .github/workflows/windows-build-msys2.yml
+#
+# Build HobbyCAD on Windows x64 using MSYS2 UCRT64 with GCC and
+# pacman packages.  This matches the local developer setup from
+# tools/windows/setup-env.ps1 (GCC, Ninja, pacman).
+#
+# All dependencies come from pre-built pacman packages (fast).
+
+name: Windows Build (MSYS2)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
+jobs:
+
+  msys2:
+    name: HobbyCAD via MSYS2 (x64)
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf input
+        shell: bash
+
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-opencascade
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-svg
+            mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-libgit2
+            mingw-w64-ucrt-x86_64-librsvg
+            mingw-w64-ucrt-x86_64-ntldd
+            mingw-w64-ucrt-x86_64-eigen3
+            git
+            patch
+
+      # libslvs is not available as an MSYS2 package - build from PPA source
+      - name: Build libslvs from source
+        shell: msys2 {0}
+        run: |
+          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
+          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
+          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
+          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
+          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+
+          # Stub empty submodule directories
+          for submod in zlib libpng freetype cairo pixman angle; do
+            mkdir -p extlib/$submod
+            echo "# stub" > extlib/$submod/CMakeLists.txt
+          done
+
+          # Populate Eigen headers from MSYS2 system package
+          mkdir -p extlib/eigen
+          cp -r /ucrt64/include/eigen3/. extlib/eigen/
+
+          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
+          # override a normal variable, so we must patch the source directly
+          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
+
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/ucrt64 \
+            -DBUILD_LIB=ON \
+            -DENABLE_GUI=OFF \
+            -DENABLE_CLI=OFF \
+            -DENABLE_OPENMP=OFF \
+            -DENABLE_TESTS=OFF
+          cmake --build build
+
+          # Install libslvs to MSYS2 prefix
+          cp build/libslvs.dll.a /ucrt64/lib/
+          cp build/libslvs.dll /ucrt64/bin/
+          mkdir -p /ucrt64/include/slvs
+          cp include/slvs.h /ucrt64/include/slvs/
+
+      - name: Configure CMake
+        run: cmake --preset msys2-release
+
+      - name: Build
+        run: cmake --build --preset msys2-release
+
+      - name: Package build
+        run: |
+          cmake --install build --prefix build/install
+
+          # Copy runtime DLLs from UCRT64
+          BINDIR="build/install/bin"
+          if [ -f "$BINDIR/hobbycad.exe" ]; then
+              # Use ntldd to find DLL dependencies
+              ntldd -R "$BINDIR/hobbycad.exe" 2>/dev/null | \
+                  grep -i '/ucrt64/' | \
+                  awk '{print $3}' | \
+                  while read dll; do
+                      cp -n "$dll" "$BINDIR/" 2>/dev/null || true
+                  done || true
+
+              # Qt plugins
+              QT_PLUGIN_DIR="/ucrt64/share/qt6/plugins"
+              if [ -d "$QT_PLUGIN_DIR/platforms" ]; then
+                  mkdir -p "$BINDIR/platforms"
+                  cp "$QT_PLUGIN_DIR/platforms/qwindows.dll" \
+                      "$BINDIR/platforms/" 2>/dev/null || true
+              fi
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-windows-x64-msys2
+          path: build/install/
+          retention-days: 14
+          if-no-files-found: error
