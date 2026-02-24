@@ -53,9 +53,6 @@ jobs:
           - arch: arm64
             runner: macos-latest
             artifact_name: hobbycad-homebrew-arm64
-          - arch: x86_64
-            runner: macos-13-large
-            artifact_name: hobbycad-homebrew-x64
 
     steps:
       - name: Checkout HobbyCAD

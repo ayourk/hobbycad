@@ -1,15 +1,13 @@
-# .github/workflows/macos-build.yml
+# .github/workflows/macos-build-x64.yml
 #
-# Build HobbyCAD on macOS for arm64 and x86_64 using Homebrew dependencies.
+# Build HobbyCAD on macOS x86_64 (Intel) using Homebrew dependencies.
 #
-# Matches the local developer setup from tools/macos/setup-env.sh.
-# Uses the HobbyCAD Homebrew tap for pinned keg-only formulas
-# (opencascade@7.9.2, libzip@1.7.3, libgit2@1.7.2) and standard
-# Homebrew for qt@6, ninja, and librsvg.
-#
-# macOS runners are free for public repositories.
+# Separated from the main macOS Build workflow because the x86_64
+# runner (macos-13-large) is a paid runner that may not always be
+# available.  Keeping it in its own workflow prevents cancellation
+# of the arm64 build when the runner is unavailable.
 
-name: macOS Build
+name: macOS Build x64
 
 on:
   push:
@@ -37,24 +35,15 @@ env:
 jobs:
 
   # ================================================================
-  #  macOS / Homebrew / Clang
+  #  macOS x86_64 / Homebrew / Clang
   # ================================================================
   #
-  #  Matches the local developer environment.  Pinned dependencies
-  #  come from the HobbyCAD Homebrew tap (keg-only); everything
-  #  else from standard Homebrew.
+  #  Requires macos-13-large (paid runner).  GitHub deprecated the
+  #  free macos-13 x86_64 runner.
 
-  macos:
-    name: HobbyCAD macOS (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-            artifact_name: hobbycad-macos-arm64
+  macos-x64:
+    name: HobbyCAD macOS (x86_64)
+    runs-on: macos-13-large
 
     steps:
       - name: Checkout HobbyCAD
@@ -115,7 +104,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: hobbycad-macos-x64
           path: build/install/
           retention-days: 14
           if-no-files-found: error
