@@ -1,0 +1,177 @@
+# .github/workflows/macos-universal.yml
+#
+# Build a macOS universal binary (arm64 + x86_64) on a free Apple
+# Silicon runner.  Both architecture slices are compiled natively
+# (arm64) and under Rosetta 2 (x86_64), then merged with lipo.
+#
+# This avoids the need for the paid macos-13-large runner while
+# still producing a binary that runs on Intel Macs.
+
+name: macOS Universal
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AUTHORS'
+      - 'LICENSE'
+      - '*.md'
+  workflow_dispatch:
+
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+
+jobs:
+
+  # ================================================================
+  #  macOS Universal Binary (arm64 + x86_64)
+  # ================================================================
+  #
+  #  Builds both slices on the same arm64 runner:
+  #    1. arm64 — native Homebrew (/opt/homebrew)
+  #    2. x86_64 — Rosetta Homebrew (/usr/local)
+  #    3. lipo merge into universal binary
+
+  universal:
+    name: HobbyCAD macOS (universal)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      # ── arm64 dependencies (native Homebrew) ──────────────────────
+      - name: Install arm64 dependencies
+        run: |
+          brew tap ayourk/hobbycad
+
+          brew install ayourk/hobbycad/opencascade@7.9.2
+          brew install ayourk/hobbycad/libzip@1.7.3
+          brew install ayourk/hobbycad/libgit2@1.7.2
+          brew install ayourk/hobbycad/libslvs
+          brew install ayourk/hobbycad/lib3mf
+          brew install ayourk/hobbycad/openmesh
+          brew install ayourk/hobbycad/meshfix
+
+          brew install qt@6 ninja librsvg
+
+      - name: Dump Homebrew logs on failure
+        if: failure()
+        run: |
+          for f in ~/Library/Logs/Homebrew/*/*; do
+            echo "::group::$(basename "$f")"
+            cat "$f"
+            echo "::endgroup::"
+          done
+
+      # ── arm64 build ───────────────────────────────────────────────
+      - name: Build arm64
+        run: |
+          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)
+          LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
+          LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
+          SLVS_PFX=$(brew --prefix ayourk/hobbycad/libslvs)
+          L3MF_PFX=$(brew --prefix ayourk/hobbycad/lib3mf)
+          OMSH_PFX=$(brew --prefix ayourk/hobbycad/openmesh)
+          MFIX_PFX=$(brew --prefix ayourk/hobbycad/meshfix)
+          QT6_PFX=$(brew --prefix qt@6)
+
+          export CMAKE_PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
+
+          cmake -B build-arm64 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_INSTALL_PREFIX=install-arm64
+
+          cmake --build build-arm64
+          cmake --install build-arm64
+
+      # ── x86_64 Homebrew under Rosetta ─────────────────────────────
+      - name: Install x86_64 Homebrew
+        run: |
+          # Install a separate x86_64 Homebrew under /usr/local
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
+
+      - name: Install x86_64 dependencies
+        run: |
+          export PATH="/usr/local/bin:$PATH"
+          alias ibrew="arch -x86_64 /usr/local/bin/brew"
+
+          ibrew tap ayourk/hobbycad
+
+          ibrew install ayourk/hobbycad/opencascade@7.9.2
+          ibrew install ayourk/hobbycad/libzip@1.7.3
+          ibrew install ayourk/hobbycad/libgit2@1.7.2
+          ibrew install ayourk/hobbycad/libslvs
+          ibrew install ayourk/hobbycad/lib3mf
+          ibrew install ayourk/hobbycad/openmesh
+          ibrew install ayourk/hobbycad/meshfix
+
+          ibrew install qt@6 ninja librsvg
+
+      # ── x86_64 build under Rosetta ───────────────────────────────
+      - name: Build x86_64
+        run: |
+          IBREW="/usr/local/bin/brew"
+
+          OCCT_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/opencascade@7.9.2)
+          LZIP_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/libzip@1.7.3)
+          LGIT_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/libgit2@1.7.2)
+          SLVS_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/libslvs)
+          L3MF_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/lib3mf)
+          OMSH_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/openmesh)
+          MFIX_PFX=$(arch -x86_64 $IBREW --prefix ayourk/hobbycad/meshfix)
+          QT6_PFX=$(arch -x86_64 $IBREW --prefix qt@6)
+
+          export CMAKE_PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
+
+          arch -x86_64 cmake -B build-x86_64 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_INSTALL_PREFIX=install-x86_64
+
+          arch -x86_64 cmake --build build-x86_64
+          arch -x86_64 cmake --install build-x86_64
+
+      # ── Merge into universal binary ──────────────────────────────
+      - name: Create universal binary
+        run: |
+          mkdir -p install-universal
+
+          # Copy the arm64 install as the base (preserves directory structure)
+          cp -R install-arm64/ install-universal/
+
+          # Merge every Mach-O binary with lipo
+          find install-arm64 -type f | while read arm64_file; do
+            rel="${arm64_file#install-arm64/}"
+            x86_file="install-x86_64/$rel"
+            out_file="install-universal/$rel"
+
+            if [ -f "$x86_file" ] && file "$arm64_file" | grep -q "Mach-O"; then
+              lipo -create "$arm64_file" "$x86_file" -output "$out_file" 2>/dev/null || \
+                echo "::warning::lipo failed for $rel, keeping arm64 only"
+            fi
+          done
+
+          # Verify a key binary is universal
+          echo "Verifying universal binary:"
+          find install-universal/bin -type f | head -1 | xargs file || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-macos-universal
+          path: install-universal/
+          retention-days: 14
+          if-no-files-found: error
