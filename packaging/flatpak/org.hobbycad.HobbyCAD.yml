@@ -48,6 +48,7 @@ modules:
     builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_CXX_STANDARD=14
       - -DBUILD_LIB=ON
       - -DENABLE_GUI=OFF
       - -DENABLE_CLI=OFF
@@ -84,6 +85,7 @@ modules:
   # OpenMesh
   - name: openmesh
     buildsystem: cmake-ninja
+    builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
       - -DOPENMESH_BUILD_SHARED=ON

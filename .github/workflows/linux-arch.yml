@@ -116,8 +116,15 @@ jobs:
           mkdir -p extlib/eigen
           cp -r /usr/include/eigen3/. extlib/eigen/
 
+          # EIGEN_DONT_VECTORIZE works around Eigen NEON isfinite_impl bug on aarch64
+          EXTRA_CXX_FLAGS=""
+          if [ "$(uname -m)" = "aarch64" ]; then
+            EXTRA_CXX_FLAGS="-DEIGEN_DONT_VECTORIZE"
+          fi
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=14 \
+            -DCMAKE_CXX_FLAGS="${EXTRA_CXX_FLAGS}" \
             -DBUILD_LIB=ON \
             -DENABLE_GUI=OFF \
             -DENABLE_CLI=OFF \

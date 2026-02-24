@@ -51,6 +51,7 @@ endif()
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
+        -DCMAKE_CXX_STANDARD=14
         -DBUILD_LIB=ON
         -DBUILD_GUI=OFF
         -DENABLE_GUI=OFF
