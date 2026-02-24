@@ -104,8 +104,9 @@ jobs:
           cmake --build build
 
           # Install libslvs to MSYS2 prefix
-          cp build/libslvs.dll.a /ucrt64/lib/
-          cp build/libslvs.dll /ucrt64/bin/
+          # Ninja places binaries under build/bin/
+          cp build/bin/libslvs.dll.a /ucrt64/lib/
+          cp build/bin/libslvs.dll /ucrt64/bin/
           mkdir -p /ucrt64/include/slvs
           cp include/slvs.h /ucrt64/include/slvs/
 

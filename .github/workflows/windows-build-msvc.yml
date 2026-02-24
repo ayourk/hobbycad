@@ -103,7 +103,8 @@ jobs:
         run: |
           vcpkg install --triplet x64-windows `
             --overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports `
-            --x-install-root=vcpkg_installed
+            --x-install-root=vcpkg_installed `
+            --clean-buildtrees-after-build
 
       - name: Configure CMake
         run: |
