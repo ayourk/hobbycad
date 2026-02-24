@@ -165,8 +165,11 @@ jobs:
             --output appimage \
             --desktop-file AppDir/usr/share/applications/hobbycad.desktop
 
-          # Rename to standard format
-          mv HobbyCAD*.AppImage HobbyCAD-${{ matrix.arch }}.AppImage
+          # Rename to standard format (skip if already named correctly)
+          for f in HobbyCAD*.AppImage; do
+            target="HobbyCAD-${{ matrix.arch }}.AppImage"
+            [ "$f" != "$target" ] && mv "$f" "$target" || true
+          done
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
