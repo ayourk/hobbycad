@@ -1,14 +1,13 @@
-# .github/workflows/macos-homebrew.yml
+# .github/workflows/macos-homebrew-x64.yml
 #
-# Test HobbyCAD Homebrew formula installation on macOS.
+# Test HobbyCAD Homebrew formula installation on macOS x86_64 (Intel).
 #
-# This workflow tests that the Homebrew formula in ayourk/homebrew-hobbycad
-# builds and installs correctly. It does not publish to Homebrew - that
-# is handled by the homebrew-hobbycad repository.
-#
-# Both arm64 (Apple Silicon) and x86_64 (Intel) are tested.
+# Separated from the main macOS Homebrew workflow because the x86_64
+# runner (macos-13-large) is a paid runner that may not always be
+# available.  Keeping it in its own workflow prevents cancellation
+# of the arm64 build when the runner is unavailable.
 
-name: macOS Homebrew
+name: macOS Homebrew x64
 
 on:
   push:
@@ -36,23 +35,15 @@ env:
 jobs:
 
   # ================================================================
-  #  Homebrew Formula Test
+  #  Homebrew Formula Test — x86_64
   # ================================================================
   #
-  #  Tests the Homebrew formula from ayourk/homebrew-hobbycad tap.
-  #  Builds from source to verify the formula works with current code.
+  #  Requires macos-13-large (paid runner).  GitHub deprecated the
+  #  free macos-13 x86_64 runner.
 
-  homebrew:
-    name: HobbyCAD Homebrew (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-            artifact_name: hobbycad-homebrew-arm64
+  homebrew-x64:
+    name: HobbyCAD Homebrew (x86_64)
+    runs-on: macos-13-large
 
     steps:
       - name: Checkout HobbyCAD
@@ -108,12 +99,12 @@ jobs:
         run: |
           # Create a tarball similar to what Homebrew would install
           cd install
-          tar -czvf ../hobbycad-homebrew-${{ matrix.arch }}.tar.gz .
+          tar -czvf ../hobbycad-homebrew-x64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: hobbycad-homebrew-x64
           path: "*.tar.gz"
           retention-days: 14
           if-no-files-found: error

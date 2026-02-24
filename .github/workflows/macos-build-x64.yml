@@ -1,14 +1,13 @@
-# .github/workflows/macos-homebrew.yml
+# .github/workflows/macos-build-x64.yml
 #
-# Test HobbyCAD Homebrew formula installation on macOS.
+# Build HobbyCAD on macOS x86_64 (Intel) using Homebrew dependencies.
 #
-# This workflow tests that the Homebrew formula in ayourk/homebrew-hobbycad
-# builds and installs correctly. It does not publish to Homebrew - that
-# is handled by the homebrew-hobbycad repository.
-#
-# Both arm64 (Apple Silicon) and x86_64 (Intel) are tested.
+# Separated from the main macOS Build workflow because the x86_64
+# runner (macos-13-large) is a paid runner that may not always be
+# available.  Keeping it in its own workflow prevents cancellation
+# of the arm64 build when the runner is unavailable.
 
-name: macOS Homebrew
+name: macOS Build x64
 
 on:
   push:
@@ -36,40 +35,26 @@ env:
 jobs:
 
   # ================================================================
-  #  Homebrew Formula Test
+  #  macOS x86_64 / Homebrew / Clang
   # ================================================================
   #
-  #  Tests the Homebrew formula from ayourk/homebrew-hobbycad tap.
-  #  Builds from source to verify the formula works with current code.
+  #  Requires macos-13-large (paid runner).  GitHub deprecated the
+  #  free macos-13 x86_64 runner.
 
-  homebrew:
-    name: HobbyCAD Homebrew (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-            artifact_name: hobbycad-homebrew-arm64
+  macos-x64:
+    name: HobbyCAD macOS (x86_64)
+    runs-on: macos-13-large
 
     steps:
       - name: Checkout HobbyCAD
         uses: actions/checkout@v4
 
-      - name: Set up Homebrew
+      - name: Install dependencies
         run: |
-          # Ensure Homebrew is up to date
-          brew update
-
-      - name: Tap HobbyCAD repository
-        run: |
+          # Tap for pinned keg-only formulas
           brew tap ayourk/hobbycad
 
-      - name: Install HobbyCAD dependencies
-        run: |
-          # Install dependencies from tap (keg-only, pinned versions)
+          # Pinned formulas (keg-only — need CMAKE_PREFIX_PATH)
           brew install ayourk/hobbycad/opencascade@7.9.2
           brew install ayourk/hobbycad/libzip@1.7.3
           brew install ayourk/hobbycad/libgit2@1.7.2
@@ -78,11 +63,22 @@ jobs:
           brew install ayourk/hobbycad/openmesh
           brew install ayourk/hobbycad/meshfix
 
-          # Install standard dependencies
+          # Core formulas
           brew install qt@6 ninja librsvg
+
+      - name: Dump Homebrew logs on failure
+        if: failure()
+        run: |
+          for f in ~/Library/Logs/Homebrew/*/*; do
+            echo "::group::$(basename "$f")"
+            cat "$f"
+            echo "::endgroup::"
+          done
 
       - name: Set CMAKE_PREFIX_PATH
         run: |
+          # Keg-only formulas are not linked into the Homebrew
+          # prefix, so CMake needs explicit paths to find them.
           OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)
           LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
           LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
@@ -95,25 +91,20 @@ jobs:
           PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
           echo "CMAKE_PREFIX_PATH=${PREFIX_PATH}" >> "$GITHUB_ENV"
 
-      - name: Build HobbyCAD
-        run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=install
+      - name: Configure CMake
+        run: cmake --preset macos-release
 
-          cmake --build build
-          cmake --install build
+      - name: Build
+        run: cmake --build --preset macos-release
 
-      - name: Create Homebrew-style package
+      - name: Package build
         run: |
-          # Create a tarball similar to what Homebrew would install
-          cd install
-          tar -czvf ../hobbycad-homebrew-${{ matrix.arch }}.tar.gz .
+          cmake --install build --prefix build/install
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: "*.tar.gz"
+          name: hobbycad-macos-x64
+          path: build/install/
           retention-days: 14
           if-no-files-found: error
