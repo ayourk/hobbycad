@@ -105,8 +105,7 @@ jobs:
 
       - name: Install x86_64 dependencies
         run: |
-          export PATH="/usr/local/bin:$PATH"
-          alias ibrew="arch -x86_64 /usr/local/bin/brew"
+          ibrew() { arch -x86_64 /usr/local/bin/brew "$@"; }
 
           ibrew tap ayourk/hobbycad
 
