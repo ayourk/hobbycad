@@ -148,11 +148,16 @@ jobs:
           $binDir = "$installDir\bin"
           $vcpkgBin = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\bin"
 
-          # Qt plugins
+          # Qt platform plugin — search multiple possible vcpkg locations
           $qtPluginDir = "$installDir\bin\platforms"
-          $vcpkgPlugins = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\plugins"
           New-Item -ItemType Directory -Force -Path $qtPluginDir | Out-Null
-          Copy-Item "$vcpkgPlugins\platforms\qwindows.dll" $qtPluginDir -ErrorAction SilentlyContinue
+          $qwin = Get-ChildItem -Path "${{ github.workspace }}\vcpkg_installed" -Filter "qwindows.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($qwin) {
+              Copy-Item $qwin.FullName $qtPluginDir
+              Write-Host "Found qwindows.dll at: $($qwin.FullName)"
+          } else {
+              Write-Warning "qwindows.dll not found in vcpkg_installed — app may not launch"
+          }
 
           # Copy DLL dependencies
           $exePath = Get-ChildItem "$binDir\hobbycad.exe" -ErrorAction SilentlyContinue
