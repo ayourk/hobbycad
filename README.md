@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/PPA-ayourk%2Fhobbycad-purple.svg" alt="PPA">
   <br>
   <a href="https://github.com/ayourk/hobbycad/actions/workflows/linux-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad/linux-build.yml?label=Linux%20Build" alt="Linux Build"></a>
-  <a href="https://github.com/ayourk/hobbycad/actions/workflows/windows-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad/windows-build.yml?label=Windows%20Build" alt="Windows Build"></a>
+  <a href="https://github.com/ayourk/hobbycad/actions/workflows/windows-build-msys2.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad/windows-build-msys2.yml?label=Windows%20Build" alt="Windows Build"></a>
   <a href="https://github.com/ayourk/hobbycad/actions/workflows/macos-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad/macos-build.yml?label=macOS%20Build" alt="macOS Build"></a>
   <a href="https://github.com/ayourk/hobbycad-vcpkg/actions/workflows/build-ports.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad-vcpkg/build-ports.yml?label=vcpkg%20ports" alt="vcpkg ports"></a>
 </p>
