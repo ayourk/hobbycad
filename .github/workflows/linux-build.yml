@@ -6,7 +6,7 @@
 # Ubuntu 24.04 (glibc 2.39) uses newer libraries.
 # Both LTS releases are supported for the duration of their lifecycle.
 
-name: Linux Build
+name: Linux Ubuntu
 
 on:
   push:
