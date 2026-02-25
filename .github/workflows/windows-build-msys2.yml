@@ -122,7 +122,7 @@ jobs:
             'Description: SolveSpace constraint solver library' \
             'Version: 3.2' \
             'Libs: -L${libdir} -lslvs' \
-            'Cflags: -I${includedir}' \
+            'Cflags: -I${includedir}/slvs' \
             > /ucrt64/lib/pkgconfig/libslvs.pc
 
       - name: Configure CMake
