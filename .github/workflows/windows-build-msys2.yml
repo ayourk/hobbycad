@@ -110,6 +110,21 @@ jobs:
           mkdir -p /ucrt64/include/slvs
           cp include/slvs.h /ucrt64/include/slvs/
 
+          # Create pkg-config file so CMake can find libslvs
+          mkdir -p /ucrt64/lib/pkgconfig
+          cat > /ucrt64/lib/pkgconfig/libslvs.pc <<'PKGEOF'
+prefix=/ucrt64
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: libslvs
+Description: SolveSpace constraint solver library
+Version: 3.2
+Libs: -L${libdir} -lslvs
+Cflags: -I${includedir}
+PKGEOF
+
       - name: Configure CMake
         run: cmake --preset msys2-release
 

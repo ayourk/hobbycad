@@ -135,13 +135,19 @@ jobs:
 
           export CMAKE_PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
 
-          arch -x86_64 cmake -B build-x86_64 -G Ninja \
+          # Use x86_64 cmake/ninja from Rosetta Homebrew (arm64 binaries
+          # cannot run under arch -x86_64)
+          X86_CMAKE=$(arch -x86_64 $IBREW --prefix cmake)/bin/cmake
+          X86_NINJA=$(arch -x86_64 $IBREW --prefix ninja)/bin/ninja
+
+          arch -x86_64 $X86_CMAKE -B build-x86_64 -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DCMAKE_INSTALL_PREFIX=install-x86_64
+            -DCMAKE_INSTALL_PREFIX=install-x86_64 \
+            -DCMAKE_MAKE_PROGRAM=$X86_NINJA
 
-          arch -x86_64 cmake --build build-x86_64
-          arch -x86_64 cmake --install build-x86_64
+          arch -x86_64 $X86_CMAKE --build build-x86_64
+          arch -x86_64 $X86_CMAKE --install build-x86_64
 
       # ── Merge into universal binary ──────────────────────────────
       - name: Create universal binary
