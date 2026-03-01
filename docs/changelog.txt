@@ -524,3 +524,61 @@ Fixed
 - Tangent arc preview/final arc direction mismatch
 - Two-point line second click now uses constrained position (was recalculating snap)
 
+================================================================================
+2026-02-26
+================================================================================
+
+Changed
+-------
+- Windows MSVC CI workflows now produce fully static executables:
+  - Custom vcpkg triplets: x64-windows-static-md, arm64-windows-static-md
+  - All dependencies (Qt, OCCT, lib3mf, libslvs, etc.) linked into hobbycad.exe
+  - No DLLs, windeployqt, or plugin directory copying required
+  - Inno Setup and WiX MSI installers simplified to single-file packaging
+- macOS CI workflows switched from Homebrew to vcpkg with static triplets:
+  - Custom vcpkg triplets: arm64-osx-static, x64-osx-static
+  - Self-contained binaries with only macOS system frameworks dynamic
+  - Universal binary workflow uses Apple Clang cross-compilation (no Rosetta)
+- vcpkg overlay ports updated for static build support:
+  - libslvs: removed ONLY_DYNAMIC_LIBRARY restriction, patched hardcoded SHARED,
+    added STATIC_LIB define for static builds
+  - lib3mf: patched hardcoded SHARED to respect BUILD_SHARED_LIBS
+
+Added
+-----
+- vcpkg-custom-triplets/ directory with 4 triplet files:
+  - x64-windows-static-md.cmake, arm64-windows-static-md.cmake
+  - arm64-osx-static.cmake, x64-osx-static.cmake
+- qt_finalize_target(hobbycad) in CMakeLists.txt for static Qt plugin linking
+  (auto-links platform, imageformat, iconengine, style, and TLS plugins)
+- Separate MSVC ARM64 build workflow (windows-build-msvc-arm64.yml)
+
+================================================================================
+2026-02-25
+================================================================================
+
+Changed
+-------
+- Qt type migration: libhobbycad public API now uses Qt-free custom types:
+  - QPointF → Point2D, QRectF → Rect2D, QVector3D → Vec3
+  - QVector<T> → std::vector<T>, QString → std::string
+  - QPolygonF → std::vector<Point2D>
+  - qFuzzyCompare/qFuzzyIsNull → hobbycad::fuzzyCompare/fuzzyIsNull
+  - qMin/qMax/qAbs → std::min/std::max/std::abs
+- Library builds as pure C++ when Qt is not available
+- CMake auto-disables GUI build when Qt 6.4.2+ is not found
+- Minimum Qt version enforced at 6.4.2 (was 6.2)
+
+Added
+-----
+- hobbycad/types.h: Point2D, Rect2D, Vec3 structs with implicit
+  Qt conversion operators (when Qt 6.4.2+ available)
+- hobbycad/qt_compat.h: explicit conversion functions for containers
+  and strings (toQt/fromQt, toQVector/fromQVector, toQtPoints/fromQtPoints)
+- hobbycad/format.h: formatDouble(), formatStorageDouble(), format()
+  replacing QString::number() and QString::arg()
+- HOBBYCAD_HAS_QT preprocessor macro for version-guarded Qt interop
+- Container helpers: contains(), indexOf(), removeOne(), removeAll(),
+  removeAt(), valueAt() for std::vector (replaces QVector convenience methods)
+- Library-only build mode: cmake auto-detects Qt availability
+

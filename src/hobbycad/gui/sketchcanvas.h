@@ -69,13 +69,14 @@ struct DimFieldState {
 /// adding only GUI-specific state (selected).
 struct SketchEntity : public sketch::Entity {
     bool selected = false;        ///< UI selection state
+    int tangentEntityId = -1;     ///< Entity this arc is tangent to (-1 if none)
 
     // Default constructor
     SketchEntity() = default;
 
     // Construct from library entity
     explicit SketchEntity(const sketch::Entity& e)
-        : sketch::Entity(e), selected(false) {}
+        : sketch::Entity(e), selected(false), tangentEntityId(-1) {}
 };
 
 /// A parametric constraint (GUI version — inherits library Constraint, adds selection state)
@@ -137,9 +138,9 @@ public:
 
     /// Set display units for dimensions
     void setDisplayUnit(LengthUnit unit);
-    void setUnitSuffix(const QString& suffix) { setDisplayUnit(parseUnitSuffix(suffix)); }
+    void setUnitSuffix(const QString& suffix) { setDisplayUnit(parseUnitSuffix(suffix.toStdString())); }
     LengthUnit displayUnit() const { return m_displayUnit; }
-    QString unitSuffix() const { return unitSuffixQ(m_displayUnit); }
+    QString unitSuffix() const { return QString::fromLatin1(hobbycad::unitSuffix(m_displayUnit)); }
     double unitScale() const { return hobbycad::unitScale(m_displayUnit); }
 
     /// Get all entities
@@ -148,12 +149,22 @@ public:
     /// Get all constraints
     const QVector<SketchConstraint>& constraints() const { return m_constraints; }
 
+    /// Get a constraint by ID
+    SketchConstraint* constraintById(int id);
+    const SketchConstraint* constraintById(int id) const;
+
+    /// Set a constraint value programmatically (used by Properties panel)
+    void setConstraintValue(int constraintId, double newValue);
+
     /// Set all entities (replaces current entities, used for loading)
     void setEntities(const QVector<SketchEntity>& entities);
 
     /// Get selected entity (or nullptr if none) - returns primary selection
     SketchEntity* selectedEntity();
     const SketchEntity* selectedEntity() const;
+
+    /// Get selected constraint ID (-1 if none)
+    int selectedConstraintId() const { return m_selectedConstraintId; }
 
     /// Multi-selection support
     QVector<SketchEntity*> selectedEntities();
@@ -225,6 +236,26 @@ public:
 
     /// Toggle construction geometry flag for an entity
     void setEntityConstruction(int entityId, bool isConstruction);
+
+    /// Notify that an entity's geometry was modified externally (e.g. property panel).
+    /// Re-solves constraints, re-establishes tangency if needed, emits entityModified, and repaints.
+    void notifyEntityChanged(int entityId);
+
+    /// Re-establish tangency for a tangent arc by re-projecting the tangent
+    /// point onto the parent entity and repositioning the center.
+    /// Preserves the arc's current radius and sweep angle.
+    void reestablishTangency(SketchEntity& arc);
+
+    /// Ensure a Text entity has its rotation handle point (points[1]).
+    /// Call this for legacy text entities that only have the anchor point.
+    static void ensureTextRotationHandle(SketchEntity& entity);
+
+    /// Recompute a Text entity's rotation handle position from its current
+    /// anchor, textRotation, fontSize and text content.
+    static void recomputeTextRotationHandle(SketchEntity& entity);
+
+    /// Push an undo command onto the undo stack.
+    void pushUndoCommand(const sketch::UndoCommand& cmd);
 
     // Trim/Extend/Split operations
     /// Find all intersections between entities
@@ -313,6 +344,9 @@ public:
     /// Get groups
     const QVector<SketchGroup>& groups() const { return m_groups; }
 
+    /// Check if a group is a sweep-angle constraint group
+    bool isSweepAngleGroup(int groupId) const;
+
     // Undo/Redo support
     /// Undo the last operation
     void undo();
@@ -325,6 +359,18 @@ public:
 
     /// Check if redo is available
     bool canRedo() const { return m_libUndoStack.canRedo(); }
+
+    /// Get descriptions of all undo operations (most recent first)
+    QStringList undoDescriptions() const;
+
+    /// Get descriptions of all redo operations (most recent first)
+    QStringList redoDescriptions() const;
+
+    /// Undo multiple levels at once (for click-to-navigate in history panel)
+    void undoMultiple(int levels);
+
+    /// Redo multiple levels at once (for click-to-navigate in history panel)
+    void redoMultiple(int levels);
 
     // Background image support
     /// Set background image for the sketch
@@ -354,9 +400,16 @@ public:
     /// Get the angle of a line entity (returns angle in degrees, 0 if not a line)
     double getEntityAngle(int entityId) const;
 
+    // Entity lookup helpers
+    SketchEntity* entityById(int id);
+    const SketchEntity* entityById(int id) const;
+
 signals:
     /// Emitted when an entity is selected or deselected
     void selectionChanged(int entityId);
+
+    /// Emitted when a constraint is selected (constraintId = -1 means deselected)
+    void constraintSelectionChanged(int constraintId);
 
     /// Emitted when an entity is created
     void entityCreated(int entityId);
@@ -413,6 +466,9 @@ signals:
     void undoAvailabilityChanged(bool canUndo);
     void redoAvailabilityChanged(bool canRedo);
 
+    /// Emitted when the undo stack contents change (push, undo, redo, clear)
+    void undoStackChanged();
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -457,6 +513,7 @@ private:
     void drawDistanceConstraint(QPainter& painter, const SketchConstraint& constraint);
     void drawRadialConstraint(QPainter& painter, const SketchConstraint& constraint);
     void drawAngleConstraint(QPainter& painter, const SketchConstraint& constraint);
+    void drawFixedAngleConstraint(QPainter& painter, const SketchConstraint& constraint);
     void drawGeometricConstraint(QPainter& painter, const SketchConstraint& constraint);
     void drawArrow(QPainter& painter, const QPointF& pos, const QPointF& dir, double size);
 
@@ -466,17 +523,22 @@ private:
     void createGeometricConstraint(ConstraintType type);  // For non-dimensional constraints
     void editConstraintValue(int constraintId);
     void finishConstraintCreation();
+    void deleteConstraintById(int constraintId);  // Delete a constraint with full cleanup + undo
     void solveConstraints();
     void refreshConstrainedFlags();  // Recompute entity.constrained from remaining constraints
     void updateDrivenDimensions();   // Update Driven dimension values from geometry
     void updateConstraintLabelPositions(); // Reposition labels to track geometry after solving
     ConstraintType detectConstraintType(int entityId1, int entityId2) const;
-    double calculateConstraintValue(ConstraintType type, const QVector<int>& entityIds,
-                                     const QVector<QPointF>& points) const;
     bool getConstraintEndpoints(const SketchConstraint& constraint, QPointF& p1, QPointF& p2) const;
-    SketchConstraint* constraintById(int id);
-    const SketchConstraint* constraintById(int id) const;
     QString describeConstraint(int constraintId) const;  // Human-readable constraint description
+
+    // Sweep-angle construction line helpers
+    void syncSweepAngleConstructionLines(const SketchEntity& arc);
+    int findSweepAngleGroupForArc(int arcId) const;
+
+    // Label collision avoidance
+    void resolveConstraintLabelOverlaps();
+    QHash<int, QPointF> m_labelNudgeOffsets;  ///< constraint id → screen-space nudge (per-frame)
     QPointF findClosestPointOnEntity(const SketchEntity* entity, const QPointF& worldPos) const;
     int findNearestPointIndex(const SketchEntity* entity, const QPointF& worldPos) const;
 
@@ -495,9 +557,7 @@ private:
     bool convertToDriving(int constraintId);   // Convert Driven to Driving (returns false if would over-constrain)
     void convertToDriven(int constraintId);    // Convert Driving to Driven
 
-    // Entity lookup helpers
-    SketchEntity* entityById(int id);
-    const SketchEntity* entityById(int id) const;
+    // Entity lookup helpers (moved to public section)
 
     // Entity creation
     void startEntity(const QPointF& pos);
@@ -633,6 +693,7 @@ private:
     QPointF m_dragHandleOriginal;    ///< Original handle position before drag
     QPointF m_dragHandleOriginal2;   ///< Second point for circles (radius point)
     double m_dragOriginalRadius = 0; ///< Original radius for circles/arcs
+    sketch::Entity m_dragOriginalEntity; ///< Full entity snapshot before drag (for undo)
     QPointF m_lastRawMouseWorld;     ///< Last raw (unsnapped) mouse position
     bool m_shiftWasPressed = false;  ///< Track Shift state for snap-to-grid during drag
     bool m_ctrlWasPressed = false;   ///< Track Ctrl state for axis constraint during drag
@@ -716,9 +777,6 @@ private:
 
     // Undo/Redo support
     sketch::UndoStack m_libUndoStack{100};
-
-    /// Push an undo command and clear redo stack
-    void pushUndoCommand(const sketch::UndoCommand& cmd);
 
     /// Update undo/redo action availability
     void updateUndoRedoState();

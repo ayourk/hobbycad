@@ -14,21 +14,21 @@ Document::~Document() = default;
 
 // ---- File path ------------------------------------------------------
 
-QString Document::filePath() const { return m_filePath; }
-bool Document::isNew() const       { return m_filePath.isEmpty(); }
+std::string Document::filePath() const { return m_filePath; }
+bool Document::isNew() const       { return m_filePath.empty(); }
 bool Document::isModified() const   { return m_modified; }
 void Document::setModified(bool modified) { m_modified = modified; }
 
 // ---- Shapes ---------------------------------------------------------
 
-const QList<TopoDS_Shape>& Document::shapes() const
+const std::vector<TopoDS_Shape>& Document::shapes() const
 {
     return m_shapes;
 }
 
 void Document::addShape(const TopoDS_Shape& shape)
 {
-    m_shapes.append(shape);
+    m_shapes.push_back(shape);
     m_modified = true;
 }
 
@@ -41,11 +41,11 @@ void Document::clear()
 
 // ---- File I/O -------------------------------------------------------
 
-bool Document::loadBrep(const QString& path)
+bool Document::loadBrep(const std::string& path)
 {
-    QString err;
+    std::string err;
     auto shapes = brep_io::readBrep(path, &err);
-    if (shapes.isEmpty() && !err.isEmpty()) {
+    if (shapes.empty() && !err.empty()) {
         return false;
     }
 
@@ -55,14 +55,14 @@ bool Document::loadBrep(const QString& path)
     return true;
 }
 
-bool Document::saveBrep(const QString& path)
+bool Document::saveBrep(const std::string& path)
 {
-    QString savePath = path.isEmpty() ? m_filePath : path;
-    if (savePath.isEmpty()) {
+    std::string savePath = path.empty() ? m_filePath : path;
+    if (savePath.empty()) {
         return false;
     }
 
-    QString err;
+    std::string err;
     if (!brep_io::writeBrep(savePath, m_shapes, &err)) {
         return false;
     }
@@ -85,7 +85,7 @@ void Document::createTestSolid()
     boxMaker.Build();
 
     if (boxMaker.IsDone()) {
-        m_shapes.append(boxMaker.Shape());
+        m_shapes.push_back(boxMaker.Shape());
     }
 
     m_filePath.clear();
@@ -93,4 +93,3 @@ void Document::createTestSolid()
 }
 
 }  // namespace hobbycad
-

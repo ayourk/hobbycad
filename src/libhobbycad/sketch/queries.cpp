@@ -13,11 +13,14 @@
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/geometry/intersections.h>
 
-#include <QLineF>
-#include <QSet>
-#include <QMap>
-#include <QtMath>
+#include <cmath>
 #include <algorithm>
+#include <unordered_set>
+#include <map>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace hobbycad {
 namespace sketch {
@@ -31,12 +34,12 @@ using namespace geometry;
 namespace {
 
 /// Calculate distance from point to entity
-double distanceToEntity(const QPointF& point, const Entity& entity)
+double distanceToEntity(const Point2D& point, const Entity& entity)
 {
     switch (entity.type) {
     case EntityType::Point:
-        if (!entity.points.isEmpty()) {
-            return QLineF(point, entity.points[0]).length();
+        if (!entity.points.empty()) {
+            return std::hypot(point.x - entity.points[0].x, point.y - entity.points[0].y);
         }
         break;
 
@@ -47,14 +50,14 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
         break;
 
     case EntityType::Circle:
-        if (!entity.points.isEmpty()) {
-            double distToCenter = QLineF(point, entity.points[0]).length();
-            return qAbs(distToCenter - entity.radius);
+        if (!entity.points.empty()) {
+            double distToCenter = std::hypot(point.x - entity.points[0].x, point.y - entity.points[0].y);
+            return std::abs(distToCenter - entity.radius);
         }
         break;
 
     case EntityType::Arc:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             return pointToArcDistance(point, Arc{
                 entity.points[0], entity.radius, entity.startAngle, entity.sweepAngle
             });
@@ -63,18 +66,18 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
 
     case EntityType::Rectangle:
         if (entity.points.size() >= 2) {
-            QPointF p1 = entity.points[0];
-            QPointF p2 = entity.points[1];
-            QPointF corners[4] = {
+            Point2D p1 = entity.points[0];
+            Point2D p2 = entity.points[1];
+            Point2D corners[4] = {
                 p1,
-                QPointF(p2.x(), p1.y()),
+                Point2D(p2.x, p1.y),
                 p2,
-                QPointF(p1.x(), p2.y())
+                Point2D(p1.x, p2.y)
             };
             double minDist = std::numeric_limits<double>::max();
             for (int i = 0; i < 4; ++i) {
                 double d = pointToLineDistance(point, corners[i], corners[(i+1)%4]);
-                minDist = qMin(minDist, d);
+                minDist = std::min(minDist, d);
             }
             return minDist;
         }
@@ -83,27 +86,27 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
     case EntityType::Polygon:
         if (entity.points.size() >= 2) {
             double minDist = std::numeric_limits<double>::max();
-            for (int i = 0; i < entity.points.size(); ++i) {
-                int j = (i + 1) % entity.points.size();
+            for (int i = 0; i < static_cast<int>(entity.points.size()); ++i) {
+                int j = (i + 1) % static_cast<int>(entity.points.size());
                 double d = pointToLineDistance(point, entity.points[i], entity.points[j]);
-                minDist = qMin(minDist, d);
+                minDist = std::min(minDist, d);
             }
             return minDist;
         }
         break;
 
     case EntityType::Ellipse:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             // Approximate: use distance to closest point on ellipse
             // This is a simplified calculation
-            QPointF center = entity.points[0];
-            QPointF rel = point - center;
-            double angle = qAtan2(rel.y(), rel.x());
-            QPointF ellipsePoint(
-                center.x() + entity.majorRadius * qCos(angle),
-                center.y() + entity.minorRadius * qSin(angle)
+            Point2D center = entity.points[0];
+            Point2D rel = point - center;
+            double angle = std::atan2(rel.y, rel.x);
+            Point2D ellipsePoint(
+                center.x + entity.majorRadius * std::cos(angle),
+                center.y + entity.minorRadius * std::sin(angle)
             );
-            return QLineF(point, ellipsePoint).length();
+            return std::hypot(point.x - ellipsePoint.x, point.y - ellipsePoint.y);
         }
         break;
 
@@ -111,7 +114,7 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
         if (entity.points.size() >= 2) {
             // Distance to capsule shape
             double lineDist = pointToLineDistance(point, entity.points[0], entity.points[1]);
-            return qMax(0.0, lineDist - entity.radius);
+            return std::max(0.0, lineDist - entity.radius);
         }
         break;
 
@@ -119,9 +122,9 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
         if (entity.points.size() >= 2) {
             // Approximate by checking control polygon
             double minDist = std::numeric_limits<double>::max();
-            for (int i = 0; i < entity.points.size() - 1; ++i) {
+            for (int i = 0; i < static_cast<int>(entity.points.size()) - 1; ++i) {
                 double d = pointToLineDistance(point, entity.points[i], entity.points[i+1]);
-                minDist = qMin(minDist, d);
+                minDist = std::min(minDist, d);
             }
             return minDist;
         }
@@ -129,8 +132,8 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
 
     case EntityType::Text:
         // Text hit testing would use bounding box
-        if (!entity.points.isEmpty()) {
-            return QLineF(point, entity.points[0]).length();
+        if (!entity.points.empty()) {
+            return std::hypot(point.x - entity.points[0].x, point.y - entity.points[0].y);
         }
         break;
     }
@@ -139,11 +142,11 @@ double distanceToEntity(const QPointF& point, const Entity& entity)
 }
 
 /// Get closest point on entity to a query point
-QPointF closestPointOnEntity(const QPointF& point, const Entity& entity)
+Point2D closestPointOnEntity(const Point2D& point, const Entity& entity)
 {
     switch (entity.type) {
     case EntityType::Point:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             return entity.points[0];
         }
         break;
@@ -155,13 +158,13 @@ QPointF closestPointOnEntity(const QPointF& point, const Entity& entity)
         break;
 
     case EntityType::Circle:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             return closestPointOnCircle(point, entity.points[0], entity.radius);
         }
         break;
 
     case EntityType::Arc:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             return closestPointOnArc(point, Arc{
                 entity.points[0], entity.radius, entity.startAngle, entity.sweepAngle
             });
@@ -170,11 +173,11 @@ QPointF closestPointOnEntity(const QPointF& point, const Entity& entity)
 
     default:
         // For complex entities, return nearest control point
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             double minDist = std::numeric_limits<double>::max();
-            QPointF nearest = entity.points[0];
-            for (const QPointF& p : entity.points) {
-                double d = QLineF(point, p).length();
+            Point2D nearest = entity.points[0];
+            for (const Point2D& p : entity.points) {
+                double d = std::hypot(point.x - p.x, point.y - p.y);
                 if (d < minDist) {
                     minDist = d;
                     nearest = p;
@@ -194,36 +197,36 @@ QPointF closestPointOnEntity(const QPointF& point, const Entity& entity)
 //  Hit Testing
 // =====================================================================
 
-QVector<int> findEntitiesAtPoint(
-    const QVector<Entity>& entities,
-    const QPointF& point,
+std::vector<int> findEntitiesAtPoint(
+    const std::vector<Entity>& entities,
+    const Point2D& point,
     double tolerance)
 {
-    QVector<QPair<int, double>> hits;
+    std::vector<std::pair<int, double>> hits;
 
     for (const Entity& entity : entities) {
         double dist = distanceToEntity(point, entity);
         if (dist <= tolerance) {
-            hits.append({entity.id, dist});
+            hits.push_back({entity.id, dist});
         }
     }
 
     // Sort by distance
     std::sort(hits.begin(), hits.end(),
-              [](const QPair<int,double>& a, const QPair<int,double>& b) {
+              [](const std::pair<int,double>& a, const std::pair<int,double>& b) {
                   return a.second < b.second;
               });
 
-    QVector<int> result;
+    std::vector<int> result;
     for (const auto& hit : hits) {
-        result.append(hit.first);
+        result.push_back(hit.first);
     }
     return result;
 }
 
 HitTestResult findNearestEntity(
-    const QVector<Entity>& entities,
-    const QPointF& point)
+    const std::vector<Entity>& entities,
+    const Point2D& point)
 {
     HitTestResult result;
     result.distance = std::numeric_limits<double>::max();
@@ -237,8 +240,8 @@ HitTestResult findNearestEntity(
 
             // Check if we hit a control point
             result.pointIndex = -1;
-            for (int i = 0; i < entity.points.size(); ++i) {
-                if (QLineF(point, entity.points[i]).length() < POINT_TOLERANCE) {
+            for (int i = 0; i < static_cast<int>(entity.points.size()); ++i) {
+                if (std::hypot(point.x - entity.points[i].x, point.y - entity.points[i].y) < POINT_TOLERANCE) {
                     result.pointIndex = i;
                     break;
                 }
@@ -249,47 +252,35 @@ HitTestResult findNearestEntity(
     return result;
 }
 
-QVector<int> findEntitiesInRect(
-    const QVector<Entity>& entities,
-    const QRectF& rect,
+std::vector<int> findEntitiesInRect(
+    const std::vector<Entity>& entities,
+    const Rect2D& rect,
     bool mustBeFullyInside)
 {
-    QVector<int> result;
+    std::vector<int> result;
 
     for (const Entity& entity : entities) {
-        BoundingBox bounds = entity.boundingBox();
-
-        if (mustBeFullyInside) {
-            // Entity must be fully contained
-            if (rect.contains(QPointF(bounds.minX, bounds.minY)) &&
-                rect.contains(QPointF(bounds.maxX, bounds.maxY))) {
-                result.append(entity.id);
-            }
-        } else {
-            // Any intersection counts
-            QRectF entityRect(bounds.minX, bounds.minY,
-                              bounds.maxX - bounds.minX,
-                              bounds.maxY - bounds.minY);
-            if (rect.intersects(entityRect)) {
-                result.append(entity.id);
-            }
-        }
+        bool match = mustBeFullyInside
+            ? entityEnclosedByRect(entity, rect)
+            : entityIntersectsRect(entity, rect);
+        if (match)
+            result.push_back(entity.id);
     }
 
     return result;
 }
 
-QVector<QPair<int, int>> findControlPointsAtPoint(
-    const QVector<Entity>& entities,
-    const QPointF& point,
+std::vector<std::pair<int, int>> findControlPointsAtPoint(
+    const std::vector<Entity>& entities,
+    const Point2D& point,
     double tolerance)
 {
-    QVector<QPair<int, int>> result;
+    std::vector<std::pair<int, int>> result;
 
     for (const Entity& entity : entities) {
-        for (int i = 0; i < entity.points.size(); ++i) {
-            if (QLineF(point, entity.points[i]).length() <= tolerance) {
-                result.append({entity.id, i});
+        for (int i = 0; i < static_cast<int>(entity.points.size()); ++i) {
+            if (std::hypot(point.x - entity.points[i].x, point.y - entity.points[i].y) <= tolerance) {
+                result.push_back({entity.id, i});
             }
         }
     }
@@ -302,26 +293,26 @@ QVector<QPair<int, int>> findControlPointsAtPoint(
 // =====================================================================
 
 ValidationResult validateSketch(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
     ValidationResult result;
 
     // Check for duplicate entity IDs
-    QSet<int> entityIds;
+    std::unordered_set<int> entityIds;
     for (const Entity& e : entities) {
-        if (entityIds.contains(e.id)) {
-            result.errors.append(QString("Duplicate entity ID: %1").arg(e.id));
+        if (entityIds.count(e.id) > 0) {
+            result.errors.push_back("Duplicate entity ID: " + std::to_string(e.id));
             result.valid = false;
         }
         entityIds.insert(e.id);
     }
 
     // Check for duplicate constraint IDs
-    QSet<int> constraintIds;
+    std::unordered_set<int> constraintIds;
     for (const Constraint& c : constraints) {
-        if (constraintIds.contains(c.id)) {
-            result.errors.append(QString("Duplicate constraint ID: %1").arg(c.id));
+        if (constraintIds.count(c.id) > 0) {
+            result.errors.push_back("Duplicate constraint ID: " + std::to_string(c.id));
             result.valid = false;
         }
         constraintIds.insert(c.id);
@@ -330,9 +321,9 @@ ValidationResult validateSketch(
     // Check constraints reference valid entities
     for (const Constraint& c : constraints) {
         for (int entityId : c.entityIds) {
-            if (!entityIds.contains(entityId)) {
-                result.errors.append(QString("Constraint %1 references non-existent entity %2")
-                                     .arg(c.id).arg(entityId));
+            if (entityIds.count(entityId) == 0) {
+                result.errors.push_back("Constraint " + std::to_string(c.id) +
+                    " references non-existent entity " + std::to_string(entityId));
                 result.valid = false;
             }
         }
@@ -343,14 +334,14 @@ ValidationResult validateSketch(
         switch (e.type) {
         case EntityType::Line:
             if (e.points.size() >= 2 &&
-                QLineF(e.points[0], e.points[1]).length() < POINT_TOLERANCE) {
-                result.warnings.append(QString("Line %1 has zero length").arg(e.id));
+                std::hypot(e.points[0].x - e.points[1].x, e.points[0].y - e.points[1].y) < POINT_TOLERANCE) {
+                result.warnings.push_back("Line " + std::to_string(e.id) + " has zero length");
             }
             break;
         case EntityType::Circle:
         case EntityType::Arc:
             if (e.radius < POINT_TOLERANCE) {
-                result.warnings.append(QString("Circle/Arc %1 has zero radius").arg(e.id));
+                result.warnings.push_back("Circle/Arc " + std::to_string(e.id) + " has zero radius");
             }
             break;
         default:
@@ -362,8 +353,8 @@ ValidationResult validateSketch(
 }
 
 bool isSketchFullyConstrained(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
     if (!Solver::isAvailable()) {
         return false;
@@ -373,12 +364,12 @@ bool isSketchFullyConstrained(
     return solver.degreesOfFreedom(entities, constraints) == 0;
 }
 
-QVector<int> findUnconstrainedEntities(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+std::vector<int> findUnconstrainedEntities(
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
     // Collect all entity IDs referenced by constraints
-    QSet<int> constrainedIds;
+    std::unordered_set<int> constrainedIds;
     for (const Constraint& c : constraints) {
         for (int id : c.entityIds) {
             constrainedIds.insert(id);
@@ -386,31 +377,31 @@ QVector<int> findUnconstrainedEntities(
     }
 
     // Find entities not referenced by any constraint
-    QVector<int> unconstrained;
+    std::vector<int> unconstrained;
     for (const Entity& e : entities) {
-        if (!constrainedIds.contains(e.id)) {
-            unconstrained.append(e.id);
+        if (constrainedIds.count(e.id) == 0) {
+            unconstrained.push_back(e.id);
         }
     }
 
     return unconstrained;
 }
 
-QVector<int> findUnderconstrainedEntities(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+std::vector<int> findUnderconstrainedEntities(
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
     // Heuristic: count constraints per entity and compare to expected DOF
-    QMap<int, int> constraintCount;
+    std::map<int, int> constraintCount;
     for (const Constraint& c : constraints) {
         for (int id : c.entityIds) {
             constraintCount[id]++;
         }
     }
 
-    QVector<int> underconstrained;
+    std::vector<int> underconstrained;
     for (const Entity& e : entities) {
-        int count = constraintCount.value(e.id, 0);
+        int count = constraintCount.count(e.id) ? constraintCount.at(e.id) : 0;
         int expectedDOF = 0;
 
         switch (e.type) {
@@ -427,13 +418,13 @@ QVector<int> findUnderconstrainedEntities(
             expectedDOF = 5;  // cx, cy, r, start, sweep
             break;
         default:
-            expectedDOF = 2 * e.points.size();
+            expectedDOF = 2 * static_cast<int>(e.points.size());
             break;
         }
 
         // This is a rough heuristic - real DOF analysis needs the solver
         if (count > 0 && count < expectedDOF / 2) {
-            underconstrained.append(e.id);
+            underconstrained.push_back(e.id);
         }
     }
 
@@ -444,20 +435,20 @@ QVector<int> findUnderconstrainedEntities(
 //  Sketch Analysis
 // =====================================================================
 
-double sketchArea(const QVector<Entity>& entities)
+double sketchArea(const std::vector<Entity>& entities)
 {
     ProfileDetectionOptions options;
-    QVector<Profile> profiles = detectProfiles(entities, options);
+    std::vector<Profile> profiles = detectProfiles(entities, options);
 
     double totalArea = 0.0;
     for (const Profile& p : profiles) {
-        totalArea += qAbs(p.area);
+        totalArea += std::abs(p.area);
     }
 
     return totalArea;
 }
 
-double sketchLength(const QVector<Entity>& entities)
+double sketchLength(const std::vector<Entity>& entities)
 {
     double total = 0.0;
     for (const Entity& e : entities) {
@@ -466,7 +457,7 @@ double sketchLength(const QVector<Entity>& entities)
     return total;
 }
 
-BoundingBox sketchBounds(const QVector<Entity>& entities)
+BoundingBox sketchBounds(const std::vector<Entity>& entities)
 {
     BoundingBox bounds;
     for (const Entity& e : entities) {
@@ -475,9 +466,9 @@ BoundingBox sketchBounds(const QVector<Entity>& entities)
     return bounds;
 }
 
-QMap<EntityType, int> countEntitiesByType(const QVector<Entity>& entities)
+std::map<EntityType, int> countEntitiesByType(const std::vector<Entity>& entities)
 {
-    QMap<EntityType, int> counts;
+    std::map<EntityType, int> counts;
     for (const Entity& e : entities) {
         counts[e.type]++;
     }
@@ -496,7 +487,7 @@ double entityLength(const Entity& entity)
 
     case EntityType::Line:
         if (entity.points.size() >= 2) {
-            return QLineF(entity.points[0], entity.points[1]).length();
+            return std::hypot(entity.points[0].x - entity.points[1].x, entity.points[0].y - entity.points[1].y);
         }
         break;
 
@@ -504,12 +495,12 @@ double entityLength(const Entity& entity)
         return 2.0 * M_PI * entity.radius;
 
     case EntityType::Arc:
-        return qAbs(qDegreesToRadians(entity.sweepAngle)) * entity.radius;
+        return std::abs(entity.sweepAngle * M_PI / 180.0) * entity.radius;
 
     case EntityType::Rectangle:
         if (entity.points.size() >= 2) {
-            double w = qAbs(entity.points[1].x() - entity.points[0].x());
-            double h = qAbs(entity.points[1].y() - entity.points[0].y());
+            double w = std::abs(entity.points[1].x - entity.points[0].x);
+            double h = std::abs(entity.points[1].y - entity.points[0].y);
             return 2.0 * (w + h);
         }
         break;
@@ -517,9 +508,9 @@ double entityLength(const Entity& entity)
     case EntityType::Polygon:
         {
             double len = 0.0;
-            for (int i = 0; i < entity.points.size(); ++i) {
-                int j = (i + 1) % entity.points.size();
-                len += QLineF(entity.points[i], entity.points[j]).length();
+            for (int i = 0; i < static_cast<int>(entity.points.size()); ++i) {
+                int j = (i + 1) % static_cast<int>(entity.points.size());
+                len += std::hypot(entity.points[i].x - entity.points[j].x, entity.points[i].y - entity.points[j].y);
             }
             return len;
         }
@@ -529,13 +520,13 @@ double entityLength(const Entity& entity)
         {
             double a = entity.majorRadius;
             double b = entity.minorRadius;
-            double h = qPow((a - b) / (a + b), 2);
-            return M_PI * (a + b) * (1.0 + 3.0 * h / (10.0 + qSqrt(4.0 - 3.0 * h)));
+            double h = std::pow((a - b) / (a + b), 2);
+            return M_PI * (a + b) * (1.0 + 3.0 * h / (10.0 + std::sqrt(4.0 - 3.0 * h)));
         }
 
     case EntityType::Slot:
         if (entity.points.size() >= 2) {
-            double lineLen = QLineF(entity.points[0], entity.points[1]).length();
+            double lineLen = std::hypot(entity.points[0].x - entity.points[1].x, entity.points[0].y - entity.points[1].y);
             return 2.0 * lineLen + 2.0 * M_PI * entity.radius;
         }
         break;
@@ -544,8 +535,8 @@ double entityLength(const Entity& entity)
         // Approximate by summing control polygon segments
         {
             double len = 0.0;
-            for (int i = 0; i < entity.points.size() - 1; ++i) {
-                len += QLineF(entity.points[i], entity.points[i+1]).length();
+            for (int i = 0; i < static_cast<int>(entity.points.size()) - 1; ++i) {
+                len += std::hypot(entity.points[i].x - entity.points[i+1].x, entity.points[i].y - entity.points[i+1].y);
             }
             return len;
         }
@@ -557,13 +548,13 @@ double entityLength(const Entity& entity)
     return 0.0;
 }
 
-QPointF pointAtParameter(const Entity& entity, double t)
+Point2D pointAtParameter(const Entity& entity, double t)
 {
-    t = qBound(0.0, t, 1.0);
+    t = std::clamp(t, 0.0, 1.0);
 
     switch (entity.type) {
     case EntityType::Point:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             return entity.points[0];
         }
         break;
@@ -575,23 +566,23 @@ QPointF pointAtParameter(const Entity& entity, double t)
         break;
 
     case EntityType::Circle:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             double angle = 2.0 * M_PI * t;
-            return entity.points[0] + QPointF(
-                entity.radius * qCos(angle),
-                entity.radius * qSin(angle)
+            return entity.points[0] + Point2D(
+                entity.radius * std::cos(angle),
+                entity.radius * std::sin(angle)
             );
         }
         break;
 
     case EntityType::Arc:
-        if (!entity.points.isEmpty()) {
-            double startRad = qDegreesToRadians(entity.startAngle);
-            double sweepRad = qDegreesToRadians(entity.sweepAngle);
+        if (!entity.points.empty()) {
+            double startRad = entity.startAngle * M_PI / 180.0;
+            double sweepRad = entity.sweepAngle * M_PI / 180.0;
             double angle = startRad + t * sweepRad;
-            return entity.points[0] + QPointF(
-                entity.radius * qCos(angle),
-                entity.radius * qSin(angle)
+            return entity.points[0] + Point2D(
+                entity.radius * std::cos(angle),
+                entity.radius * std::sin(angle)
             );
         }
         break;
@@ -599,20 +590,20 @@ QPointF pointAtParameter(const Entity& entity, double t)
     case EntityType::Rectangle:
         if (entity.points.size() >= 2) {
             // Traverse rectangle perimeter
-            QPointF p1 = entity.points[0];
-            QPointF p2 = entity.points[1];
-            QPointF corners[4] = {
+            Point2D p1 = entity.points[0];
+            Point2D p2 = entity.points[1];
+            Point2D corners[4] = {
                 p1,
-                QPointF(p2.x(), p1.y()),
+                Point2D(p2.x, p1.y),
                 p2,
-                QPointF(p1.x(), p2.y())
+                Point2D(p1.x, p2.y)
             };
-            double perimeter = 2.0 * (qAbs(p2.x() - p1.x()) + qAbs(p2.y() - p1.y()));
+            double perimeter = 2.0 * (std::abs(p2.x - p1.x) + std::abs(p2.y - p1.y));
             double dist = t * perimeter;
             double accumulated = 0.0;
             for (int i = 0; i < 4; ++i) {
                 int j = (i + 1) % 4;
-                double segLen = QLineF(corners[i], corners[j]).length();
+                double segLen = std::hypot(corners[i].x - corners[j].x, corners[i].y - corners[j].y);
                 if (accumulated + segLen >= dist) {
                     double segT = (dist - accumulated) / segLen;
                     return lerp(corners[i], corners[j], segT);
@@ -627,34 +618,34 @@ QPointF pointAtParameter(const Entity& entity, double t)
         // Simple linear interpolation along control polygon
         if (entity.points.size() >= 2) {
             double totalLen = 0.0;
-            for (int i = 0; i < entity.points.size() - 1; ++i) {
-                totalLen += QLineF(entity.points[i], entity.points[i+1]).length();
+            for (int i = 0; i < static_cast<int>(entity.points.size()) - 1; ++i) {
+                totalLen += std::hypot(entity.points[i].x - entity.points[i+1].x, entity.points[i].y - entity.points[i+1].y);
             }
             double targetLen = t * totalLen;
             double accumulated = 0.0;
-            for (int i = 0; i < entity.points.size() - 1; ++i) {
-                double segLen = QLineF(entity.points[i], entity.points[i+1]).length();
+            for (int i = 0; i < static_cast<int>(entity.points.size()) - 1; ++i) {
+                double segLen = std::hypot(entity.points[i].x - entity.points[i+1].x, entity.points[i].y - entity.points[i+1].y);
                 if (accumulated + segLen >= targetLen) {
                     double segT = (targetLen - accumulated) / segLen;
                     return lerp(entity.points[i], entity.points[i+1], segT);
                 }
                 accumulated += segLen;
             }
-            return entity.points.last();
+            return entity.points.back();
         }
         break;
 
     default:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             return entity.points[0];
         }
         break;
     }
 
-    return QPointF();
+    return Point2D();
 }
 
-double parameterAtPoint(const Entity& entity, const QPointF& point)
+double parameterAtPoint(const Entity& entity, const Point2D& point)
 {
     switch (entity.type) {
     case EntityType::Point:
@@ -663,23 +654,23 @@ double parameterAtPoint(const Entity& entity, const QPointF& point)
     case EntityType::Line:
         if (entity.points.size() >= 2) {
             double t = projectPointOnLine(point, entity.points[0], entity.points[1]);
-            return qBound(0.0, t, 1.0);
+            return std::clamp(t, 0.0, 1.0);
         }
         break;
 
     case EntityType::Circle:
-        if (!entity.points.isEmpty()) {
-            QPointF rel = point - entity.points[0];
-            double angle = qAtan2(rel.y(), rel.x());
+        if (!entity.points.empty()) {
+            Point2D rel = point - entity.points[0];
+            double angle = std::atan2(rel.y, rel.x);
             if (angle < 0) angle += 2.0 * M_PI;
             return angle / (2.0 * M_PI);
         }
         break;
 
     case EntityType::Arc:
-        if (!entity.points.isEmpty()) {
-            QPointF rel = point - entity.points[0];
-            double angle = qRadiansToDegrees(qAtan2(rel.y(), rel.x()));
+        if (!entity.points.empty()) {
+            Point2D rel = point - entity.points[0];
+            double angle = std::atan2(rel.y, rel.x) * 180.0 / M_PI;
             double startAngle = entity.startAngle;
             double sweepAngle = entity.sweepAngle;
 
@@ -693,7 +684,7 @@ double parameterAtPoint(const Entity& entity, const QPointF& point)
                 sweepAngle = -sweepAngle;
             }
 
-            return qBound(0.0, relAngle / sweepAngle, 1.0);
+            return std::clamp(relAngle / sweepAngle, 0.0, 1.0);
         }
         break;
 
@@ -704,13 +695,13 @@ double parameterAtPoint(const Entity& entity, const QPointF& point)
     return -1.0;
 }
 
-QPointF tangentAtParameter(const Entity& entity, double t)
+Point2D tangentAtParameter(const Entity& entity, double t)
 {
-    t = qBound(0.0, t, 1.0);
+    t = std::clamp(t, 0.0, 1.0);
 
     switch (entity.type) {
     case EntityType::Point:
-        return QPointF(1, 0);  // Arbitrary
+        return Point2D(1, 0);  // Arbitrary
 
     case EntityType::Line:
         if (entity.points.size() >= 2) {
@@ -719,19 +710,19 @@ QPointF tangentAtParameter(const Entity& entity, double t)
         break;
 
     case EntityType::Circle:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             double angle = 2.0 * M_PI * t;
-            return QPointF(-qSin(angle), qCos(angle));
+            return Point2D(-std::sin(angle), std::cos(angle));
         }
         break;
 
     case EntityType::Arc:
-        if (!entity.points.isEmpty()) {
-            double startRad = qDegreesToRadians(entity.startAngle);
-            double sweepRad = qDegreesToRadians(entity.sweepAngle);
+        if (!entity.points.empty()) {
+            double startRad = entity.startAngle * M_PI / 180.0;
+            double sweepRad = entity.sweepAngle * M_PI / 180.0;
             double angle = startRad + t * sweepRad;
             double sign = (sweepRad >= 0) ? 1.0 : -1.0;
-            return QPointF(-sign * qSin(angle), sign * qCos(angle));
+            return Point2D(-sign * std::sin(angle), sign * std::cos(angle));
         }
         break;
 
@@ -739,9 +730,9 @@ QPointF tangentAtParameter(const Entity& entity, double t)
         // Approximate by finite difference
         {
             double dt = 0.001;
-            QPointF p1 = pointAtParameter(entity, qMax(0.0, t - dt));
-            QPointF p2 = pointAtParameter(entity, qMin(1.0, t + dt));
-            QPointF diff = p2 - p1;
+            Point2D p1 = pointAtParameter(entity, std::max(0.0, t - dt));
+            Point2D p2 = pointAtParameter(entity, std::min(1.0, t + dt));
+            Point2D diff = p2 - p1;
             double len = length(diff);
             if (len > POINT_TOLERANCE) {
                 return diff / len;
@@ -750,12 +741,12 @@ QPointF tangentAtParameter(const Entity& entity, double t)
         break;
     }
 
-    return QPointF(1, 0);
+    return Point2D(1, 0);
 }
 
-QPointF normalAtParameter(const Entity& entity, double t)
+Point2D normalAtParameter(const Entity& entity, double t)
 {
-    QPointF tan = tangentAtParameter(entity, t);
+    Point2D tan = tangentAtParameter(entity, t);
     return perpendicular(tan);
 }
 
@@ -763,21 +754,21 @@ QPointF normalAtParameter(const Entity& entity, double t)
 //  Tessellation
 // =====================================================================
 
-QVector<QPointF> tessellate(const Entity& entity, double tolerance)
+std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
 {
-    QVector<QPointF> points;
+    std::vector<Point2D> points;
 
     switch (entity.type) {
     case EntityType::Point:
-        if (!entity.points.isEmpty()) {
-            points.append(entity.points[0]);
+        if (!entity.points.empty()) {
+            points.push_back(entity.points[0]);
         }
         break;
 
     case EntityType::Line:
         if (entity.points.size() >= 2) {
-            points.append(entity.points[0]);
-            points.append(entity.points[1]);
+            points.push_back(entity.points[0]);
+            points.push_back(entity.points[1]);
         }
         break;
 
@@ -786,34 +777,34 @@ QVector<QPointF> tessellate(const Entity& entity, double tolerance)
         {
             double sweepRad = (entity.type == EntityType::Circle)
                               ? 2.0 * M_PI
-                              : qDegreesToRadians(qAbs(entity.sweepAngle));
+                              : std::abs(entity.sweepAngle) * M_PI / 180.0;
             // Number of segments based on tolerance
-            int segments = qMax(8, static_cast<int>(
-                qCeil(sweepRad * entity.radius / tolerance)
+            int segments = std::max(8, static_cast<int>(
+                std::ceil(sweepRad * entity.radius / tolerance)
             ));
             for (int i = 0; i <= segments; ++i) {
                 double t = static_cast<double>(i) / segments;
-                points.append(pointAtParameter(entity, t));
+                points.push_back(pointAtParameter(entity, t));
             }
         }
         break;
 
     case EntityType::Rectangle:
         if (entity.points.size() >= 2) {
-            QPointF p1 = entity.points[0];
-            QPointF p2 = entity.points[1];
-            points.append(p1);
-            points.append(QPointF(p2.x(), p1.y()));
-            points.append(p2);
-            points.append(QPointF(p1.x(), p2.y()));
-            points.append(p1);  // Close
+            Point2D p1 = entity.points[0];
+            Point2D p2 = entity.points[1];
+            points.push_back(p1);
+            points.push_back(Point2D(p2.x, p1.y));
+            points.push_back(p2);
+            points.push_back(Point2D(p1.x, p2.y));
+            points.push_back(p1);  // Close
         }
         break;
 
     case EntityType::Polygon:
         points = entity.points;
-        if (!points.isEmpty() && points.first() != points.last()) {
-            points.append(points.first());
+        if (!points.empty() && !(points.front().x == points.back().x && points.front().y == points.back().y)) {
+            points.push_back(points.front());
         }
         break;
 
@@ -823,13 +814,13 @@ QVector<QPointF> tessellate(const Entity& entity, double tolerance)
             double a = entity.majorRadius;
             double b = entity.minorRadius;
             double approxCircum = M_PI * (a + b);
-            int segments = qMax(16, static_cast<int>(qCeil(approxCircum / tolerance)));
+            int segments = std::max(16, static_cast<int>(std::ceil(approxCircum / tolerance)));
             for (int i = 0; i <= segments; ++i) {
                 double angle = 2.0 * M_PI * i / segments;
-                if (!entity.points.isEmpty()) {
-                    points.append(entity.points[0] + QPointF(
-                        a * qCos(angle),
-                        b * qSin(angle)
+                if (!entity.points.empty()) {
+                    points.push_back(entity.points[0] + Point2D(
+                        a * std::cos(angle),
+                        b * std::sin(angle)
                     ));
                 }
             }
@@ -839,29 +830,29 @@ QVector<QPointF> tessellate(const Entity& entity, double tolerance)
     case EntityType::Slot:
         if (entity.points.size() >= 2) {
             // Two semicircles connected by lines
-            QPointF p1 = entity.points[0];
-            QPointF p2 = entity.points[1];
-            QPointF dir = normalize(p2 - p1);
-            QPointF perp = perpendicular(dir);
+            Point2D p1 = entity.points[0];
+            Point2D p2 = entity.points[1];
+            Point2D dir = normalize(p2 - p1);
+            Point2D perp = perpendicular(dir);
 
-            int arcSegments = qMax(8, static_cast<int>(
-                qCeil(M_PI * entity.radius / tolerance)
+            int arcSegments = std::max(8, static_cast<int>(
+                std::ceil(M_PI * entity.radius / tolerance)
             ));
 
             // First semicircle
-            double baseAngle = qAtan2(perp.y(), perp.x());
+            double baseAngle = std::atan2(perp.y, perp.x);
             for (int i = 0; i <= arcSegments; ++i) {
                 double angle = baseAngle + M_PI * i / arcSegments;
-                points.append(p1 + entity.radius * QPointF(qCos(angle), qSin(angle)));
+                points.push_back(p1 + entity.radius * Point2D(std::cos(angle), std::sin(angle)));
             }
 
             // Second semicircle
             for (int i = 0; i <= arcSegments; ++i) {
                 double angle = baseAngle + M_PI + M_PI * i / arcSegments;
-                points.append(p2 + entity.radius * QPointF(qCos(angle), qSin(angle)));
+                points.push_back(p2 + entity.radius * Point2D(std::cos(angle), std::sin(angle)));
             }
 
-            points.append(points.first());  // Close
+            points.push_back(points.front());  // Close
         }
         break;
 
@@ -879,14 +870,14 @@ QVector<QPointF> tessellate(const Entity& entity, double tolerance)
     return points;
 }
 
-QVector<QLineF> tessellateToLines(const QVector<Entity>& entities, double tolerance)
+std::vector<std::pair<Point2D, Point2D>> tessellateToLines(const std::vector<Entity>& entities, double tolerance)
 {
-    QVector<QLineF> lines;
+    std::vector<std::pair<Point2D, Point2D>> lines;
 
     for (const Entity& entity : entities) {
-        QVector<QPointF> points = tessellate(entity, tolerance);
-        for (int i = 0; i < points.size() - 1; ++i) {
-            lines.append(QLineF(points[i], points[i+1]));
+        std::vector<Point2D> points = tessellate(entity, tolerance);
+        for (int i = 0; i < static_cast<int>(points.size()) - 1; ++i) {
+            lines.push_back({points[i], points[i+1]});
         }
     }
 

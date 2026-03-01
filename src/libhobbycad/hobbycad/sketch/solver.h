@@ -18,11 +18,9 @@
 #include "constraint.h"
 #include "../core.h"
 
-#include <QVector>
-#include <QPointF>
-#include <QMap>
-#include <QString>
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -35,8 +33,8 @@ namespace sketch {
 struct SolveResult {
     bool success = false;
     int dof = 0;                           ///< Degrees of freedom remaining
-    QString errorMessage;
-    QVector<int> failedConstraintIds;      ///< IDs of constraints that couldn't be satisfied
+    std::string errorMessage;
+    std::vector<int> failedConstraintIds;  ///< IDs of constraints that couldn't be satisfied
 
     /// Solver result codes (matches libslvs)
     enum ResultCode {
@@ -52,8 +50,8 @@ struct SolveResult {
 /// Result of over-constraint check
 struct OverConstraintInfo {
     bool wouldOverConstrain = false;
-    QVector<int> conflictingConstraintIds;  ///< IDs of existing constraints causing the conflict
-    QString reason;                          ///< Human-readable explanation
+    std::vector<int> conflictingConstraintIds;  ///< IDs of existing constraints causing the conflict
+    std::string reason;                          ///< Human-readable explanation
 };
 
 // =====================================================================
@@ -69,8 +67,8 @@ struct OverConstraintInfo {
 /// Example usage:
 /// @code
 ///     Solver solver;
-///     QVector<Entity> entities = { ... };
-///     QVector<Constraint> constraints = { ... };
+///     std::vector<Entity> entities = { ... };
+///     std::vector<Constraint> constraints = { ... };
 ///
 ///     SolveResult result = solver.solve(entities, constraints);
 ///     if (result.success) {
@@ -89,8 +87,8 @@ public:
     /// @param constraints Constraints to satisfy
     /// @return Solve result with success status and diagnostic info
     SolveResult solve(
-        QVector<Entity>& entities,
-        const QVector<Constraint>& constraints
+        std::vector<Entity>& entities,
+        const std::vector<Constraint>& constraints
     );
 
     /// Test if adding a constraint would over-constrain the sketch
@@ -99,8 +97,8 @@ public:
     /// @param newConstraint Proposed new constraint
     /// @return True if the new constraint would cause over-constraint
     bool wouldOverConstrain(
-        const QVector<Entity>& entities,
-        const QVector<Constraint>& existingConstraints,
+        const std::vector<Entity>& entities,
+        const std::vector<Constraint>& existingConstraints,
         const Constraint& newConstraint
     );
 
@@ -110,8 +108,8 @@ public:
     /// @param newConstraint Proposed new constraint
     /// @return Detailed information about potential conflicts
     OverConstraintInfo checkOverConstrain(
-        const QVector<Entity>& entities,
-        const QVector<Constraint>& existingConstraints,
+        const std::vector<Entity>& entities,
+        const std::vector<Constraint>& existingConstraints,
         const Constraint& newConstraint
     );
 
@@ -120,8 +118,8 @@ public:
     /// @param constraints Current constraints
     /// @return Number of remaining degrees of freedom (0 = fully constrained)
     int degreesOfFreedom(
-        const QVector<Entity>& entities,
-        const QVector<Constraint>& constraints
+        const std::vector<Entity>& entities,
+        const std::vector<Constraint>& constraints
     );
 
     /// Check if solver is available (libslvs compiled in)
@@ -138,13 +136,13 @@ private:
 // =====================================================================
 
 /// Get human-readable name for a solve result code
-HOBBYCAD_EXPORT QString solveResultName(SolveResult::ResultCode code);
+HOBBYCAD_EXPORT std::string solveResultName(SolveResult::ResultCode code);
 
 /// Check if a constraint type is supported by the solver
 HOBBYCAD_EXPORT bool constraintSupported(ConstraintType type);
 
 /// Get list of all solver-supported constraint types
-HOBBYCAD_EXPORT QVector<ConstraintType> supportedConstraintTypes();
+HOBBYCAD_EXPORT std::vector<ConstraintType> supportedConstraintTypes();
 
 }  // namespace sketch
 }  // namespace hobbycad

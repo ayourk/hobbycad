@@ -128,7 +128,7 @@ void BackgroundImageDialog::setupUi()
 
 void BackgroundImageDialog::browseForImage()
 {
-    QString filter = sketch::imageFileFilter();
+    QString filter = QString::fromStdString(sketch::imageFileFilter());
     QString filePath = QFileDialog::getOpenFileName(
         this,
         tr("Select Background Image"),
@@ -159,7 +159,7 @@ void BackgroundImageDialog::loadImage(const QString& filePath)
     }
 
     // Load background using library function
-    m_background = sketch::loadBackgroundImage(filePath, m_embedCheckBox->isChecked());
+    m_background = sketch::loadBackgroundImage(filePath.toStdString(), m_embedCheckBox->isChecked());
 
     if (!m_background.enabled) {
         QMessageBox::warning(this, tr("Load Failed"),
@@ -185,9 +185,9 @@ void BackgroundImageDialog::onOpacityChanged(int percent)
 
 void BackgroundImageDialog::onEmbedChanged(bool embed)
 {
-    if (!m_background.filePath.isEmpty()) {
+    if (!m_background.filePath.empty()) {
         // Reload with new embed setting
-        QString filePath = m_background.filePath;
+        std::string filePath = m_background.filePath;
         m_background = sketch::loadBackgroundImage(filePath, embed);
         m_background.setOpacityPercent(m_opacitySlider->value());
     }
@@ -224,7 +224,7 @@ void BackgroundImageDialog::setBackgroundImage(const sketch::BackgroundImage& bg
     m_background = bg;
 
     if (bg.enabled) {
-        m_filePathEdit->setText(bg.filePath);
+        m_filePathEdit->setText(QString::fromStdString(bg.filePath));
         m_opacitySlider->setValue(bg.opacityPercent());
         m_opacitySpinBox->setValue(bg.opacityPercent());
         m_embedCheckBox->setChecked(bg.storage == sketch::BackgroundStorage::Embedded);
@@ -241,7 +241,7 @@ void BackgroundImageDialog::setBackgroundImage(const sketch::BackgroundImage& bg
 
 void BackgroundImageDialog::accept()
 {
-    if (!m_background.enabled || m_background.filePath.isEmpty()) {
+    if (!m_background.enabled || m_background.filePath.empty()) {
         QMessageBox::warning(this, tr("No Image Selected"),
             tr("Please select a background image before continuing."));
         return;

@@ -59,12 +59,31 @@ if(NOT HOBBYCAD_CORE_LINKAGE MATCHES "^(STATIC|SHARED|OBJECT)$")
 endif()
 
 option(HOBBYCAD_BUILD_APP
-    "Build the HobbyCAD application (requires Qt6::Widgets)" ON)
+    "Build the HobbyCAD application (requires Qt6 >= 6.4.2)" ON)
+
+# ---- Qt detection ----------------------------------------------------
+#  Probe for Qt 6.4.2+ early.  If not found (or too old), automatically
+#  disable the GUI build and fall back to a library-only build.
+
+set(HOBBYCAD_MIN_QT_VERSION "6.4.2")
+
+if(HOBBYCAD_BUILD_APP)
+    find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} QUIET COMPONENTS Core)
+    if(NOT Qt6_FOUND)
+        message(STATUS "Qt6 >= ${HOBBYCAD_MIN_QT_VERSION} not found — disabling GUI, building library only")
+        set(HOBBYCAD_BUILD_APP OFF)
+    endif()
+endif()
 
 message(STATUS "HobbyCAD ${PROJECT_VERSION}")
 message(STATUS "Core library linkage: ${HOBBYCAD_CORE_LINKAGE}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build application: ${HOBBYCAD_BUILD_APP}")
+if(Qt6_FOUND)
+    message(STATUS "Qt version: ${Qt6_VERSION}")
+else()
+    message(STATUS "Qt version: not found")
+endif()
 
 # ---- Platform: silence macOS OpenGL deprecation warnings ------------
 

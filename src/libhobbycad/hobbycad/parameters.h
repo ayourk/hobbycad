@@ -26,14 +26,19 @@
 #define HOBBYCAD_PARAMETERS_H
 
 #include "core.h"
+#include "types.h"
 #include "units.h"
 
+#include <map>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#if HOBBYCAD_HAS_QT
 #include <QJsonObject>
-#include <QList>
-#include <QMap>
-#include <QSet>
-#include <QString>
-#include <QStringList>
+#else
+#include <nlohmann/json.hpp>
+#endif
 
 namespace hobbycad {
 
@@ -53,13 +58,13 @@ public:
 
     ParametricValue() = default;
     explicit ParametricValue(double value);
-    explicit ParametricValue(const QString& expression);
+    explicit ParametricValue(const std::string& expression);
 
     /// Get the type of this value
     Type type() const { return m_type; }
 
     /// Get the raw expression string
-    QString expression() const { return m_expression; }
+    std::string expression() const { return m_expression; }
 
     /// Get the numeric value (evaluates if formula/parameter)
     double value() const { return m_value; }
@@ -68,29 +73,29 @@ public:
     bool isValid() const { return m_valid; }
 
     /// Get error message if invalid
-    QString errorMessage() const { return m_errorMessage; }
+    std::string errorMessage() const { return m_errorMessage; }
 
     /// Set the expression and re-evaluate
-    void setExpression(const QString& expr);
+    void setExpression(const std::string& expr);
 
     /// Evaluate the expression with given parameter values
-    bool evaluate(const QMap<QString, double>& parameters);
+    bool evaluate(const std::map<std::string, double>& parameters);
 
     /// Check if expression contains any parameters
     bool containsParameters() const;
 
     /// Get list of parameter names used in the expression
-    QStringList usedParameters() const;
+    std::vector<std::string> usedParameters() const;
 
 private:
     void parse();
 
     Type m_type = Type::Number;
-    QString m_expression;
+    std::string m_expression;
     double m_value = 0.0;
     bool m_valid = true;
-    QString m_errorMessage;
-    QStringList m_usedParams;
+    std::string m_errorMessage;
+    std::vector<std::string> m_usedParams;
 };
 
 // =====================================================================
@@ -99,23 +104,23 @@ private:
 
 /// A single parameter definition
 struct Parameter {
-    QString name;                   ///< Parameter name (identifier)
-    QString expression;             ///< Expression string (number or formula)
-    double value = 0.0;             ///< Evaluated numeric value
-    QString unit;                   ///< Unit type (mm, deg, etc.)
-    QString comment;                ///< User description
-    bool isUserParam = true;        ///< User vs model-generated parameter
-    bool isValid = true;            ///< Expression evaluated successfully
-    QString errorMessage;           ///< Error description if invalid
-    QStringList dependencies;       ///< Parameters this depends on
+    std::string name;                   ///< Parameter name (identifier)
+    std::string expression;             ///< Expression string (number or formula)
+    double value = 0.0;                 ///< Evaluated numeric value
+    std::string unit;                   ///< Unit type (mm, deg, etc.)
+    std::string comment;                ///< User description
+    bool isUserParam = true;            ///< User vs model-generated parameter
+    bool isValid = true;                ///< Expression evaluated successfully
+    std::string errorMessage;           ///< Error description if invalid
+    std::vector<std::string> dependencies;  ///< Parameters this depends on
 };
 
 /// Result of parameter evaluation
 struct EvaluationResult {
-    bool success = false;           ///< All parameters evaluated successfully
-    int errorCount = 0;             ///< Number of parameters with errors
-    QStringList errorMessages;      ///< Detailed error messages
-    QStringList evaluationOrder;    ///< Order parameters were evaluated
+    bool success = false;               ///< All parameters evaluated successfully
+    int errorCount = 0;                 ///< Number of parameters with errors
+    std::vector<std::string> errorMessages;      ///< Detailed error messages
+    std::vector<std::string> evaluationOrder;    ///< Order parameters were evaluated
 };
 
 /// Parameter engine for expression evaluation and dependency tracking
@@ -127,30 +132,30 @@ public:
     // ---- Parameter management ----
 
     /// Set all parameters (replaces existing)
-    void setParameters(const QList<Parameter>& params);
+    void setParameters(const std::vector<Parameter>& params);
 
     /// Get all parameters
-    QList<Parameter> parameters() const;
+    std::vector<Parameter> parameters() const;
 
     /// Add or update a parameter
-    void setParameter(const QString& name, const QString& expression,
-                      const QString& unit = QString(),
-                      const QString& comment = QString());
+    void setParameter(const std::string& name, const std::string& expression,
+                      const std::string& unit = {},
+                      const std::string& comment = {});
 
     /// Remove a parameter
-    void removeParameter(const QString& name);
+    void removeParameter(const std::string& name);
 
     /// Clear all parameters
     void clear();
 
     /// Check if a parameter exists
-    bool hasParameter(const QString& name) const;
+    bool hasParameter(const std::string& name) const;
 
     /// Get a parameter by name (returns nullptr if not found)
-    const Parameter* parameter(const QString& name) const;
+    const Parameter* parameter(const std::string& name) const;
 
     /// Get parameter value by name (returns 0 if not found)
-    double value(const QString& name) const;
+    double value(const std::string& name) const;
 
     // ---- Evaluation ----
 
@@ -163,8 +168,8 @@ public:
     /// @param result Output: the numeric result
     /// @param errorMsg Output: error message if evaluation fails
     /// @return true if evaluation succeeded
-    bool evaluateExpression(const QString& expression, double& result,
-                            QString* errorMsg = nullptr) const;
+    bool evaluateExpression(const std::string& expression, double& result,
+                            std::string* errorMsg = nullptr) const;
 
     /// Evaluate a single expression with unit-aware number parsing.
     /// Bare numbers are treated as being in defaultUnit (no conversion).
@@ -176,45 +181,53 @@ public:
     /// @param defaultUnit Unit assumed for bare numbers (no suffix)
     /// @param errorMsg Output: error message if evaluation fails
     /// @return true if evaluation succeeded
-    bool evaluateExpression(const QString& expression, double& result,
+    bool evaluateExpression(const std::string& expression, double& result,
                             LengthUnit defaultUnit,
-                            QString* errorMsg = nullptr) const;
+                            std::string* errorMsg = nullptr) const;
 
     /// Get the evaluation order (topologically sorted)
-    QStringList evaluationOrder() const;
+    std::vector<std::string> evaluationOrder() const;
 
     // ---- Dependency analysis ----
 
     /// Get parameters that the given parameter depends on
-    QStringList dependenciesOf(const QString& name) const;
+    std::vector<std::string> dependenciesOf(const std::string& name) const;
 
     /// Get parameters that depend on the given parameter
-    QStringList dependentsOf(const QString& name) const;
+    std::vector<std::string> dependentsOf(const std::string& name) const;
 
     /// Check if there are any circular dependencies
     bool hasCircularDependencies() const;
 
     /// Get circular dependency chain (if any)
-    QStringList circularDependencyChain() const;
+    std::vector<std::string> circularDependencyChain() const;
 
     // ---- Validation ----
 
     /// Check if a name is a valid parameter name
-    static bool isValidName(const QString& name);
+    static bool isValidName(const std::string& name);
 
     /// Check if expression syntax is valid (without evaluating)
-    bool isValidSyntax(const QString& expression, QString* errorMsg = nullptr) const;
+    bool isValidSyntax(const std::string& expression, std::string* errorMsg = nullptr) const;
 
     /// Get list of parameter names used in an expression
-    static QStringList usedParameters(const QString& expression);
+    static std::vector<std::string> usedParameters(const std::string& expression);
 
     // ---- Import/Export ----
 
+#if HOBBYCAD_HAS_QT
     /// Export parameters to JSON
     QJsonObject toJson() const;
 
     /// Import parameters from JSON
-    bool fromJson(const QJsonObject& json, QString* errorMsg = nullptr);
+    bool fromJson(const QJsonObject& json, std::string* errorMsg = nullptr);
+#else
+    /// Export parameters to JSON (non-Qt fallback using nlohmann/json)
+    nlohmann::json toJson() const;
+
+    /// Import parameters from JSON (non-Qt fallback using nlohmann/json)
+    bool fromJson(const nlohmann::json& json, std::string* errorMsg = nullptr);
+#endif
 
 private:
     class Impl;
@@ -227,12 +240,12 @@ private:
 /// Does not require a ParameterEngine instance.
 /// @param expression The expression to evaluate
 /// @param result Output: the numeric result
-/// @param params Parameter name→value map for variable resolution
+/// @param params Parameter name->value map for variable resolution
 /// @param errorMsg Output: error message if evaluation fails
 /// @return true if evaluation succeeded
-bool evaluateExpression(const QString& expression, double& result,
-                        const QMap<QString, double>& params,
-                        QString* errorMsg = nullptr);
+bool evaluateExpression(const std::string& expression, double& result,
+                        const std::map<std::string, double>& params,
+                        std::string* errorMsg = nullptr);
 
 }  // namespace hobbycad
 

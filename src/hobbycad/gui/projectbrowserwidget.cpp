@@ -460,8 +460,8 @@ void ProjectBrowserWidget::setProject(Project* project)
 {
     m_project = project;
 
-    if (project && !project->projectPath().isEmpty()) {
-        m_projectRoot = project->projectPath();
+    if (project && !project->projectPath().empty()) {
+        m_projectRoot = QString::fromStdString(project->projectPath());
         m_model->setProjectRoot(m_projectRoot);
         m_treeView->setRootIndex(m_model->index(m_projectRoot));
         loadProjectFiles();
@@ -663,7 +663,9 @@ void ProjectBrowserWidget::loadProjectFiles()
     // Get foreign files from project
     const auto& projectForeignFiles = m_project->foreignFiles();
     for (const ForeignFileData& data : projectForeignFiles) {
-        foreignFiles.append({data.path, data.description, data.category});
+        foreignFiles.append({QString::fromStdString(data.path),
+                             QString::fromStdString(data.description),
+                             QString::fromStdString(data.category)});
     }
 
     // Also detect common files that might not be tracked yet
@@ -758,12 +760,12 @@ bool ProjectBrowserWidget::addToForeignFiles(const QString& relativePath,
     if (!m_project) return false;
 
     // Check if already in foreign files
-    if (m_project->isForeignFile(relativePath)) {
+    if (m_project->isForeignFile(relativePath.toStdString())) {
         return false;
     }
 
     // Add to project's foreign_files list
-    m_project->addForeignFile(relativePath, category);
+    m_project->addForeignFile(relativePath.toStdString(), category.toStdString());
     m_project->setModified(true);
 
     // Reload foreign files into model
@@ -777,7 +779,7 @@ bool ProjectBrowserWidget::removeFromForeignFiles(const QString& relativePath)
     if (!m_project) return false;
 
     // Remove from project's foreign_files list
-    m_project->removeForeignFile(relativePath);
+    m_project->removeForeignFile(relativePath.toStdString());
     m_project->setModified(true);
 
     // Reload foreign files into model

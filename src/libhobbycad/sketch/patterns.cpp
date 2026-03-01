@@ -11,6 +11,12 @@
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/geometry/intersections.h>
 
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace hobbycad {
 namespace sketch {
 
@@ -21,13 +27,13 @@ using namespace geometry;
 // =====================================================================
 
 RectPatternResult createRectangularPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const RectPatternParams& params,
     std::function<int()> nextId)
 {
     RectPatternResult result;
 
-    if (sourceEntities.isEmpty()) {
+    if (sourceEntities.empty()) {
         result.errorMessage = "No entities to pattern";
         return result;
     }
@@ -48,13 +54,13 @@ RectPatternResult createRectangularPattern(
                 continue;  // Original stays in place
             }
 
-            QPointF offset(i * params.spacingX, j * params.spacingY);
-            Transform2D transform = Transform2D::translation(offset.x(), offset.y());
+            Point2D offset(i * params.spacingX, j * params.spacingY);
+            Transform2D transform = Transform2D::translation(offset.x, offset.y);
 
             for (const Entity& source : sourceEntities) {
                 Entity copy = source.transformed(transform);
                 copy.id = nextId();
-                result.entities.append(copy);
+                result.entities.push_back(copy);
             }
         }
     }
@@ -68,13 +74,13 @@ RectPatternResult createRectangularPattern(
 // =====================================================================
 
 CircPatternResult createCircularPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const CircPatternParams& params,
     std::function<int()> nextId)
 {
     CircPatternResult result;
 
-    if (sourceEntities.isEmpty()) {
+    if (sourceEntities.empty()) {
         result.errorMessage = "No entities to pattern";
         return result;
     }
@@ -100,7 +106,7 @@ CircPatternResult createCircularPattern(
                 copy.startAngle = normalizeAngle(copy.startAngle + angle);
             }
 
-            result.entities.append(copy);
+            result.entities.push_back(copy);
         }
     }
 
@@ -113,13 +119,13 @@ CircPatternResult createCircularPattern(
 // =====================================================================
 
 LinearPatternResult createLinearPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const LinearPatternParams& params,
     std::function<int()> nextId)
 {
     LinearPatternResult result;
 
-    if (sourceEntities.isEmpty()) {
+    if (sourceEntities.empty()) {
         result.errorMessage = "No entities to pattern";
         return result;
     }
@@ -130,18 +136,18 @@ LinearPatternResult createLinearPattern(
     }
 
     // Calculate direction vector
-    double rad = qDegreesToRadians(params.angle);
-    QPointF dir(qCos(rad), qSin(rad));
+    double rad = params.angle * M_PI / 180.0;
+    Point2D dir(std::cos(rad), std::sin(rad));
 
     // Create pattern copies
     for (int i = 1; i < params.count; ++i) {  // Start at 1 to skip original
-        QPointF offset = dir * (i * params.spacing);
-        Transform2D transform = Transform2D::translation(offset.x(), offset.y());
+        Point2D offset = dir * (i * params.spacing);
+        Transform2D transform = Transform2D::translation(offset.x, offset.y);
 
         for (const Entity& source : sourceEntities) {
             Entity copy = source.transformed(transform);
             copy.id = nextId();
-            result.entities.append(copy);
+            result.entities.push_back(copy);
         }
     }
 
@@ -154,19 +160,19 @@ LinearPatternResult createLinearPattern(
 // =====================================================================
 
 MirrorPatternResult createMirrorPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const MirrorPatternParams& params,
     std::function<int()> nextId)
 {
     MirrorPatternResult result;
 
-    if (sourceEntities.isEmpty()) {
+    if (sourceEntities.empty()) {
         result.errorMessage = "No entities to mirror";
         return result;
     }
 
     // Calculate mirror line properties
-    QPointF lineDir = params.linePoint2 - params.linePoint1;
+    Point2D lineDir = params.linePoint2 - params.linePoint1;
     double lineLen = length(lineDir);
 
     if (lineLen < DEFAULT_TOLERANCE) {
@@ -182,11 +188,11 @@ MirrorPatternResult createMirrorPattern(
         copy.id = nextId();
 
         // Mirror each point
-        for (QPointF& p : copy.points) {
+        for (Point2D& p : copy.points) {
             // Project point onto line
-            QPointF toPoint = p - params.linePoint1;
+            Point2D toPoint = p - params.linePoint1;
             double proj = dot(toPoint, lineDir);
-            QPointF projPoint = params.linePoint1 + lineDir * proj;
+            Point2D projPoint = params.linePoint1 + lineDir * proj;
 
             // Mirror: reflect across the projection point
             p = projPoint * 2.0 - p;
@@ -196,7 +202,7 @@ MirrorPatternResult createMirrorPattern(
         if (copy.type == EntityType::Arc) {
             // Mirror arc angles
             // The start angle needs to be reflected and sweep reversed
-            double lineAngle = qRadiansToDegrees(qAtan2(lineDir.y(), lineDir.x()));
+            double lineAngle = std::atan2(lineDir.y, lineDir.x) * 180.0 / M_PI;
 
             // Reflect start angle about the line
             double startRel = copy.startAngle - lineAngle;
@@ -207,7 +213,7 @@ MirrorPatternResult createMirrorPattern(
             copy.sweepAngle = -copy.sweepAngle;
         }
 
-        result.entities.append(copy);
+        result.entities.push_back(copy);
     }
 
     result.success = true;

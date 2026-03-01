@@ -87,7 +87,7 @@ jobs:
             qt6-base-dev qt6-base-dev-tools \
             libqt6openglwidgets6 qmake6 \
             qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-            qt6-svg-dev
+            qt6-svg-dev qt6-image-formats-plugins
 
       - name: Install dependencies
         run: |
@@ -100,9 +100,9 @@ jobs:
             libocct-visualization-dev occt-misc libtbb-dev \
             qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
             qt6-tools-dev-tools qt6-l10n-tools \
-            libqt6openglwidgets6 qt6-svg-dev qmake6 \
+            libqt6openglwidgets6 qt6-svg-dev qt6-image-formats-plugins qmake6 \
             libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
-            libpng-dev libjpeg-dev \
+            libpng-dev libjpeg-dev libwebp-dev \
             libzip-dev libminizip-dev \
             libgit2-dev \
             lib3mf-dev libopenmesh-dev libmeshfix-dev \

@@ -1,13 +1,12 @@
 # .github/workflows/macos-build.yml
 #
-# Build HobbyCAD on macOS for arm64 and x86_64 using Homebrew dependencies.
+# Build HobbyCAD on macOS arm64 (Apple Silicon) using vcpkg with
+# static linking.  All third-party dependencies are statically linked
+# into the executable; only macOS system frameworks remain dynamic.
 #
-# Matches the local developer setup from tools/macos/setup-env.sh.
-# Uses the HobbyCAD Homebrew tap for pinned keg-only formulas
-# (opencascade@7.9.2, libzip@1.7.3, libgit2@1.7.2) and standard
-# Homebrew for qt@6, ninja, and librsvg.
-#
-# macOS runners are free for public repositories.
+# First build is slow (~45 min) due to Qt6/OCCT compilation.
+# Subsequent builds use GitHub Actions cache via vcpkg binary
+# caching, reducing install to ~2 min.
 
 name: macOS Build
 
@@ -36,86 +35,75 @@ env:
 
 jobs:
 
-  # ================================================================
-  #  macOS / Homebrew / Clang
-  # ================================================================
-  #
-  #  Matches the local developer environment.  Pinned dependencies
-  #  come from the HobbyCAD Homebrew tap (keg-only); everything
-  #  else from standard Homebrew.
-
   macos:
-    name: HobbyCAD macOS (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    name: HobbyCAD macOS (arm64)
+    runs-on: macos-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-            artifact_name: hobbycad-macos-arm64
+    env:
+      BUILD_TYPE: Release
+      VCPKG_DEFAULT_TRIPLET: arm64-osx-static
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     steps:
       - name: Checkout HobbyCAD
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build tools
+        run: brew install ninja
+
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Setup vcpkg
         run: |
-          # Tap for pinned keg-only formulas
-          brew tap ayourk/hobbycad
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git ~/vcpkg
+          ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          echo "VCPKG_ROOT=$HOME/vcpkg" >> $GITHUB_ENV
+          echo "$HOME/vcpkg" >> $GITHUB_PATH
 
-          # Pinned formulas (keg-only — need CMAKE_PREFIX_PATH)
-          brew install ayourk/hobbycad/opencascade@7.9.2
-          brew install ayourk/hobbycad/libzip@1.7.3
-          brew install ayourk/hobbycad/libgit2@1.7.2
-          brew install ayourk/hobbycad/libslvs
-          brew install ayourk/hobbycad/lib3mf
-          brew install ayourk/hobbycad/openmesh
-          brew install ayourk/hobbycad/meshfix
-
-          # Core formulas
-          brew install qt@6 ninja librsvg
-
-      - name: Dump Homebrew logs on failure
-        if: failure()
+      - name: Install dependencies via vcpkg
         run: |
-          for f in ~/Library/Logs/Homebrew/*/*; do
-            echo "::group::$(basename "$f")"
-            cat "$f"
-            echo "::endgroup::"
-          done
-
-      - name: Set CMAKE_PREFIX_PATH
-        run: |
-          # Keg-only formulas are not linked into the Homebrew
-          # prefix, so CMake needs explicit paths to find them.
-          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)
-          LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
-          LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
-          SLVS_PFX=$(brew --prefix ayourk/hobbycad/libslvs)
-          L3MF_PFX=$(brew --prefix ayourk/hobbycad/lib3mf)
-          OMSH_PFX=$(brew --prefix ayourk/hobbycad/openmesh)
-          MFIX_PFX=$(brew --prefix ayourk/hobbycad/meshfix)
-          QT6_PFX=$(brew --prefix qt@6)
-
-          PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
-          echo "CMAKE_PREFIX_PATH=${PREFIX_PATH}" >> "$GITHUB_ENV"
+          vcpkg install --triplet arm64-osx-static \
+            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets \
+            --overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports \
+            --x-install-root=vcpkg_installed \
+            --clean-buildtrees-after-build
 
       - name: Configure CMake
-        run: cmake --preset macos-release
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=arm64-osx-static \
+            -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/vcpkg-custom-triplets \
+            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}/vcpkg_installed \
+            -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}/vcpkg-overlay-ports
 
       - name: Build
-        run: cmake --build --preset macos-release
+        run: cmake --build build --config ${{ env.BUILD_TYPE }}
 
       - name: Package build
         run: |
           cmake --install build --prefix build/install
 
+          # Static build — single executable, no dylibs to bundle
+          exe="build/install/bin/hobbycad"
+          if [ ! -f "$exe" ]; then
+            echo "::error::hobbycad not found at $exe"
+            exit 1
+          fi
+          echo "Static build produced: $exe"
+          echo "Size: $(du -h "$exe" | cut -f1)"
+          echo "Architecture: $(file "$exe")"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: hobbycad-macos-arm64
           path: build/install/
           retention-days: 14
           if-no-files-found: error

@@ -18,8 +18,9 @@
 
 #include <TopoDS_Shape.hxx>
 #include <Poly_Triangulation.hxx>
-#include <QString>
-#include <QList>
+
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace stl_io {
@@ -40,7 +41,7 @@ struct MeshQuality {
 /// Result of an STL read operation
 struct ReadResult {
     bool success = false;
-    QString errorMessage;
+    std::string errorMessage;
     Handle(Poly_Triangulation) mesh;  ///< The triangulation data
     TopoDS_Shape shape;               ///< Shape constructed from mesh (if requested)
     int triangleCount = 0;            ///< Number of triangles read
@@ -51,7 +52,7 @@ struct ReadResult {
 /// Result of an STL write operation
 struct WriteResult {
     bool success = false;
-    QString errorMessage;
+    std::string errorMessage;
     int triangleCount = 0;      ///< Number of triangles written
 };
 
@@ -62,8 +63,8 @@ struct WriteResult {
 /// @param quality Mesh quality settings
 /// @return WriteResult with status
 HOBBYCAD_EXPORT WriteResult writeStl(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
     StlFormat format = StlFormat::Binary,
     const MeshQuality& quality = MeshQuality{});
 
@@ -74,7 +75,7 @@ HOBBYCAD_EXPORT WriteResult writeStl(
 /// @param quality Mesh quality settings
 /// @return WriteResult with status
 HOBBYCAD_EXPORT WriteResult writeStl(
-    const QString& path,
+    const std::string& path,
     const TopoDS_Shape& shape,
     StlFormat format = StlFormat::Binary,
     const MeshQuality& quality = MeshQuality{});
@@ -85,16 +86,16 @@ HOBBYCAD_EXPORT WriteResult writeStl(
 /// @param errorMsg Optional error message output
 /// @return true on success
 HOBBYCAD_EXPORT bool writeStl(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
-    QString* errorMsg);
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
+    std::string* errorMsg);
 
 // ---- Import functions ----
 
 /// Read an STL file (binary or ASCII, auto-detected).
 /// @param path Path to the STL file
 /// @return ReadResult with mesh/shape and status
-HOBBYCAD_EXPORT ReadResult readStl(const QString& path);
+HOBBYCAD_EXPORT ReadResult readStl(const std::string& path);
 
 /// Read an STL file and convert to a TopoDS_Shape.
 /// The result is a face with the triangulation attached.
@@ -102,29 +103,29 @@ HOBBYCAD_EXPORT ReadResult readStl(const QString& path);
 /// @param errorMsg Optional error message output
 /// @return Shape (null on failure)
 HOBBYCAD_EXPORT TopoDS_Shape readStlAsShape(
-    const QString& path,
-    QString* errorMsg = nullptr);
+    const std::string& path,
+    std::string* errorMsg = nullptr);
 
 /// Read an STL file and return raw triangulation.
 /// @param path Path to the STL file
 /// @param errorMsg Optional error message output
 /// @return Triangulation handle (null on failure)
 HOBBYCAD_EXPORT Handle(Poly_Triangulation) readStlAsMesh(
-    const QString& path,
-    QString* errorMsg = nullptr);
+    const std::string& path,
+    std::string* errorMsg = nullptr);
 
 /// Detect the format of an STL file (binary or ASCII).
 /// @param path Path to the STL file
 /// @return Detected format (defaults to Binary if detection fails)
-HOBBYCAD_EXPORT StlFormat detectStlFormat(const QString& path);
+HOBBYCAD_EXPORT StlFormat detectStlFormat(const std::string& path);
 
 // ---- Utility functions ----
 
 /// Check if a file appears to be an STL file (by extension).
-HOBBYCAD_EXPORT bool isStlFile(const QString& path);
+HOBBYCAD_EXPORT bool isStlFile(const std::string& path);
 
 /// Get supported STL file extensions.
-HOBBYCAD_EXPORT QStringList stlExtensions();
+HOBBYCAD_EXPORT std::vector<std::string> stlExtensions();
 
 /// Get default mesh quality settings for different use cases.
 HOBBYCAD_EXPORT MeshQuality defaultQuality();       ///< General purpose

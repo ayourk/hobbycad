@@ -10,6 +10,13 @@
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/geometry/intersections.h>
 
+#include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace hobbycad {
 namespace geometry {
 
@@ -17,50 +24,50 @@ namespace geometry {
 //  Vector Operations
 // =====================================================================
 
-double dot(const QPointF& a, const QPointF& b)
+double dot(const Point2D& a, const Point2D& b)
 {
-    return a.x() * b.x() + a.y() * b.y();
+    return a.x * b.x + a.y * b.y;
 }
 
-double cross(const QPointF& a, const QPointF& b)
+double cross(const Point2D& a, const Point2D& b)
 {
-    return a.x() * b.y() - a.y() * b.x();
+    return a.x * b.y - a.y * b.x;
 }
 
-double length(const QPointF& v)
+double length(const Point2D& v)
 {
-    return qSqrt(v.x() * v.x() + v.y() * v.y());
+    return std::sqrt(v.x * v.x + v.y * v.y);
 }
 
-double lengthSquared(const QPointF& v)
+double lengthSquared(const Point2D& v)
 {
-    return v.x() * v.x() + v.y() * v.y();
+    return v.x * v.x + v.y * v.y;
 }
 
-QPointF normalize(const QPointF& v)
+Point2D normalize(const Point2D& v)
 {
     double len = length(v);
     if (len < DEFAULT_TOLERANCE) {
-        return QPointF(0, 0);
+        return Point2D(0, 0);
     }
-    return QPointF(v.x() / len, v.y() / len);
+    return Point2D(v.x / len, v.y / len);
 }
 
-QPointF perpendicular(const QPointF& v)
+Point2D perpendicular(const Point2D& v)
 {
-    return QPointF(-v.y(), v.x());
+    return Point2D(-v.y, v.x);
 }
 
-QPointF perpendicularCW(const QPointF& v)
+Point2D perpendicularCW(const Point2D& v)
 {
-    return QPointF(v.y(), -v.x());
+    return Point2D(v.y, -v.x);
 }
 
-QPointF lerp(const QPointF& a, const QPointF& b, double t)
+Point2D lerp(const Point2D& a, const Point2D& b, double t)
 {
-    return QPointF(
-        a.x() + t * (b.x() - a.x()),
-        a.y() + t * (b.y() - a.y())
+    return Point2D(
+        a.x + t * (b.x - a.x),
+        a.y + t * (b.y - a.y)
     );
 }
 
@@ -68,12 +75,12 @@ QPointF lerp(const QPointF& a, const QPointF& b, double t)
 //  Angle Operations
 // =====================================================================
 
-double vectorAngle(const QPointF& v)
+double vectorAngle(const Point2D& v)
 {
-    return qRadiansToDegrees(qAtan2(v.y(), v.x()));
+    return std::atan2(v.y, v.x) * 180.0 / M_PI;
 }
 
-double angleBetween(const QPointF& a, const QPointF& b)
+double angleBetween(const Point2D& a, const Point2D& b)
 {
     double lenA = length(a);
     double lenB = length(b);
@@ -83,32 +90,32 @@ double angleBetween(const QPointF& a, const QPointF& b)
     }
 
     double cosAngle = dot(a, b) / (lenA * lenB);
-    cosAngle = qBound(-1.0, cosAngle, 1.0);
+    cosAngle = std::clamp(cosAngle, -1.0, 1.0);
 
-    return qRadiansToDegrees(qAcos(cosAngle));
+    return std::acos(cosAngle) * 180.0 / M_PI;
 }
 
-double signedAngleBetween(const QPointF& a, const QPointF& b)
+double signedAngleBetween(const Point2D& a, const Point2D& b)
 {
-    double angle = qRadiansToDegrees(qAtan2(b.y(), b.x()) - qAtan2(a.y(), a.x()));
+    double angle = (std::atan2(b.y, b.x) - std::atan2(a.y, a.x)) * 180.0 / M_PI;
     return normalizeAngleSigned(angle);
 }
 
-QPointF rotatePoint(const QPointF& point, double angleDegrees)
+Point2D rotatePoint(const Point2D& point, double angleDegrees)
 {
-    double rad = qDegreesToRadians(angleDegrees);
-    double c = qCos(rad);
-    double s = qSin(rad);
-    return QPointF(
-        point.x() * c - point.y() * s,
-        point.x() * s + point.y() * c
+    double rad = angleDegrees * M_PI / 180.0;
+    double c = std::cos(rad);
+    double s = std::sin(rad);
+    return Point2D(
+        point.x * c - point.y * s,
+        point.x * s + point.y * c
     );
 }
 
-QPointF rotatePointAround(const QPointF& point, const QPointF& center, double angleDegrees)
+Point2D rotatePointAround(const Point2D& point, const Point2D& center, double angleDegrees)
 {
-    QPointF rel = point - center;
-    QPointF rotated = rotatePoint(rel, angleDegrees);
+    Point2D rel = point - center;
+    Point2D rotated = rotatePoint(rel, angleDegrees);
     return center + rotated;
 }
 
@@ -116,31 +123,31 @@ QPointF rotatePointAround(const QPointF& point, const QPointF& center, double an
 //  Line Operations
 // =====================================================================
 
-double lineLength(const QPointF& p1, const QPointF& p2)
+double lineLength(const Point2D& p1, const Point2D& p2)
 {
-    return QLineF(p1, p2).length();
+    return std::hypot(p2.x - p1.x, p2.y - p1.y);
 }
 
-QPointF lineMidpoint(const QPointF& p1, const QPointF& p2)
+Point2D lineMidpoint(const Point2D& p1, const Point2D& p2)
 {
-    return QPointF((p1.x() + p2.x()) / 2.0, (p1.y() + p2.y()) / 2.0);
+    return Point2D((p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0);
 }
 
-QPointF lineDirection(const QPointF& p1, const QPointF& p2)
+Point2D lineDirection(const Point2D& p1, const Point2D& p2)
 {
     return normalize(p2 - p1);
 }
 
-QPointF pointOnLine(const QPointF& p1, const QPointF& p2, double t)
+Point2D pointOnLine(const Point2D& p1, const Point2D& p2, double t)
 {
     return lerp(p1, p2, t);
 }
 
 double projectPointOnLine(
-    const QPointF& point,
-    const QPointF& lineStart, const QPointF& lineEnd)
+    const Point2D& point,
+    const Point2D& lineStart, const Point2D& lineEnd)
 {
-    QPointF d = lineEnd - lineStart;
+    Point2D d = lineEnd - lineStart;
     double lenSq = lengthSquared(d);
 
     if (lenSq < DEFAULT_TOLERANCE * DEFAULT_TOLERANCE) {
@@ -151,12 +158,12 @@ double projectPointOnLine(
 }
 
 bool linesParallel(
-    const QPointF& p1, const QPointF& p2,
-    const QPointF& p3, const QPointF& p4,
+    const Point2D& p1, const Point2D& p2,
+    const Point2D& p3, const Point2D& p4,
     double tolerance)
 {
-    QPointF d1 = p2 - p1;
-    QPointF d2 = p4 - p3;
+    Point2D d1 = p2 - p1;
+    Point2D d2 = p4 - p3;
 
     double crossProd = cross(d1, d2);
     double len1 = length(d1);
@@ -166,16 +173,16 @@ bool linesParallel(
         return false;
     }
 
-    return qAbs(crossProd) < tolerance * len1 * len2;
+    return std::abs(crossProd) < tolerance * len1 * len2;
 }
 
 bool linesPerpendicular(
-    const QPointF& p1, const QPointF& p2,
-    const QPointF& p3, const QPointF& p4,
+    const Point2D& p1, const Point2D& p2,
+    const Point2D& p3, const Point2D& p4,
     double tolerance)
 {
-    QPointF d1 = p2 - p1;
-    QPointF d2 = p4 - p3;
+    Point2D d1 = p2 - p1;
+    Point2D d2 = p4 - p3;
 
     double len1 = length(d1);
     double len2 = length(d2);
@@ -185,62 +192,62 @@ bool linesPerpendicular(
     }
 
     double dotProd = dot(d1, d2);
-    return qAbs(dotProd) < tolerance * len1 * len2;
+    return std::abs(dotProd) < tolerance * len1 * len2;
 }
 
 // =====================================================================
 //  Ray Operations
 // =====================================================================
 
-QPointF projectPointOntoRay(
-    const QPointF& point,
-    const QPointF& rayOrigin,
-    const QPointF& rayDirection)
+Point2D projectPointOntoRay(
+    const Point2D& point,
+    const Point2D& rayOrigin,
+    const Point2D& rayDirection)
 {
-    QPointF dir = normalize(rayDirection);
+    Point2D dir = normalize(rayDirection);
     if (lengthSquared(dir) < DEFAULT_TOLERANCE) {
         return rayOrigin;
     }
 
-    QPointF toPoint = point - rayOrigin;
+    Point2D toPoint = point - rayOrigin;
     double projection = dot(toPoint, dir);
     return rayOrigin + dir * projection;
 }
 
 double distanceFromRay(
-    const QPointF& point,
-    const QPointF& rayOrigin,
-    const QPointF& rayDirection)
+    const Point2D& point,
+    const Point2D& rayOrigin,
+    const Point2D& rayDirection)
 {
-    QPointF projected = projectPointOntoRay(point, rayOrigin, rayDirection);
+    Point2D projected = projectPointOntoRay(point, rayOrigin, rayDirection);
     return length(point - projected);
 }
 
 bool pointOnRay(
-    const QPointF& point,
-    const QPointF& rayOrigin,
-    const QPointF& rayDirection,
+    const Point2D& point,
+    const Point2D& rayOrigin,
+    const Point2D& rayDirection,
     double tolerance)
 {
     return distanceFromRay(point, rayOrigin, rayDirection) < tolerance;
 }
 
-QPointF snapToAngleIncrement(
-    const QPointF& origin,
-    const QPointF& target,
+Point2D snapToAngleIncrement(
+    const Point2D& origin,
+    const Point2D& target,
     double incrementDegrees)
 {
     double snappedAngle;
     return snapToAngleIncrementWithAngle(origin, target, incrementDegrees, snappedAngle);
 }
 
-QPointF snapToAngleIncrementWithAngle(
-    const QPointF& origin,
-    const QPointF& target,
+Point2D snapToAngleIncrementWithAngle(
+    const Point2D& origin,
+    const Point2D& target,
     double incrementDegrees,
     double& snappedAngle)
 {
-    QPointF delta = target - origin;
+    Point2D delta = target - origin;
     double distance = length(delta);
 
     if (distance < DEFAULT_TOLERANCE) {
@@ -249,14 +256,14 @@ QPointF snapToAngleIncrementWithAngle(
     }
 
     // Calculate current angle in degrees
-    double angle = qAtan2(delta.y(), delta.x()) * 180.0 / M_PI;
+    double angle = std::atan2(delta.y, delta.x) * 180.0 / M_PI;
 
     // Snap to nearest increment
-    snappedAngle = qRound(angle / incrementDegrees) * incrementDegrees;
+    snappedAngle = std::round(angle / incrementDegrees) * incrementDegrees;
 
     // Calculate new position at snapped angle
     double snappedRad = snappedAngle * M_PI / 180.0;
-    return origin + QPointF(distance * qCos(snappedRad), distance * qSin(snappedRad));
+    return origin + Point2D(distance * std::cos(snappedRad), distance * std::sin(snappedRad));
 }
 
 // =====================================================================
@@ -264,18 +271,18 @@ QPointF snapToAngleIncrementWithAngle(
 // =====================================================================
 
 std::optional<Arc> arcFromThreePoints(
-    const QPointF& start, const QPointF& mid, const QPointF& end)
+    const Point2D& start, const Point2D& mid, const Point2D& end)
 {
     // Find circumcenter of triangle formed by three points
     // Using perpendicular bisectors of two sides
 
-    double ax = start.x(), ay = start.y();
-    double bx = mid.x(), by = mid.y();
-    double cx = end.x(), cy = end.y();
+    double ax = start.x, ay = start.y;
+    double bx = mid.x, by = mid.y;
+    double cx = end.x, cy = end.y;
 
     double d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
 
-    if (qAbs(d) < DEFAULT_TOLERANCE) {
+    if (std::abs(d) < DEFAULT_TOLERANCE) {
         // Points are collinear
         return std::nullopt;
     }
@@ -288,13 +295,13 @@ std::optional<Arc> arcFromThreePoints(
                  (bx * bx + by * by) * (ax - cx) +
                  (cx * cx + cy * cy) * (bx - ax)) / d;
 
-    QPointF center(ux, uy);
-    double radius = QLineF(center, start).length();
+    Point2D center(ux, uy);
+    double radius = std::hypot(start.x - ux, start.y - uy);
 
     // Calculate start and end angles
-    double startAngle = qRadiansToDegrees(qAtan2(ay - uy, ax - ux));
-    double midAngle = qRadiansToDegrees(qAtan2(by - uy, bx - ux));
-    double endAngle = qRadiansToDegrees(qAtan2(cy - uy, cx - ux));
+    double startAngle = std::atan2(ay - uy, ax - ux) * 180.0 / M_PI;
+    double midAngle = std::atan2(by - uy, bx - ux) * 180.0 / M_PI;
+    double endAngle = std::atan2(cy - uy, cx - ux) * 180.0 / M_PI;
 
     // Determine sweep direction based on mid point
     // Normalize angles to [0, 360)
@@ -319,18 +326,18 @@ std::optional<Arc> arcFromThreePoints(
 }
 
 Arc arcFromCenterAndEndpoints(
-    const QPointF& center,
-    const QPointF& start, const QPointF& end,
+    const Point2D& center,
+    const Point2D& start, const Point2D& end,
     bool sweepCCW)
 {
     Arc arc;
     arc.center = center;
-    arc.radius = QLineF(center, start).length();
+    arc.radius = std::hypot(start.x - center.x, start.y - center.y);
 
-    double startAngle = qRadiansToDegrees(qAtan2(
-        start.y() - center.y(), start.x() - center.x()));
-    double endAngle = qRadiansToDegrees(qAtan2(
-        end.y() - center.y(), end.x() - center.x()));
+    double startAngle = std::atan2(
+        start.y - center.y, start.x - center.x) * 180.0 / M_PI;
+    double endAngle = std::atan2(
+        end.y - center.y, end.x - center.x) * 180.0 / M_PI;
 
     arc.startAngle = normalizeAngle(startAngle);
     double sweep = normalizeAngle(endAngle - startAngle);
@@ -346,15 +353,15 @@ Arc arcFromCenterAndEndpoints(
 
 double arcLength(const Arc& arc)
 {
-    return qAbs(arc.radius * qDegreesToRadians(arc.sweepAngle));
+    return std::abs(arc.radius * (arc.sweepAngle * M_PI / 180.0));
 }
 
-QVector<Arc> splitArc(const Arc& arc, const QPointF& point)
+std::vector<Arc> splitArc(const Arc& arc, const Point2D& point)
 {
     // Check if point is on arc
-    double angle = qRadiansToDegrees(qAtan2(
-        point.y() - arc.center.y(),
-        point.x() - arc.center.x()));
+    double angle = std::atan2(
+        point.y - arc.center.y,
+        point.x - arc.center.x) * 180.0 / M_PI;
 
     if (!arc.containsAngle(angle)) {
         return {};  // Point not on arc
@@ -383,7 +390,7 @@ QVector<Arc> splitArc(const Arc& arc, const QPointF& point)
 //  Polygon Operations
 // =====================================================================
 
-double polygonArea(const QVector<QPointF>& polygon)
+double polygonArea(const std::vector<Point2D>& polygon)
 {
     if (polygon.size() < 3) return 0.0;
 
@@ -392,26 +399,26 @@ double polygonArea(const QVector<QPointF>& polygon)
 
     for (int i = 0; i < n; ++i) {
         int j = (i + 1) % n;
-        area += polygon[i].x() * polygon[j].y();
-        area -= polygon[j].x() * polygon[i].y();
+        area += polygon[i].x * polygon[j].y;
+        area -= polygon[j].x * polygon[i].y;
     }
 
     return area / 2.0;
 }
 
-bool polygonIsCCW(const QVector<QPointF>& polygon)
+bool polygonIsCCW(const std::vector<Point2D>& polygon)
 {
     return polygonArea(polygon) > 0;
 }
 
-QVector<QPointF> reversePolygon(const QVector<QPointF>& polygon)
+std::vector<Point2D> reversePolygon(const std::vector<Point2D>& polygon)
 {
-    QVector<QPointF> result = polygon;
+    std::vector<Point2D> result = polygon;
     std::reverse(result.begin(), result.end());
     return result;
 }
 
-bool pointInPolygon(const QPointF& point, const QVector<QPointF>& polygon)
+bool pointInPolygon(const Point2D& point, const std::vector<Point2D>& polygon)
 {
     if (polygon.size() < 3) return false;
 
@@ -420,11 +427,11 @@ bool pointInPolygon(const QPointF& point, const QVector<QPointF>& polygon)
     int n = polygon.size();
 
     for (int i = 0, j = n - 1; i < n; j = i++) {
-        double xi = polygon[i].x(), yi = polygon[i].y();
-        double xj = polygon[j].x(), yj = polygon[j].y();
+        double xi = polygon[i].x, yi = polygon[i].y;
+        double xj = polygon[j].x, yj = polygon[j].y;
 
-        if (((yi > point.y()) != (yj > point.y())) &&
-            (point.x() < (xj - xi) * (point.y() - yi) / (yj - yi) + xi)) {
+        if (((yi > point.y) != (yj > point.y)) &&
+            (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
             inside = !inside;
         }
     }
@@ -432,9 +439,9 @@ bool pointInPolygon(const QPointF& point, const QVector<QPointF>& polygon)
     return inside;
 }
 
-QPointF polygonCentroid(const QVector<QPointF>& polygon)
+Point2D polygonCentroid(const std::vector<Point2D>& polygon)
 {
-    if (polygon.isEmpty()) return QPointF();
+    if (polygon.empty()) return Point2D();
     if (polygon.size() == 1) return polygon[0];
     if (polygon.size() == 2) return lineMidpoint(polygon[0], polygon[1]);
 
@@ -444,31 +451,31 @@ QPointF polygonCentroid(const QVector<QPointF>& polygon)
 
     for (int i = 0; i < n; ++i) {
         int j = (i + 1) % n;
-        double cross = polygon[i].x() * polygon[j].y() -
-                       polygon[j].x() * polygon[i].y();
+        double cross = polygon[i].x * polygon[j].y -
+                       polygon[j].x * polygon[i].y;
         area += cross;
-        cx += (polygon[i].x() + polygon[j].x()) * cross;
-        cy += (polygon[i].y() + polygon[j].y()) * cross;
+        cx += (polygon[i].x + polygon[j].x) * cross;
+        cy += (polygon[i].y + polygon[j].y) * cross;
     }
 
     area /= 2.0;
 
-    if (qAbs(area) < DEFAULT_TOLERANCE) {
+    if (std::abs(area) < DEFAULT_TOLERANCE) {
         // Degenerate polygon - return average of points
-        for (const QPointF& p : polygon) {
-            cx += p.x();
-            cy += p.y();
+        for (const Point2D& p : polygon) {
+            cx += p.x;
+            cy += p.y;
         }
-        return QPointF(cx / n, cy / n);
+        return Point2D(cx / n, cy / n);
     }
 
-    return QPointF(cx / (6.0 * area), cy / (6.0 * area));
+    return Point2D(cx / (6.0 * area), cy / (6.0 * area));
 }
 
-BoundingBox polygonBounds(const QVector<QPointF>& polygon)
+BoundingBox polygonBounds(const std::vector<Point2D>& polygon)
 {
     BoundingBox bbox;
-    for (const QPointF& p : polygon) {
+    for (const Point2D& p : polygon) {
         bbox.include(p);
     }
     return bbox;
@@ -478,12 +485,12 @@ BoundingBox polygonBounds(const QVector<QPointF>& polygon)
 //  Rectangle Operations
 // =====================================================================
 
-bool pointInRect(const QPointF& point, const QRectF& rect)
+bool pointInRect(const Point2D& point, const Rect2D& rect)
 {
     return rect.contains(point);
 }
 
-bool lineIntersectsRect(const QPointF& p1, const QPointF& p2, const QRectF& rect)
+bool lineIntersectsRect(const Point2D& p1, const Point2D& p2, const Rect2D& rect)
 {
     // Check if either endpoint is inside
     if (rect.contains(p1) || rect.contains(p2)) {
@@ -491,7 +498,7 @@ bool lineIntersectsRect(const QPointF& p1, const QPointF& p2, const QRectF& rect
     }
 
     // Check intersection with each edge
-    QPointF corners[4] = {
+    Point2D corners[4] = {
         rect.topLeft(),
         rect.topRight(),
         rect.bottomRight(),
@@ -510,29 +517,29 @@ bool lineIntersectsRect(const QPointF& p1, const QPointF& p2, const QRectF& rect
     return false;
 }
 
-bool circleIntersectsRect(const QPointF& center, double radius, const QRectF& rect)
+bool circleIntersectsRect(const Point2D& center, double radius, const Rect2D& rect)
 {
     // Find closest point on rectangle to circle center
-    double closestX = qBound(rect.left(), center.x(), rect.right());
-    double closestY = qBound(rect.top(), center.y(), rect.bottom());
+    double closestX = std::clamp(center.x, rect.left(), rect.right());
+    double closestY = std::clamp(center.y, rect.top(), rect.bottom());
 
-    double dx = center.x() - closestX;
-    double dy = center.y() - closestY;
+    double dx = center.x - closestX;
+    double dy = center.y - closestY;
 
     return (dx * dx + dy * dy) <= (radius * radius);
 }
 
-bool lineEnclosedByRect(const QPointF& p1, const QPointF& p2, const QRectF& rect)
+bool lineEnclosedByRect(const Point2D& p1, const Point2D& p2, const Rect2D& rect)
 {
     return rect.contains(p1) && rect.contains(p2);
 }
 
-bool circleEnclosedByRect(const QPointF& center, double radius, const QRectF& rect)
+bool circleEnclosedByRect(const Point2D& center, double radius, const Rect2D& rect)
 {
-    return center.x() - radius >= rect.left() &&
-           center.x() + radius <= rect.right() &&
-           center.y() - radius >= rect.top() &&
-           center.y() + radius <= rect.bottom();
+    return center.x - radius >= rect.left() &&
+           center.x + radius <= rect.right() &&
+           center.y - radius >= rect.top() &&
+           center.y + radius <= rect.bottom();
 }
 
 // =====================================================================
@@ -540,10 +547,10 @@ bool circleEnclosedByRect(const QPointF& center, double radius, const QRectF& re
 // =====================================================================
 
 TangentCircleResult circleTangentToTwoLines(
-    const QPointF& line1Start, const QPointF& line1End,
-    const QPointF& line2Start, const QPointF& line2End,
+    const Point2D& line1Start, const Point2D& line1End,
+    const Point2D& line2Start, const Point2D& line2End,
     double radius,
-    const QPointF& hint)
+    const Point2D& hint)
 {
     TangentCircleResult result;
 
@@ -557,42 +564,42 @@ TangentCircleResult circleTangentToTwoLines(
         return result;
     }
 
-    QPointF vertex = intersection.point;
+    Point2D vertex = intersection.point;
 
     // Get normalized direction vectors for both lines
-    QPointF dir1 = normalize(line1End - line1Start);
-    QPointF dir2 = normalize(line2End - line2Start);
+    Point2D dir1 = normalize(line1End - line1Start);
+    Point2D dir2 = normalize(line2End - line2Start);
 
     // Calculate the angle bisector direction
     // There are two bisectors; we'll use hint to pick the right one
-    QPointF bisector1 = normalize(dir1 + dir2);
-    QPointF bisector2 = perpendicular(bisector1);
+    Point2D bisector1 = normalize(dir1 + dir2);
+    Point2D bisector2 = perpendicular(bisector1);
 
     // The center lies on the angle bisector at distance r/sin(half_angle)
     // where half_angle is half the angle between the lines
     double dotProd = dot(dir1, dir2);
-    dotProd = qBound(-1.0, dotProd, 1.0);
-    double fullAngle = qAcos(dotProd);  // Angle between lines (radians)
+    dotProd = std::clamp(dotProd, -1.0, 1.0);
+    double fullAngle = std::acos(dotProd);  // Angle between lines (radians)
     double halfAngle = fullAngle / 2.0;
 
-    if (qAbs(qSin(halfAngle)) < DEFAULT_TOLERANCE) {
+    if (std::abs(std::sin(halfAngle)) < DEFAULT_TOLERANCE) {
         return result;  // Lines nearly parallel
     }
 
-    double distFromVertex = radius / qSin(halfAngle);
+    double distFromVertex = radius / std::sin(halfAngle);
 
     // Two possible centers (on each bisector direction)
-    QPointF center1 = vertex + bisector1 * distFromVertex;
-    QPointF center2 = vertex - bisector1 * distFromVertex;
-    QPointF center3 = vertex + bisector2 * distFromVertex;
-    QPointF center4 = vertex - bisector2 * distFromVertex;
+    Point2D center1 = vertex + bisector1 * distFromVertex;
+    Point2D center2 = vertex - bisector1 * distFromVertex;
+    Point2D center3 = vertex + bisector2 * distFromVertex;
+    Point2D center4 = vertex - bisector2 * distFromVertex;
 
     // Choose the center closest to the hint point
-    QVector<QPointF> candidates = {center1, center2, center3, center4};
-    QPointF bestCenter = center1;
+    std::vector<Point2D> candidates = {center1, center2, center3, center4};
+    Point2D bestCenter = center1;
     double bestDist = lengthSquared(center1 - hint);
 
-    for (const QPointF& c : candidates) {
+    for (const Point2D& c : candidates) {
         double d = lengthSquared(c - hint);
         if (d < bestDist) {
             bestDist = d;
@@ -608,9 +615,9 @@ TangentCircleResult circleTangentToTwoLines(
 }
 
 TangentCircleResult circleTangentToThreeLines(
-    const QPointF& line1Start, const QPointF& line1End,
-    const QPointF& line2Start, const QPointF& line2End,
-    const QPointF& line3Start, const QPointF& line3End)
+    const Point2D& line1Start, const Point2D& line1End,
+    const Point2D& line2Start, const Point2D& line2End,
+    const Point2D& line3Start, const Point2D& line3End)
 {
     TangentCircleResult result;
 
@@ -626,9 +633,9 @@ TangentCircleResult circleTangentToThreeLines(
         return result;  // Lines don't form a proper triangle
     }
 
-    QPointF A = int12.point;  // Vertex between line1 and line2
-    QPointF B = int23.point;  // Vertex between line2 and line3
-    QPointF C = int31.point;  // Vertex between line3 and line1
+    Point2D A = int12.point;  // Vertex between line1 and line2
+    Point2D B = int23.point;  // Vertex between line2 and line3
+    Point2D C = int31.point;  // Vertex between line3 and line1
 
     // Calculate incenter using angle bisector intersection
     // Incenter = (a*A + b*B + c*C) / (a + b + c)
@@ -643,13 +650,13 @@ TangentCircleResult circleTangentToThreeLines(
         return result;
     }
 
-    QPointF incenter(
-        (a * A.x() + b * B.x() + c * C.x()) / perimeter,
-        (a * A.y() + b * B.y() + c * C.y()) / perimeter
+    Point2D incenter(
+        (a * A.x + b * B.x + c * C.x) / perimeter,
+        (a * A.y + b * B.y + c * C.y) / perimeter
     );
 
     // Calculate inradius = area / semi-perimeter
-    double area = qAbs(polygonArea({A, B, C}));
+    double area = std::abs(polygonArea({A, B, C}));
     double inradius = area / (perimeter / 2.0);
 
     result.valid = true;
@@ -660,25 +667,25 @@ TangentCircleResult circleTangentToThreeLines(
 }
 
 TangentArcResult arcTangentToLine(
-    const QPointF& lineStart, const QPointF& lineEnd,
-    const QPointF& tangentPoint,
-    const QPointF& endPoint)
+    const Point2D& lineStart, const Point2D& lineEnd,
+    const Point2D& tangentPoint,
+    const Point2D& endPoint)
 {
     TangentArcResult result;
 
     // Direction of line
-    QPointF lineDir = normalize(lineEnd - lineStart);
+    Point2D lineDir = normalize(lineEnd - lineStart);
 
     // Perpendicular to line at tangent point
-    QPointF perpDir = perpendicular(lineDir);
+    Point2D perpDir = perpendicular(lineDir);
 
     // The center lies on the perpendicular through tangentPoint
     // The center is equidistant from tangentPoint and endPoint
     // So the center lies on the perpendicular bisector of tangentPoint-endPoint
 
-    QPointF midpoint = lineMidpoint(tangentPoint, endPoint);
-    QPointF chordDir = normalize(endPoint - tangentPoint);
-    QPointF bisectorDir = perpendicular(chordDir);
+    Point2D midpoint = lineMidpoint(tangentPoint, endPoint);
+    Point2D chordDir = normalize(endPoint - tangentPoint);
+    Point2D bisectorDir = perpendicular(chordDir);
 
     // Find intersection of:
     // 1. Line through tangentPoint with direction perpDir
@@ -691,21 +698,21 @@ TangentArcResult arcTangentToLine(
         return result;  // Lines are parallel (shouldn't happen normally)
     }
 
-    QPointF center = centerIntersection.point;
+    Point2D center = centerIntersection.point;
     double radius = lineLength(center, tangentPoint);
 
     // Calculate angles
-    double startAngle = qRadiansToDegrees(qAtan2(
-        tangentPoint.y() - center.y(),
-        tangentPoint.x() - center.x()));
-    double endAngle = qRadiansToDegrees(qAtan2(
-        endPoint.y() - center.y(),
-        endPoint.x() - center.x()));
+    double startAngle = std::atan2(
+        tangentPoint.y - center.y,
+        tangentPoint.x - center.x) * 180.0 / M_PI;
+    double endAngle = std::atan2(
+        endPoint.y - center.y,
+        endPoint.x - center.x) * 180.0 / M_PI;
 
     // Determine sweep direction based on tangent direction
     // The arc should be tangent to the line, meaning the tangent at startAngle
     // should be parallel to lineDir
-    QPointF tangentAtStart = perpendicular(normalize(tangentPoint - center));
+    Point2D tangentAtStart = perpendicular(normalize(tangentPoint - center));
 
     // Check if we need to flip the sweep direction
     double sweepAngle = normalizeAngleSigned(endAngle - startAngle);
@@ -730,8 +737,8 @@ TangentArcResult arcTangentToLine(
 }
 
 TangentArcResult filletArc(
-    const QPointF& line1Start, const QPointF& line1End,
-    const QPointF& line2Start, const QPointF& line2End,
+    const Point2D& line1Start, const Point2D& line1End,
+    const Point2D& line2Start, const Point2D& line2End,
     double radius)
 {
     TangentArcResult result;
@@ -744,11 +751,11 @@ TangentArcResult filletArc(
         return result;
     }
 
-    QPointF vertex = intersection.point;
+    Point2D vertex = intersection.point;
 
     // Get direction vectors pointing away from vertex
-    QPointF dir1 = normalize(line1End - line1Start);
-    QPointF dir2 = normalize(line2End - line2Start);
+    Point2D dir1 = normalize(line1End - line1Start);
+    Point2D dir2 = normalize(line2End - line2Start);
 
     // Ensure directions point away from vertex
     if (dot(dir1, vertex - line1Start) < 0) dir1 = -dir1;
@@ -760,42 +767,42 @@ TangentArcResult filletArc(
 
     // Calculate half angle between lines
     double dotProd = dot(dir1, dir2);
-    dotProd = qBound(-1.0, dotProd, 1.0);
-    double halfAngle = qAcos(dotProd) / 2.0;
+    dotProd = std::clamp(dotProd, -1.0, 1.0);
+    double halfAngle = std::acos(dotProd) / 2.0;
 
-    if (qAbs(qSin(halfAngle)) < DEFAULT_TOLERANCE) {
+    if (std::abs(std::sin(halfAngle)) < DEFAULT_TOLERANCE) {
         return result;  // Lines nearly parallel
     }
 
     // Distance from vertex to tangent points
-    double tangentDist = radius / qTan(halfAngle);
+    double tangentDist = radius / std::tan(halfAngle);
 
     // Distance from vertex to center
-    double centerDist = radius / qSin(halfAngle);
+    double centerDist = radius / std::sin(halfAngle);
 
     // Angle bisector direction
-    QPointF bisector = normalize(dir1 + dir2);
+    Point2D bisector = normalize(dir1 + dir2);
 
     // Center of fillet arc
-    QPointF center = vertex + bisector * centerDist;
+    Point2D center = vertex + bisector * centerDist;
 
     // Tangent points on each line
-    QPointF tangent1 = vertex + dir1 * tangentDist;
-    QPointF tangent2 = vertex + dir2 * tangentDist;
+    Point2D tangent1 = vertex + dir1 * tangentDist;
+    Point2D tangent2 = vertex + dir2 * tangentDist;
 
     // Calculate arc angles
-    double startAngle = qRadiansToDegrees(qAtan2(
-        tangent1.y() - center.y(),
-        tangent1.x() - center.x()));
-    double endAngle = qRadiansToDegrees(qAtan2(
-        tangent2.y() - center.y(),
-        tangent2.x() - center.x()));
+    double startAngle = std::atan2(
+        tangent1.y - center.y,
+        tangent1.x - center.x) * 180.0 / M_PI;
+    double endAngle = std::atan2(
+        tangent2.y - center.y,
+        tangent2.x - center.x) * 180.0 / M_PI;
 
     // The fillet arc should go the "short way" between tangent points
     double sweepAngle = normalizeAngleSigned(endAngle - startAngle);
 
     // Ensure we take the shorter path (< 180 degrees for a fillet)
-    if (qAbs(sweepAngle) > 180.0) {
+    if (std::abs(sweepAngle) > 180.0) {
         if (sweepAngle > 0) {
             sweepAngle -= 360.0;
         } else {

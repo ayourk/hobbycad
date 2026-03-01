@@ -15,11 +15,19 @@
 
 #include "../core.h"
 #include "../geometry/types.h"
+#include "../types.h"
 
-#include <QString>
-#include <QPointF>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#if HOBBYCAD_HAS_QT
 #include <QImage>
-#include <QByteArray>
+#elif HOBBYCAD_HAS_STB_IMAGE
+#include "../image_buffer.h"
+#endif
 
 namespace hobbycad {
 namespace sketch {
@@ -40,12 +48,12 @@ struct BackgroundImage {
 
     // Image source
     BackgroundStorage storage = BackgroundStorage::FilePath;
-    QString filePath;                  ///< Path to image file (if FilePath storage)
-    QByteArray imageData;              ///< Embedded image data (if Embedded storage)
-    QString mimeType;                  ///< MIME type for embedded data (e.g., "image/png")
+    std::string filePath;              ///< Path to image file (if FilePath storage)
+    std::vector<uint8_t> imageData;    ///< Embedded image data (if Embedded storage)
+    std::string mimeType;              ///< MIME type for embedded data (e.g., "image/png")
 
     // Position and size in sketch coordinates (mm)
-    QPointF position = QPointF(0, 0);  ///< Top-left corner position
+    Point2D position;                  ///< Top-left corner position
     double width = 100.0;              ///< Width in mm
     double height = 100.0;             ///< Height in mm
     double rotation = 0.0;             ///< Rotation in degrees (around center)
@@ -63,7 +71,7 @@ struct BackgroundImage {
     int opacityPercent() const { return static_cast<int>(opacity * 100.0 + 0.5); }
 
     /// Set opacity from percentage (0-100)
-    void setOpacityPercent(int percent) { opacity = qBound(0, percent, 100) / 100.0; }
+    void setOpacityPercent(int percent) { opacity = std::clamp(percent, 0, 100) / 100.0; }
 
     /// Normalize rotation to 0-360 range
     void normalizeRotation() {
@@ -97,10 +105,10 @@ struct BackgroundImage {
     geometry::BoundingBox bounds() const;
 
     /// Get center point
-    QPointF center() const;
+    Point2D center() const;
 
     /// Check if a point is inside the background bounds
-    bool containsPoint(const QPointF& point) const;
+    bool containsPoint(const Point2D& point) const;
 };
 
 // =====================================================================
@@ -112,7 +120,7 @@ struct BackgroundImage {
 /// @param embed If true, embed image data; if false, store as file reference
 /// @return Background image data (check enabled flag for success)
 HOBBYCAD_EXPORT BackgroundImage loadBackgroundImage(
-    const QString& filePath,
+    const std::string& filePath,
     bool embed = false);
 
 /// Load a background image from raw data
@@ -120,9 +128,10 @@ HOBBYCAD_EXPORT BackgroundImage loadBackgroundImage(
 /// @param mimeType MIME type (e.g., "image/png", "image/jpeg")
 /// @return Background image data
 HOBBYCAD_EXPORT BackgroundImage loadBackgroundImageFromData(
-    const QByteArray& data,
-    const QString& mimeType);
+    const std::vector<uint8_t>& data,
+    const std::string& mimeType);
 
+#if HOBBYCAD_HAS_QT
 /// Get the actual QImage for rendering
 /// @param background Background image data
 /// @return QImage for rendering (may be null if loading fails)
@@ -135,6 +144,21 @@ HOBBYCAD_EXPORT QImage getBackgroundQImage(const BackgroundImage& background);
 HOBBYCAD_EXPORT QImage applyBackgroundAdjustments(
     const QImage& image,
     const BackgroundImage& background);
+#elif HOBBYCAD_HAS_STB_IMAGE
+/// Get the background as an RGBA pixel buffer (non-Qt path).
+/// @param background Background image data
+/// @return ImageBuffer for rendering (check isNull() for failure)
+HOBBYCAD_EXPORT ImageBuffer getBackgroundImage(const BackgroundImage& background);
+
+/// Apply display adjustments (opacity, grayscale, contrast, brightness)
+/// to an ImageBuffer (non-Qt path).
+/// @param image Source image buffer
+/// @param background Background settings
+/// @return Adjusted image buffer
+HOBBYCAD_EXPORT ImageBuffer applyBackgroundAdjustments(
+    const ImageBuffer& image,
+    const BackgroundImage& background);
+#endif
 
 /// Calculate image dimensions maintaining aspect ratio
 /// @param originalWidth Original image width in pixels
@@ -157,25 +181,25 @@ HOBBYCAD_EXPORT void calculateAspectRatio(
 /// @return Updated background with calibration applied
 HOBBYCAD_EXPORT BackgroundImage calibrateBackground(
     const BackgroundImage& background,
-    const QPointF& point1,
-    const QPointF& point2,
+    const Point2D& point1,
+    const Point2D& point2,
     double realDistance);
 
 /// Convert a point from sketch coordinates to image pixel coordinates
 /// @param background Background image
 /// @param sketchPoint Point in sketch coordinates (mm)
 /// @return Point in image pixel coordinates
-HOBBYCAD_EXPORT QPointF sketchToImageCoords(
+HOBBYCAD_EXPORT Point2D sketchToImageCoords(
     const BackgroundImage& background,
-    const QPointF& sketchPoint);
+    const Point2D& sketchPoint);
 
 /// Convert a point from image pixel coordinates to sketch coordinates
 /// @param background Background image
 /// @param imagePoint Point in image pixel coordinates
 /// @return Point in sketch coordinates (mm)
-HOBBYCAD_EXPORT QPointF imageToSketchCoords(
+HOBBYCAD_EXPORT Point2D imageToSketchCoords(
     const BackgroundImage& background,
-    const QPointF& imagePoint);
+    const Point2D& imagePoint);
 
 // =====================================================================
 //  Alignment Utilities
@@ -185,7 +209,7 @@ HOBBYCAD_EXPORT QPointF imageToSketchCoords(
 /// @param point1 First point
 /// @param point2 Second point
 /// @return Angle in degrees (-180 to 180, 0 = horizontal right)
-HOBBYCAD_EXPORT double calculateLineAngle(const QPointF& point1, const QPointF& point2);
+HOBBYCAD_EXPORT double calculateLineAngle(const Point2D& point1, const Point2D& point2);
 
 /// Calculate the rotation needed to align a line to a target angle
 /// @param currentAngle Current angle of the line (degrees)
@@ -215,32 +239,32 @@ HOBBYCAD_EXPORT double normalizeAngle180(double degrees);
 /// @return Updated background with new file path, or original if export failed
 HOBBYCAD_EXPORT BackgroundImage exportBackgroundToProject(
     const BackgroundImage& background,
-    const QString& projectDir,
-    const QString& sketchName);
+    const std::string& projectDir,
+    const std::string& sketchName);
 
 /// Check if a file path is inside the project directory
 /// @param filePath Absolute file path to check
 /// @param projectDir Project root directory
 /// @return True if file is inside project directory
 HOBBYCAD_EXPORT bool isFileInProject(
-    const QString& filePath,
-    const QString& projectDir);
+    const std::string& filePath,
+    const std::string& projectDir);
 
 /// Convert absolute path to relative path within project
 /// @param absolutePath Absolute file path
 /// @param projectDir Project root directory
 /// @return Relative path, or original if not in project
-HOBBYCAD_EXPORT QString toRelativePath(
-    const QString& absolutePath,
-    const QString& projectDir);
+HOBBYCAD_EXPORT std::string toRelativePath(
+    const std::string& absolutePath,
+    const std::string& projectDir);
 
 /// Convert relative path to absolute path within project
 /// @param relativePath Relative file path
 /// @param projectDir Project root directory
 /// @return Absolute path
-HOBBYCAD_EXPORT QString toAbsolutePath(
-    const QString& relativePath,
-    const QString& projectDir);
+HOBBYCAD_EXPORT std::string toAbsolutePath(
+    const std::string& relativePath,
+    const std::string& projectDir);
 
 /// Update background image from a new file
 /// If file is outside project, embeds the image data as base64
@@ -249,8 +273,8 @@ HOBBYCAD_EXPORT QString toAbsolutePath(
 /// @param projectDir Project root directory (empty if project not saved yet)
 /// @return Updated background image
 HOBBYCAD_EXPORT BackgroundImage updateBackgroundFromFile(
-    const QString& filePath,
-    const QString& projectDir);
+    const std::string& filePath,
+    const std::string& projectDir);
 
 // =====================================================================
 //  Serialization
@@ -260,14 +284,14 @@ HOBBYCAD_EXPORT BackgroundImage updateBackgroundFromFile(
 /// @param background Background to serialize
 /// @param includeImageData If true, include embedded image data
 /// @return JSON object as string
-HOBBYCAD_EXPORT QString backgroundToJson(
+HOBBYCAD_EXPORT std::string backgroundToJson(
     const BackgroundImage& background,
     bool includeImageData = true);
 
 /// Deserialize background image from JSON
 /// @param json JSON string
 /// @return Background image data
-HOBBYCAD_EXPORT BackgroundImage backgroundFromJson(const QString& json);
+HOBBYCAD_EXPORT BackgroundImage backgroundFromJson(const std::string& json);
 
 // =====================================================================
 //  Supported Formats
@@ -275,16 +299,16 @@ HOBBYCAD_EXPORT BackgroundImage backgroundFromJson(const QString& json);
 
 /// Get list of supported image format extensions
 /// @return List of extensions (e.g., "png", "jpg", "bmp")
-HOBBYCAD_EXPORT QStringList supportedImageFormats();
+HOBBYCAD_EXPORT std::vector<std::string> supportedImageFormats();
 
 /// Get file filter string for open dialogs
 /// @return Filter string (e.g., "Images (*.png *.jpg *.bmp)")
-HOBBYCAD_EXPORT QString imageFileFilter();
+HOBBYCAD_EXPORT std::string imageFileFilter();
 
 /// Check if a file format is supported
 /// @param filePath Path to check
 /// @return True if format is supported
-HOBBYCAD_EXPORT bool isImageFormatSupported(const QString& filePath);
+HOBBYCAD_EXPORT bool isImageFormatSupported(const std::string& filePath);
 
 }  // namespace sketch
 }  // namespace hobbycad

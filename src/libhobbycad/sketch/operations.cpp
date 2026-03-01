@@ -11,9 +11,14 @@
 #include <hobbycad/geometry/intersections.h>
 #include <hobbycad/geometry/utils.h>
 
-#include <QQueue>
-#include <QSet>
+#include <queue>
+#include <unordered_set>
 #include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace hobbycad {
 namespace sketch {
@@ -24,9 +29,9 @@ using namespace geometry;
 //  Intersection Detection
 // =====================================================================
 
-QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
+std::vector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
 {
-    QVector<Intersection> results;
+    std::vector<Intersection> results;
 
     // Line-Line
     if (e1.type == EntityType::Line && e2.type == EntityType::Line) {
@@ -42,14 +47,14 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
                 inter.point = lli.point;
                 inter.param1 = lli.t1;
                 inter.param2 = lli.t2;
-                results.append(inter);
+                results.push_back(inter);
             }
         }
     }
     // Line-Circle
     else if (e1.type == EntityType::Line &&
              (e2.type == EntityType::Circle || e2.type == EntityType::Arc)) {
-        if (e1.points.size() >= 2 && !e2.points.isEmpty()) {
+        if (e1.points.size() >= 2 && !e2.points.empty()) {
             if (e2.type == EntityType::Circle) {
                 LineCircleIntersection lci = lineCircleIntersection(
                     e1.points[0], e1.points[1],
@@ -61,7 +66,7 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
                     inter.entityId2 = e2.id;
                     inter.point = lci.point1;
                     inter.param1 = lci.t1;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
                 if (lci.count >= 2 && lci.point2InSegment) {
                     Intersection inter;
@@ -69,7 +74,7 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
                     inter.entityId2 = e2.id;
                     inter.point = lci.point2;
                     inter.param1 = lci.t2;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
             } else {
                 // Arc
@@ -87,14 +92,14 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
                     inter.entityId1 = e1.id;
                     inter.entityId2 = e2.id;
                     inter.point = lai.point1;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
                 if (lai.count >= 2 && lai.point2InSegment && lai.point2OnArc) {
                     Intersection inter;
                     inter.entityId1 = e1.id;
                     inter.entityId2 = e2.id;
                     inter.point = lai.point2;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
             }
         }
@@ -107,12 +112,14 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
             std::swap(inter.entityId1, inter.entityId2);
             std::swap(inter.param1, inter.param2);
         }
-        results.append(swapped);
+        for (auto& inter : swapped) {
+            results.push_back(inter);
+        }
     }
     // Circle-Circle
     else if ((e1.type == EntityType::Circle || e1.type == EntityType::Arc) &&
              (e2.type == EntityType::Circle || e2.type == EntityType::Arc)) {
-        if (!e1.points.isEmpty() && !e2.points.isEmpty()) {
+        if (!e1.points.empty() && !e2.points.empty()) {
             if (e1.type == EntityType::Circle && e2.type == EntityType::Circle) {
                 CircleCircleIntersection cci = circleCircleIntersection(
                     e1.points[0], e1.radius,
@@ -123,14 +130,14 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
                     inter.entityId1 = e1.id;
                     inter.entityId2 = e2.id;
                     inter.point = cci.point1;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
                 if (cci.count >= 2) {
                     Intersection inter;
                     inter.entityId1 = e1.id;
                     inter.entityId2 = e2.id;
                     inter.point = cci.point2;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
             } else {
                 // At least one arc - use arc-arc intersection
@@ -152,14 +159,14 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
                     inter.entityId1 = e1.id;
                     inter.entityId2 = e2.id;
                     inter.point = cci.point1;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
                 if (cci.count >= 2) {
                     Intersection inter;
                     inter.entityId1 = e1.id;
                     inter.entityId2 = e2.id;
                     inter.point = cci.point2;
-                    results.append(inter);
+                    results.push_back(inter);
                 }
             }
         }
@@ -168,27 +175,33 @@ QVector<Intersection> findIntersection(const Entity& e1, const Entity& e2)
     return results;
 }
 
-QVector<Intersection> findIntersections(
+std::vector<Intersection> findIntersections(
     const Entity& entity,
-    const QVector<Entity>& others)
+    const std::vector<Entity>& others)
 {
-    QVector<Intersection> results;
+    std::vector<Intersection> results;
 
     for (const Entity& other : others) {
         if (other.id == entity.id) continue;
-        results.append(findIntersection(entity, other));
+        auto inters = findIntersection(entity, other);
+        for (auto& inter : inters) {
+            results.push_back(inter);
+        }
     }
 
     return results;
 }
 
-QVector<Intersection> findAllIntersections(const QVector<Entity>& entities)
+std::vector<Intersection> findAllIntersections(const std::vector<Entity>& entities)
 {
-    QVector<Intersection> results;
+    std::vector<Intersection> results;
 
-    for (int i = 0; i < entities.size(); ++i) {
-        for (int j = i + 1; j < entities.size(); ++j) {
-            results.append(findIntersection(entities[i], entities[j]));
+    for (int i = 0; i < static_cast<int>(entities.size()); ++i) {
+        for (int j = i + 1; j < static_cast<int>(entities.size()); ++j) {
+            auto inters = findIntersection(entities[i], entities[j]);
+            for (auto& inter : inters) {
+                results.push_back(inter);
+            }
         }
     }
 
@@ -202,22 +215,22 @@ QVector<Intersection> findAllIntersections(const QVector<Entity>& entities)
 OffsetResult offsetEntity(
     const Entity& entity,
     double distance,
-    const QPointF& clickPos,
+    const Point2D& clickPos,
     int newId)
 {
     OffsetResult result;
 
     if (entity.type == EntityType::Line && entity.points.size() >= 2) {
         // Calculate perpendicular direction
-        QPointF dir = entity.points[1] - entity.points[0];
-        QPointF perp = normalize(perpendicular(dir));
+        Point2D dir = entity.points[1] - entity.points[0];
+        Point2D perp = normalize(perpendicular(dir));
 
         // Determine which side based on click position
-        QPointF mid = lineMidpoint(entity.points[0], entity.points[1]);
-        QPointF toClick = clickPos - mid;
+        Point2D mid = lineMidpoint(entity.points[0], entity.points[1]);
+        Point2D toClick = clickPos - mid;
         int side = (dot(toClick, perp) > 0) ? 1 : -1;
 
-        QPointF offset = perp * (distance * side);
+        Point2D offset = perp * (distance * side);
 
         result.entity = createLine(newId,
             entity.points[0] + offset,
@@ -225,9 +238,9 @@ OffsetResult offsetEntity(
         result.entity.isConstruction = entity.isConstruction;
         result.success = true;
     }
-    else if (entity.type == EntityType::Circle && !entity.points.isEmpty()) {
+    else if (entity.type == EntityType::Circle && !entity.points.empty()) {
         // Determine if offset is inward or outward
-        double distToCenter = QLineF(clickPos, entity.points[0]).length();
+        double distToCenter = std::hypot(clickPos.x - entity.points[0].x, clickPos.y - entity.points[0].y);
         double newRadius = (distToCenter > entity.radius)
             ? entity.radius + distance
             : entity.radius - distance;
@@ -241,8 +254,8 @@ OffsetResult offsetEntity(
         result.entity.isConstruction = entity.isConstruction;
         result.success = true;
     }
-    else if (entity.type == EntityType::Arc && !entity.points.isEmpty()) {
-        double distToCenter = QLineF(clickPos, entity.points[0]).length();
+    else if (entity.type == EntityType::Arc && !entity.points.empty()) {
+        double distToCenter = std::hypot(clickPos.x - entity.points[0].x, clickPos.y - entity.points[0].y);
         double newRadius = (distToCenter > entity.radius)
             ? entity.radius + distance
             : entity.radius - distance;
@@ -271,17 +284,17 @@ OffsetResult offsetEntity(
     int newId)
 {
     // Create a click position on the appropriate side
-    QPointF clickPos;
+    Point2D clickPos;
 
     if (entity.type == EntityType::Line && entity.points.size() >= 2) {
-        QPointF mid = lineMidpoint(entity.points[0], entity.points[1]);
-        QPointF dir = entity.points[1] - entity.points[0];
-        QPointF perp = normalize(perpendicular(dir));
+        Point2D mid = lineMidpoint(entity.points[0], entity.points[1]);
+        Point2D dir = entity.points[1] - entity.points[0];
+        Point2D perp = normalize(perpendicular(dir));
         clickPos = mid + perp * (side > 0 ? 1.0 : -1.0);
     }
     else if ((entity.type == EntityType::Circle || entity.type == EntityType::Arc) &&
-             !entity.points.isEmpty()) {
-        clickPos = entity.points[0] + QPointF(entity.radius * side * 1.1, 0);
+             !entity.points.empty()) {
+        clickPos = entity.points[0] + Point2D(entity.radius * side * 1.1, 0);
     }
 
     return offsetEntity(entity, distance, clickPos, newId);
@@ -291,7 +304,7 @@ OffsetResult offsetEntity(
 //  Fillet Operation
 // =====================================================================
 
-std::optional<QPointF> findCornerPoint(
+std::optional<Point2D> findCornerPoint(
     const Entity& line1,
     const Entity& line2,
     double tolerance)
@@ -334,29 +347,29 @@ FilletResult createFillet(
         return result;
     }
 
-    QPointF corner = *cornerOpt;
+    Point2D corner = *cornerOpt;
 
     // Find which endpoints are at the corner
     int idx1 = pointsCoincident(line1.points[0], corner) ? 0 : 1;
     int idx2 = pointsCoincident(line2.points[0], corner) ? 0 : 1;
 
-    QPointF other1 = line1.points[1 - idx1];
-    QPointF other2 = line2.points[1 - idx2];
+    Point2D other1 = line1.points[1 - idx1];
+    Point2D other2 = line2.points[1 - idx2];
 
     // Direction vectors from corner
-    QPointF dir1 = normalize(other1 - corner);
-    QPointF dir2 = normalize(other2 - corner);
+    Point2D dir1 = normalize(other1 - corner);
+    Point2D dir2 = normalize(other2 - corner);
 
     double len1 = lineLength(corner, other1);
     double len2 = lineLength(corner, other2);
 
     // Calculate angle between lines
     double dotProd = dot(dir1, dir2);
-    double angle = qAcos(qBound(-1.0, dotProd, 1.0));
+    double angle = std::acos(std::clamp(dotProd, -1.0, 1.0));
 
     // Calculate tangent distance from corner
-    double tanHalfAngle = qTan((M_PI - angle) / 2.0);
-    if (qAbs(tanHalfAngle) < 0.001) {
+    double tanHalfAngle = std::tan((M_PI - angle) / 2.0);
+    if (std::abs(tanHalfAngle) < 0.001) {
         result.errorMessage = "Lines are nearly parallel";
         return result;
     }
@@ -369,21 +382,21 @@ FilletResult createFillet(
     }
 
     // Calculate tangent points
-    QPointF tangent1 = corner + dir1 * tangentDist;
-    QPointF tangent2 = corner + dir2 * tangentDist;
+    Point2D tangent1 = corner + dir1 * tangentDist;
+    Point2D tangent2 = corner + dir2 * tangentDist;
 
     // Calculate arc center
-    QPointF bisector = normalize(dir1 + dir2);
-    double centerDist = radius / qSin((M_PI - angle) / 2.0);
-    QPointF arcCenter = corner + bisector * centerDist;
+    Point2D bisector = normalize(dir1 + dir2);
+    double centerDist = radius / std::sin((M_PI - angle) / 2.0);
+    Point2D arcCenter = corner + bisector * centerDist;
 
     // Calculate arc angles
-    double startAngle = qRadiansToDegrees(qAtan2(
-        tangent1.y() - arcCenter.y(),
-        tangent1.x() - arcCenter.x()));
-    double endAngle = qRadiansToDegrees(qAtan2(
-        tangent2.y() - arcCenter.y(),
-        tangent2.x() - arcCenter.x()));
+    double startAngle = std::atan2(
+        tangent1.y - arcCenter.y,
+        tangent1.x - arcCenter.x) * 180.0 / M_PI;
+    double endAngle = std::atan2(
+        tangent2.y - arcCenter.y,
+        tangent2.x - arcCenter.x) * 180.0 / M_PI;
 
     double sweep = endAngle - startAngle;
     while (sweep > 180.0) sweep -= 360.0;
@@ -436,14 +449,14 @@ ChamferResult createChamfer(
         return result;
     }
 
-    QPointF corner = *cornerOpt;
+    Point2D corner = *cornerOpt;
 
     // Find which endpoints are at the corner
     int idx1 = pointsCoincident(line1.points[0], corner) ? 0 : 1;
     int idx2 = pointsCoincident(line2.points[0], corner) ? 0 : 1;
 
-    QPointF other1 = line1.points[1 - idx1];
-    QPointF other2 = line2.points[1 - idx2];
+    Point2D other1 = line1.points[1 - idx1];
+    Point2D other2 = line2.points[1 - idx2];
 
     double len1 = lineLength(corner, other1);
     double len2 = lineLength(corner, other2);
@@ -454,11 +467,11 @@ ChamferResult createChamfer(
     }
 
     // Calculate chamfer points
-    QPointF dir1 = normalize(other1 - corner);
-    QPointF dir2 = normalize(other2 - corner);
+    Point2D dir1 = normalize(other1 - corner);
+    Point2D dir2 = normalize(other2 - corner);
 
-    QPointF chamferPt1 = corner + dir1 * distance1;
-    QPointF chamferPt2 = corner + dir2 * distance2;
+    Point2D chamferPt1 = corner + dir1 * distance1;
+    Point2D chamferPt2 = corner + dir2 * distance2;
 
     // Create modified lines
     result.line1 = line1;
@@ -480,28 +493,28 @@ ChamferResult createChamfer(
 
 TrimResult trimEntity(
     const Entity& entity,
-    const QVector<QPointF>& intersections,
-    const QPointF& clickPos,
+    const std::vector<Point2D>& intersections,
+    const Point2D& clickPos,
     std::function<int()> nextId)
 {
     TrimResult result;
 
-    if (intersections.isEmpty()) {
+    if (intersections.empty()) {
         result.errorMessage = "No intersections found to trim at";
         return result;
     }
 
     if (entity.type == EntityType::Line && entity.points.size() >= 2) {
         // Sort intersections by parameter along line
-        QVector<double> params;
-        for (const QPointF& pt : intersections) {
+        std::vector<double> params;
+        for (const Point2D& pt : intersections) {
             double t = projectPointOnLine(pt, entity.points[0], entity.points[1]);
             if (t > 0.001 && t < 0.999) {
-                params.append(t);
+                params.push_back(t);
             }
         }
 
-        if (params.isEmpty()) {
+        if (params.empty()) {
             result.errorMessage = "No valid trim points on this segment";
             return result;
         }
@@ -512,28 +525,28 @@ TrimResult trimEntity(
         double clickT = projectPointOnLine(clickPos, entity.points[0], entity.points[1]);
 
         // Add endpoints
-        params.prepend(0.0);
-        params.append(1.0);
+        params.insert(params.begin(), 0.0);
+        params.push_back(1.0);
 
         // Create segments except the one containing clickT
         result.removedEntityId = entity.id;
 
-        for (int i = 0; i < params.size() - 1; ++i) {
+        for (int i = 0; i < static_cast<int>(params.size()) - 1; ++i) {
             if (clickT >= params[i] && clickT <= params[i + 1]) {
                 continue;  // Skip this segment
             }
 
-            QPointF p1 = pointOnLine(entity.points[0], entity.points[1], params[i]);
-            QPointF p2 = pointOnLine(entity.points[0], entity.points[1], params[i + 1]);
+            Point2D p1 = pointOnLine(entity.points[0], entity.points[1], params[i]);
+            Point2D p2 = pointOnLine(entity.points[0], entity.points[1], params[i + 1]);
 
             Entity newLine = createLine(nextId(), p1, p2);
             newLine.isConstruction = entity.isConstruction;
-            result.newEntities.append(newLine);
+            result.newEntities.push_back(newLine);
         }
 
         result.success = true;
     }
-    else if (entity.type == EntityType::Circle && !entity.points.isEmpty()) {
+    else if (entity.type == EntityType::Circle && !entity.points.empty()) {
         // Convert circle to arcs
         // For now, just handle the simple case of 2 intersections
         if (intersections.size() < 2) {
@@ -542,26 +555,26 @@ TrimResult trimEntity(
         }
 
         // Calculate angles for each intersection
-        QVector<double> angles;
-        for (const QPointF& pt : intersections) {
-            double angle = qRadiansToDegrees(qAtan2(
-                pt.y() - entity.points[0].y(),
-                pt.x() - entity.points[0].x()));
-            angles.append(normalizeAngle(angle));
+        std::vector<double> angles;
+        for (const Point2D& pt : intersections) {
+            double angle = std::atan2(
+                pt.y - entity.points[0].y,
+                pt.x - entity.points[0].x) * 180.0 / M_PI;
+            angles.push_back(normalizeAngle(angle));
         }
 
         std::sort(angles.begin(), angles.end());
 
         // Find which arc segment the click is in
-        double clickAngle = normalizeAngle(qRadiansToDegrees(qAtan2(
-            clickPos.y() - entity.points[0].y(),
-            clickPos.x() - entity.points[0].x())));
+        double clickAngle = normalizeAngle(std::atan2(
+            clickPos.y - entity.points[0].y,
+            clickPos.x - entity.points[0].x) * 180.0 / M_PI);
 
         result.removedEntityId = entity.id;
 
         // Create arcs for each segment except the one containing the click
-        for (int i = 0; i < angles.size(); ++i) {
-            int j = (i + 1) % angles.size();
+        for (int i = 0; i < static_cast<int>(angles.size()); ++i) {
+            int j = (i + 1) % static_cast<int>(angles.size());
             double startA = angles[i];
             double endA = angles[j];
             double sweep = endA - startA;
@@ -575,7 +588,7 @@ TrimResult trimEntity(
 
             Entity arc = createArc(nextId(), entity.points[0], entity.radius, startA, sweep);
             arc.isConstruction = entity.isConstruction;
-            result.newEntities.append(arc);
+            result.newEntities.push_back(arc);
         }
 
         result.success = true;
@@ -593,9 +606,9 @@ TrimResult trimEntity(
 
 ExtendResult extendEntity(
     const Entity& entity,
-    const QVector<Entity>& boundaries,
+    const std::vector<Entity>& boundaries,
     int extendEnd,
-    const QPointF& clickPos)
+    const Point2D& clickPos)
 {
     ExtendResult result;
 
@@ -607,24 +620,24 @@ ExtendResult extendEntity(
     // Determine which end to extend
     int endIdx = extendEnd;
     if (endIdx < 0) {
-        double d0 = QLineF(clickPos, entity.points[0]).length();
-        double d1 = QLineF(clickPos, entity.points[1]).length();
+        double d0 = std::hypot(clickPos.x - entity.points[0].x, clickPos.y - entity.points[0].y);
+        double d1 = std::hypot(clickPos.x - entity.points[1].x, clickPos.y - entity.points[1].y);
         endIdx = (d0 < d1) ? 0 : 1;
     }
 
-    QPointF extendPoint = entity.points[endIdx];
-    QPointF anchorPoint = entity.points[1 - endIdx];
-    QPointF dir = normalize(extendPoint - anchorPoint);
+    Point2D extendPoint = entity.points[endIdx];
+    Point2D anchorPoint = entity.points[1 - endIdx];
+    Point2D dir = normalize(extendPoint - anchorPoint);
 
     // Find intersections with extension ray
     double bestDist = std::numeric_limits<double>::max();
-    QPointF bestPoint = extendPoint;
+    Point2D bestPoint = extendPoint;
 
     for (const Entity& boundary : boundaries) {
         if (boundary.id == entity.id) continue;
 
         // Create extended line (project far)
-        QPointF farPoint = extendPoint + dir * 10000.0;
+        Point2D farPoint = extendPoint + dir * 10000.0;
 
         auto intersections = findIntersection(
             createLine(-1, anchorPoint, farPoint), boundary);
@@ -657,16 +670,16 @@ ExtendResult extendEntity(
 
 SplitResult splitEntityAt(
     const Entity& entity,
-    const QPointF& splitPoint,
+    const Point2D& splitPoint,
     std::function<int()> nextId)
 {
     SplitResult result;
 
     if (entity.type == EntityType::Line && entity.points.size() >= 2) {
         double t = projectPointOnLine(splitPoint, entity.points[0], entity.points[1]);
-        t = qBound(0.01, t, 0.99);
+        t = std::clamp(t, 0.01, 0.99);
 
-        QPointF midPoint = pointOnLine(entity.points[0], entity.points[1], t);
+        Point2D midPoint = pointOnLine(entity.points[0], entity.points[1], t);
 
         Entity line1 = createLine(nextId(), entity.points[0], midPoint);
         line1.isConstruction = entity.isConstruction;
@@ -674,16 +687,16 @@ SplitResult splitEntityAt(
         Entity line2 = createLine(nextId(), midPoint, entity.points[1]);
         line2.isConstruction = entity.isConstruction;
 
-        result.newEntities.append(line1);
-        result.newEntities.append(line2);
+        result.newEntities.push_back(line1);
+        result.newEntities.push_back(line2);
         result.removedEntityId = entity.id;
         result.success = true;
     }
-    else if (entity.type == EntityType::Circle && !entity.points.isEmpty()) {
+    else if (entity.type == EntityType::Circle && !entity.points.empty()) {
         // Split circle into two arcs
-        double angle = normalizeAngle(qRadiansToDegrees(qAtan2(
-            splitPoint.y() - entity.points[0].y(),
-            splitPoint.x() - entity.points[0].x())));
+        double angle = normalizeAngle(std::atan2(
+            splitPoint.y - entity.points[0].y,
+            splitPoint.x - entity.points[0].x) * 180.0 / M_PI);
 
         Entity arc1 = createArc(nextId(), entity.points[0], entity.radius, angle, 180.0);
         arc1.isConstruction = entity.isConstruction;
@@ -691,12 +704,12 @@ SplitResult splitEntityAt(
         Entity arc2 = createArc(nextId(), entity.points[0], entity.radius, angle + 180.0, 180.0);
         arc2.isConstruction = entity.isConstruction;
 
-        result.newEntities.append(arc1);
-        result.newEntities.append(arc2);
+        result.newEntities.push_back(arc1);
+        result.newEntities.push_back(arc2);
         result.removedEntityId = entity.id;
         result.success = true;
     }
-    else if (entity.type == EntityType::Arc && !entity.points.isEmpty()) {
+    else if (entity.type == EntityType::Arc && !entity.points.empty()) {
         Arc arc;
         arc.center = entity.points[0];
         arc.radius = entity.radius;
@@ -713,8 +726,8 @@ SplitResult splitEntityAt(
                 splitArcs[1].startAngle, splitArcs[1].sweepAngle);
             arc2.isConstruction = entity.isConstruction;
 
-            result.newEntities.append(arc1);
-            result.newEntities.append(arc2);
+            result.newEntities.push_back(arc1);
+            result.newEntities.push_back(arc2);
             result.removedEntityId = entity.id;
             result.success = true;
         } else {
@@ -730,33 +743,33 @@ SplitResult splitEntityAt(
 
 SplitResult splitEntityAtIntersections(
     const Entity& entity,
-    const QVector<QPointF>& intersections,
+    const std::vector<Point2D>& intersections,
     std::function<int()> nextId)
 {
     SplitResult result;
 
-    if (intersections.isEmpty()) {
+    if (intersections.empty()) {
         result.errorMessage = "No intersection points to split at";
         return result;
     }
 
     if (entity.type == EntityType::Line && entity.points.size() >= 2) {
         // Sort intersections by parameter
-        QVector<double> params;
-        params.append(0.0);
-        for (const QPointF& pt : intersections) {
+        std::vector<double> params;
+        params.push_back(0.0);
+        for (const Point2D& pt : intersections) {
             double t = projectPointOnLine(pt, entity.points[0], entity.points[1]);
             if (t > 0.001 && t < 0.999) {
-                params.append(t);
+                params.push_back(t);
             }
         }
-        params.append(1.0);
+        params.push_back(1.0);
 
         std::sort(params.begin(), params.end());
 
         // Remove duplicates
         auto last = std::unique(params.begin(), params.end(),
-            [](double a, double b) { return qAbs(a - b) < 0.001; });
+            [](double a, double b) { return std::abs(a - b) < 0.001; });
         params.erase(last, params.end());
 
         if (params.size() <= 2) {
@@ -766,13 +779,13 @@ SplitResult splitEntityAtIntersections(
 
         result.removedEntityId = entity.id;
 
-        for (int i = 0; i < params.size() - 1; ++i) {
-            QPointF p1 = pointOnLine(entity.points[0], entity.points[1], params[i]);
-            QPointF p2 = pointOnLine(entity.points[0], entity.points[1], params[i + 1]);
+        for (int i = 0; i < static_cast<int>(params.size()) - 1; ++i) {
+            Point2D p1 = pointOnLine(entity.points[0], entity.points[1], params[i]);
+            Point2D p2 = pointOnLine(entity.points[0], entity.points[1], params[i + 1]);
 
             Entity newLine = createLine(nextId(), p1, p2);
             newLine.isConstruction = entity.isConstruction;
-            result.newEntities.append(newLine);
+            result.newEntities.push_back(newLine);
         }
 
         result.success = true;
@@ -790,22 +803,23 @@ SplitResult splitEntityAtIntersections(
 //  Chain Selection
 // =====================================================================
 
-QVector<int> findConnectedChain(
+std::vector<int> findConnectedChain(
     int startId,
-    const QVector<Entity>& entities,
+    const std::vector<Entity>& entities,
     double tolerance)
 {
-    QSet<int> visited;
-    QVector<int> result;
-    QQueue<int> queue;
+    std::unordered_set<int> visited;
+    std::vector<int> result;
+    std::queue<int> queue;
 
-    queue.enqueue(startId);
+    queue.push(startId);
 
-    while (!queue.isEmpty()) {
-        int currentId = queue.dequeue();
-        if (visited.contains(currentId)) continue;
+    while (!queue.empty()) {
+        int currentId = queue.front();
+        queue.pop();
+        if (visited.count(currentId) > 0) continue;
         visited.insert(currentId);
-        result.append(currentId);
+        result.push_back(currentId);
 
         // Find the current entity
         const Entity* current = nullptr;
@@ -819,9 +833,9 @@ QVector<int> findConnectedChain(
 
         // Find connected entities
         for (const Entity& other : entities) {
-            if (visited.contains(other.id)) continue;
+            if (visited.count(other.id) > 0) continue;
             if (entitiesConnected(*current, other, tolerance)) {
-                queue.enqueue(other.id);
+                queue.push(other.id);
             }
         }
     }
@@ -831,8 +845,8 @@ QVector<int> findConnectedChain(
 
 int findConnectedLineAtCorner(
     const Entity& lineEntity,
-    const QVector<Entity>& allEntities,
-    const QPointF& cornerHint,
+    const std::vector<Entity>& allEntities,
+    const Point2D& cornerHint,
     double tolerance)
 {
     if (lineEntity.type != EntityType::Line || lineEntity.points.size() < 2) {
@@ -840,9 +854,9 @@ int findConnectedLineAtCorner(
     }
 
     // Determine which endpoint is closer to the hint
-    double d0 = QLineF(lineEntity.points[0], cornerHint).length();
-    double d1 = QLineF(lineEntity.points[1], cornerHint).length();
-    QPointF targetEndpoint = (d0 < d1) ? lineEntity.points[0] : lineEntity.points[1];
+    double d0 = std::hypot(lineEntity.points[0].x - cornerHint.x, lineEntity.points[0].y - cornerHint.y);
+    double d1 = std::hypot(lineEntity.points[1].x - cornerHint.x, lineEntity.points[1].y - cornerHint.y);
+    Point2D targetEndpoint = (d0 < d1) ? lineEntity.points[0] : lineEntity.points[1];
 
     // Find another line connected at this endpoint
     for (const Entity& other : allEntities) {
@@ -851,8 +865,8 @@ int findConnectedLineAtCorner(
         if (other.points.size() < 2) continue;
 
         // Check if either endpoint matches
-        if (QLineF(other.points[0], targetEndpoint).length() < tolerance ||
-            QLineF(other.points[1], targetEndpoint).length() < tolerance) {
+        if (std::hypot(other.points[0].x - targetEndpoint.x, other.points[0].y - targetEndpoint.y) < tolerance ||
+            std::hypot(other.points[1].x - targetEndpoint.x, other.points[1].y - targetEndpoint.y) < tolerance) {
             return other.id;
         }
     }

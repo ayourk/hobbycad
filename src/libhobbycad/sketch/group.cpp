@@ -4,6 +4,8 @@
 
 #include <hobbycad/sketch/group.h>
 
+#include <algorithm>
+
 namespace hobbycad {
 namespace sketch {
 
@@ -11,12 +13,12 @@ namespace sketch {
 //  GroupManager Implementation
 // =====================================================================
 
-int GroupManager::createGroup(const QString& name)
+int GroupManager::createGroup(const std::string& name)
 {
     Group group;
     group.id = m_nextId++;
-    group.name = name.isEmpty() ? QStringLiteral("Group %1").arg(group.id) : name;
-    m_groups.append(group);
+    group.name = name.empty() ? ("Group " + std::to_string(group.id)) : name;
+    m_groups.push_back(group);
     return group.id;
 }
 
@@ -40,8 +42,8 @@ void GroupManager::deleteGroup(int groupId, bool deleteChildren)
                 child->parentGroupId = parentId;
                 if (parentId >= 0) {
                     Group* parent = groupById(parentId);
-                    if (parent && !parent->childGroupIds.contains(childId)) {
-                        parent->childGroupIds.append(childId);
+                    if (parent && !hobbycad::contains(parent->childGroupIds, childId)) {
+                        parent->childGroupIds.push_back(childId);
                     }
                 }
             }
@@ -52,14 +54,14 @@ void GroupManager::deleteGroup(int groupId, bool deleteChildren)
     if (parentId >= 0) {
         Group* parent = groupById(parentId);
         if (parent) {
-            parent->childGroupIds.removeAll(groupId);
+            hobbycad::removeAll(parent->childGroupIds, groupId);
         }
     }
 
     // Remove the group itself
-    for (int i = 0; i < m_groups.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(m_groups.size()); ++i) {
         if (m_groups[i].id == groupId) {
-            m_groups.removeAt(i);
+            m_groups.erase(m_groups.begin() + i);
             break;
         }
     }
@@ -68,8 +70,8 @@ void GroupManager::deleteGroup(int groupId, bool deleteChildren)
 void GroupManager::addEntityToGroup(int entityId, int groupId)
 {
     Group* group = groupById(groupId);
-    if (group && !group->entityIds.contains(entityId)) {
-        group->entityIds.append(entityId);
+    if (group && !hobbycad::contains(group->entityIds, entityId)) {
+        group->entityIds.push_back(entityId);
     }
 }
 
@@ -77,7 +79,7 @@ void GroupManager::removeEntityFromGroup(int entityId, int groupId)
 {
     Group* group = groupById(groupId);
     if (group) {
-        group->entityIds.removeAll(entityId);
+        hobbycad::removeAll(group->entityIds, entityId);
     }
 }
 
@@ -94,14 +96,14 @@ bool GroupManager::addGroupToGroup(int childGroupId, int parentGroupId)
     if (child->parentGroupId >= 0) {
         Group* oldParent = groupById(child->parentGroupId);
         if (oldParent) {
-            oldParent->childGroupIds.removeAll(childGroupId);
+            hobbycad::removeAll(oldParent->childGroupIds, childGroupId);
         }
     }
 
     // Add to new parent
     child->parentGroupId = parentGroupId;
-    if (!parent->childGroupIds.contains(childGroupId)) {
-        parent->childGroupIds.append(childGroupId);
+    if (!hobbycad::contains(parent->childGroupIds, childGroupId)) {
+        parent->childGroupIds.push_back(childGroupId);
     }
 
     return true;
@@ -114,7 +116,7 @@ void GroupManager::ungroupFromParent(int groupId)
 
     Group* parent = groupById(group->parentGroupId);
     if (parent) {
-        parent->childGroupIds.removeAll(groupId);
+        hobbycad::removeAll(parent->childGroupIds, groupId);
     }
     group->parentGroupId = -1;
 }
@@ -135,20 +137,20 @@ const Group* GroupManager::groupById(int id) const
     return nullptr;
 }
 
-QVector<int> GroupManager::topLevelGroupIds() const
+std::vector<int> GroupManager::topLevelGroupIds() const
 {
-    QVector<int> result;
+    std::vector<int> result;
     for (const auto& g : m_groups) {
         if (g.parentGroupId < 0) {
-            result.append(g.id);
+            result.push_back(g.id);
         }
     }
     return result;
 }
 
-QSet<int> GroupManager::allEntityIds(int groupId) const
+std::unordered_set<int> GroupManager::allEntityIds(int groupId) const
 {
-    QSet<int> result;
+    std::unordered_set<int> result;
     const Group* group = groupById(groupId);
     if (!group) return result;
 
@@ -159,18 +161,19 @@ QSet<int> GroupManager::allEntityIds(int groupId) const
 
     // Recursively add entities from child groups
     for (int childId : group->childGroupIds) {
-        result.unite(allEntityIds(childId));
+        auto childIds = allEntityIds(childId);
+        result.insert(childIds.begin(), childIds.end());
     }
 
     return result;
 }
 
-QVector<int> GroupManager::groupsContainingEntity(int entityId) const
+std::vector<int> GroupManager::groupsContainingEntity(int entityId) const
 {
-    QVector<int> result;
+    std::vector<int> result;
     for (const auto& g : m_groups) {
-        if (g.entityIds.contains(entityId)) {
-            result.append(g.id);
+        if (hobbycad::contains(g.entityIds, entityId)) {
+            result.push_back(g.id);
         }
     }
     return result;
@@ -215,12 +218,12 @@ int groupDepth(const GroupManager& manager, int groupId)
     return depth;
 }
 
-QVector<int> groupPath(const GroupManager& manager, int groupId)
+std::vector<int> groupPath(const GroupManager& manager, int groupId)
 {
-    QVector<int> path;
+    std::vector<int> path;
     const Group* group = manager.groupById(groupId);
     while (group) {
-        path.prepend(group->id);
+        path.insert(path.begin(), group->id);
         if (group->parentGroupId < 0) break;
         group = manager.groupById(group->parentGroupId);
     }
@@ -229,11 +232,11 @@ QVector<int> groupPath(const GroupManager& manager, int groupId)
 
 int commonAncestor(const GroupManager& manager, int groupId1, int groupId2)
 {
-    QVector<int> path1 = groupPath(manager, groupId1);
-    QVector<int> path2 = groupPath(manager, groupId2);
+    std::vector<int> path1 = groupPath(manager, groupId1);
+    std::vector<int> path2 = groupPath(manager, groupId2);
 
     int common = -1;
-    int minLen = qMin(path1.size(), path2.size());
+    int minLen = std::min(static_cast<int>(path1.size()), static_cast<int>(path2.size()));
     for (int i = 0; i < minLen; ++i) {
         if (path1[i] == path2[i]) {
             common = path1[i];

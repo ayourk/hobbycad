@@ -20,40 +20,40 @@
 #include <TopoDS_Compound.hxx>
 #include <BRep_Builder.hxx>
 
-#include <QFileInfo>
+#include <algorithm>
+#include <filesystem>
 
 namespace hobbycad {
 namespace step_io {
 
-ReadResult readStep(const QString& path)
+ReadResult readStep(const std::string& path)
 {
     ReadResult result;
 
     // Check file exists
-    QFileInfo fileInfo(path);
-    if (!fileInfo.exists()) {
-        result.errorMessage = QStringLiteral("File not found: %1").arg(path);
+    if (!std::filesystem::exists(path)) {
+        result.errorMessage = "File not found: " + path;
         return result;
     }
 
     STEPControl_Reader reader;
 
     // Read the file
-    IFSelect_ReturnStatus status = reader.ReadFile(path.toUtf8().constData());
+    IFSelect_ReturnStatus status = reader.ReadFile(path.c_str());
 
     if (status != IFSelect_RetDone) {
         switch (status) {
         case IFSelect_RetError:
-            result.errorMessage = QStringLiteral("Error reading STEP file");
+            result.errorMessage = "Error reading STEP file";
             break;
         case IFSelect_RetFail:
-            result.errorMessage = QStringLiteral("Failed to read STEP file");
+            result.errorMessage = "Failed to read STEP file";
             break;
         case IFSelect_RetVoid:
-            result.errorMessage = QStringLiteral("No data in STEP file");
+            result.errorMessage = "No data in STEP file";
             break;
         default:
-            result.errorMessage = QStringLiteral("Unknown error reading STEP file");
+            result.errorMessage = "Unknown error reading STEP file";
             break;
         }
         return result;
@@ -72,19 +72,19 @@ ReadResult readStep(const QString& path)
     for (int i = 1; i <= numShapes; ++i) {
         TopoDS_Shape shape = reader.Shape(i);
         if (!shape.IsNull()) {
-            result.shapes.append(shape);
+            result.shapes.push_back(shape);
         }
     }
 
-    result.success = !result.shapes.isEmpty();
-    if (!result.success && result.errorMessage.isEmpty()) {
-        result.errorMessage = QStringLiteral("No valid shapes found in STEP file");
+    result.success = !result.shapes.empty();
+    if (!result.success && result.errorMessage.empty()) {
+        result.errorMessage = "No valid shapes found in STEP file";
     }
 
     return result;
 }
 
-QList<TopoDS_Shape> readStep(const QString& path, QString* errorMsg)
+std::vector<TopoDS_Shape> readStep(const std::string& path, std::string* errorMsg)
 {
     ReadResult result = readStep(path);
 
@@ -96,14 +96,14 @@ QList<TopoDS_Shape> readStep(const QString& path, QString* errorMsg)
 }
 
 WriteResult writeStep(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
     StepVersion version)
 {
     WriteResult result;
 
-    if (shapes.isEmpty()) {
-        result.errorMessage = QStringLiteral("No shapes to write");
+    if (shapes.empty()) {
+        result.errorMessage = "No shapes to write";
         return result;
     }
 
@@ -132,17 +132,17 @@ WriteResult writeStep(
 
         IFSelect_ReturnStatus status = writer.Transfer(shape, modelType);
         if (status != IFSelect_RetDone) {
-            result.errorMessage = QStringLiteral("Failed to transfer shape to STEP");
+            result.errorMessage = "Failed to transfer shape to STEP";
             return result;
         }
         result.shapeCount++;
     }
 
     // Write the file
-    IFSelect_ReturnStatus writeStatus = writer.Write(path.toUtf8().constData());
+    IFSelect_ReturnStatus writeStatus = writer.Write(path.c_str());
 
     if (writeStatus != IFSelect_RetDone) {
-        result.errorMessage = QStringLiteral("Failed to write STEP file");
+        result.errorMessage = "Failed to write STEP file";
         return result;
     }
 
@@ -151,17 +151,17 @@ WriteResult writeStep(
 }
 
 WriteResult writeStep(
-    const QString& path,
+    const std::string& path,
     const TopoDS_Shape& shape,
     StepVersion version)
 {
-    return writeStep(path, QList<TopoDS_Shape>{shape}, version);
+    return writeStep(path, std::vector<TopoDS_Shape>{shape}, version);
 }
 
 bool writeStep(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
-    QString* errorMsg)
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
+    std::string* errorMsg)
 {
     WriteResult result = writeStep(path, shapes, StepVersion::AP214);
 
@@ -172,20 +172,21 @@ bool writeStep(
     return result.success;
 }
 
-bool isStepFile(const QString& path)
+bool isStepFile(const std::string& path)
 {
-    QString lower = path.toLower();
-    return lower.endsWith(QLatin1String(".step")) ||
-           lower.endsWith(QLatin1String(".stp"));
+    std::string lower = path;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return (lower.size() >= 5 && lower.substr(lower.size() - 5) == ".step") ||
+           (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".stp");
 }
 
-QStringList stepExtensions()
+std::vector<std::string> stepExtensions()
 {
     return {
-        QStringLiteral("step"),
-        QStringLiteral("stp"),
-        QStringLiteral("STEP"),
-        QStringLiteral("STP")
+        "step",
+        "stp",
+        "STEP",
+        "STP"
     };
 }
 

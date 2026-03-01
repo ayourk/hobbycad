@@ -55,7 +55,12 @@
 // Lists for thick solid
 #include <TopTools_ListOfShape.hxx>
 
-#include <QtMath>
+#include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace hobbycad {
 namespace brep {
@@ -67,7 +72,7 @@ namespace brep {
 namespace {
 
 /// Find entity by ID in entity list
-const sketch::Entity* findEntity(int id, const QVector<sketch::Entity>& entities)
+const sketch::Entity* findEntity(int id, const std::vector<sketch::Entity>& entities)
 {
     for (const sketch::Entity& e : entities) {
         if (e.id == id) return &e;
@@ -76,9 +81,9 @@ const sketch::Entity* findEntity(int id, const QVector<sketch::Entity>& entities
 }
 
 /// Convert 2D sketch point to 3D point (on XY plane at Z=0)
-gp_Pnt toPoint3D(const QPointF& p2d, double z = 0.0)
+gp_Pnt toPoint3D(const Point2D& p2d, double z = 0.0)
 {
-    return gp_Pnt(p2d.x(), p2d.y(), z);
+    return gp_Pnt(p2d.x, p2d.y, z);
 }
 
 /// Build an edge from a sketch entity
@@ -97,14 +102,14 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
         break;
 
     case sketch::EntityType::Arc:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             gp_Pnt center = toPoint3D(entity.points[0]);
             gp_Dir zDir(0, 0, 1);
             gp_Ax2 axis(center, zDir);
             gp_Circ circle(axis, entity.radius);
 
-            double startRad = qDegreesToRadians(entity.startAngle);
-            double endRad = qDegreesToRadians(entity.startAngle + entity.sweepAngle);
+            double startRad = entity.startAngle * M_PI / 180.0;
+            double endRad = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
 
             if (reversed) {
                 std::swap(startRad, endRad);
@@ -118,7 +123,7 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
         break;
 
     case sketch::EntityType::Circle:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             gp_Pnt center = toPoint3D(entity.points[0]);
             gp_Dir zDir(0, 0, 1);
             gp_Ax2 axis(center, zDir);
@@ -132,13 +137,13 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
         break;
 
     case sketch::EntityType::Ellipse:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             gp_Pnt center = toPoint3D(entity.points[0]);
             gp_Dir zDir(0, 0, 1);
             gp_Ax2 axis(center, zDir);
             // gp_Elips requires major >= minor
-            double majorR = qMax(entity.majorRadius, entity.minorRadius);
-            double minorR = qMin(entity.majorRadius, entity.minorRadius);
+            double majorR = std::max(entity.majorRadius, entity.minorRadius);
+            double minorR = std::min(entity.majorRadius, entity.minorRadius);
             gp_Elips ellipse(axis, majorR, minorR);
 
             BRepBuilderAPI_MakeEdge makeEdge(ellipse);
@@ -151,7 +156,7 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
     case sketch::EntityType::Spline:
         if (entity.points.size() >= 2) {
             // Build B-Spline through control points
-            int nPts = entity.points.size();
+            int nPts = static_cast<int>(entity.points.size());
             TColgp_Array1OfPnt pts(1, nPts);
             for (int i = 0; i < nPts; ++i) {
                 int idx = reversed ? (nPts - 1 - i) : i;
@@ -192,19 +197,19 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
 }
 
 /// Build multiple edges for rectangle entity
-QVector<TopoDS_Edge> buildRectangleEdges(const sketch::Entity& entity, bool reversed = false)
+std::vector<TopoDS_Edge> buildRectangleEdges(const sketch::Entity& entity, bool reversed = false)
 {
-    QVector<TopoDS_Edge> edges;
+    std::vector<TopoDS_Edge> edges;
 
     if (entity.type != sketch::EntityType::Rectangle || entity.points.size() < 2)
         return edges;
 
-    QPointF p1 = entity.points[0];
-    QPointF p3 = entity.points[1];
-    QPointF p2(p3.x(), p1.y());
-    QPointF p4(p1.x(), p3.y());
+    Point2D p1 = entity.points[0];
+    Point2D p3 = entity.points[1];
+    Point2D p2(p3.x, p1.y);
+    Point2D p4(p1.x, p3.y);
 
-    QVector<QPointF> corners = {p1, p2, p3, p4};
+    std::vector<Point2D> corners = {p1, p2, p3, p4};
     if (reversed) {
         std::reverse(corners.begin(), corners.end());
     }
@@ -214,28 +219,29 @@ QVector<TopoDS_Edge> buildRectangleEdges(const sketch::Entity& entity, bool reve
         gp_Pnt pt1 = toPoint3D(corners[i]);
         gp_Pnt pt2 = toPoint3D(corners[j]);
         TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(pt1, pt2);
-        edges.append(edge);
+        edges.push_back(edge);
     }
 
     return edges;
 }
 
 /// Build multiple edges for polygon entity
-QVector<TopoDS_Edge> buildPolygonEdges(const sketch::Entity& entity, bool reversed = false)
+std::vector<TopoDS_Edge> buildPolygonEdges(const sketch::Entity& entity, bool reversed = false)
 {
-    QVector<TopoDS_Edge> edges;
+    std::vector<TopoDS_Edge> edges;
 
-    if (entity.type != sketch::EntityType::Polygon || entity.points.isEmpty())
+    if (entity.type != sketch::EntityType::Polygon || entity.points.empty())
         return edges;
 
-    QPointF center = entity.points[0];
+    Point2D center = entity.points[0];
     int n = entity.sides;
     double r = entity.radius;
 
-    QVector<QPointF> vertices;
+    std::vector<Point2D> vertices;
     for (int i = 0; i < n; ++i) {
         double angle = 2.0 * M_PI * i / n - M_PI / 2.0;  // Start at top
-        vertices.append(center + QPointF(r * qCos(angle), r * qSin(angle)));
+        vertices.push_back(Point2D(center.x + r * std::cos(angle),
+                                   center.y + r * std::sin(angle)));
     }
 
     if (reversed) {
@@ -247,80 +253,80 @@ QVector<TopoDS_Edge> buildPolygonEdges(const sketch::Entity& entity, bool revers
         gp_Pnt pt1 = toPoint3D(vertices[i]);
         gp_Pnt pt2 = toPoint3D(vertices[j]);
         TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(pt1, pt2);
-        edges.append(edge);
+        edges.push_back(edge);
     }
 
     return edges;
 }
 
 /// Build multiple edges for slot entity
-QVector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool reversed = false)
+std::vector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool reversed = false)
 {
-    QVector<TopoDS_Edge> edges;
+    std::vector<TopoDS_Edge> edges;
 
     if (entity.type != sketch::EntityType::Slot || entity.points.size() < 2)
         return edges;
 
-    QPointF c1 = entity.points[0];
-    QPointF c2 = entity.points[1];
+    Point2D c1 = entity.points[0];
+    Point2D c2 = entity.points[1];
     double r = entity.radius;
 
     // Direction from c1 to c2
-    QPointF dir = c2 - c1;
-    double len = qSqrt(dir.x() * dir.x() + dir.y() * dir.y());
+    Point2D dir = c2 - c1;
+    double len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     if (len < 1e-6) return edges;
 
-    dir /= len;
-    QPointF perp(-dir.y(), dir.x());
+    dir = dir / len;
+    Point2D perp(-dir.y, dir.x);
 
     // Four key points on the slot outline
-    QPointF p1 = c1 + perp * r;
-    QPointF p2 = c2 + perp * r;
-    QPointF p3 = c2 - perp * r;
-    QPointF p4 = c1 - perp * r;
+    Point2D p1 = c1 + perp * r;
+    Point2D p2 = c2 + perp * r;
+    Point2D p3 = c2 - perp * r;
+    Point2D p4 = c1 - perp * r;
 
     // Two straight lines and two arcs
     // Arc angles
-    double angle1 = qRadiansToDegrees(qAtan2(perp.y(), perp.x()));
+    double angle1 = std::atan2(perp.y, perp.x) * 180.0 / M_PI;
     double angle2 = angle1 + 180.0;
 
     if (!reversed) {
         // Line from p1 to p2
-        edges.append(BRepBuilderAPI_MakeEdge(toPoint3D(p1), toPoint3D(p2)));
+        edges.push_back(BRepBuilderAPI_MakeEdge(toPoint3D(p1), toPoint3D(p2)));
 
         // Arc at c2 from p2 to p3
         gp_Ax2 axis2(toPoint3D(c2), gp_Dir(0, 0, 1));
         gp_Circ circ2(axis2, r);
-        double start2 = qDegreesToRadians(angle1);
-        double end2 = qDegreesToRadians(angle2);
-        edges.append(BRepBuilderAPI_MakeEdge(circ2, start2, end2));
+        double start2 = angle1 * M_PI / 180.0;
+        double end2 = angle2 * M_PI / 180.0;
+        edges.push_back(BRepBuilderAPI_MakeEdge(circ2, start2, end2));
 
         // Line from p3 to p4
-        edges.append(BRepBuilderAPI_MakeEdge(toPoint3D(p3), toPoint3D(p4)));
+        edges.push_back(BRepBuilderAPI_MakeEdge(toPoint3D(p3), toPoint3D(p4)));
 
         // Arc at c1 from p4 to p1
         gp_Ax2 axis1(toPoint3D(c1), gp_Dir(0, 0, 1));
         gp_Circ circ1(axis1, r);
-        double start1 = qDegreesToRadians(angle2);
-        double end1 = qDegreesToRadians(angle1 + 360.0);
-        edges.append(BRepBuilderAPI_MakeEdge(circ1, start1, end1));
+        double start1 = angle2 * M_PI / 180.0;
+        double end1 = (angle1 + 360.0) * M_PI / 180.0;
+        edges.push_back(BRepBuilderAPI_MakeEdge(circ1, start1, end1));
     } else {
         // Reversed order
         gp_Ax2 axis1(toPoint3D(c1), gp_Dir(0, 0, 1));
         gp_Circ circ1(axis1, r);
-        double start1 = qDegreesToRadians(angle1 + 360.0);
-        double end1 = qDegreesToRadians(angle2);
-        edges.append(BRepBuilderAPI_MakeEdge(circ1, end1, start1));
+        double start1 = (angle1 + 360.0) * M_PI / 180.0;
+        double end1 = angle2 * M_PI / 180.0;
+        edges.push_back(BRepBuilderAPI_MakeEdge(circ1, end1, start1));
 
-        edges.append(BRepBuilderAPI_MakeEdge(toPoint3D(p4), toPoint3D(p3)));
+        edges.push_back(BRepBuilderAPI_MakeEdge(toPoint3D(p4), toPoint3D(p3)));
 
         gp_Ax2 axis2(toPoint3D(c2), gp_Dir(0, 0, 1));
         gp_Circ circ2(axis2, r);
-        double start2 = qDegreesToRadians(angle2);
-        double end2 = qDegreesToRadians(angle1);
-        edges.append(BRepBuilderAPI_MakeEdge(circ2, end2, start2));
+        double start2 = angle2 * M_PI / 180.0;
+        double end2 = angle1 * M_PI / 180.0;
+        edges.push_back(BRepBuilderAPI_MakeEdge(circ2, end2, start2));
 
-        edges.append(BRepBuilderAPI_MakeEdge(toPoint3D(p2), toPoint3D(p1)));
+        edges.push_back(BRepBuilderAPI_MakeEdge(toPoint3D(p2), toPoint3D(p1)));
     }
 
     return edges;
@@ -329,11 +335,11 @@ QVector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool reversed 
 /// Build a wire from a profile
 TopoDS_Wire buildWireFromProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities)
+    const std::vector<sketch::Entity>& entities)
 {
     BRepBuilderAPI_MakeWire wireBuilder;
 
-    for (int i = 0; i < profile.entityIds.size(); ++i) {
+    for (size_t i = 0; i < profile.entityIds.size(); ++i) {
         int entityId = profile.entityIds[i];
         bool reversed = (i < profile.reversed.size()) ? profile.reversed[i] : false;
 
@@ -385,7 +391,7 @@ TopoDS_Face buildFaceFromWire(const TopoDS_Wire& wire)
 }
 
 /// Build a wire from a sequence of entities (for sweep path, etc.)
-TopoDS_Wire buildWireFromEntities(const QVector<sketch::Entity>& pathEntities)
+TopoDS_Wire buildWireFromEntities(const std::vector<sketch::Entity>& pathEntities)
 {
     BRepBuilderAPI_MakeWire wireBuilder;
 
@@ -430,7 +436,7 @@ TopoDS_Wire buildWireFromEntities(const QVector<sketch::Entity>& pathEntities)
 
 OperationResult extrudeProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& entities,
     const gp_Dir& direction,
     double distance)
 {
@@ -439,14 +445,14 @@ OperationResult extrudeProfile(
     // Build wire from profile
     TopoDS_Wire wire = buildWireFromProfile(profile, entities);
     if (wire.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build wire from profile");
+        result.errorMessage = "Failed to build wire from profile";
         return result;
     }
 
     // Build face from wire
     TopoDS_Face face = buildFaceFromWire(wire);
     if (face.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build face from wire");
+        result.errorMessage = "Failed to build face from wire";
         return result;
     }
 
@@ -461,10 +467,10 @@ OperationResult extrudeProfile(
             result.shape = prism.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Extrusion operation failed");
+            result.errorMessage = "Extrusion operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during extrusion");
+        result.errorMessage = "Exception during extrusion";
     }
 
     return result;
@@ -472,7 +478,7 @@ OperationResult extrudeProfile(
 
 OperationResult extrudeProfileSymmetric(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& entities,
     const gp_Dir& direction,
     double distance,
     bool symmetric)
@@ -482,14 +488,14 @@ OperationResult extrudeProfileSymmetric(
     // Build wire from profile
     TopoDS_Wire wire = buildWireFromProfile(profile, entities);
     if (wire.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build wire from profile");
+        result.errorMessage = "Failed to build wire from profile";
         return result;
     }
 
     // Build face from wire
     TopoDS_Face face = buildFaceFromWire(wire);
     if (face.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build face from wire");
+        result.errorMessage = "Failed to build face from wire";
         return result;
     }
 
@@ -514,10 +520,10 @@ OperationResult extrudeProfileSymmetric(
                     result.shape = fuse.Shape();
                     result.success = true;
                 } else {
-                    result.errorMessage = QStringLiteral("Failed to fuse symmetric extrusions");
+                    result.errorMessage = "Failed to fuse symmetric extrusions";
                 }
             } else {
-                result.errorMessage = QStringLiteral("Symmetric extrusion failed");
+                result.errorMessage = "Symmetric extrusion failed";
             }
         } else {
             // Single direction extrusion
@@ -529,11 +535,11 @@ OperationResult extrudeProfileSymmetric(
                 result.shape = prism.Shape();
                 result.success = true;
             } else {
-                result.errorMessage = QStringLiteral("Extrusion operation failed");
+                result.errorMessage = "Extrusion operation failed";
             }
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during extrusion");
+        result.errorMessage = "Exception during extrusion";
     }
 
     return result;
@@ -541,7 +547,7 @@ OperationResult extrudeProfileSymmetric(
 
 OperationResult revolveProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& entities,
     const gp_Ax1& axis,
     double angleDegrees)
 {
@@ -550,19 +556,19 @@ OperationResult revolveProfile(
     // Build wire from profile
     TopoDS_Wire wire = buildWireFromProfile(profile, entities);
     if (wire.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build wire from profile");
+        result.errorMessage = "Failed to build wire from profile";
         return result;
     }
 
     // Build face from wire
     TopoDS_Face face = buildFaceFromWire(wire);
     if (face.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build face from wire");
+        result.errorMessage = "Failed to build face from wire";
         return result;
     }
 
     // Convert angle to radians
-    double angleRad = qDegreesToRadians(angleDegrees);
+    double angleRad = angleDegrees * M_PI / 180.0;
 
     // Perform revolution
     try {
@@ -571,10 +577,10 @@ OperationResult revolveProfile(
             result.shape = revol.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Revolution operation failed");
+            result.errorMessage = "Revolution operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during revolution");
+        result.errorMessage = "Exception during revolution";
     }
 
     return result;
@@ -582,22 +588,22 @@ OperationResult revolveProfile(
 
 OperationResult sweepProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
-    const QVector<sketch::Entity>& pathEntities)
+    const std::vector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& pathEntities)
 {
     OperationResult result;
 
     // Build profile wire
     TopoDS_Wire profileWire = buildWireFromProfile(profile, entities);
     if (profileWire.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build profile wire");
+        result.errorMessage = "Failed to build profile wire";
         return result;
     }
 
     // Build path wire
     TopoDS_Wire pathWire = buildWireFromEntities(pathEntities);
     if (pathWire.IsNull()) {
-        result.errorMessage = QStringLiteral("Failed to build path wire");
+        result.errorMessage = "Failed to build path wire";
         return result;
     }
 
@@ -609,24 +615,24 @@ OperationResult sweepProfile(
             result.shape = pipe.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Sweep operation failed");
+            result.errorMessage = "Sweep operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during sweep");
+        result.errorMessage = "Exception during sweep";
     }
 
     return result;
 }
 
 OperationResult loftProfiles(
-    const QVector<sketch::Profile>& profiles,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Profile>& profiles,
+    const std::vector<sketch::Entity>& entities,
     bool solid)
 {
     OperationResult result;
 
     if (profiles.size() < 2) {
-        result.errorMessage = QStringLiteral("Loft requires at least 2 profiles");
+        result.errorMessage = "Loft requires at least 2 profiles";
         return result;
     }
 
@@ -637,7 +643,7 @@ OperationResult loftProfiles(
         for (const sketch::Profile& profile : profiles) {
             TopoDS_Wire wire = buildWireFromProfile(profile, entities);
             if (wire.IsNull()) {
-                result.errorMessage = QStringLiteral("Failed to build wire for profile");
+                result.errorMessage = "Failed to build wire for profile";
                 return result;
             }
             loft.AddWire(wire);
@@ -648,10 +654,10 @@ OperationResult loftProfiles(
             result.shape = loft.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Loft operation failed");
+            result.errorMessage = "Loft operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during loft");
+        result.errorMessage = "Exception during loft";
     }
 
     return result;
@@ -668,7 +674,7 @@ OperationResult fuseShapes(
     OperationResult result;
 
     if (shape1.IsNull() || shape2.IsNull()) {
-        result.errorMessage = QStringLiteral("One or both shapes are null");
+        result.errorMessage = "One or both shapes are null";
         return result;
     }
 
@@ -678,10 +684,10 @@ OperationResult fuseShapes(
             result.shape = fuse.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Fuse operation failed");
+            result.errorMessage = "Fuse operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during fuse operation");
+        result.errorMessage = "Exception during fuse operation";
     }
 
     return result;
@@ -694,7 +700,7 @@ OperationResult cutShape(
     OperationResult result;
 
     if (shape.IsNull() || tool.IsNull()) {
-        result.errorMessage = QStringLiteral("One or both shapes are null");
+        result.errorMessage = "One or both shapes are null";
         return result;
     }
 
@@ -704,10 +710,10 @@ OperationResult cutShape(
             result.shape = cut.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Cut operation failed");
+            result.errorMessage = "Cut operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during cut operation");
+        result.errorMessage = "Exception during cut operation";
     }
 
     return result;
@@ -720,7 +726,7 @@ OperationResult intersectShapes(
     OperationResult result;
 
     if (shape1.IsNull() || shape2.IsNull()) {
-        result.errorMessage = QStringLiteral("One or both shapes are null");
+        result.errorMessage = "One or both shapes are null";
         return result;
     }
 
@@ -730,10 +736,10 @@ OperationResult intersectShapes(
             result.shape = common.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Intersection operation failed");
+            result.errorMessage = "Intersection operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during intersection operation");
+        result.errorMessage = "Exception during intersection operation";
     }
 
     return result;
@@ -746,37 +752,37 @@ OperationResult intersectShapes(
 OperationResult filletShape(
     const TopoDS_Shape& shape,
     double radius,
-    const QVector<int>& edgeIndices)
+    const std::vector<int>& edgeIndices)
 {
     OperationResult result;
 
     if (shape.IsNull()) {
-        result.errorMessage = QStringLiteral("Shape is null");
+        result.errorMessage = "Shape is null";
         return result;
     }
 
     if (radius <= 0) {
-        result.errorMessage = QStringLiteral("Fillet radius must be positive");
+        result.errorMessage = "Fillet radius must be positive";
         return result;
     }
 
     try {
         BRepFilletAPI_MakeFillet fillet(shape);
 
-        if (edgeIndices.isEmpty()) {
+        if (edgeIndices.empty()) {
             // Fillet all edges
             for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
                 fillet.Add(radius, TopoDS::Edge(exp.Current()));
             }
         } else {
             // Fillet specific edges
-            QVector<TopoDS_Edge> edges;
+            std::vector<TopoDS_Edge> edges;
             for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
-                edges.append(TopoDS::Edge(exp.Current()));
+                edges.push_back(TopoDS::Edge(exp.Current()));
             }
 
             for (int idx : edgeIndices) {
-                if (idx >= 0 && idx < edges.size()) {
+                if (idx >= 0 && idx < static_cast<int>(edges.size())) {
                     fillet.Add(radius, edges[idx]);
                 }
             }
@@ -787,10 +793,10 @@ OperationResult filletShape(
             result.shape = fillet.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Fillet operation failed");
+            result.errorMessage = "Fillet operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during fillet operation");
+        result.errorMessage = "Exception during fillet operation";
     }
 
     return result;
@@ -799,17 +805,17 @@ OperationResult filletShape(
 OperationResult chamferShape(
     const TopoDS_Shape& shape,
     double distance,
-    const QVector<int>& edgeIndices)
+    const std::vector<int>& edgeIndices)
 {
     OperationResult result;
 
     if (shape.IsNull()) {
-        result.errorMessage = QStringLiteral("Shape is null");
+        result.errorMessage = "Shape is null";
         return result;
     }
 
     if (distance <= 0) {
-        result.errorMessage = QStringLiteral("Chamfer distance must be positive");
+        result.errorMessage = "Chamfer distance must be positive";
         return result;
     }
 
@@ -817,12 +823,12 @@ OperationResult chamferShape(
         BRepFilletAPI_MakeChamfer chamfer(shape);
 
         // Collect all edges and their adjacent faces
-        QVector<TopoDS_Edge> edges;
-        QVector<TopoDS_Face> adjacentFaces;
+        std::vector<TopoDS_Edge> edges;
+        std::vector<TopoDS_Face> adjacentFaces;
 
         for (TopExp_Explorer edgeExp(shape, TopAbs_EDGE); edgeExp.More(); edgeExp.Next()) {
             TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
-            edges.append(edge);
+            edges.push_back(edge);
 
             // Find an adjacent face for this edge
             TopoDS_Face adjacentFace;
@@ -836,12 +842,12 @@ OperationResult chamferShape(
                 }
                 if (!adjacentFace.IsNull()) break;
             }
-            adjacentFaces.append(adjacentFace);
+            adjacentFaces.push_back(adjacentFace);
         }
 
-        if (edgeIndices.isEmpty()) {
+        if (edgeIndices.empty()) {
             // Chamfer all edges (symmetric chamfer: same distance on both sides)
-            for (int i = 0; i < edges.size(); ++i) {
+            for (size_t i = 0; i < edges.size(); ++i) {
                 if (!adjacentFaces[i].IsNull()) {
                     chamfer.Add(distance, distance, edges[i], adjacentFaces[i]);
                 }
@@ -849,7 +855,7 @@ OperationResult chamferShape(
         } else {
             // Chamfer specific edges
             for (int idx : edgeIndices) {
-                if (idx >= 0 && idx < edges.size() && !adjacentFaces[idx].IsNull()) {
+                if (idx >= 0 && idx < static_cast<int>(edges.size()) && !adjacentFaces[idx].IsNull()) {
                     chamfer.Add(distance, distance, edges[idx], adjacentFaces[idx]);
                 }
             }
@@ -860,10 +866,10 @@ OperationResult chamferShape(
             result.shape = chamfer.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Chamfer operation failed");
+            result.errorMessage = "Chamfer operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during chamfer operation");
+        result.errorMessage = "Exception during chamfer operation";
     }
 
     return result;
@@ -872,17 +878,17 @@ OperationResult chamferShape(
 OperationResult shellShape(
     const TopoDS_Shape& shape,
     double thickness,
-    const QVector<int>& facesToRemove)
+    const std::vector<int>& facesToRemove)
 {
     OperationResult result;
 
     if (shape.IsNull()) {
-        result.errorMessage = QStringLiteral("Shape is null");
+        result.errorMessage = "Shape is null";
         return result;
     }
 
     if (thickness <= 0) {
-        result.errorMessage = QStringLiteral("Shell thickness must be positive");
+        result.errorMessage = "Shell thickness must be positive";
         return result;
     }
 
@@ -890,15 +896,15 @@ OperationResult shellShape(
         // Collect faces to remove (openings)
         TopTools_ListOfShape facesToRemoveList;
 
-        QVector<TopoDS_Face> allFaces;
+        std::vector<TopoDS_Face> allFaces;
         for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
-            allFaces.append(TopoDS::Face(exp.Current()));
+            allFaces.push_back(TopoDS::Face(exp.Current()));
         }
 
-        if (facesToRemove.isEmpty()) {
+        if (facesToRemove.empty()) {
             // If no faces specified, try to find a "top" face (highest Z centroid)
             // This is a heuristic - user should ideally specify faces
-            if (!allFaces.isEmpty()) {
+            if (!allFaces.empty()) {
                 TopoDS_Face topFace = allFaces[0];
                 double maxZ = -1e9;
 
@@ -916,7 +922,7 @@ OperationResult shellShape(
             }
         } else {
             for (int idx : facesToRemove) {
-                if (idx >= 0 && idx < allFaces.size()) {
+                if (idx >= 0 && idx < static_cast<int>(allFaces.size())) {
                     facesToRemoveList.Append(allFaces[idx]);
                 }
             }
@@ -931,10 +937,10 @@ OperationResult shellShape(
             result.shape = thickSolid.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Shell operation failed");
+            result.errorMessage = "Shell operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during shell operation");
+        result.errorMessage = "Exception during shell operation";
     }
 
     return result;
@@ -947,7 +953,7 @@ OperationResult offsetShape(
     OperationResult result;
 
     if (shape.IsNull()) {
-        result.errorMessage = QStringLiteral("Shape is null");
+        result.errorMessage = "Shape is null";
         return result;
     }
 
@@ -959,10 +965,10 @@ OperationResult offsetShape(
             result.shape = offset.Shape();
             result.success = true;
         } else {
-            result.errorMessage = QStringLiteral("Offset operation failed");
+            result.errorMessage = "Offset operation failed";
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during offset operation");
+        result.errorMessage = "Exception during offset operation";
     }
 
     return result;
@@ -1019,12 +1025,12 @@ gp_Pnt shapeCenterOfMass(const TopoDS_Shape& shape)
     return props.CentreOfMass();
 }
 
-QVector<TopoDS_Face> shapeFaces(const TopoDS_Shape& shape)
+std::vector<TopoDS_Face> shapeFaces(const TopoDS_Shape& shape)
 {
-    QVector<TopoDS_Face> faces;
+    std::vector<TopoDS_Face> faces;
 
     for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
-        faces.append(TopoDS::Face(exp.Current()));
+        faces.push_back(TopoDS::Face(exp.Current()));
     }
 
     return faces;

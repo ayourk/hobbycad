@@ -15,9 +15,12 @@
 #ifndef HOBBYCAD_UNITS_H
 #define HOBBYCAD_UNITS_H
 
-#include <QString>
+#include "format.h"
+
 #include <array>
+#include <cctype>
 #include <cmath>
+#include <string>
 
 namespace hobbycad {
 
@@ -76,14 +79,6 @@ inline const char* unitSuffix(LengthUnit unit)
     return "mm";  // Default to mm
 }
 
-/// Get the display suffix as a QString.
-/// @param unit The length unit
-/// @return Suffix string (e.g., "mm", "in")
-inline QString unitSuffixQ(LengthUnit unit)
-{
-    return QString::fromLatin1(unitSuffix(unit));
-}
-
 /// Convert a length value from millimeters to another unit.
 /// @param mm Value in millimeters (base unit)
 /// @param toUnit Target unit
@@ -119,18 +114,23 @@ inline double convertLength(double value, LengthUnit fromUnit, LengthUnit toUnit
 /// Parse a unit suffix string to get the unit enum.
 /// @param suffix Unit suffix string (case-insensitive)
 /// @return The corresponding LengthUnit, or Millimeters if not recognized
-inline LengthUnit parseUnitSuffix(const QString& suffix)
+inline LengthUnit parseUnitSuffix(const std::string& suffix)
 {
-    QString lower = suffix.toLower().trimmed();
-    if (lower == QLatin1String("mm"))
+    // toLower + trim
+    std::string lower;
+    for (char c : suffix) {
+        if (!std::isspace(static_cast<unsigned char>(c)))
+            lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    if (lower == "mm")
         return LengthUnit::Millimeters;
-    if (lower == QLatin1String("cm"))
+    if (lower == "cm")
         return LengthUnit::Centimeters;
-    if (lower == QLatin1String("m"))
+    if (lower == "m")
         return LengthUnit::Meters;
-    if (lower == QLatin1String("in") || lower == QLatin1String("inch") || lower == QLatin1String("inches"))
+    if (lower == "in" || lower == "inch" || lower == "inches")
         return LengthUnit::Inches;
-    if (lower == QLatin1String("ft") || lower == QLatin1String("foot") || lower == QLatin1String("feet"))
+    if (lower == "ft" || lower == "foot" || lower == "feet")
         return LengthUnit::Feet;
     return LengthUnit::Millimeters;  // Default
 }
@@ -175,25 +175,17 @@ inline int unitDisplayPrecision([[maybe_unused]] LengthUnit unit)
 /// Trailing zeros are trimmed (e.g., "1.5000" becomes "1.5", "1.0000" becomes "1").
 /// @param value The numeric value to format
 /// @return Formatted string with trailing zeros removed
-inline QString formatValue(double value)
+inline std::string formatValue(double value)
 {
-    QString str = QString::number(value, 'f', DisplayPrecision);
-    // Remove trailing zeros after decimal point
-    if (str.contains(QLatin1Char('.'))) {
-        while (str.endsWith(QLatin1Char('0')))
-            str.chop(1);
-        if (str.endsWith(QLatin1Char('.')))
-            str.chop(1);
-    }
-    return str;
+    return hobbycad::formatDouble(value);
 }
 
 /// Format a numeric value for file storage with full precision.
 /// @param value The numeric value to format
 /// @return Formatted string with StoragePrecision decimal places
-inline QString formatStorageValue(double value)
+inline std::string formatStorageValue(double value)
 {
-    return QString::number(value, 'f', StoragePrecision);
+    return hobbycad::formatStorageDouble(value);
 }
 
 /// Format a length value with unit suffix for display.
@@ -201,9 +193,9 @@ inline QString formatStorageValue(double value)
 /// @param mm Value in millimeters
 /// @param unit Target display unit
 /// @return Formatted string (e.g., "25.4 mm", "1 in")
-inline QString formatValueWithUnit(double mm, LengthUnit unit)
+inline std::string formatValueWithUnit(double mm, LengthUnit unit)
 {
-    return formatValue(mmToUnit(mm, unit)) + QStringLiteral(" ") + unitSuffixQ(unit);
+    return formatValue(mmToUnit(mm, unit)) + " " + unitSuffix(unit);
 }
 
 /// Parse a value string that may include a unit suffix.
@@ -212,18 +204,26 @@ inline QString formatValueWithUnit(double mm, LengthUnit unit)
 /// @param input Input string with optional unit suffix
 /// @param defaultUnit Unit to assume if no suffix is present
 /// @return Value in millimeters, or 0.0 if parsing fails
-inline double parseValueWithUnit(const QString& input, LengthUnit defaultUnit = LengthUnit::Millimeters)
+inline double parseValueWithUnit(const std::string& input, LengthUnit defaultUnit = LengthUnit::Millimeters)
 {
-    QString str = input.trimmed();
-    if (str.isEmpty())
+    // Trim whitespace
+    size_t start = 0;
+    while (start < input.size() && std::isspace(static_cast<unsigned char>(input[start])))
+        ++start;
+    size_t end = input.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(input[end - 1])))
+        --end;
+    std::string str = input.substr(start, end - start);
+
+    if (str.empty())
         return 0.0;
 
     // Try to find where the number ends and unit begins
     int unitStart = -1;
-    for (int i = 0; i < str.length(); ++i) {
-        QChar c = str[i];
-        if (!c.isDigit() && c != QLatin1Char('.') && c != QLatin1Char('-') && c != QLatin1Char('+')) {
-            unitStart = i;
+    for (size_t i = 0; i < str.size(); ++i) {
+        char c = str[i];
+        if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.' && c != '-' && c != '+') {
+            unitStart = static_cast<int>(i);
             break;
         }
     }
@@ -233,14 +233,14 @@ inline double parseValueWithUnit(const QString& input, LengthUnit defaultUnit = 
 
     if (unitStart > 0) {
         // Has both number and unit
-        value = str.left(unitStart).toDouble();
-        unit = parseUnitSuffix(str.mid(unitStart));
+        value = std::stod(str.substr(0, static_cast<size_t>(unitStart)));
+        unit = parseUnitSuffix(str.substr(static_cast<size_t>(unitStart)));
     } else if (unitStart == 0) {
         // Starts with non-digit, invalid
         return 0.0;
     } else {
         // No unit, just a number
-        value = str.toDouble();
+        value = std::stod(str);
     }
 
     return unitToMm(value, unit);
@@ -313,9 +313,9 @@ inline double normalizeAngle180(double degrees)
 /// Uses formatValue() for consistent precision and trailing zero trimming.
 /// @param degrees Angle in degrees
 /// @return Formatted string (e.g., "45°", "22.5°")
-inline QString formatAngle(double degrees)
+inline std::string formatAngle(double degrees)
 {
-    return formatValue(degrees) + QStringLiteral("°");
+    return formatValue(degrees) + "\xC2\xB0";  // UTF-8 degree sign °
 }
 
 /// Parse a degrees-minutes-seconds string into decimal degrees.
@@ -327,51 +327,103 @@ inline QString formatAngle(double degrees)
 /// @param input  The string to parse
 /// @param degrees Output: the angle in decimal degrees
 /// @return true if parsed successfully
-inline bool parseDMS(const QString& input, double& degrees)
+inline bool parseDMS(const std::string& input, double& degrees)
 {
-    QString s = input.trimmed();
-    if (s.isEmpty())
+    // Trim whitespace
+    size_t start = 0;
+    while (start < input.size() && std::isspace(static_cast<unsigned char>(input[start])))
+        ++start;
+    size_t end = input.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(input[end - 1])))
+        --end;
+    std::string s = input.substr(start, end - start);
+
+    if (s.empty())
         return false;
 
     // Must contain at least one DMS indicator to be recognized as DMS
-    bool hasDeg = s.contains(QChar(0x00B0));                                  // °
-    bool hasMin = s.contains(QLatin1Char('\'')) || s.contains(QChar(0x2032)); // ' or ′
-    bool hasSec = s.contains(QLatin1Char('"')) || s.contains(QChar(0x2033));  // " or ″
+    // ° is UTF-8 0xC2 0xB0, ′ is UTF-8 0xE2 0x80 0xB2, ″ is UTF-8 0xE2 0x80 0xB3
+    bool hasDeg = s.find("\xC2\xB0") != std::string::npos;                                  // °
+    bool hasMin = s.find('\'') != std::string::npos ||
+                  s.find("\xE2\x80\xB2") != std::string::npos;                               // ' or ′
+    bool hasSec = s.find('"') != std::string::npos ||
+                  s.find("\xE2\x80\xB3") != std::string::npos;                               // " or ″
     if (!hasDeg && !hasMin && !hasSec)
         return false;
 
-    int pos = 0;
+    size_t pos = 0;
 
     // Optional sign
     double sign = 1.0;
-    if (pos < s.length() && s[pos] == QLatin1Char('-')) {
+    if (pos < s.size() && s[pos] == '-') {
         sign = -1.0;
         ++pos;
-    } else if (pos < s.length() && s[pos] == QLatin1Char('+')) {
+    } else if (pos < s.size() && s[pos] == '+') {
         ++pos;
     }
 
     auto skipSpaces = [&]() {
-        while (pos < s.length() && s[pos].isSpace())
+        while (pos < s.size() && std::isspace(static_cast<unsigned char>(s[pos])))
             ++pos;
     };
 
     auto readNumber = [&]() -> double {
         skipSpaces();
-        int numStart = pos;
-        while (pos < s.length() && (s[pos].isDigit() || s[pos] == QLatin1Char('.')))
+        size_t numStart = pos;
+        while (pos < s.size() && (std::isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.'))
             ++pos;
         if (pos == numStart)
             return 0.0;
-        return s.mid(numStart, pos - numStart).toDouble();
+        return std::stod(s.substr(numStart, pos - numStart));
     };
 
-    auto skipChar = [&](auto... chars) -> bool {
-        if (pos >= s.length())
+    // Try to skip a degree/minute/second marker at current position.
+    // Returns true if a marker was found and skipped.
+    auto skipDegreeSign = [&]() -> bool {
+        if (pos >= s.size())
             return false;
-        QChar c = s[pos];
-        bool match = ((c == chars) || ...);
-        if (match) {
+        // Check for UTF-8 ° (0xC2 0xB0)
+        if (pos + 1 < s.size() &&
+            static_cast<unsigned char>(s[pos]) == 0xC2 &&
+            static_cast<unsigned char>(s[pos + 1]) == 0xB0) {
+            pos += 2;
+            return true;
+        }
+        return false;
+    };
+
+    auto skipMinuteSign = [&]() -> bool {
+        if (pos >= s.size())
+            return false;
+        // Check for UTF-8 ′ (0xE2 0x80 0xB2)
+        if (pos + 2 < s.size() &&
+            static_cast<unsigned char>(s[pos]) == 0xE2 &&
+            static_cast<unsigned char>(s[pos + 1]) == 0x80 &&
+            static_cast<unsigned char>(s[pos + 2]) == 0xB2) {
+            pos += 3;
+            return true;
+        }
+        // Check for ASCII '
+        if (s[pos] == '\'') {
+            ++pos;
+            return true;
+        }
+        return false;
+    };
+
+    auto skipSecondSign = [&]() -> bool {
+        if (pos >= s.size())
+            return false;
+        // Check for UTF-8 ″ (0xE2 0x80 0xB3)
+        if (pos + 2 < s.size() &&
+            static_cast<unsigned char>(s[pos]) == 0xE2 &&
+            static_cast<unsigned char>(s[pos + 1]) == 0x80 &&
+            static_cast<unsigned char>(s[pos + 2]) == 0xB3) {
+            pos += 3;
+            return true;
+        }
+        // Check for ASCII "
+        if (s[pos] == '"') {
             ++pos;
             return true;
         }
@@ -380,27 +432,27 @@ inline bool parseDMS(const QString& input, double& degrees)
 
     // Parse degrees
     double deg = readNumber();
-    skipChar(QChar(0x00B0));  // ° (optional — might be absent if only ' or " used)
+    skipDegreeSign();  // ° (optional — might be absent if only ' or " used)
 
     // Parse minutes
     skipSpaces();
     double min = 0.0;
-    if (pos < s.length() && (s[pos].isDigit() || s[pos] == QLatin1Char('.'))) {
+    if (pos < s.size() && (std::isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.')) {
         min = readNumber();
     }
-    skipChar(QLatin1Char('\''), QChar(0x2032));  // ' or ′
+    skipMinuteSign();  // ' or ′
 
     // Parse seconds
     skipSpaces();
     double sec = 0.0;
-    if (pos < s.length() && (s[pos].isDigit() || s[pos] == QLatin1Char('.'))) {
+    if (pos < s.size() && (std::isdigit(static_cast<unsigned char>(s[pos])) || s[pos] == '.')) {
         sec = readNumber();
     }
-    skipChar(QLatin1Char('"'), QChar(0x2033));  // " or ″
+    skipSecondSign();  // " or ″
 
     // Should be at end of string (after optional whitespace)
     skipSpaces();
-    if (pos != s.length())
+    if (pos != s.size())
         return false;  // Trailing junk — not a clean DMS value
 
     degrees = sign * (deg + min / 60.0 + sec / 3600.0);

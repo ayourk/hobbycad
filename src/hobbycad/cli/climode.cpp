@@ -63,17 +63,17 @@ int CliMode::runConvert(const QString& input, const QString& output)
         return 1;
     }
 
-    QString errorMsg;
-    auto shapes = brep_io::readBrep(input, &errorMsg);
-    if (shapes.isEmpty()) {
+    std::string errorMsg;
+    auto shapes = brep_io::readBrep(input.toStdString(), &errorMsg);
+    if (shapes.empty()) {
         std::cerr << "Error reading input: "
-                  << errorMsg.toStdString() << std::endl;
+                  << errorMsg << std::endl;
         return 1;
     }
 
-    if (!brep_io::writeBrep(output, shapes, &errorMsg)) {
+    if (!brep_io::writeBrep(output.toStdString(), shapes, &errorMsg)) {
         std::cerr << "Error writing output: "
-                  << errorMsg.toStdString() << std::endl;
+                  << errorMsg << std::endl;
         return 1;
     }
 

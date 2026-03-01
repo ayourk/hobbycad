@@ -4,6 +4,9 @@
 
 #include "formuladialog.h"
 
+#include <map>
+#include <string>
+
 #include <QDialogButtonBox>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -146,7 +149,7 @@ bool FormulaDialog::isValid() const
 
 void FormulaDialog::onExpressionChanged()
 {
-    m_value.setExpression(expression());
+    m_value.setExpression(expression().toStdString());
     updateResult();
 }
 
@@ -164,7 +167,12 @@ void FormulaDialog::onParameterDoubleClicked()
 
 void FormulaDialog::updateResult()
 {
-    m_value.evaluate(m_parameters);
+    // Convert QMap<QString,double> to std::map<std::string,double> for library
+    std::map<std::string, double> stdParams;
+    for (auto it = m_parameters.constBegin(); it != m_parameters.constEnd(); ++it) {
+        stdParams[it.key().toStdString()] = it.value();
+    }
+    m_value.evaluate(stdParams);
 
     if (m_value.isValid()) {
         QString resultText;
@@ -183,7 +191,7 @@ void FormulaDialog::updateResult()
         m_resultLabel->setText(tr("Error"));
         m_resultLabel->setStyleSheet(QStringLiteral(
             "QLabel { font-weight: bold; font-size: 14px; color: #cc0000; }"));
-        m_errorLabel->setText(m_value.errorMessage());
+        m_errorLabel->setText(QString::fromStdString(m_value.errorMessage()));
         m_errorLabel->setVisible(true);
     }
 }

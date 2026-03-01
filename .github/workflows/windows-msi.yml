@@ -53,12 +53,12 @@ jobs:
       matrix:
         include:
           - arch: x64
-            triplet: x64-windows
+            triplet: x64-windows-static-md
             msvc_arch: x64
             wix_arch: x64
             artifact_name: hobbycad-windows-x64-msi
           - arch: arm64
-            triplet: arm64-windows
+            triplet: arm64-windows-static-md
             msvc_arch: amd64_arm64
             wix_arch: arm64
             artifact_name: hobbycad-windows-arm64-msi
@@ -121,6 +121,7 @@ jobs:
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet ${{ matrix.triplet }} `
+            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
             --overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports `
             --x-install-root=vcpkg_installed `
             --clean-buildtrees-after-build
@@ -131,6 +132,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
+            -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
             -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed `
             -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}\vcpkg-overlay-ports
 
@@ -140,37 +142,16 @@ jobs:
       - name: Prepare installation files
         shell: pwsh
         run: |
-          $installDir = "staging"
-          cmake --install build --prefix $installDir
+          cmake --install build --prefix staging
 
-          # Copy runtime DLLs
-          $binDir = "$installDir\bin"
-          $vcpkgBin = "${{ github.workspace }}\vcpkg_installed\${{ matrix.triplet }}\bin"
-
-          # Qt platform plugin — search multiple possible vcpkg locations
-          $qtPluginDir = "$installDir\bin\platforms"
-          New-Item -ItemType Directory -Force -Path $qtPluginDir | Out-Null
-          $qwin = Get-ChildItem -Path "${{ github.workspace }}\vcpkg_installed" -Filter "qwindows.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($qwin) {
-              Copy-Item $qwin.FullName $qtPluginDir
-              Write-Host "Found qwindows.dll at: $($qwin.FullName)"
-          } else {
-              Write-Warning "qwindows.dll not found in vcpkg_installed — app may not launch"
+          # Static build — single executable, no DLLs or plugins to copy
+          $exe = "staging\bin\hobbycad.exe"
+          if (-not (Test-Path $exe)) {
+              Write-Error "hobbycad.exe not found"
+              exit 1
           }
-
-          # Copy DLL dependencies
-          $exePath = Get-ChildItem "$binDir\hobbycad.exe" -ErrorAction SilentlyContinue
-          if ($exePath) {
-              $deps = & dumpbin /dependents $exePath.FullName 2>$null |
-                      Select-String '\.dll' |
-                      ForEach-Object { $_.ToString().Trim() }
-              foreach ($dll in $deps) {
-                  $src = Join-Path $vcpkgBin $dll
-                  if (Test-Path $src) {
-                      Copy-Item $src $binDir -ErrorAction SilentlyContinue
-                  }
-              }
-          }
+          Write-Host "Static build produced: $exe"
+          Write-Host "Size: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
 
       - name: Install WiX Toolset
         run: |
@@ -190,73 +171,57 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
 
-          # Enumerate DLLs dynamically - <Files> glob not valid inside <Component>
-          $dllComponents = (Get-ChildItem "staging\bin\*.dll" | ForEach-Object {
-            $id = "Dll" + ($_.Name -replace '[^a-zA-Z0-9]', '')
-            "            <Component Id=`"$id`" Guid=`"*`"><File Source=`"staging\bin\$($_.Name)`" /></Component>"
-          }) -join "`n"
+          # Static build — single executable, no DLLs or plugin directories
+          $wxs = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+            <Package Name="HobbyCAD"
+                     Manufacturer="HobbyCAD Project"
+                     Version="$version"
+                     UpgradeCode="E8F5A231-7B3C-4D5E-9F1A-2B3C4D5E6F7A"
+                     Scope="perMachine">
 
-          $platComponents = (Get-ChildItem "staging\bin\platforms\*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
-            $id = "Plat" + ($_.Name -replace '[^a-zA-Z0-9]', '')
-            "            <Component Id=`"$id`" Guid=`"*`"><File Source=`"staging\bin\platforms\$($_.Name)`" /></Component>"
-          }) -join "`n"
+              <MajorUpgrade DowngradeErrorMessage="A newer version of HobbyCAD is already installed." />
+              <MediaTemplate EmbedCab="yes" />
 
-          $wxs = '<?xml version="1.0" encoding="UTF-8"?>' + "`n"
-          $wxs += '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">' + "`n"
-          $wxs += '  <Package Name="HobbyCAD"' + "`n"
-          $wxs += '           Manufacturer="HobbyCAD Project"' + "`n"
-          $wxs += "           Version=`"$version`"" + "`n"
-          $wxs += '           UpgradeCode="E8F5A231-7B3C-4D5E-9F1A-2B3C4D5E6F7A"' + "`n"
-          $wxs += '           Scope="perMachine">' + "`n"
-          $wxs += "`n"
-          $wxs += '    <MajorUpgrade DowngradeErrorMessage="A newer version of HobbyCAD is already installed." />' + "`n"
-          $wxs += '    <MediaTemplate EmbedCab="yes" />' + "`n"
-          $wxs += "`n"
-          $wxs += '    <StandardDirectory Id="ProgramFiles6432Folder">' + "`n"
-          $wxs += '      <Directory Id="INSTALLFOLDER" Name="HobbyCAD">' + "`n"
-          $wxs += '        <Directory Id="BinFolder" Name="bin">' + "`n"
-          $wxs += '          <Directory Id="PlatformsFolder" Name="platforms" />' + "`n"
-          $wxs += '        </Directory>' + "`n"
-          $wxs += '      </Directory>' + "`n"
-          $wxs += '    </StandardDirectory>' + "`n"
-          $wxs += "`n"
-          $wxs += '    <StandardDirectory Id="ProgramMenuFolder">' + "`n"
-          $wxs += '      <Directory Id="ApplicationProgramsFolder" Name="HobbyCAD" />' + "`n"
-          $wxs += '    </StandardDirectory>' + "`n"
-          $wxs += "`n"
-          $wxs += '    <ComponentGroup Id="ProductComponents" Directory="BinFolder">' + "`n"
-          $wxs += '      <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">' + "`n"
-          $wxs += '        <File Id="HobbyCADExe" Source="staging\bin\hobbycad.exe" KeyPath="yes">' + "`n"
-          $wxs += '          <Shortcut Id="StartMenuShortcut"' + "`n"
-          $wxs += '                    Directory="ApplicationProgramsFolder"' + "`n"
-          $wxs += '                    Name="HobbyCAD"' + "`n"
-          $wxs += '                    WorkingDirectory="BinFolder"' + "`n"
-          $wxs += '                    Icon="HobbyCADIcon"' + "`n"
-          $wxs += '                    IconIndex="0"' + "`n"
-          $wxs += '                    Advertise="yes" />' + "`n"
-          $wxs += '        </File>' + "`n"
-          $wxs += '        <ProgId Id="HobbyCAD.Project" Description="HobbyCAD Project">' + "`n"
-          $wxs += '          <Extension Id="hcad" ContentType="application/x-hobbycad">' + "`n"
-          $wxs += '            <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument=''"%1"'' />' + "`n"
-          $wxs += '          </Extension>' + "`n"
-          $wxs += '        </ProgId>' + "`n"
-          $wxs += '      </Component>' + "`n"
-          $wxs += $dllComponents + "`n"
-          $wxs += '    </ComponentGroup>' + "`n"
-          $wxs += "`n"
-          $wxs += '    <ComponentGroup Id="PlatformPlugins" Directory="PlatformsFolder">' + "`n"
-          $wxs += $platComponents + "`n"
-          $wxs += '    </ComponentGroup>' + "`n"
-          $wxs += "`n"
-          $wxs += '    <Icon Id="HobbyCADIcon" SourceFile="staging\bin\hobbycad.exe" />' + "`n"
-          $wxs += "`n"
-          $wxs += '    <Feature Id="ProductFeature" Title="HobbyCAD" Level="1">' + "`n"
-          $wxs += '      <ComponentGroupRef Id="ProductComponents" />' + "`n"
-          $wxs += '      <ComponentGroupRef Id="PlatformPlugins" />' + "`n"
-          $wxs += '    </Feature>' + "`n"
-          $wxs += "`n"
-          $wxs += '  </Package>' + "`n"
-          $wxs += '</Wix>'
+              <StandardDirectory Id="ProgramFiles6432Folder">
+                <Directory Id="INSTALLFOLDER" Name="HobbyCAD">
+                  <Directory Id="BinFolder" Name="bin" />
+                </Directory>
+              </StandardDirectory>
+
+              <StandardDirectory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="HobbyCAD" />
+              </StandardDirectory>
+
+              <ComponentGroup Id="ProductComponents" Directory="BinFolder">
+                <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+                  <File Id="HobbyCADExe" Source="staging\bin\hobbycad.exe" KeyPath="yes">
+                    <Shortcut Id="StartMenuShortcut"
+                              Directory="ApplicationProgramsFolder"
+                              Name="HobbyCAD"
+                              WorkingDirectory="BinFolder"
+                              Icon="HobbyCADIcon"
+                              IconIndex="0"
+                              Advertise="yes" />
+                  </File>
+                  <ProgId Id="HobbyCAD.Project" Description="HobbyCAD Project">
+                    <Extension Id="hcad" ContentType="application/x-hobbycad">
+                      <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument="`"%1`"" />
+                    </Extension>
+                  </ProgId>
+                </Component>
+              </ComponentGroup>
+
+              <Icon Id="HobbyCADIcon" SourceFile="staging\bin\hobbycad.exe" />
+
+              <Feature Id="ProductFeature" Title="HobbyCAD" Level="1">
+                <ComponentGroupRef Id="ProductComponents" />
+              </Feature>
+
+            </Package>
+          </Wix>
+          "@
           $wxs | Out-File -FilePath "hobbycad.wxs" -Encoding UTF8
 
       - name: Build MSI

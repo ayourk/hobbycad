@@ -4,13 +4,21 @@
 
 #include "hobbycad/project.h"
 #include "hobbycad/brep_io.h"
+#include "hobbycad/format.h"
 
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+#if HOBBYCAD_HAS_QT
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QString>
+#endif
 
 namespace hobbycad {
 
@@ -18,8 +26,8 @@ const char* Project::HOBBYCAD_VERSION = "0.1.0";
 
 Project::Project()
 {
-    m_created = QDateTime::currentDateTimeUtc();
-    m_modified_time = m_created;
+    // Timestamps left empty — no Qt dependency for time
+    // The save code will populate them if needed
 }
 
 Project::~Project() = default;
@@ -29,20 +37,17 @@ Project::~Project() = default;
 void Project::setModified(bool modified)
 {
     m_modified_flag = modified;
-    if (modified) {
-        m_modified_time = QDateTime::currentDateTimeUtc();
-    }
 }
 
 // ---- Geometry ----
 
 void Project::addShape(const TopoDS_Shape& shape)
 {
-    m_shapes.append(shape);
+    m_shapes.push_back(shape);
     setModified(true);
 }
 
-void Project::setShapes(const QList<TopoDS_Shape>& shapes)
+void Project::setShapes(const std::vector<TopoDS_Shape>& shapes)
 {
     m_shapes = shapes;
     setModified(true);
@@ -58,13 +63,13 @@ void Project::clearShapes()
 
 void Project::addConstructionPlane(const ConstructionPlaneData& plane)
 {
-    m_constructionPlanes.append(plane);
+    m_constructionPlanes.push_back(plane);
     setModified(true);
 }
 
 void Project::setConstructionPlane(int index, const ConstructionPlaneData& plane)
 {
-    if (index >= 0 && index < m_constructionPlanes.size()) {
+    if (index >= 0 && index < static_cast<int>(m_constructionPlanes.size())) {
         m_constructionPlanes[index] = plane;
         setModified(true);
     }
@@ -72,8 +77,8 @@ void Project::setConstructionPlane(int index, const ConstructionPlaneData& plane
 
 void Project::removeConstructionPlane(int index)
 {
-    if (index >= 0 && index < m_constructionPlanes.size()) {
-        m_constructionPlanes.remove(index);
+    if (index >= 0 && index < static_cast<int>(m_constructionPlanes.size())) {
+        m_constructionPlanes.erase(m_constructionPlanes.begin() + index);
         setModified(true);
     }
 }
@@ -109,13 +114,13 @@ const ConstructionPlaneData* Project::constructionPlaneById(int id) const
 
 void Project::addSketch(const SketchData& sketch)
 {
-    m_sketches.append(sketch);
+    m_sketches.push_back(sketch);
     setModified(true);
 }
 
 void Project::setSketch(int index, const SketchData& sketch)
 {
-    if (index >= 0 && index < m_sketches.size()) {
+    if (index >= 0 && index < static_cast<int>(m_sketches.size())) {
         m_sketches[index] = sketch;
         setModified(true);
     }
@@ -123,8 +128,8 @@ void Project::setSketch(int index, const SketchData& sketch)
 
 void Project::removeSketch(int index)
 {
-    if (index >= 0 && index < m_sketches.size()) {
-        m_sketches.remove(index);
+    if (index >= 0 && index < static_cast<int>(m_sketches.size())) {
+        m_sketches.erase(m_sketches.begin() + index);
         setModified(true);
     }
 }
@@ -137,7 +142,7 @@ void Project::clearSketches()
 
 // ---- Parameters ----
 
-void Project::setParameters(const QList<ParameterData>& params)
+void Project::setParameters(const std::vector<ParameterData>& params)
 {
     m_parameters = params;
     setModified(true);
@@ -145,7 +150,7 @@ void Project::setParameters(const QList<ParameterData>& params)
 
 void Project::addParameter(const ParameterData& param)
 {
-    m_parameters.append(param);
+    m_parameters.push_back(param);
     setModified(true);
 }
 
@@ -159,11 +164,11 @@ void Project::clearParameters()
 
 void Project::addFeature(const FeatureData& feature)
 {
-    m_features.append(feature);
+    m_features.push_back(feature);
     setModified(true);
 }
 
-void Project::setFeatures(const QVector<FeatureData>& features)
+void Project::setFeatures(const std::vector<FeatureData>& features)
 {
     m_features = features;
     setModified(true);
@@ -185,12 +190,12 @@ void Project::addForeignFile(const ForeignFileData& file)
             return;
         }
     }
-    m_foreignFiles.append(file);
+    m_foreignFiles.push_back(file);
     setModified(true);
 }
 
-void Project::addForeignFile(const QString& path, const QString& category,
-                              const QString& description)
+void Project::addForeignFile(const std::string& path, const std::string& category,
+                              const std::string& description)
 {
     ForeignFileData file;
     file.path = path;
@@ -199,18 +204,18 @@ void Project::addForeignFile(const QString& path, const QString& category,
     addForeignFile(file);
 }
 
-void Project::removeForeignFile(const QString& path)
+void Project::removeForeignFile(const std::string& path)
 {
-    for (int i = 0; i < m_foreignFiles.size(); ++i) {
+    for (size_t i = 0; i < m_foreignFiles.size(); ++i) {
         if (m_foreignFiles[i].path == path) {
-            m_foreignFiles.removeAt(i);
+            m_foreignFiles.erase(m_foreignFiles.begin() + static_cast<ptrdiff_t>(i));
             setModified(true);
             return;
         }
     }
 }
 
-void Project::setForeignFiles(const QVector<ForeignFileData>& files)
+void Project::setForeignFiles(const std::vector<ForeignFileData>& files)
 {
     m_foreignFiles = files;
     setModified(true);
@@ -222,21 +227,22 @@ void Project::clearForeignFiles()
     setModified(true);
 }
 
-bool Project::isForeignFile(const QString& relativePath) const
+bool Project::isForeignFile(const std::string& relativePath) const
 {
     for (const auto& file : m_foreignFiles) {
         if (file.path == relativePath) {
             return true;
         }
         // Check if path is under a foreign directory (e.g., "docs/" matches "docs/readme.txt")
-        if (file.path.endsWith(QLatin1Char('/')) && relativePath.startsWith(file.path)) {
+        if (!file.path.empty() && file.path.back() == '/' &&
+            relativePath.substr(0, file.path.size()) == file.path) {
             return true;
         }
     }
     return false;
 }
 
-const ForeignFileData* Project::foreignFileByPath(const QString& path) const
+const ForeignFileData* Project::foreignFileByPath(const std::string& path) const
 {
     for (const auto& file : m_foreignFiles) {
         if (file.path == path) {
@@ -248,12 +254,10 @@ const ForeignFileData* Project::foreignFileByPath(const QString& path) const
 
 // ---- Create / Close ----
 
-void Project::createNew(const QString& name)
+void Project::createNew(const std::string& name)
 {
     close();
-    m_name = name.isEmpty() ? QStringLiteral("Untitled") : name;
-    m_created = QDateTime::currentDateTimeUtc();
-    m_modified_time = m_created;
+    m_name = name.empty() ? "Untitled" : name;
     m_modified_flag = false;
 }
 
@@ -262,7 +266,7 @@ void Project::close()
     m_name.clear();
     m_author.clear();
     m_description.clear();
-    m_units = QStringLiteral("mm");
+    m_units = "mm";
     m_projectPath.clear();
     m_modified_flag = false;
 
@@ -277,53 +281,59 @@ void Project::close()
     m_sketchFiles.clear();
 }
 
+// =====================================================================
+//  JSON Serialization — only available when compiled with Qt
+// =====================================================================
+
+#if HOBBYCAD_HAS_QT
+
 // ---- JSON Serialization: Construction Planes ----
 
 QJsonObject Project::constructionPlaneToJson(const ConstructionPlaneData& plane) const
 {
     QJsonObject obj;
-    obj[QStringLiteral("id")] = plane.id;
-    obj[QStringLiteral("name")] = plane.name;
-    obj[QStringLiteral("type")] = static_cast<int>(plane.type);
-    obj[QStringLiteral("base_plane")] = static_cast<int>(plane.basePlane);
-    obj[QStringLiteral("base_plane_id")] = plane.basePlaneId;
+    obj["id"] = plane.id;
+    obj["name"] = QString::fromStdString(plane.name);
+    obj["type"] = static_cast<int>(plane.type);
+    obj["base_plane"] = static_cast<int>(plane.basePlane);
+    obj["base_plane_id"] = plane.basePlaneId;
 
     // Origin point (plane center in absolute coordinates)
-    obj[QStringLiteral("origin_x")] = plane.originX;
-    obj[QStringLiteral("origin_y")] = plane.originY;
-    obj[QStringLiteral("origin_z")] = plane.originZ;
+    obj["origin_x"] = plane.originX;
+    obj["origin_y"] = plane.originY;
+    obj["origin_z"] = plane.originZ;
 
-    obj[QStringLiteral("offset")] = plane.offset;
-    obj[QStringLiteral("primary_axis")] = static_cast<int>(plane.primaryAxis);
-    obj[QStringLiteral("primary_angle")] = plane.primaryAngle;
-    obj[QStringLiteral("secondary_axis")] = static_cast<int>(plane.secondaryAxis);
-    obj[QStringLiteral("secondary_angle")] = plane.secondaryAngle;
-    obj[QStringLiteral("roll_angle")] = plane.rollAngle;
-    obj[QStringLiteral("visible")] = plane.visible;
+    obj["offset"] = plane.offset;
+    obj["primary_axis"] = static_cast<int>(plane.primaryAxis);
+    obj["primary_angle"] = plane.primaryAngle;
+    obj["secondary_axis"] = static_cast<int>(plane.secondaryAxis);
+    obj["secondary_angle"] = plane.secondaryAngle;
+    obj["roll_angle"] = plane.rollAngle;
+    obj["visible"] = plane.visible;
     return obj;
 }
 
 ConstructionPlaneData Project::constructionPlaneFromJson(const QJsonObject& json) const
 {
     ConstructionPlaneData plane;
-    plane.id = json[QStringLiteral("id")].toInt();
-    plane.name = json[QStringLiteral("name")].toString();
-    plane.type = static_cast<ConstructionPlaneType>(json[QStringLiteral("type")].toInt());
-    plane.basePlane = static_cast<SketchPlane>(json[QStringLiteral("base_plane")].toInt());
-    plane.basePlaneId = json[QStringLiteral("base_plane_id")].toInt(-1);
+    plane.id = json["id"].toInt();
+    plane.name = json["name"].toString().toStdString();
+    plane.type = static_cast<ConstructionPlaneType>(json["type"].toInt());
+    plane.basePlane = static_cast<SketchPlane>(json["base_plane"].toInt());
+    plane.basePlaneId = json["base_plane_id"].toInt(-1);
 
     // Origin point (plane center in absolute coordinates)
-    plane.originX = json[QStringLiteral("origin_x")].toDouble(0.0);
-    plane.originY = json[QStringLiteral("origin_y")].toDouble(0.0);
-    plane.originZ = json[QStringLiteral("origin_z")].toDouble(0.0);
+    plane.originX = json["origin_x"].toDouble(0.0);
+    plane.originY = json["origin_y"].toDouble(0.0);
+    plane.originZ = json["origin_z"].toDouble(0.0);
 
-    plane.offset = json[QStringLiteral("offset")].toDouble(0.0);
-    plane.primaryAxis = static_cast<PlaneRotationAxis>(json[QStringLiteral("primary_axis")].toInt());
-    plane.primaryAngle = json[QStringLiteral("primary_angle")].toDouble(0.0);
-    plane.secondaryAxis = static_cast<PlaneRotationAxis>(json[QStringLiteral("secondary_axis")].toInt());
-    plane.secondaryAngle = json[QStringLiteral("secondary_angle")].toDouble(0.0);
-    plane.rollAngle = json[QStringLiteral("roll_angle")].toDouble(0.0);
-    plane.visible = json[QStringLiteral("visible")].toBool(true);
+    plane.offset = json["offset"].toDouble(0.0);
+    plane.primaryAxis = static_cast<PlaneRotationAxis>(json["primary_axis"].toInt());
+    plane.primaryAngle = json["primary_angle"].toDouble(0.0);
+    plane.secondaryAxis = static_cast<PlaneRotationAxis>(json["secondary_axis"].toInt());
+    plane.secondaryAngle = json["secondary_angle"].toDouble(0.0);
+    plane.rollAngle = json["roll_angle"].toDouble(0.0);
+    plane.visible = json["visible"].toBool(true);
     return plane;
 }
 
@@ -332,136 +342,137 @@ ConstructionPlaneData Project::constructionPlaneFromJson(const QJsonObject& json
 QJsonObject Project::sketchToJson(const SketchData& sketch) const
 {
     QJsonObject obj;
-    obj[QStringLiteral("name")] = sketch.name;
-    obj[QStringLiteral("plane")] = static_cast<int>(sketch.plane);
-    obj[QStringLiteral("construction_plane_id")] = sketch.constructionPlaneId;
-    obj[QStringLiteral("plane_offset")] = sketch.planeOffset;
+    obj["name"] = QString::fromStdString(sketch.name);
+    obj["plane"] = static_cast<int>(sketch.plane);
+    obj["construction_plane_id"] = sketch.constructionPlaneId;
+    obj["plane_offset"] = sketch.planeOffset;
     // Inline plane parameters (when not referencing a construction plane)
     if (sketch.constructionPlaneId < 0 && sketch.plane == SketchPlane::Custom) {
-        obj[QStringLiteral("rotation_axis")] = static_cast<int>(sketch.rotationAxis);
-        obj[QStringLiteral("rotation_angle")] = sketch.rotationAngle;
+        obj["rotation_axis"] = static_cast<int>(sketch.rotationAxis);
+        obj["rotation_angle"] = sketch.rotationAngle;
     }
-    obj[QStringLiteral("grid_spacing")] = sketch.gridSpacing;
+    obj["grid_spacing"] = sketch.gridSpacing;
 
     QJsonArray entities;
     for (const auto& entity : sketch.entities) {
         QJsonObject ent;
-        ent[QStringLiteral("id")] = entity.id;
-        ent[QStringLiteral("type")] = static_cast<int>(entity.type);
+        ent["id"] = entity.id;
+        ent["type"] = static_cast<int>(entity.type);
 
         QJsonArray pts;
         for (const auto& pt : entity.points) {
             QJsonArray ptArr;
-            ptArr.append(pt.x());
-            ptArr.append(pt.y());
+            ptArr.append(pt.x);
+            ptArr.append(pt.y);
             pts.append(ptArr);
         }
-        ent[QStringLiteral("points")] = pts;
+        ent["points"] = pts;
 
         if (entity.type == SketchEntityType::Circle ||
             entity.type == SketchEntityType::Arc ||
             entity.type == SketchEntityType::Slot) {
-            ent[QStringLiteral("radius")] = entity.radius;
+            ent["radius"] = entity.radius;
         }
         if (entity.type == SketchEntityType::Arc) {
-            ent[QStringLiteral("start_angle")] = entity.startAngle;
-            ent[QStringLiteral("sweep_angle")] = entity.sweepAngle;
+            ent["start_angle"] = entity.startAngle;
+            ent["sweep_angle"] = entity.sweepAngle;
         }
         if (entity.type == SketchEntityType::Polygon) {
-            ent[QStringLiteral("sides")] = entity.sides;
+            ent["sides"] = entity.sides;
         }
         if (entity.type == SketchEntityType::Ellipse) {
-            ent[QStringLiteral("major_radius")] = entity.majorRadius;
-            ent[QStringLiteral("minor_radius")] = entity.minorRadius;
+            ent["major_radius"] = entity.majorRadius;
+            ent["minor_radius"] = entity.minorRadius;
         }
         if (entity.type == SketchEntityType::Text) {
-            ent[QStringLiteral("text")] = entity.text;
-            if (!entity.fontFamily.isEmpty()) {
-                ent[QStringLiteral("font_family")] = entity.fontFamily;
+            ent["text"] = QString::fromStdString(entity.text);
+            if (!entity.fontFamily.empty()) {
+                ent["font_family"] = QString::fromStdString(entity.fontFamily);
             }
-            ent[QStringLiteral("font_size")] = entity.fontSize;
-            ent[QStringLiteral("font_bold")] = entity.fontBold;
-            ent[QStringLiteral("font_italic")] = entity.fontItalic;
-            if (!qFuzzyIsNull(entity.textRotation)) {
-                ent[QStringLiteral("text_rotation")] = entity.textRotation;
+            ent["font_size"] = entity.fontSize;
+            ent["font_bold"] = entity.fontBold;
+            ent["font_italic"] = entity.fontItalic;
+            if (!fuzzyIsNull(entity.textRotation)) {
+                ent["text_rotation"] = entity.textRotation;
             }
         }
         if (entity.type == SketchEntityType::Slot && entity.arcFlipped) {
-            ent[QStringLiteral("arc_flipped")] = true;
+            ent["arc_flipped"] = true;
         }
-        ent[QStringLiteral("constrained")] = entity.constrained;
-        ent[QStringLiteral("is_construction")] = entity.isConstruction;
+        ent["constrained"] = entity.constrained;
+        ent["is_construction"] = entity.isConstruction;
 
         entities.append(ent);
     }
-    obj[QStringLiteral("entities")] = entities;
+    obj["entities"] = entities;
 
     // Serialize constraints
     QJsonArray constraints;
     for (const auto& constraint : sketch.constraints) {
         QJsonObject c;
-        c[QStringLiteral("id")] = constraint.id;
-        c[QStringLiteral("type")] = static_cast<int>(constraint.type);
+        c["id"] = constraint.id;
+        c["type"] = static_cast<int>(constraint.type);
 
         // Entity IDs
         QJsonArray eids;
         for (int eid : constraint.entityIds) {
             eids.append(eid);
         }
-        c[QStringLiteral("entity_ids")] = eids;
+        c["entity_ids"] = eids;
 
         // Point indices
         QJsonArray pidxs;
         for (int pidx : constraint.pointIndices) {
             pidxs.append(pidx);
         }
-        c[QStringLiteral("point_indices")] = pidxs;
+        c["point_indices"] = pidxs;
 
-        c[QStringLiteral("value")] = constraint.value;
-        c[QStringLiteral("is_driving")] = constraint.isDriving;
-        c[QStringLiteral("label_x")] = constraint.labelPosition.x();
-        c[QStringLiteral("label_y")] = constraint.labelPosition.y();
-        c[QStringLiteral("label_visible")] = constraint.labelVisible;
-        c[QStringLiteral("enabled")] = constraint.enabled;
+        c["value"] = constraint.value;
+        c["is_driving"] = constraint.isDriving;
+        c["label_x"] = constraint.labelPosition.x;
+        c["label_y"] = constraint.labelPosition.y;
+        c["label_visible"] = constraint.labelVisible;
+        c["enabled"] = constraint.enabled;
 
         constraints.append(c);
     }
-    obj[QStringLiteral("constraints")] = constraints;
+    obj["constraints"] = constraints;
 
     // Serialize background image (only if enabled)
     if (sketch.backgroundImage.enabled) {
         QJsonObject bg;
-        bg[QStringLiteral("enabled")] = true;
-        bg[QStringLiteral("storage")] = static_cast<int>(sketch.backgroundImage.storage);
-        bg[QStringLiteral("file_path")] = sketch.backgroundImage.filePath;
-        bg[QStringLiteral("mime_type")] = sketch.backgroundImage.mimeType;
+        bg["enabled"] = true;
+        bg["storage"] = static_cast<int>(sketch.backgroundImage.storage);
+        bg["file_path"] = QString::fromStdString(sketch.backgroundImage.filePath);
+        bg["mime_type"] = QString::fromStdString(sketch.backgroundImage.mimeType);
 
         // Position and size
-        bg[QStringLiteral("position_x")] = sketch.backgroundImage.position.x();
-        bg[QStringLiteral("position_y")] = sketch.backgroundImage.position.y();
-        bg[QStringLiteral("width")] = sketch.backgroundImage.width;
-        bg[QStringLiteral("height")] = sketch.backgroundImage.height;
-        bg[QStringLiteral("rotation")] = sketch.backgroundImage.rotation;
+        bg["position_x"] = sketch.backgroundImage.position.x;
+        bg["position_y"] = sketch.backgroundImage.position.y;
+        bg["width"] = sketch.backgroundImage.width;
+        bg["height"] = sketch.backgroundImage.height;
+        bg["rotation"] = sketch.backgroundImage.rotation;
 
         // Display options
-        bg[QStringLiteral("opacity")] = sketch.backgroundImage.opacity;
-        bg[QStringLiteral("lock_aspect_ratio")] = sketch.backgroundImage.lockAspectRatio;
-        bg[QStringLiteral("grayscale")] = sketch.backgroundImage.grayscale;
-        bg[QStringLiteral("contrast")] = sketch.backgroundImage.contrast;
-        bg[QStringLiteral("brightness")] = sketch.backgroundImage.brightness;
+        bg["opacity"] = sketch.backgroundImage.opacity;
+        bg["lock_aspect_ratio"] = sketch.backgroundImage.lockAspectRatio;
+        bg["grayscale"] = sketch.backgroundImage.grayscale;
+        bg["contrast"] = sketch.backgroundImage.contrast;
+        bg["brightness"] = sketch.backgroundImage.brightness;
 
         // Calibration
-        bg[QStringLiteral("calibrated")] = sketch.backgroundImage.calibrated;
-        bg[QStringLiteral("calibration_scale")] = sketch.backgroundImage.calibrationScale;
+        bg["calibrated"] = sketch.backgroundImage.calibrated;
+        bg["calibration_scale"] = sketch.backgroundImage.calibrationScale;
 
         // Embed image data if storage is Embedded
         if (sketch.backgroundImage.storage == sketch::BackgroundStorage::Embedded &&
-            !sketch.backgroundImage.imageData.isEmpty()) {
-            bg[QStringLiteral("image_data")] = QString::fromLatin1(
-                sketch.backgroundImage.imageData.toBase64());
+            !sketch.backgroundImage.imageData.empty()) {
+            QByteArray rawData(reinterpret_cast<const char*>(sketch.backgroundImage.imageData.data()),
+                               static_cast<int>(sketch.backgroundImage.imageData.size()));
+            bg["image_data"] = QString::fromLatin1(rawData.toBase64());
         }
 
-        obj[QStringLiteral("background_image")] = bg;
+        obj["background_image"] = bg;
     }
 
     return obj;
@@ -470,118 +481,121 @@ QJsonObject Project::sketchToJson(const SketchData& sketch) const
 SketchData Project::sketchFromJson(const QJsonObject& json) const
 {
     SketchData sketch;
-    sketch.name = json[QStringLiteral("name")].toString();
-    sketch.plane = static_cast<SketchPlane>(json[QStringLiteral("plane")].toInt());
-    sketch.constructionPlaneId = json[QStringLiteral("construction_plane_id")].toInt(-1);
-    sketch.planeOffset = json[QStringLiteral("plane_offset")].toDouble(0.0);
+    sketch.name = json["name"].toString().toStdString();
+    sketch.plane = static_cast<SketchPlane>(json["plane"].toInt());
+    sketch.constructionPlaneId = json["construction_plane_id"].toInt(-1);
+    sketch.planeOffset = json["plane_offset"].toDouble(0.0);
     // Inline plane parameters (when not referencing a construction plane)
     if (sketch.constructionPlaneId < 0 && sketch.plane == SketchPlane::Custom) {
         sketch.rotationAxis = static_cast<PlaneRotationAxis>(
-            json[QStringLiteral("rotation_axis")].toInt());
-        sketch.rotationAngle = json[QStringLiteral("rotation_angle")].toDouble(0.0);
+            json["rotation_axis"].toInt());
+        sketch.rotationAngle = json["rotation_angle"].toDouble(0.0);
     }
-    sketch.gridSpacing = json[QStringLiteral("grid_spacing")].toDouble(10.0);
+    sketch.gridSpacing = json["grid_spacing"].toDouble(10.0);
 
-    QJsonArray entities = json[QStringLiteral("entities")].toArray();
+    QJsonArray entities = json["entities"].toArray();
     for (const auto& entVal : entities) {
         QJsonObject ent = entVal.toObject();
         SketchEntityData entity;
-        entity.id = ent[QStringLiteral("id")].toInt();
-        entity.type = static_cast<SketchEntityType>(ent[QStringLiteral("type")].toInt());
+        entity.id = ent["id"].toInt();
+        entity.type = static_cast<SketchEntityType>(ent["type"].toInt());
 
-        QJsonArray pts = ent[QStringLiteral("points")].toArray();
+        QJsonArray pts = ent["points"].toArray();
         for (const auto& ptVal : pts) {
             QJsonArray ptArr = ptVal.toArray();
             if (ptArr.size() >= 2) {
-                entity.points.append(QPointF(ptArr[0].toDouble(), ptArr[1].toDouble()));
+                entity.points.push_back(Point2D(ptArr[0].toDouble(), ptArr[1].toDouble()));
             }
         }
 
-        entity.radius = ent[QStringLiteral("radius")].toDouble();
-        entity.startAngle = ent[QStringLiteral("start_angle")].toDouble();
-        entity.sweepAngle = ent[QStringLiteral("sweep_angle")].toDouble();
-        entity.sides = ent[QStringLiteral("sides")].toInt(6);  // Default 6 sides (hexagon)
-        entity.majorRadius = ent[QStringLiteral("major_radius")].toDouble();
-        entity.minorRadius = ent[QStringLiteral("minor_radius")].toDouble();
-        entity.text = ent[QStringLiteral("text")].toString();
-        entity.fontFamily = ent[QStringLiteral("font_family")].toString();
-        entity.fontSize = ent[QStringLiteral("font_size")].toDouble(12.0);
-        entity.fontBold = ent[QStringLiteral("font_bold")].toBool();
-        entity.fontItalic = ent[QStringLiteral("font_italic")].toBool();
-        entity.textRotation = ent[QStringLiteral("text_rotation")].toDouble();
-        entity.arcFlipped = ent[QStringLiteral("arc_flipped")].toBool();
-        entity.constrained = ent[QStringLiteral("constrained")].toBool();
-        entity.isConstruction = ent[QStringLiteral("is_construction")].toBool();
+        entity.radius = ent["radius"].toDouble();
+        entity.startAngle = ent["start_angle"].toDouble();
+        entity.sweepAngle = ent["sweep_angle"].toDouble();
+        entity.sides = ent["sides"].toInt(6);  // Default 6 sides (hexagon)
+        entity.majorRadius = ent["major_radius"].toDouble();
+        entity.minorRadius = ent["minor_radius"].toDouble();
+        entity.text = ent["text"].toString().toStdString();
+        entity.fontFamily = ent["font_family"].toString().toStdString();
+        entity.fontSize = ent["font_size"].toDouble(12.0);
+        entity.fontBold = ent["font_bold"].toBool();
+        entity.fontItalic = ent["font_italic"].toBool();
+        entity.textRotation = ent["text_rotation"].toDouble();
+        entity.arcFlipped = ent["arc_flipped"].toBool();
+        entity.constrained = ent["constrained"].toBool();
+        entity.isConstruction = ent["is_construction"].toBool();
 
-        sketch.entities.append(entity);
+        sketch.entities.push_back(entity);
     }
 
     // Deserialize constraints
-    QJsonArray constraints = json[QStringLiteral("constraints")].toArray();
+    QJsonArray constraints = json["constraints"].toArray();
     for (const auto& cVal : constraints) {
         QJsonObject c = cVal.toObject();
         ConstraintData constraint;
 
-        constraint.id = c[QStringLiteral("id")].toInt();
-        constraint.type = static_cast<ConstraintType>(c[QStringLiteral("type")].toInt());
+        constraint.id = c["id"].toInt();
+        constraint.type = static_cast<ConstraintType>(c["type"].toInt());
 
         // Entity IDs
-        QJsonArray eids = c[QStringLiteral("entity_ids")].toArray();
+        QJsonArray eids = c["entity_ids"].toArray();
         for (const auto& eid : eids) {
-            constraint.entityIds.append(eid.toInt());
+            constraint.entityIds.push_back(eid.toInt());
         }
 
         // Point indices
-        QJsonArray pidxs = c[QStringLiteral("point_indices")].toArray();
+        QJsonArray pidxs = c["point_indices"].toArray();
         for (const auto& pidx : pidxs) {
-            constraint.pointIndices.append(pidx.toInt());
+            constraint.pointIndices.push_back(pidx.toInt());
         }
 
-        constraint.value = c[QStringLiteral("value")].toDouble();
-        constraint.isDriving = c[QStringLiteral("is_driving")].toBool(true);
-        constraint.labelPosition = QPointF(
-            c[QStringLiteral("label_x")].toDouble(),
-            c[QStringLiteral("label_y")].toDouble()
+        constraint.value = c["value"].toDouble();
+        constraint.isDriving = c["is_driving"].toBool(true);
+        constraint.labelPosition = Point2D(
+            c["label_x"].toDouble(),
+            c["label_y"].toDouble()
         );
-        constraint.labelVisible = c[QStringLiteral("label_visible")].toBool(true);
-        constraint.enabled = c[QStringLiteral("enabled")].toBool(true);
+        constraint.labelVisible = c["label_visible"].toBool(true);
+        constraint.enabled = c["enabled"].toBool(true);
 
-        sketch.constraints.append(constraint);
+        sketch.constraints.push_back(constraint);
     }
 
     // Deserialize background image
-    if (json.contains(QStringLiteral("background_image"))) {
-        QJsonObject bg = json[QStringLiteral("background_image")].toObject();
+    if (json.contains("background_image")) {
+        QJsonObject bg = json["background_image"].toObject();
 
-        sketch.backgroundImage.enabled = bg[QStringLiteral("enabled")].toBool(false);
+        sketch.backgroundImage.enabled = bg["enabled"].toBool(false);
         sketch.backgroundImage.storage = static_cast<sketch::BackgroundStorage>(
-            bg[QStringLiteral("storage")].toInt(0));
-        sketch.backgroundImage.filePath = bg[QStringLiteral("file_path")].toString();
-        sketch.backgroundImage.mimeType = bg[QStringLiteral("mime_type")].toString();
+            bg["storage"].toInt(0));
+        sketch.backgroundImage.filePath = bg["file_path"].toString().toStdString();
+        sketch.backgroundImage.mimeType = bg["mime_type"].toString().toStdString();
 
         // Position and size
-        sketch.backgroundImage.position = QPointF(
-            bg[QStringLiteral("position_x")].toDouble(0),
-            bg[QStringLiteral("position_y")].toDouble(0));
-        sketch.backgroundImage.width = bg[QStringLiteral("width")].toDouble(100);
-        sketch.backgroundImage.height = bg[QStringLiteral("height")].toDouble(100);
-        sketch.backgroundImage.rotation = bg[QStringLiteral("rotation")].toDouble(0);
+        sketch.backgroundImage.position = Point2D(
+            bg["position_x"].toDouble(0),
+            bg["position_y"].toDouble(0));
+        sketch.backgroundImage.width = bg["width"].toDouble(100);
+        sketch.backgroundImage.height = bg["height"].toDouble(100);
+        sketch.backgroundImage.rotation = bg["rotation"].toDouble(0);
 
         // Display options
-        sketch.backgroundImage.opacity = bg[QStringLiteral("opacity")].toDouble(0.5);
-        sketch.backgroundImage.lockAspectRatio = bg[QStringLiteral("lock_aspect_ratio")].toBool(true);
-        sketch.backgroundImage.grayscale = bg[QStringLiteral("grayscale")].toBool(false);
-        sketch.backgroundImage.contrast = bg[QStringLiteral("contrast")].toDouble(1.0);
-        sketch.backgroundImage.brightness = bg[QStringLiteral("brightness")].toDouble(0.0);
+        sketch.backgroundImage.opacity = bg["opacity"].toDouble(0.5);
+        sketch.backgroundImage.lockAspectRatio = bg["lock_aspect_ratio"].toBool(true);
+        sketch.backgroundImage.grayscale = bg["grayscale"].toBool(false);
+        sketch.backgroundImage.contrast = bg["contrast"].toDouble(1.0);
+        sketch.backgroundImage.brightness = bg["brightness"].toDouble(0.0);
 
         // Calibration
-        sketch.backgroundImage.calibrated = bg[QStringLiteral("calibrated")].toBool(false);
-        sketch.backgroundImage.calibrationScale = bg[QStringLiteral("calibration_scale")].toDouble(1.0);
+        sketch.backgroundImage.calibrated = bg["calibrated"].toBool(false);
+        sketch.backgroundImage.calibrationScale = bg["calibration_scale"].toDouble(1.0);
 
         // Embedded image data
-        if (bg.contains(QStringLiteral("image_data"))) {
-            sketch.backgroundImage.imageData = QByteArray::fromBase64(
-                bg[QStringLiteral("image_data")].toString().toLatin1());
+        if (bg.contains("image_data")) {
+            QByteArray decoded = QByteArray::fromBase64(
+                bg["image_data"].toString().toLatin1());
+            sketch.backgroundImage.imageData.assign(
+                reinterpret_cast<const uint8_t*>(decoded.constData()),
+                reinterpret_cast<const uint8_t*>(decoded.constData()) + decoded.size());
         }
     }
 
@@ -597,34 +611,34 @@ QJsonObject Project::parametersToJson() const
 
     for (const auto& param : m_parameters) {
         QJsonObject p;
-        p[QStringLiteral("name")] = param.name;
-        p[QStringLiteral("expression")] = param.expression;
-        p[QStringLiteral("value")] = param.value;
-        p[QStringLiteral("unit")] = param.unit;
-        p[QStringLiteral("comment")] = param.comment;
-        p[QStringLiteral("is_user_param")] = param.isUserParam;
+        p["name"] = QString::fromStdString(param.name);
+        p["expression"] = QString::fromStdString(param.expression);
+        p["value"] = param.value;
+        p["unit"] = QString::fromStdString(param.unit);
+        p["comment"] = QString::fromStdString(param.comment);
+        p["is_user_param"] = param.isUserParam;
         params.append(p);
     }
 
-    obj[QStringLiteral("parameters")] = params;
+    obj["parameters"] = params;
     return obj;
 }
 
 void Project::parametersFromJson(const QJsonObject& json)
 {
     m_parameters.clear();
-    QJsonArray params = json[QStringLiteral("parameters")].toArray();
+    QJsonArray params = json["parameters"].toArray();
 
     for (const auto& pVal : params) {
         QJsonObject p = pVal.toObject();
         ParameterData param;
-        param.name = p[QStringLiteral("name")].toString();
-        param.expression = p[QStringLiteral("expression")].toString();
-        param.value = p[QStringLiteral("value")].toDouble();
-        param.unit = p[QStringLiteral("unit")].toString();
-        param.comment = p[QStringLiteral("comment")].toString();
-        param.isUserParam = p[QStringLiteral("is_user_param")].toBool(true);
-        m_parameters.append(param);
+        param.name = p["name"].toString().toStdString();
+        param.expression = p["expression"].toString().toStdString();
+        param.value = p["value"].toDouble();
+        param.unit = p["unit"].toString().toStdString();
+        param.comment = p["comment"].toString().toStdString();
+        param.isUserParam = p["is_user_param"].toBool(true);
+        m_parameters.push_back(param);
     }
 }
 
@@ -681,32 +695,32 @@ QJsonObject Project::featuresToJson() const
 
     for (const auto& feature : m_features) {
         QJsonObject f;
-        f[QStringLiteral("id")] = feature.id;
-        f[QStringLiteral("type")] = featureTypeToString(feature.type);
-        f[QStringLiteral("name")] = feature.name;
+        f["id"] = feature.id;
+        f["type"] = featureTypeToString(feature.type);
+        f["name"] = QString::fromStdString(feature.name);
         if (!feature.properties.isEmpty()) {
-            f[QStringLiteral("properties")] = feature.properties;
+            f["properties"] = feature.properties;
         }
         features.append(f);
     }
 
-    obj[QStringLiteral("features")] = features;
+    obj["features"] = features;
     return obj;
 }
 
 void Project::featuresFromJson(const QJsonObject& json)
 {
     m_features.clear();
-    QJsonArray features = json[QStringLiteral("features")].toArray();
+    QJsonArray features = json["features"].toArray();
 
     for (const auto& fVal : features) {
         QJsonObject f = fVal.toObject();
         FeatureData feature;
-        feature.id = f[QStringLiteral("id")].toInt();
-        feature.type = featureTypeFromString(f[QStringLiteral("type")].toString());
-        feature.name = f[QStringLiteral("name")].toString();
-        feature.properties = f[QStringLiteral("properties")].toObject();
-        m_features.append(feature);
+        feature.id = f["id"].toInt();
+        feature.type = featureTypeFromString(f["type"].toString());
+        feature.name = f["name"].toString().toStdString();
+        feature.properties = f["properties"].toObject();
+        m_features.push_back(feature);
     }
 }
 
@@ -717,102 +731,121 @@ QJsonObject Project::manifestToJson() const
     QJsonObject obj;
 
     // Version info
-    obj[QStringLiteral("hobbycad_version")] = QString::fromLatin1(HOBBYCAD_VERSION);
-    obj[QStringLiteral("format_version")] = FORMAT_VERSION;
+    obj["hobbycad_version"] = QString::fromLatin1(HOBBYCAD_VERSION);
+    obj["format_version"] = FORMAT_VERSION;
 
     // Metadata
-    obj[QStringLiteral("project_name")] = m_name;
-    obj[QStringLiteral("author")] = m_author;
-    obj[QStringLiteral("description")] = m_description;
-    obj[QStringLiteral("units")] = m_units;
-    obj[QStringLiteral("created")] = m_created.toString(Qt::ISODate);
-    obj[QStringLiteral("modified")] = m_modified_time.toString(Qt::ISODate);
+    obj["project_name"] = QString::fromStdString(m_name);
+    obj["author"] = QString::fromStdString(m_author);
+    obj["description"] = QString::fromStdString(m_description);
+    obj["units"] = QString::fromStdString(m_units);
+    obj["created"] = QString::fromStdString(m_created);
+    obj["modified"] = QString::fromStdString(m_modified_time);
 
     // File references
-    obj[QStringLiteral("geometry")] = QJsonArray::fromStringList(m_geometryFiles);
-    obj[QStringLiteral("construction_planes")] = QJsonArray::fromStringList(m_constructionPlaneFiles);
-    obj[QStringLiteral("sketches")] = QJsonArray::fromStringList(m_sketchFiles);
-    obj[QStringLiteral("parameters")] = QStringLiteral("features/parameters.json");
-    obj[QStringLiteral("features")] = QStringLiteral("features/feature_tree.json");
+    {
+        QJsonArray geoArr;
+        for (const auto& f : m_geometryFiles) {
+            geoArr.append(QString::fromStdString(f));
+        }
+        obj["geometry"] = geoArr;
+    }
+    {
+        QJsonArray cpArr;
+        for (const auto& f : m_constructionPlaneFiles) {
+            cpArr.append(QString::fromStdString(f));
+        }
+        obj["construction_planes"] = cpArr;
+    }
+    {
+        QJsonArray skArr;
+        for (const auto& f : m_sketchFiles) {
+            skArr.append(QString::fromStdString(f));
+        }
+        obj["sketches"] = skArr;
+    }
+    obj["parameters"] = QStringLiteral("features/parameters.json");
+    obj["features"] = QStringLiteral("features/feature_tree.json");
 
     // Foreign files (non-CAD content tracked by the project)
-    if (!m_foreignFiles.isEmpty()) {
+    if (!m_foreignFiles.empty()) {
         QJsonArray foreignArr;
         for (const auto& file : m_foreignFiles) {
-            if (file.description.isEmpty() && file.category.isEmpty()) {
+            if (file.description.empty() && file.category.empty()) {
                 // Simple string format for minimal entries
-                foreignArr.append(file.path);
+                foreignArr.append(QString::fromStdString(file.path));
             } else {
                 // Object format with metadata
                 QJsonObject fileObj;
-                fileObj[QStringLiteral("path")] = file.path;
-                if (!file.description.isEmpty()) {
-                    fileObj[QStringLiteral("description")] = file.description;
+                fileObj["path"] = QString::fromStdString(file.path);
+                if (!file.description.empty()) {
+                    fileObj["description"] = QString::fromStdString(file.description);
                 }
-                if (!file.category.isEmpty()) {
-                    fileObj[QStringLiteral("category")] = file.category;
+                if (!file.category.empty()) {
+                    fileObj["category"] = QString::fromStdString(file.category);
                 }
                 foreignArr.append(fileObj);
             }
         }
-        obj[QStringLiteral("foreign_files")] = foreignArr;
+        obj["foreign_files"] = foreignArr;
     }
 
     return obj;
 }
 
-bool Project::manifestFromJson(const QJsonObject& json, QString* errorMsg)
+bool Project::manifestFromJson(const QJsonObject& json, std::string* errorMsg)
 {
     // Check format version
-    int formatVersion = json[QStringLiteral("format_version")].toInt(0);
+    int formatVersion = json["format_version"].toInt(0);
     if (formatVersion > FORMAT_VERSION) {
         if (errorMsg) {
-            *errorMsg = QStringLiteral("Project was created with a newer version of HobbyCAD (format %1, this version supports %2)")
-                        .arg(formatVersion).arg(FORMAT_VERSION);
+            *errorMsg = format(
+                "Project was created with a newer version of HobbyCAD (format %d, this version supports %d)",
+                formatVersion, FORMAT_VERSION);
         }
         return false;
     }
 
     // Metadata
-    m_name = json[QStringLiteral("project_name")].toString();
-    m_author = json[QStringLiteral("author")].toString();
-    m_description = json[QStringLiteral("description")].toString();
-    m_units = json[QStringLiteral("units")].toString(QStringLiteral("mm"));
-    m_created = QDateTime::fromString(json[QStringLiteral("created")].toString(), Qt::ISODate);
-    m_modified_time = QDateTime::fromString(json[QStringLiteral("modified")].toString(), Qt::ISODate);
+    m_name = json["project_name"].toString().toStdString();
+    m_author = json["author"].toString().toStdString();
+    m_description = json["description"].toString().toStdString();
+    m_units = json["units"].toString(QStringLiteral("mm")).toStdString();
+    m_created = json["created"].toString().toStdString();
+    m_modified_time = json["modified"].toString().toStdString();
 
     // File references
     m_geometryFiles.clear();
-    for (const auto& val : json[QStringLiteral("geometry")].toArray()) {
-        m_geometryFiles.append(val.toString());
+    for (const auto& val : json["geometry"].toArray()) {
+        m_geometryFiles.push_back(val.toString().toStdString());
     }
 
     m_constructionPlaneFiles.clear();
-    for (const auto& val : json[QStringLiteral("construction_planes")].toArray()) {
-        m_constructionPlaneFiles.append(val.toString());
+    for (const auto& val : json["construction_planes"].toArray()) {
+        m_constructionPlaneFiles.push_back(val.toString().toStdString());
     }
 
     m_sketchFiles.clear();
-    for (const auto& val : json[QStringLiteral("sketches")].toArray()) {
-        m_sketchFiles.append(val.toString());
+    for (const auto& val : json["sketches"].toArray()) {
+        m_sketchFiles.push_back(val.toString().toStdString());
     }
 
     // Foreign files
     m_foreignFiles.clear();
-    for (const auto& val : json[QStringLiteral("foreign_files")].toArray()) {
+    for (const auto& val : json["foreign_files"].toArray()) {
         ForeignFileData file;
         if (val.isString()) {
             // Simple string format
-            file.path = val.toString();
+            file.path = val.toString().toStdString();
         } else if (val.isObject()) {
             // Object format with metadata
             QJsonObject fileObj = val.toObject();
-            file.path = fileObj[QStringLiteral("path")].toString();
-            file.description = fileObj[QStringLiteral("description")].toString();
-            file.category = fileObj[QStringLiteral("category")].toString();
+            file.path = fileObj["path"].toString().toStdString();
+            file.description = fileObj["description"].toString().toStdString();
+            file.category = fileObj["category"].toString().toStdString();
         }
-        if (!file.path.isEmpty()) {
-            m_foreignFiles.append(file);
+        if (!file.path.empty()) {
+            m_foreignFiles.push_back(file);
         }
     }
 
@@ -821,13 +854,15 @@ bool Project::manifestFromJson(const QJsonObject& json, QString* errorMsg)
 
 // ---- File I/O: Save ----
 
-bool Project::save(const QString& path, QString* errorMsg)
+bool Project::save(const std::string& path, std::string* errorMsg)
 {
-    QString savePath = path.isEmpty() ? m_projectPath : path;
-    if (savePath.isEmpty()) {
-        if (errorMsg) *errorMsg = QStringLiteral("No save path specified");
+    std::string savePath = path.empty() ? m_projectPath : path;
+    if (savePath.empty()) {
+        if (errorMsg) *errorMsg = "No save path specified";
         return false;
     }
+
+    namespace fs = std::filesystem;
 
     // Project structure per project_definition.txt Section 5.2:
     //   my_widget/              <- directory (no .hcad extension)
@@ -839,41 +874,43 @@ bool Project::save(const QString& path, QString* errorMsg)
     //
     // If user provides a path ending in .hcad, treat it as the manifest path
     // and use its parent directory as the project directory.
-    if (savePath.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive)) {
-        QFileInfo info(savePath);
-        if (info.isFile() || !info.exists()) {
-            // User specified the manifest file path - use parent as project dir
-            savePath = info.absolutePath();
-            // Extract project name from manifest filename
-            QString baseName = info.completeBaseName();  // e.g., "my_widget" from "my_widget.hcad"
-            if (!baseName.isEmpty() && m_name.isEmpty()) {
-                m_name = baseName;
+    {
+        fs::path p(savePath);
+        std::string ext = p.extension().string();
+        // Case-insensitive .hcad check
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (ext == ".hcad") {
+            if (fs::is_regular_file(p) || !fs::exists(p)) {
+                // User specified the manifest file path - use parent as project dir
+                savePath = p.parent_path().string();
+                // Extract project name from manifest filename
+                std::string baseName = p.stem().string();
+                if (!baseName.empty() && m_name.empty()) {
+                    m_name = baseName;
+                }
             }
+            // If it's an existing directory ending in .hcad, use it as-is (legacy support)
         }
-        // If it's an existing directory ending in .hcad, use it as-is (legacy support)
     }
 
     // Set project name from directory if not already set
-    if (m_name.isEmpty()) {
-        QDir dir(savePath);
-        m_name = dir.dirName();
+    if (m_name.empty()) {
+        fs::path dirPath(savePath);
+        m_name = dirPath.filename().string();
     }
 
     // Create directory structure
-    QDir dir(savePath);
-    if (!dir.exists()) {
-        if (!dir.mkpath(QStringLiteral("."))) {
-            if (errorMsg) *errorMsg = QStringLiteral("Failed to create project directory");
-            return false;
-        }
+    try {
+        fs::create_directories(savePath);
+        fs::create_directories(savePath + "/geometry");
+        fs::create_directories(savePath + "/construction");
+        fs::create_directories(savePath + "/sketches");
+        fs::create_directories(savePath + "/features");
+        fs::create_directories(savePath + "/metadata");
+    } catch (const fs::filesystem_error& e) {
+        if (errorMsg) *errorMsg = std::string("Failed to create project directory: ") + e.what();
+        return false;
     }
-
-    // Create subdirectories
-    dir.mkpath(QStringLiteral("geometry"));
-    dir.mkpath(QStringLiteral("construction"));
-    dir.mkpath(QStringLiteral("sketches"));
-    dir.mkpath(QStringLiteral("features"));
-    dir.mkpath(QStringLiteral("metadata"));
 
     // Save all components
     if (!saveGeometry(savePath, errorMsg)) return false;
@@ -888,16 +925,17 @@ bool Project::save(const QString& path, QString* errorMsg)
     return true;
 }
 
-bool Project::saveManifest(const QString& dir, QString* errorMsg)
+bool Project::saveManifest(const std::string& dir, std::string* errorMsg)
 {
     // Manifest is named after the project: my_widget/my_widget.hcad
-    QDir d(dir);
-    QString manifestName = d.dirName() + QStringLiteral(".hcad");
-    QString path = dir + QStringLiteral("/") + manifestName;
+    namespace fs = std::filesystem;
+    std::string dirName = fs::path(dir).filename().string();
+    std::string manifestName = dirName + ".hcad";
+    std::string path = dir + "/" + manifestName;
 
-    QFile file(path);
+    QFile file(QString::fromStdString(path));
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to create manifest: %1").arg(file.errorString());
+        if (errorMsg) *errorMsg = "Failed to create manifest: " + file.errorString().toStdString();
         return false;
     }
 
@@ -906,73 +944,73 @@ bool Project::saveManifest(const QString& dir, QString* errorMsg)
     return true;
 }
 
-bool Project::saveGeometry(const QString& dir, QString* errorMsg)
+bool Project::saveGeometry(const std::string& dir, std::string* errorMsg)
 {
     m_geometryFiles.clear();
 
-    for (int i = 0; i < m_shapes.size(); ++i) {
-        QString relPath = QStringLiteral("geometry/body_%1.brep").arg(i + 1, 3, 10, QLatin1Char('0'));
-        QString fullPath = dir + QStringLiteral("/") + relPath;
+    for (size_t i = 0; i < m_shapes.size(); ++i) {
+        std::string relPath = format("geometry/body_%03d.brep", static_cast<int>(i + 1));
+        std::string fullPath = dir + "/" + relPath;
 
         if (!brep_io::writeBrep(fullPath, {m_shapes[i]}, errorMsg)) {
             return false;
         }
-        m_geometryFiles.append(relPath);
+        m_geometryFiles.push_back(relPath);
     }
 
     return true;
 }
 
-bool Project::saveConstructionPlanes(const QString& dir, QString* errorMsg)
+bool Project::saveConstructionPlanes(const std::string& dir, std::string* errorMsg)
 {
     m_constructionPlaneFiles.clear();
 
-    for (int i = 0; i < m_constructionPlanes.size(); ++i) {
-        QString relPath = QStringLiteral("construction/plane_%1.json").arg(i + 1, 3, 10, QLatin1Char('0'));
-        QString fullPath = dir + QStringLiteral("/") + relPath;
+    for (size_t i = 0; i < m_constructionPlanes.size(); ++i) {
+        std::string relPath = format("construction/plane_%03d.json", static_cast<int>(i + 1));
+        std::string fullPath = dir + "/" + relPath;
 
-        QFile file(fullPath);
+        QFile file(QString::fromStdString(fullPath));
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            if (errorMsg) *errorMsg = QStringLiteral("Failed to save construction plane: %1").arg(file.errorString());
+            if (errorMsg) *errorMsg = "Failed to save construction plane: " + file.errorString().toStdString();
             return false;
         }
 
         QJsonDocument doc(constructionPlaneToJson(m_constructionPlanes[i]));
         file.write(doc.toJson(QJsonDocument::Indented));
-        m_constructionPlaneFiles.append(relPath);
+        m_constructionPlaneFiles.push_back(relPath);
     }
 
     return true;
 }
 
-bool Project::saveSketches(const QString& dir, QString* errorMsg)
+bool Project::saveSketches(const std::string& dir, std::string* errorMsg)
 {
     m_sketchFiles.clear();
 
-    for (int i = 0; i < m_sketches.size(); ++i) {
-        QString relPath = QStringLiteral("sketches/sketch_%1.json").arg(i + 1, 3, 10, QLatin1Char('0'));
-        QString fullPath = dir + QStringLiteral("/") + relPath;
+    for (size_t i = 0; i < m_sketches.size(); ++i) {
+        std::string relPath = format("sketches/sketch_%03d.json", static_cast<int>(i + 1));
+        std::string fullPath = dir + "/" + relPath;
 
-        QFile file(fullPath);
+        QFile file(QString::fromStdString(fullPath));
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            if (errorMsg) *errorMsg = QStringLiteral("Failed to save sketch: %1").arg(file.errorString());
+            if (errorMsg) *errorMsg = "Failed to save sketch: " + file.errorString().toStdString();
             return false;
         }
 
         QJsonDocument doc(sketchToJson(m_sketches[i]));
         file.write(doc.toJson(QJsonDocument::Indented));
-        m_sketchFiles.append(relPath);
+        m_sketchFiles.push_back(relPath);
     }
 
     return true;
 }
 
-bool Project::saveParameters(const QString& dir, QString* errorMsg)
+bool Project::saveParameters(const std::string& dir, std::string* errorMsg)
 {
-    QString path = dir + QStringLiteral("/features/parameters.json");
-    QFile file(path);
+    std::string path = dir + "/features/parameters.json";
+    QFile file(QString::fromStdString(path));
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to save parameters: %1").arg(file.errorString());
+        if (errorMsg) *errorMsg = "Failed to save parameters: " + file.errorString().toStdString();
         return false;
     }
 
@@ -981,12 +1019,12 @@ bool Project::saveParameters(const QString& dir, QString* errorMsg)
     return true;
 }
 
-bool Project::saveFeatures(const QString& dir, QString* errorMsg)
+bool Project::saveFeatures(const std::string& dir, std::string* errorMsg)
 {
-    QString path = dir + QStringLiteral("/features/feature_tree.json");
-    QFile file(path);
+    std::string path = dir + "/features/feature_tree.json";
+    QFile file(QString::fromStdString(path));
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to save features: %1").arg(file.errorString());
+        if (errorMsg) *errorMsg = "Failed to save features: " + file.errorString().toStdString();
         return false;
     }
 
@@ -999,49 +1037,64 @@ bool Project::saveFeatures(const QString& dir, QString* errorMsg)
 
 /// Find the .hcad manifest file in a project directory.
 /// Returns empty string if not found.
-static QString findManifest(const QString& dirPath)
+static std::string findManifest(const std::string& dirPath)
 {
-    QDir dir(dirPath);
+    namespace fs = std::filesystem;
+
+    fs::path dir(dirPath);
 
     // Look for <dirname>.hcad first (standard naming)
-    QString standardName = dir.dirName() + QStringLiteral(".hcad");
-    QString standardPath = dirPath + QStringLiteral("/") + standardName;
-    if (QFileInfo::exists(standardPath)) {
+    std::string standardName = dir.filename().string() + ".hcad";
+    std::string standardPath = dirPath + "/" + standardName;
+    if (fs::exists(standardPath)) {
         return standardPath;
     }
 
     // Fall back to any .hcad file in the directory
-    QStringList filters;
-    filters << QStringLiteral("*.hcad");
-    QStringList hcadFiles = dir.entryList(filters, QDir::Files);
-    if (!hcadFiles.isEmpty()) {
-        return dirPath + QStringLiteral("/") + hcadFiles.first();
+    try {
+        for (const auto& entry : fs::directory_iterator(dir)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                if (ext == ".hcad") {
+                    return entry.path().string();
+                }
+            }
+        }
+    } catch (...) {
+        // Directory iteration failed
     }
 
-    return QString();
+    return {};
 }
 
-bool Project::load(const QString& path, QString* errorMsg)
+bool Project::load(const std::string& path, std::string* errorMsg)
 {
-    QString projectDir = path;
-    QString manifestPath;
+    namespace fs = std::filesystem;
 
-    QFileInfo info(path);
-    if (info.isFile() && path.endsWith(QStringLiteral(".hcad"), Qt::CaseInsensitive)) {
-        // User specified the manifest file directly
-        manifestPath = path;
-        projectDir = info.absolutePath();
-    } else if (info.isDir()) {
+    std::string projectDir = path;
+    std::string manifestPath;
+
+    fs::path p(path);
+
+    if (fs::is_regular_file(p)) {
+        std::string ext = p.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (ext == ".hcad") {
+            // User specified the manifest file directly
+            manifestPath = path;
+            projectDir = p.parent_path().string();
+        }
+    } else if (fs::is_directory(p)) {
         // User specified the project directory
         projectDir = path;
         manifestPath = findManifest(projectDir);
     } else {
-        if (errorMsg) *errorMsg = QStringLiteral("Path does not exist: %1").arg(path);
+        if (errorMsg) *errorMsg = "Path does not exist: " + path;
         return false;
     }
 
-    if (manifestPath.isEmpty()) {
-        if (errorMsg) *errorMsg = QStringLiteral("Not a valid HobbyCAD project (no .hcad manifest found)");
+    if (manifestPath.empty()) {
+        if (errorMsg) *errorMsg = "Not a valid HobbyCAD project (no .hcad manifest found)";
         return false;
     }
 
@@ -1062,121 +1115,129 @@ bool Project::load(const QString& path, QString* errorMsg)
     return true;
 }
 
-bool Project::loadManifestFile(const QString& manifestPath, QString* errorMsg)
+bool Project::loadManifestFile(const std::string& manifestPath, std::string* errorMsg)
 {
-    QFile file(manifestPath);
+    QFile file(QString::fromStdString(manifestPath));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to read manifest: %1").arg(file.errorString());
+        if (errorMsg) *errorMsg = "Failed to read manifest: " + file.errorString().toStdString();
         return false;
     }
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError) {
-        if (errorMsg) *errorMsg = QStringLiteral("Invalid manifest JSON: %1").arg(parseError.errorString());
+        if (errorMsg) *errorMsg = "Invalid manifest JSON: " + parseError.errorString().toStdString();
         return false;
     }
 
     return manifestFromJson(doc.object(), errorMsg);
 }
 
-bool Project::loadGeometry(const QString& dir, QString* errorMsg)
+bool Project::loadGeometry(const std::string& dir, std::string* errorMsg)
 {
+    namespace fs = std::filesystem;
+
     m_shapes.clear();
 
-    for (const QString& relPath : m_geometryFiles) {
-        QString fullPath = dir + QStringLiteral("/") + relPath;
-        if (!QFileInfo::exists(fullPath)) {
+    for (const std::string& relPath : m_geometryFiles) {
+        std::string fullPath = dir + "/" + relPath;
+        if (!fs::exists(fullPath)) {
             // Skip missing files (may have been deleted)
             continue;
         }
 
         auto shapes = brep_io::readBrep(fullPath, errorMsg);
-        if (shapes.isEmpty() && errorMsg && !errorMsg->isEmpty()) {
+        if (shapes.empty() && errorMsg && !errorMsg->empty()) {
             return false;
         }
-        m_shapes.append(shapes);
+        m_shapes.insert(m_shapes.end(), shapes.begin(), shapes.end());
     }
 
     return true;
 }
 
-bool Project::loadConstructionPlanes(const QString& dir, QString* errorMsg)
+bool Project::loadConstructionPlanes(const std::string& dir, std::string* errorMsg)
 {
+    namespace fs = std::filesystem;
+
     m_constructionPlanes.clear();
 
-    for (const QString& relPath : m_constructionPlaneFiles) {
-        QString fullPath = dir + QStringLiteral("/") + relPath;
-        if (!QFileInfo::exists(fullPath)) {
+    for (const std::string& relPath : m_constructionPlaneFiles) {
+        std::string fullPath = dir + "/" + relPath;
+        if (!fs::exists(fullPath)) {
             continue;
         }
 
-        QFile file(fullPath);
+        QFile file(QString::fromStdString(fullPath));
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            if (errorMsg) *errorMsg = QStringLiteral("Failed to read construction plane: %1").arg(file.errorString());
+            if (errorMsg) *errorMsg = "Failed to read construction plane: " + file.errorString().toStdString();
             return false;
         }
 
         QJsonParseError parseError;
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
         if (parseError.error != QJsonParseError::NoError) {
-            if (errorMsg) *errorMsg = QStringLiteral("Invalid construction plane JSON: %1").arg(parseError.errorString());
+            if (errorMsg) *errorMsg = "Invalid construction plane JSON: " + parseError.errorString().toStdString();
             return false;
         }
 
-        m_constructionPlanes.append(constructionPlaneFromJson(doc.object()));
+        m_constructionPlanes.push_back(constructionPlaneFromJson(doc.object()));
     }
 
     return true;
 }
 
-bool Project::loadSketches(const QString& dir, QString* errorMsg)
+bool Project::loadSketches(const std::string& dir, std::string* errorMsg)
 {
+    namespace fs = std::filesystem;
+
     m_sketches.clear();
 
-    for (const QString& relPath : m_sketchFiles) {
-        QString fullPath = dir + QStringLiteral("/") + relPath;
-        if (!QFileInfo::exists(fullPath)) {
+    for (const std::string& relPath : m_sketchFiles) {
+        std::string fullPath = dir + "/" + relPath;
+        if (!fs::exists(fullPath)) {
             continue;
         }
 
-        QFile file(fullPath);
+        QFile file(QString::fromStdString(fullPath));
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            if (errorMsg) *errorMsg = QStringLiteral("Failed to read sketch: %1").arg(file.errorString());
+            if (errorMsg) *errorMsg = "Failed to read sketch: " + file.errorString().toStdString();
             return false;
         }
 
         QJsonParseError parseError;
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
         if (parseError.error != QJsonParseError::NoError) {
-            if (errorMsg) *errorMsg = QStringLiteral("Invalid sketch JSON: %1").arg(parseError.errorString());
+            if (errorMsg) *errorMsg = "Invalid sketch JSON: " + parseError.errorString().toStdString();
             return false;
         }
 
-        m_sketches.append(sketchFromJson(doc.object()));
+        m_sketches.push_back(sketchFromJson(doc.object()));
     }
 
     return true;
 }
 
-bool Project::loadParameters(const QString& dir, QString* errorMsg)
+bool Project::loadParameters(const std::string& dir, std::string* errorMsg)
 {
-    QString path = dir + QStringLiteral("/features/parameters.json");
-    if (!QFileInfo::exists(path)) {
+    namespace fs = std::filesystem;
+
+    std::string path = dir + "/features/parameters.json";
+    if (!fs::exists(path)) {
         // Parameters file is optional
         return true;
     }
 
-    QFile file(path);
+    QFile file(QString::fromStdString(path));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to read parameters: %1").arg(file.errorString());
+        if (errorMsg) *errorMsg = "Failed to read parameters: " + file.errorString().toStdString();
         return false;
     }
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError) {
-        if (errorMsg) *errorMsg = QStringLiteral("Invalid parameters JSON: %1").arg(parseError.errorString());
+        if (errorMsg) *errorMsg = "Invalid parameters JSON: " + parseError.errorString().toStdString();
         return false;
     }
 
@@ -1184,29 +1245,784 @@ bool Project::loadParameters(const QString& dir, QString* errorMsg)
     return true;
 }
 
-bool Project::loadFeatures(const QString& dir, QString* errorMsg)
+bool Project::loadFeatures(const std::string& dir, std::string* errorMsg)
 {
-    QString path = dir + QStringLiteral("/features/feature_tree.json");
-    if (!QFileInfo::exists(path)) {
+    namespace fs = std::filesystem;
+
+    std::string path = dir + "/features/feature_tree.json";
+    if (!fs::exists(path)) {
         // Features file is optional
         return true;
     }
 
-    QFile file(path);
+    QFile file(QString::fromStdString(path));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to read features: %1").arg(file.errorString());
+        if (errorMsg) *errorMsg = "Failed to read features: " + file.errorString().toStdString();
         return false;
     }
 
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError) {
-        if (errorMsg) *errorMsg = QStringLiteral("Invalid features JSON: %1").arg(parseError.errorString());
+        if (errorMsg) *errorMsg = "Invalid features JSON: " + parseError.errorString().toStdString();
         return false;
     }
 
     featuresFromJson(doc.object());
     return true;
 }
+
+#else  // !HOBBYCAD_HAS_QT — nlohmann/json + std::fstream fallback
+
+#include <nlohmann/json.hpp>
+#include "hobbycad/base64.h"
+
+// ---- File I/O helpers ----
+
+static nlohmann::json readJsonFile(const std::string& path, std::string* errorMsg)
+{
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) {
+        if (errorMsg) *errorMsg = "Failed to open: " + path;
+        return {};
+    }
+    try {
+        return nlohmann::json::parse(ifs);
+    } catch (const nlohmann::json::parse_error& e) {
+        if (errorMsg) *errorMsg = std::string("JSON parse error: ") + e.what();
+        return {};
+    }
+}
+
+static bool writeJsonFile(const std::string& path, const nlohmann::json& json,
+                          std::string* errorMsg)
+{
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+        if (errorMsg) *errorMsg = "Failed to create: " + path;
+        return false;
+    }
+    ofs << json.dump(4);
+    if (!ofs.good()) {
+        if (errorMsg) *errorMsg = "Failed to write: " + path;
+        return false;
+    }
+    return true;
+}
+
+// ---- JSON Serialization: Construction Planes ----
+
+nlohmann::json Project::constructionPlaneToJson(const ConstructionPlaneData& plane) const
+{
+    nlohmann::json obj;
+    obj["id"] = plane.id;
+    obj["name"] = plane.name;
+    obj["type"] = static_cast<int>(plane.type);
+    obj["base_plane"] = static_cast<int>(plane.basePlane);
+    obj["base_plane_id"] = plane.basePlaneId;
+
+    // Origin point (plane center in absolute coordinates)
+    obj["origin_x"] = plane.originX;
+    obj["origin_y"] = plane.originY;
+    obj["origin_z"] = plane.originZ;
+
+    obj["offset"] = plane.offset;
+    obj["primary_axis"] = static_cast<int>(plane.primaryAxis);
+    obj["primary_angle"] = plane.primaryAngle;
+    obj["secondary_axis"] = static_cast<int>(plane.secondaryAxis);
+    obj["secondary_angle"] = plane.secondaryAngle;
+    obj["roll_angle"] = plane.rollAngle;
+    obj["visible"] = plane.visible;
+    return obj;
+}
+
+ConstructionPlaneData Project::constructionPlaneFromJson(const nlohmann::json& json) const
+{
+    ConstructionPlaneData plane;
+    plane.id = json.value("id", 0);
+    plane.name = json.value("name", std::string{});
+    plane.type = static_cast<ConstructionPlaneType>(json.value("type", 0));
+    plane.basePlane = static_cast<SketchPlane>(json.value("base_plane", 0));
+    plane.basePlaneId = json.value("base_plane_id", -1);
+
+    // Origin point (plane center in absolute coordinates)
+    plane.originX = json.value("origin_x", 0.0);
+    plane.originY = json.value("origin_y", 0.0);
+    plane.originZ = json.value("origin_z", 0.0);
+
+    plane.offset = json.value("offset", 0.0);
+    plane.primaryAxis = static_cast<PlaneRotationAxis>(json.value("primary_axis", 0));
+    plane.primaryAngle = json.value("primary_angle", 0.0);
+    plane.secondaryAxis = static_cast<PlaneRotationAxis>(json.value("secondary_axis", 0));
+    plane.secondaryAngle = json.value("secondary_angle", 0.0);
+    plane.rollAngle = json.value("roll_angle", 0.0);
+    plane.visible = json.value("visible", true);
+    return plane;
+}
+
+// ---- JSON Serialization: Sketches ----
+
+nlohmann::json Project::sketchToJson(const SketchData& sketch) const
+{
+    nlohmann::json obj;
+    obj["name"] = sketch.name;
+    obj["plane"] = static_cast<int>(sketch.plane);
+    obj["construction_plane_id"] = sketch.constructionPlaneId;
+    obj["plane_offset"] = sketch.planeOffset;
+    // Inline plane parameters (when not referencing a construction plane)
+    if (sketch.constructionPlaneId < 0 && sketch.plane == SketchPlane::Custom) {
+        obj["rotation_axis"] = static_cast<int>(sketch.rotationAxis);
+        obj["rotation_angle"] = sketch.rotationAngle;
+    }
+    obj["grid_spacing"] = sketch.gridSpacing;
+
+    nlohmann::json entities = nlohmann::json::array();
+    for (const auto& entity : sketch.entities) {
+        nlohmann::json ent;
+        ent["id"] = entity.id;
+        ent["type"] = static_cast<int>(entity.type);
+
+        nlohmann::json pts = nlohmann::json::array();
+        for (const auto& pt : entity.points) {
+            pts.push_back({pt.x, pt.y});
+        }
+        ent["points"] = pts;
+
+        if (entity.type == SketchEntityType::Circle ||
+            entity.type == SketchEntityType::Arc ||
+            entity.type == SketchEntityType::Slot) {
+            ent["radius"] = entity.radius;
+        }
+        if (entity.type == SketchEntityType::Arc) {
+            ent["start_angle"] = entity.startAngle;
+            ent["sweep_angle"] = entity.sweepAngle;
+        }
+        if (entity.type == SketchEntityType::Polygon) {
+            ent["sides"] = entity.sides;
+        }
+        if (entity.type == SketchEntityType::Ellipse) {
+            ent["major_radius"] = entity.majorRadius;
+            ent["minor_radius"] = entity.minorRadius;
+        }
+        if (entity.type == SketchEntityType::Text) {
+            ent["text"] = entity.text;
+            if (!entity.fontFamily.empty()) {
+                ent["font_family"] = entity.fontFamily;
+            }
+            ent["font_size"] = entity.fontSize;
+            ent["font_bold"] = entity.fontBold;
+            ent["font_italic"] = entity.fontItalic;
+            if (!fuzzyIsNull(entity.textRotation)) {
+                ent["text_rotation"] = entity.textRotation;
+            }
+        }
+        if (entity.type == SketchEntityType::Slot && entity.arcFlipped) {
+            ent["arc_flipped"] = true;
+        }
+        ent["constrained"] = entity.constrained;
+        ent["is_construction"] = entity.isConstruction;
+
+        entities.push_back(ent);
+    }
+    obj["entities"] = entities;
+
+    // Serialize constraints
+    nlohmann::json constraints = nlohmann::json::array();
+    for (const auto& constraint : sketch.constraints) {
+        nlohmann::json c;
+        c["id"] = constraint.id;
+        c["type"] = static_cast<int>(constraint.type);
+
+        // Entity IDs
+        nlohmann::json eids = nlohmann::json::array();
+        for (int eid : constraint.entityIds) {
+            eids.push_back(eid);
+        }
+        c["entity_ids"] = eids;
+
+        // Point indices
+        nlohmann::json pidxs = nlohmann::json::array();
+        for (int pidx : constraint.pointIndices) {
+            pidxs.push_back(pidx);
+        }
+        c["point_indices"] = pidxs;
+
+        c["value"] = constraint.value;
+        c["is_driving"] = constraint.isDriving;
+        c["label_x"] = constraint.labelPosition.x;
+        c["label_y"] = constraint.labelPosition.y;
+        c["label_visible"] = constraint.labelVisible;
+        c["enabled"] = constraint.enabled;
+
+        constraints.push_back(c);
+    }
+    obj["constraints"] = constraints;
+
+    // Serialize background image (only if enabled)
+    if (sketch.backgroundImage.enabled) {
+        nlohmann::json bg;
+        bg["enabled"] = true;
+        bg["storage"] = static_cast<int>(sketch.backgroundImage.storage);
+        bg["file_path"] = sketch.backgroundImage.filePath;
+        bg["mime_type"] = sketch.backgroundImage.mimeType;
+
+        // Position and size
+        bg["position_x"] = sketch.backgroundImage.position.x;
+        bg["position_y"] = sketch.backgroundImage.position.y;
+        bg["width"] = sketch.backgroundImage.width;
+        bg["height"] = sketch.backgroundImage.height;
+        bg["rotation"] = sketch.backgroundImage.rotation;
+
+        // Display options
+        bg["opacity"] = sketch.backgroundImage.opacity;
+        bg["lock_aspect_ratio"] = sketch.backgroundImage.lockAspectRatio;
+        bg["grayscale"] = sketch.backgroundImage.grayscale;
+        bg["contrast"] = sketch.backgroundImage.contrast;
+        bg["brightness"] = sketch.backgroundImage.brightness;
+
+        // Calibration
+        bg["calibrated"] = sketch.backgroundImage.calibrated;
+        bg["calibration_scale"] = sketch.backgroundImage.calibrationScale;
+
+        // Embed image data if storage is Embedded
+        if (sketch.backgroundImage.storage == sketch::BackgroundStorage::Embedded &&
+            !sketch.backgroundImage.imageData.empty()) {
+            bg["image_data"] = hobbycad::base64Encode(sketch.backgroundImage.imageData);
+        }
+
+        obj["background_image"] = bg;
+    }
+
+    return obj;
+}
+
+SketchData Project::sketchFromJson(const nlohmann::json& json) const
+{
+    SketchData sketch;
+    sketch.name = json.value("name", std::string{});
+    sketch.plane = static_cast<SketchPlane>(json.value("plane", 0));
+    sketch.constructionPlaneId = json.value("construction_plane_id", -1);
+    sketch.planeOffset = json.value("plane_offset", 0.0);
+    // Inline plane parameters (when not referencing a construction plane)
+    if (sketch.constructionPlaneId < 0 && sketch.plane == SketchPlane::Custom) {
+        sketch.rotationAxis = static_cast<PlaneRotationAxis>(
+            json.value("rotation_axis", 0));
+        sketch.rotationAngle = json.value("rotation_angle", 0.0);
+    }
+    sketch.gridSpacing = json.value("grid_spacing", 10.0);
+
+    if (json.contains("entities")) {
+        for (const auto& ent : json["entities"]) {
+            SketchEntityData entity;
+            entity.id = ent.value("id", 0);
+            entity.type = static_cast<SketchEntityType>(ent.value("type", 0));
+
+            if (ent.contains("points")) {
+                for (const auto& ptArr : ent["points"]) {
+                    if (ptArr.is_array() && ptArr.size() >= 2) {
+                        entity.points.push_back(Point2D(
+                            ptArr[0].get<double>(), ptArr[1].get<double>()));
+                    }
+                }
+            }
+
+            entity.radius = ent.value("radius", 0.0);
+            entity.startAngle = ent.value("start_angle", 0.0);
+            entity.sweepAngle = ent.value("sweep_angle", 0.0);
+            entity.sides = ent.value("sides", 6);
+            entity.majorRadius = ent.value("major_radius", 0.0);
+            entity.minorRadius = ent.value("minor_radius", 0.0);
+            entity.text = ent.value("text", std::string{});
+            entity.fontFamily = ent.value("font_family", std::string{});
+            entity.fontSize = ent.value("font_size", 12.0);
+            entity.fontBold = ent.value("font_bold", false);
+            entity.fontItalic = ent.value("font_italic", false);
+            entity.textRotation = ent.value("text_rotation", 0.0);
+            entity.arcFlipped = ent.value("arc_flipped", false);
+            entity.constrained = ent.value("constrained", false);
+            entity.isConstruction = ent.value("is_construction", false);
+
+            sketch.entities.push_back(entity);
+        }
+    }
+
+    // Deserialize constraints
+    if (json.contains("constraints")) {
+        for (const auto& c : json["constraints"]) {
+            ConstraintData constraint;
+
+            constraint.id = c.value("id", 0);
+            constraint.type = static_cast<ConstraintType>(c.value("type", 0));
+
+            // Entity IDs
+            if (c.contains("entity_ids")) {
+                for (const auto& eid : c["entity_ids"]) {
+                    constraint.entityIds.push_back(eid.get<int>());
+                }
+            }
+
+            // Point indices
+            if (c.contains("point_indices")) {
+                for (const auto& pidx : c["point_indices"]) {
+                    constraint.pointIndices.push_back(pidx.get<int>());
+                }
+            }
+
+            constraint.value = c.value("value", 0.0);
+            constraint.isDriving = c.value("is_driving", true);
+            constraint.labelPosition = Point2D(
+                c.value("label_x", 0.0),
+                c.value("label_y", 0.0)
+            );
+            constraint.labelVisible = c.value("label_visible", true);
+            constraint.enabled = c.value("enabled", true);
+
+            sketch.constraints.push_back(constraint);
+        }
+    }
+
+    // Deserialize background image
+    if (json.contains("background_image")) {
+        const auto& bg = json["background_image"];
+
+        sketch.backgroundImage.enabled = bg.value("enabled", false);
+        sketch.backgroundImage.storage = static_cast<sketch::BackgroundStorage>(
+            bg.value("storage", 0));
+        sketch.backgroundImage.filePath = bg.value("file_path", std::string{});
+        sketch.backgroundImage.mimeType = bg.value("mime_type", std::string{});
+
+        // Position and size
+        sketch.backgroundImage.position = Point2D(
+            bg.value("position_x", 0.0),
+            bg.value("position_y", 0.0));
+        sketch.backgroundImage.width = bg.value("width", 100.0);
+        sketch.backgroundImage.height = bg.value("height", 100.0);
+        sketch.backgroundImage.rotation = bg.value("rotation", 0.0);
+
+        // Display options
+        sketch.backgroundImage.opacity = bg.value("opacity", 0.5);
+        sketch.backgroundImage.lockAspectRatio = bg.value("lock_aspect_ratio", true);
+        sketch.backgroundImage.grayscale = bg.value("grayscale", false);
+        sketch.backgroundImage.contrast = bg.value("contrast", 1.0);
+        sketch.backgroundImage.brightness = bg.value("brightness", 0.0);
+
+        // Calibration
+        sketch.backgroundImage.calibrated = bg.value("calibrated", false);
+        sketch.backgroundImage.calibrationScale = bg.value("calibration_scale", 1.0);
+
+        // Embedded image data
+        if (bg.contains("image_data")) {
+            std::string encoded = bg["image_data"].get<std::string>();
+            sketch.backgroundImage.imageData = hobbycad::base64Decode(encoded);
+        }
+    }
+
+    return sketch;
+}
+
+// ---- JSON Serialization: Parameters ----
+
+nlohmann::json Project::parametersToJson() const
+{
+    nlohmann::json obj;
+    nlohmann::json params = nlohmann::json::array();
+
+    for (const auto& param : m_parameters) {
+        nlohmann::json p;
+        p["name"] = param.name;
+        p["expression"] = param.expression;
+        p["value"] = param.value;
+        p["unit"] = param.unit;
+        p["comment"] = param.comment;
+        p["is_user_param"] = param.isUserParam;
+        params.push_back(p);
+    }
+
+    obj["parameters"] = params;
+    return obj;
+}
+
+void Project::parametersFromJson(const nlohmann::json& json)
+{
+    m_parameters.clear();
+    if (!json.contains("parameters")) return;
+
+    for (const auto& p : json["parameters"]) {
+        ParameterData param;
+        param.name = p.value("name", std::string{});
+        param.expression = p.value("expression", std::string{});
+        param.value = p.value("value", 0.0);
+        param.unit = p.value("unit", std::string{});
+        param.comment = p.value("comment", std::string{});
+        param.isUserParam = p.value("is_user_param", true);
+        m_parameters.push_back(param);
+    }
+}
+
+// ---- JSON Serialization: Features ----
+
+static std::string featureTypeToString(FeatureType type)
+{
+    switch (type) {
+    case FeatureType::Origin:    return "Origin";
+    case FeatureType::Sketch:    return "Sketch";
+    case FeatureType::Extrude:   return "Extrude";
+    case FeatureType::Revolve:   return "Revolve";
+    case FeatureType::Fillet:    return "Fillet";
+    case FeatureType::Chamfer:   return "Chamfer";
+    case FeatureType::Hole:      return "Hole";
+    case FeatureType::Mirror:    return "Mirror";
+    case FeatureType::Pattern:   return "Pattern";
+    case FeatureType::Box:       return "Box";
+    case FeatureType::Cylinder:  return "Cylinder";
+    case FeatureType::Sphere:    return "Sphere";
+    case FeatureType::Move:      return "Move";
+    case FeatureType::Join:      return "Join";
+    case FeatureType::Cut:       return "Cut";
+    case FeatureType::Intersect: return "Intersect";
+    }
+    return "Unknown";
+}
+
+static FeatureType featureTypeFromString(const std::string& str)
+{
+    if (str == "Origin")    return FeatureType::Origin;
+    if (str == "Sketch")    return FeatureType::Sketch;
+    if (str == "Extrude")   return FeatureType::Extrude;
+    if (str == "Revolve")   return FeatureType::Revolve;
+    if (str == "Fillet")    return FeatureType::Fillet;
+    if (str == "Chamfer")   return FeatureType::Chamfer;
+    if (str == "Hole")      return FeatureType::Hole;
+    if (str == "Mirror")    return FeatureType::Mirror;
+    if (str == "Pattern")   return FeatureType::Pattern;
+    if (str == "Box")       return FeatureType::Box;
+    if (str == "Cylinder")  return FeatureType::Cylinder;
+    if (str == "Sphere")    return FeatureType::Sphere;
+    if (str == "Move")      return FeatureType::Move;
+    if (str == "Join")      return FeatureType::Join;
+    if (str == "Cut")       return FeatureType::Cut;
+    if (str == "Intersect") return FeatureType::Intersect;
+    return FeatureType::Origin;
+}
+
+nlohmann::json Project::featuresToJson() const
+{
+    nlohmann::json obj;
+    nlohmann::json features = nlohmann::json::array();
+
+    for (const auto& feature : m_features) {
+        nlohmann::json f;
+        f["id"] = feature.id;
+        f["type"] = featureTypeToString(feature.type);
+        f["name"] = feature.name;
+        if (!feature.properties.empty()) {
+            f["properties"] = feature.properties;
+        }
+        features.push_back(f);
+    }
+
+    obj["features"] = features;
+    return obj;
+}
+
+void Project::featuresFromJson(const nlohmann::json& json)
+{
+    m_features.clear();
+    if (!json.contains("features")) return;
+
+    for (const auto& f : json["features"]) {
+        FeatureData feature;
+        feature.id = f.value("id", 0);
+        feature.type = featureTypeFromString(f.value("type", std::string{"Origin"}));
+        feature.name = f.value("name", std::string{});
+        if (f.contains("properties")) {
+            feature.properties = f["properties"];
+        }
+        m_features.push_back(feature);
+    }
+}
+
+// ---- Manifest ----
+
+nlohmann::json Project::manifestToJson() const
+{
+    nlohmann::json obj;
+
+    // Version info
+    obj["hobbycad_version"] = std::string(HOBBYCAD_VERSION);
+    obj["format_version"] = FORMAT_VERSION;
+
+    // Metadata
+    obj["project_name"] = m_name;
+    obj["author"] = m_author;
+    obj["description"] = m_description;
+    obj["units"] = m_units;
+    obj["created"] = m_created;
+    obj["modified"] = m_modified_time;
+
+    // File references
+    {
+        nlohmann::json geoArr = nlohmann::json::array();
+        for (const auto& f : m_geometryFiles) {
+            geoArr.push_back(f);
+        }
+        obj["geometry"] = geoArr;
+    }
+    {
+        nlohmann::json cpArr = nlohmann::json::array();
+        for (const auto& f : m_constructionPlaneFiles) {
+            cpArr.push_back(f);
+        }
+        obj["construction_planes"] = cpArr;
+    }
+    {
+        nlohmann::json skArr = nlohmann::json::array();
+        for (const auto& f : m_sketchFiles) {
+            skArr.push_back(f);
+        }
+        obj["sketches"] = skArr;
+    }
+    obj["parameters"] = "features/parameters.json";
+    obj["features"] = "features/feature_tree.json";
+
+    // Foreign files (non-CAD content tracked by the project)
+    if (!m_foreignFiles.empty()) {
+        nlohmann::json foreignArr = nlohmann::json::array();
+        for (const auto& file : m_foreignFiles) {
+            if (file.description.empty() && file.category.empty()) {
+                // Simple string format for minimal entries
+                foreignArr.push_back(file.path);
+            } else {
+                // Object format with metadata
+                nlohmann::json fileObj;
+                fileObj["path"] = file.path;
+                if (!file.description.empty()) {
+                    fileObj["description"] = file.description;
+                }
+                if (!file.category.empty()) {
+                    fileObj["category"] = file.category;
+                }
+                foreignArr.push_back(fileObj);
+            }
+        }
+        obj["foreign_files"] = foreignArr;
+    }
+
+    return obj;
+}
+
+bool Project::manifestFromJson(const nlohmann::json& json, std::string* errorMsg)
+{
+    // Check format version
+    int formatVersion = json.value("format_version", 0);
+    if (formatVersion > FORMAT_VERSION) {
+        if (errorMsg) {
+            *errorMsg = format(
+                "Project was created with a newer version of HobbyCAD (format %d, this version supports %d)",
+                formatVersion, FORMAT_VERSION);
+        }
+        return false;
+    }
+
+    // Metadata
+    m_name = json.value("project_name", std::string{});
+    m_author = json.value("author", std::string{});
+    m_description = json.value("description", std::string{});
+    m_units = json.value("units", std::string{"mm"});
+    m_created = json.value("created", std::string{});
+    m_modified_time = json.value("modified", std::string{});
+
+    // File references
+    m_geometryFiles.clear();
+    if (json.contains("geometry")) {
+        for (const auto& val : json["geometry"]) {
+            m_geometryFiles.push_back(val.get<std::string>());
+        }
+    }
+
+    m_constructionPlaneFiles.clear();
+    if (json.contains("construction_planes")) {
+        for (const auto& val : json["construction_planes"]) {
+            m_constructionPlaneFiles.push_back(val.get<std::string>());
+        }
+    }
+
+    m_sketchFiles.clear();
+    if (json.contains("sketches")) {
+        for (const auto& val : json["sketches"]) {
+            m_sketchFiles.push_back(val.get<std::string>());
+        }
+    }
+
+    // Foreign files
+    m_foreignFiles.clear();
+    if (json.contains("foreign_files")) {
+        for (const auto& val : json["foreign_files"]) {
+            ForeignFileData file;
+            if (val.is_string()) {
+                // Simple string format
+                file.path = val.get<std::string>();
+            } else if (val.is_object()) {
+                // Object format with metadata
+                file.path = val.value("path", std::string{});
+                file.description = val.value("description", std::string{});
+                file.category = val.value("category", std::string{});
+            }
+            if (!file.path.empty()) {
+                m_foreignFiles.push_back(file);
+            }
+        }
+    }
+
+    return true;
+}
+
+// ---- File I/O: Save ----
+
+bool Project::saveManifest(const std::string& dir, std::string* errorMsg)
+{
+    // Manifest is named after the project: my_widget/my_widget.hcad
+    namespace fs = std::filesystem;
+    std::string dirName = fs::path(dir).filename().string();
+    std::string manifestName = dirName + ".hcad";
+    std::string path = (fs::path(dir) / manifestName).string();
+
+    return writeJsonFile(path, manifestToJson(), errorMsg);
+}
+
+bool Project::saveConstructionPlanes(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+    m_constructionPlaneFiles.clear();
+
+    for (size_t i = 0; i < m_constructionPlanes.size(); ++i) {
+        std::string relPath = format("construction/plane_%03d.json", static_cast<int>(i + 1));
+        std::string fullPath = (fs::path(dir) / relPath).string();
+
+        if (!writeJsonFile(fullPath, constructionPlaneToJson(m_constructionPlanes[i]), errorMsg))
+            return false;
+        m_constructionPlaneFiles.push_back(relPath);
+    }
+
+    return true;
+}
+
+bool Project::saveSketches(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+    m_sketchFiles.clear();
+
+    for (size_t i = 0; i < m_sketches.size(); ++i) {
+        std::string relPath = format("sketches/sketch_%03d.json", static_cast<int>(i + 1));
+        std::string fullPath = (fs::path(dir) / relPath).string();
+
+        if (!writeJsonFile(fullPath, sketchToJson(m_sketches[i]), errorMsg))
+            return false;
+        m_sketchFiles.push_back(relPath);
+    }
+
+    return true;
+}
+
+bool Project::saveParameters(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+    std::string path = (fs::path(dir) / "features" / "parameters.json").string();
+    return writeJsonFile(path, parametersToJson(), errorMsg);
+}
+
+bool Project::saveFeatures(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+    std::string path = (fs::path(dir) / "features" / "feature_tree.json").string();
+    return writeJsonFile(path, featuresToJson(), errorMsg);
+}
+
+// ---- File I/O: Load ----
+
+bool Project::loadManifestFile(const std::string& manifestPath, std::string* errorMsg)
+{
+    auto json = readJsonFile(manifestPath, errorMsg);
+    if (json.is_null()) return false;
+    return manifestFromJson(json, errorMsg);
+}
+
+bool Project::loadConstructionPlanes(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+
+    m_constructionPlanes.clear();
+
+    for (const std::string& relPath : m_constructionPlaneFiles) {
+        std::string fullPath = (fs::path(dir) / relPath).string();
+        if (!fs::exists(fullPath)) {
+            continue;
+        }
+
+        auto json = readJsonFile(fullPath, errorMsg);
+        if (json.is_null()) return false;
+
+        m_constructionPlanes.push_back(constructionPlaneFromJson(json));
+    }
+
+    return true;
+}
+
+bool Project::loadSketches(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+
+    m_sketches.clear();
+
+    for (const std::string& relPath : m_sketchFiles) {
+        std::string fullPath = (fs::path(dir) / relPath).string();
+        if (!fs::exists(fullPath)) {
+            continue;
+        }
+
+        auto json = readJsonFile(fullPath, errorMsg);
+        if (json.is_null()) return false;
+
+        m_sketches.push_back(sketchFromJson(json));
+    }
+
+    return true;
+}
+
+bool Project::loadParameters(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+
+    std::string path = (fs::path(dir) / "features" / "parameters.json").string();
+    if (!fs::exists(path)) {
+        // Parameters file is optional
+        return true;
+    }
+
+    auto json = readJsonFile(path, errorMsg);
+    if (json.is_null()) return false;
+
+    parametersFromJson(json);
+    return true;
+}
+
+bool Project::loadFeatures(const std::string& dir, std::string* errorMsg)
+{
+    namespace fs = std::filesystem;
+
+    std::string path = (fs::path(dir) / "features" / "feature_tree.json").string();
+    if (!fs::exists(path)) {
+        // Features file is optional
+        return true;
+    }
+
+    auto json = readJsonFile(path, errorMsg);
+    if (json.is_null()) return false;
+
+    featuresFromJson(json);
+    return true;
+}
+
+#endif  // HOBBYCAD_HAS_QT
 
 }  // namespace hobbycad

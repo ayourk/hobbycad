@@ -8,17 +8,30 @@
 // =====================================================================
 
 #include <hobbycad/parameters.h>
+#include <hobbycad/format.h>
 
+#if HOBBYCAD_HAS_QT
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QRegularExpression>
+#include <QString>
+#else
+#include <nlohmann/json.hpp>
+#endif
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
-#include <QRegularExpression>
-
+#include <regex>
 #include <stack>
 #include <stdexcept>
+#include <unordered_set>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#ifndef M_E
+#define M_E 2.71828182845904523536
+#endif
 
 namespace hobbycad {
 
@@ -26,21 +39,37 @@ namespace hobbycad {
 
 ParametricValue::ParametricValue(double value)
     : m_type(Type::Number)
-    , m_expression(QString::number(value))
+    , m_expression(formatDouble(value, 15))
     , m_value(value)
     , m_valid(true)
 {
 }
 
-ParametricValue::ParametricValue(const QString& expression)
-    : m_expression(expression.trimmed())
+ParametricValue::ParametricValue(const std::string& expression)
+    : m_expression(expression)
 {
+    // Trim whitespace
+    auto start = m_expression.find_first_not_of(" \t\r\n");
+    auto end = m_expression.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        m_expression.clear();
+    } else {
+        m_expression = m_expression.substr(start, end - start + 1);
+    }
     parse();
 }
 
-void ParametricValue::setExpression(const QString& expr)
+void ParametricValue::setExpression(const std::string& expr)
 {
-    m_expression = expr.trimmed();
+    m_expression = expr;
+    // Trim whitespace
+    auto start = m_expression.find_first_not_of(" \t\r\n");
+    auto end = m_expression.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        m_expression.clear();
+    } else {
+        m_expression = m_expression.substr(start, end - start + 1);
+    }
     parse();
 }
 
@@ -50,67 +79,72 @@ void ParametricValue::parse()
     m_errorMessage.clear();
     m_usedParams.clear();
 
-    if (m_expression.isEmpty()) {
+    if (m_expression.empty()) {
         m_type = Type::Number;
         m_value = 0.0;
         return;
     }
 
     // Try to parse as a plain number first
-    bool ok;
-    double num = m_expression.toDouble(&ok);
-    if (ok) {
-        m_type = Type::Number;
-        m_value = num;
-        return;
+    try {
+        size_t pos = 0;
+        double num = std::stod(m_expression, &pos);
+        if (pos == m_expression.size()) {
+            m_type = Type::Number;
+            m_value = num;
+            return;
+        }
+    } catch (...) {
+        // Not a plain number, continue
     }
 
     // Check if it's a single parameter name (identifier only)
-    static QRegularExpression identifierRx(QStringLiteral("^[a-zA-Z_][a-zA-Z0-9_]*$"));
-    if (identifierRx.match(m_expression).hasMatch()) {
+    static std::regex identifierRx("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    if (std::regex_match(m_expression, identifierRx)) {
         m_type = Type::Parameter;
-        m_usedParams.append(m_expression);
+        m_usedParams.push_back(m_expression);
         // Value will be resolved when evaluate() is called
         return;
     }
 
     // Otherwise it's a formula - extract parameter names
     m_type = Type::Formula;
-    static QRegularExpression paramRx(QStringLiteral("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b"));
-    auto it = paramRx.globalMatch(m_expression);
-    while (it.hasNext()) {
-        auto match = it.next();
-        QString name = match.captured(1);
-        // Skip known function names
-        static QStringList functions = {
-            QStringLiteral("sin"), QStringLiteral("cos"), QStringLiteral("tan"),
-            QStringLiteral("asin"), QStringLiteral("acos"), QStringLiteral("atan"),
-            QStringLiteral("atan2"), QStringLiteral("sinr"), QStringLiteral("cosr"),
-            QStringLiteral("tanr"), QStringLiteral("sqrt"), QStringLiteral("abs"),
-            QStringLiteral("floor"), QStringLiteral("ceil"), QStringLiteral("round"),
-            QStringLiteral("min"), QStringLiteral("max"), QStringLiteral("pow"),
-            QStringLiteral("log"), QStringLiteral("log10"), QStringLiteral("log2"),
-            QStringLiteral("exp"), QStringLiteral("sign"), QStringLiteral("mod"),
-            QStringLiteral("if"), QStringLiteral("pi"), QStringLiteral("e"),
-            QStringLiteral("tau")
-        };
-        if (!functions.contains(name.toLower()) && !m_usedParams.contains(name)) {
-            m_usedParams.append(name);
+    static std::regex paramRx("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+
+    static std::unordered_set<std::string> functions = {
+        "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+        "sinr", "cosr", "tanr", "sqrt", "abs", "floor", "ceil",
+        "round", "min", "max", "pow", "log", "log10", "log2",
+        "exp", "sign", "mod", "if", "pi", "e", "tau"
+    };
+
+    auto begin = std::sregex_iterator(m_expression.begin(), m_expression.end(), paramRx);
+    auto end_it = std::sregex_iterator();
+    for (auto it = begin; it != end_it; ++it) {
+        std::string name = (*it)[1].str();
+        // Convert name to lowercase for function check
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        if (functions.find(lower) == functions.end()) {
+            // Check not already in usedParams
+            if (std::find(m_usedParams.begin(), m_usedParams.end(), name) == m_usedParams.end()) {
+                m_usedParams.push_back(name);
+            }
         }
     }
 }
 
 bool ParametricValue::containsParameters() const
 {
-    return !m_usedParams.isEmpty();
+    return !m_usedParams.empty();
 }
 
-QStringList ParametricValue::usedParameters() const
+std::vector<std::string> ParametricValue::usedParameters() const
 {
     return m_usedParams;
 }
 
-bool ParametricValue::evaluate(const QMap<QString, double>& parameters)
+bool ParametricValue::evaluate(const std::map<std::string, double>& parameters)
 {
     if (m_type == Type::Number) {
         // Already a plain number
@@ -118,7 +152,7 @@ bool ParametricValue::evaluate(const QMap<QString, double>& parameters)
     }
 
     double result;
-    QString error;
+    std::string error;
 
     if (evaluateExpression(m_expression, result, parameters, &error)) {
         m_value = result;
@@ -139,20 +173,31 @@ namespace {
 
 class ExpressionEvaluator {
 public:
-    explicit ExpressionEvaluator(const QMap<QString, double>& params,
+    explicit ExpressionEvaluator(const std::map<std::string, double>& params,
                                  LengthUnit defaultUnit = LengthUnit::Millimeters,
                                  bool unitAware = false)
         : m_params(params), m_defaultUnit(defaultUnit), m_unitAware(unitAware)
     {
     }
 
-    bool evaluate(const QString& expr, double& result, QString& error)
+    bool evaluate(const std::string& expr, double& result, std::string& error)
     {
         m_error.clear();
         m_pos = 0;
-        m_expr = expr.trimmed();
+        m_expr = expr;
 
-        if (m_expr.isEmpty()) {
+        // Trim whitespace
+        {
+            auto start = m_expr.find_first_not_of(" \t\r\n");
+            auto end = m_expr.find_last_not_of(" \t\r\n");
+            if (start == std::string::npos) {
+                m_expr.clear();
+            } else {
+                m_expr = m_expr.substr(start, end - start + 1);
+            }
+        }
+
+        if (m_expr.empty()) {
             result = 0.0;
             return true;
         }
@@ -161,13 +206,13 @@ public:
             result = parseExpression();
             skipWhitespace();
             if (m_pos < m_expr.length()) {
-                error = QStringLiteral("Unexpected character '%1' at position %2")
-                    .arg(m_expr[m_pos]).arg(m_pos);
+                error = hobbycad::format("Unexpected character '%c' at position %d",
+                                         m_expr[m_pos], static_cast<int>(m_pos));
                 return false;
             }
             return true;
         } catch (const std::exception& e) {
-            error = QString::fromUtf8(e.what());
+            error = e.what();
             return false;
         }
     }
@@ -175,7 +220,7 @@ public:
 private:
     void skipWhitespace()
     {
-        while (m_pos < m_expr.length() && m_expr[m_pos].isSpace())
+        while (m_pos < m_expr.length() && std::isspace(static_cast<unsigned char>(m_expr[m_pos])))
             ++m_pos;
     }
 
@@ -190,7 +235,7 @@ private:
         skipWhitespace();
 
         while (m_pos < m_expr.length()) {
-            QChar op = m_expr[m_pos];
+            char op = m_expr[m_pos];
             if (op != '+' && op != '-')
                 break;
             ++m_pos;
@@ -210,7 +255,7 @@ private:
         skipWhitespace();
 
         while (m_pos < m_expr.length()) {
-            QChar op = m_expr[m_pos];
+            char op = m_expr[m_pos];
             if (op != '*' && op != '/' && op != '%')
                 break;
             ++m_pos;
@@ -279,28 +324,28 @@ private:
         }
 
         // Number
-        if (m_expr[m_pos].isDigit() || m_expr[m_pos] == '.') {
+        if (std::isdigit(static_cast<unsigned char>(m_expr[m_pos])) || m_expr[m_pos] == '.') {
             return parseNumber();
         }
 
         // Identifier (parameter or function)
-        if (m_expr[m_pos].isLetter() || m_expr[m_pos] == '_') {
+        if (std::isalpha(static_cast<unsigned char>(m_expr[m_pos])) || m_expr[m_pos] == '_') {
             return parseIdentifier();
         }
 
         throw std::runtime_error(
-            QStringLiteral("Unexpected character '%1'").arg(m_expr[m_pos]).toStdString());
+            hobbycad::format("Unexpected character '%c'", m_expr[m_pos]));
     }
 
     double parseNumber()
     {
-        int start = m_pos;
+        size_t start = m_pos;
         bool hasDecimal = false;
         bool hasExponent = false;
 
         while (m_pos < m_expr.length()) {
-            QChar c = m_expr[m_pos];
-            if (c.isDigit()) {
+            char c = m_expr[m_pos];
+            if (std::isdigit(static_cast<unsigned char>(c))) {
                 ++m_pos;
             } else if (c == '.' && !hasDecimal && !hasExponent) {
                 hasDecimal = true;
@@ -316,43 +361,45 @@ private:
             }
         }
 
-        QString numStr = m_expr.mid(start, m_pos - start);
-        bool ok;
-        double num = numStr.toDouble(&ok);
-        if (!ok)
-            throw std::runtime_error(
-                QStringLiteral("Invalid number '%1'").arg(numStr).toStdString());
+        std::string numStr = m_expr.substr(start, m_pos - start);
+        double num;
+        try {
+            size_t pos = 0;
+            num = std::stod(numStr, &pos);
+            if (pos != numStr.size())
+                throw std::runtime_error("Invalid number '" + numStr + "'");
+        } catch (const std::invalid_argument&) {
+            throw std::runtime_error("Invalid number '" + numStr + "'");
+        }
 
         // Unit-aware mode: check for unit suffix after the number.
-        // "Convert final result" approach: bare numbers stay as-is (in display
-        // units). Numbers with explicit unit suffixes are converted TO the
-        // default display unit so they integrate correctly in the expression.
-        // The caller converts the final result from display units to mm.
-        if (m_unitAware && m_pos < m_expr.length() && m_expr[m_pos].isLetter()) {
-            int suffixStart = m_pos;
+        if (m_unitAware && m_pos < m_expr.length() &&
+            std::isalpha(static_cast<unsigned char>(m_expr[m_pos]))) {
+            size_t suffixStart = m_pos;
             // Read potential suffix (letters only)
-            while (m_pos < m_expr.length() && m_expr[m_pos].isLetter())
+            while (m_pos < m_expr.length() &&
+                   std::isalpha(static_cast<unsigned char>(m_expr[m_pos])))
                 ++m_pos;
-            QString suffix = m_expr.mid(suffixStart, m_pos - suffixStart).toLower();
+            std::string suffix = m_expr.substr(suffixStart, m_pos - suffixStart);
+            // Convert to lowercase
+            std::transform(suffix.begin(), suffix.end(), suffix.begin(), ::tolower);
 
             // Check if it's a known unit suffix
-            // Must NOT be followed by more alphanumeric chars (to avoid eating function names)
             bool nextIsAlphaNum = (m_pos < m_expr.length() &&
-                                   (m_expr[m_pos].isLetterOrNumber() || m_expr[m_pos] == '_'));
+                                   (std::isalnum(static_cast<unsigned char>(m_expr[m_pos])) ||
+                                    m_expr[m_pos] == '_'));
             if (!nextIsAlphaNum) {
                 LengthUnit suffixUnit;
                 bool knownSuffix = true;
-                if (suffix == QStringLiteral("mm")) {
+                if (suffix == "mm") {
                     suffixUnit = LengthUnit::Millimeters;
-                } else if (suffix == QStringLiteral("cm")) {
+                } else if (suffix == "cm") {
                     suffixUnit = LengthUnit::Centimeters;
-                } else if (suffix == QStringLiteral("m")) {
+                } else if (suffix == "m") {
                     suffixUnit = LengthUnit::Meters;
-                } else if (suffix == QStringLiteral("in") || suffix == QStringLiteral("inch") ||
-                           suffix == QStringLiteral("inches")) {
+                } else if (suffix == "in" || suffix == "inch" || suffix == "inches") {
                     suffixUnit = LengthUnit::Inches;
-                } else if (suffix == QStringLiteral("ft") || suffix == QStringLiteral("foot") ||
-                           suffix == QStringLiteral("feet")) {
+                } else if (suffix == "ft" || suffix == "foot" || suffix == "feet") {
                     suffixUnit = LengthUnit::Feet;
                 } else {
                     knownSuffix = false;
@@ -369,19 +416,18 @@ private:
                 m_pos = suffixStart;
             }
         }
-        // else: no suffix, bare number stays as-is in display units
 
         return num;
     }
 
     double parseIdentifier()
     {
-        int start = m_pos;
+        size_t start = m_pos;
         while (m_pos < m_expr.length() &&
-               (m_expr[m_pos].isLetterOrNumber() || m_expr[m_pos] == '_'))
+               (std::isalnum(static_cast<unsigned char>(m_expr[m_pos])) || m_expr[m_pos] == '_'))
             ++m_pos;
 
-        QString name = m_expr.mid(start, m_pos - start);
+        std::string name = m_expr.substr(start, m_pos - start);
         skipWhitespace();
 
         // Check for function call
@@ -390,36 +436,37 @@ private:
         }
 
         // Built-in constants
-        QString lower = name.toLower();
-        if (lower == QStringLiteral("pi"))
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        if (lower == "pi")
             return M_PI;
-        if (lower == QStringLiteral("e"))
+        if (lower == "e")
             return M_E;
-        if (lower == QStringLiteral("tau"))
+        if (lower == "tau")
             return 2.0 * M_PI;
 
         // Parameter lookup
-        if (m_params.contains(name))
-            return m_params[name];
+        auto it = m_params.find(name);
+        if (it != m_params.end())
+            return it->second;
 
-        throw std::runtime_error(
-            QStringLiteral("Unknown parameter '%1'").arg(name).toStdString());
+        throw std::runtime_error("Unknown parameter '" + name + "'");
     }
 
-    double parseFunction(const QString& name)
+    double parseFunction(const std::string& name)
     {
         ++m_pos;  // Skip '('
 
-        QList<double> args;
+        std::vector<double> args;
         skipWhitespace();
 
         if (m_pos < m_expr.length() && m_expr[m_pos] != ')') {
-            args.append(parseExpression());
+            args.push_back(parseExpression());
             skipWhitespace();
 
             while (m_pos < m_expr.length() && m_expr[m_pos] == ',') {
                 ++m_pos;
-                args.append(parseExpression());
+                args.push_back(parseExpression());
                 skipWhitespace();
             }
         }
@@ -431,56 +478,57 @@ private:
         return callFunction(name, args);
     }
 
-    double callFunction(const QString& name, const QList<double>& args)
+    double callFunction(const std::string& name, const std::vector<double>& args)
     {
-        QString fn = name.toLower();
+        std::string fn = name;
+        std::transform(fn.begin(), fn.end(), fn.begin(), ::tolower);
 
         // Single-argument functions
         if (args.size() == 1) {
             double x = args[0];
 
             // Trigonometric (degrees)
-            if (fn == QStringLiteral("sin"))
+            if (fn == "sin")
                 return std::sin(x * M_PI / 180.0);
-            if (fn == QStringLiteral("cos"))
+            if (fn == "cos")
                 return std::cos(x * M_PI / 180.0);
-            if (fn == QStringLiteral("tan"))
+            if (fn == "tan")
                 return std::tan(x * M_PI / 180.0);
-            if (fn == QStringLiteral("asin"))
+            if (fn == "asin")
                 return std::asin(x) * 180.0 / M_PI;
-            if (fn == QStringLiteral("acos"))
+            if (fn == "acos")
                 return std::acos(x) * 180.0 / M_PI;
-            if (fn == QStringLiteral("atan"))
+            if (fn == "atan")
                 return std::atan(x) * 180.0 / M_PI;
 
             // Trigonometric (radians)
-            if (fn == QStringLiteral("sinr"))
+            if (fn == "sinr")
                 return std::sin(x);
-            if (fn == QStringLiteral("cosr"))
+            if (fn == "cosr")
                 return std::cos(x);
-            if (fn == QStringLiteral("tanr"))
+            if (fn == "tanr")
                 return std::tan(x);
 
             // Other math
-            if (fn == QStringLiteral("sqrt"))
+            if (fn == "sqrt")
                 return std::sqrt(x);
-            if (fn == QStringLiteral("abs"))
+            if (fn == "abs")
                 return std::abs(x);
-            if (fn == QStringLiteral("floor"))
+            if (fn == "floor")
                 return std::floor(x);
-            if (fn == QStringLiteral("ceil"))
+            if (fn == "ceil")
                 return std::ceil(x);
-            if (fn == QStringLiteral("round"))
+            if (fn == "round")
                 return std::round(x);
-            if (fn == QStringLiteral("log"))
+            if (fn == "log")
                 return std::log(x);
-            if (fn == QStringLiteral("log10"))
+            if (fn == "log10")
                 return std::log10(x);
-            if (fn == QStringLiteral("log2"))
+            if (fn == "log2")
                 return std::log2(x);
-            if (fn == QStringLiteral("exp"))
+            if (fn == "exp")
                 return std::exp(x);
-            if (fn == QStringLiteral("sign"))
+            if (fn == "sign")
                 return (x > 0) ? 1.0 : ((x < 0) ? -1.0 : 0.0);
         }
 
@@ -489,48 +537,48 @@ private:
             double a = args[0];
             double b = args[1];
 
-            if (fn == QStringLiteral("min"))
+            if (fn == "min")
                 return std::min(a, b);
-            if (fn == QStringLiteral("max"))
+            if (fn == "max")
                 return std::max(a, b);
-            if (fn == QStringLiteral("pow"))
+            if (fn == "pow")
                 return std::pow(a, b);
-            if (fn == QStringLiteral("atan2"))
+            if (fn == "atan2")
                 return std::atan2(a, b) * 180.0 / M_PI;
-            if (fn == QStringLiteral("mod"))
+            if (fn == "mod")
                 return std::fmod(a, b);
         }
 
         // Variable-argument functions
-        if (fn == QStringLiteral("min") && args.size() > 2) {
+        if (fn == "min" && args.size() > 2) {
             double result = args[0];
-            for (int i = 1; i < args.size(); ++i)
+            for (size_t i = 1; i < args.size(); ++i)
                 result = std::min(result, args[i]);
             return result;
         }
-        if (fn == QStringLiteral("max") && args.size() > 2) {
+        if (fn == "max" && args.size() > 2) {
             double result = args[0];
-            for (int i = 1; i < args.size(); ++i)
+            for (size_t i = 1; i < args.size(); ++i)
                 result = std::max(result, args[i]);
             return result;
         }
 
         // Conditional: if(condition, trueValue, falseValue)
-        if (fn == QStringLiteral("if") && args.size() == 3) {
+        if (fn == "if" && args.size() == 3) {
             return (args[0] != 0.0) ? args[1] : args[2];
         }
 
         throw std::runtime_error(
-            QStringLiteral("Unknown function '%1' or wrong number of arguments (%2)")
-                .arg(name).arg(args.size()).toStdString());
+            "Unknown function '" + name + "' or wrong number of arguments (" +
+            std::to_string(args.size()) + ")");
     }
 
-    QMap<QString, double> m_params;
+    std::map<std::string, double> m_params;
     LengthUnit m_defaultUnit = LengthUnit::Millimeters;
     bool m_unitAware = false;
-    QString m_expr;
-    int m_pos = 0;
-    QString m_error;
+    std::string m_expr;
+    size_t m_pos = 0;
+    std::string m_error;
 };
 
 }  // anonymous namespace
@@ -539,9 +587,9 @@ private:
 
 class ParameterEngine::Impl {
 public:
-    QMap<QString, Parameter> parameters;
-    QStringList evaluationOrder;
-    QStringList circularChain;
+    std::map<std::string, Parameter> parameters;
+    std::vector<std::string> evaluationOrder;
+    std::vector<std::string> circularChain;
     bool hasCircular = false;
 
     void buildDependencyGraph()
@@ -553,49 +601,50 @@ public:
 
         // Extract dependencies for each parameter
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
-            it->dependencies = usedParams(it->expression);
+            it->second.dependencies = usedParams(it->second.expression);
         }
 
         // Topological sort using Kahn's algorithm
-        QMap<QString, int> inDegree;
-        QMap<QString, QStringList> dependents;
+        std::map<std::string, int> inDegree;
+        std::map<std::string, std::vector<std::string>> dependents;
 
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
-            inDegree[it->name] = 0;
+            inDegree[it->first] = 0;
         }
 
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
-            for (const QString& dep : it->dependencies) {
-                if (parameters.contains(dep)) {
-                    dependents[dep].append(it->name);
+            for (const std::string& dep : it->second.dependencies) {
+                if (parameters.count(dep)) {
+                    dependents[dep].push_back(it->first);
                 }
             }
         }
 
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
-            for (const QString& dep : it->dependencies) {
-                if (parameters.contains(dep)) {
-                    inDegree[it->name]++;
+            for (const std::string& dep : it->second.dependencies) {
+                if (parameters.count(dep)) {
+                    inDegree[it->first]++;
                 }
             }
         }
 
         // Queue parameters with no dependencies
-        QStringList queue;
+        std::vector<std::string> queue;
         for (auto it = inDegree.begin(); it != inDegree.end(); ++it) {
-            if (it.value() == 0) {
-                queue.append(it.key());
+            if (it->second == 0) {
+                queue.push_back(it->first);
             }
         }
 
-        while (!queue.isEmpty()) {
-            QString current = queue.takeFirst();
-            evaluationOrder.append(current);
+        while (!queue.empty()) {
+            std::string current = queue.front();
+            queue.erase(queue.begin());
+            evaluationOrder.push_back(current);
 
-            for (const QString& dependent : dependents[current]) {
+            for (const std::string& dependent : dependents[current]) {
                 inDegree[dependent]--;
                 if (inDegree[dependent] == 0) {
-                    queue.append(dependent);
+                    queue.push_back(dependent);
                 }
             }
         }
@@ -605,58 +654,60 @@ public:
             hasCircular = true;
             // Find a cycle for error reporting
             for (auto it = inDegree.begin(); it != inDegree.end(); ++it) {
-                if (it.value() > 0) {
-                    circularChain = findCycle(it.key());
+                if (it->second > 0) {
+                    circularChain = findCycle(it->first);
                     break;
                 }
             }
         }
     }
 
-    QStringList findCycle(const QString& start)
+    std::vector<std::string> findCycle(const std::string& start)
     {
-        QStringList path;
-        QSet<QString> visited;
+        std::vector<std::string> path;
+        std::unordered_set<std::string> visited;
         findCycleHelper(start, path, visited);
         return path;
     }
 
-    bool findCycleHelper(const QString& node, QStringList& path, QSet<QString>& visited)
+    bool findCycleHelper(const std::string& node, std::vector<std::string>& path,
+                         std::unordered_set<std::string>& visited)
     {
-        if (path.contains(node)) {
+        // Check if node is already in path (cycle found)
+        auto pathIt = std::find(path.begin(), path.end(), node);
+        if (pathIt != path.end()) {
             // Found cycle, trim path to start at cycle
-            int idx = path.indexOf(node);
-            path = path.mid(idx);
-            path.append(node);
+            path.erase(path.begin(), pathIt);
+            path.push_back(node);
             return true;
         }
 
-        if (visited.contains(node))
+        if (visited.count(node))
             return false;
 
         visited.insert(node);
-        path.append(node);
+        path.push_back(node);
 
-        if (parameters.contains(node)) {
-            for (const QString& dep : parameters[node].dependencies) {
-                if (parameters.contains(dep)) {
+        if (parameters.count(node)) {
+            for (const std::string& dep : parameters[node].dependencies) {
+                if (parameters.count(dep)) {
                     if (findCycleHelper(dep, path, visited))
                         return true;
                 }
             }
         }
 
-        path.removeLast();
+        path.pop_back();
         return false;
     }
 
-    QStringList usedParams(const QString& expression)
+    std::vector<std::string> usedParams(const std::string& expression)
     {
-        QStringList result;
-        static QRegularExpression paramRx(QStringLiteral("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b"));
+        std::vector<std::string> result;
+        static std::regex paramRx("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
 
         // Known function names to exclude
-        static QSet<QString> functions = {
+        static std::unordered_set<std::string> functions = {
             "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
             "sinr", "cosr", "tanr",
             "sqrt", "abs", "floor", "ceil", "round",
@@ -665,12 +716,15 @@ public:
             "pi", "e", "tau"
         };
 
-        auto it = paramRx.globalMatch(expression);
-        while (it.hasNext()) {
-            auto match = it.next();
-            QString name = match.captured(1);
-            if (!functions.contains(name.toLower()) && !result.contains(name)) {
-                result.append(name);
+        auto begin = std::sregex_iterator(expression.begin(), expression.end(), paramRx);
+        auto end_it = std::sregex_iterator();
+        for (auto it = begin; it != end_it; ++it) {
+            std::string name = (*it)[1].str();
+            std::string lower = name;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+            if (functions.find(lower) == functions.end() &&
+                std::find(result.begin(), result.end(), name) == result.end()) {
+                result.push_back(name);
             }
         }
 
@@ -688,7 +742,7 @@ ParameterEngine::~ParameterEngine()
     delete d;
 }
 
-void ParameterEngine::setParameters(const QList<Parameter>& params)
+void ParameterEngine::setParameters(const std::vector<Parameter>& params)
 {
     d->parameters.clear();
     for (const Parameter& p : params) {
@@ -697,13 +751,18 @@ void ParameterEngine::setParameters(const QList<Parameter>& params)
     d->buildDependencyGraph();
 }
 
-QList<Parameter> ParameterEngine::parameters() const
+std::vector<Parameter> ParameterEngine::parameters() const
 {
-    return d->parameters.values();
+    std::vector<Parameter> result;
+    result.reserve(d->parameters.size());
+    for (const auto& kv : d->parameters) {
+        result.push_back(kv.second);
+    }
+    return result;
 }
 
-void ParameterEngine::setParameter(const QString& name, const QString& expression,
-                                    const QString& unit, const QString& comment)
+void ParameterEngine::setParameter(const std::string& name, const std::string& expression,
+                                    const std::string& unit, const std::string& comment)
 {
     Parameter p;
     p.name = name;
@@ -716,9 +775,9 @@ void ParameterEngine::setParameter(const QString& name, const QString& expressio
     d->buildDependencyGraph();
 }
 
-void ParameterEngine::removeParameter(const QString& name)
+void ParameterEngine::removeParameter(const std::string& name)
 {
-    d->parameters.remove(name);
+    d->parameters.erase(name);
     d->buildDependencyGraph();
 }
 
@@ -730,24 +789,24 @@ void ParameterEngine::clear()
     d->hasCircular = false;
 }
 
-bool ParameterEngine::hasParameter(const QString& name) const
+bool ParameterEngine::hasParameter(const std::string& name) const
 {
-    return d->parameters.contains(name);
+    return d->parameters.count(name) > 0;
 }
 
-const Parameter* ParameterEngine::parameter(const QString& name) const
+const Parameter* ParameterEngine::parameter(const std::string& name) const
 {
     auto it = d->parameters.find(name);
     if (it != d->parameters.end())
-        return &it.value();
+        return &it->second;
     return nullptr;
 }
 
-double ParameterEngine::value(const QString& name) const
+double ParameterEngine::value(const std::string& name) const
 {
     auto it = d->parameters.find(name);
     if (it != d->parameters.end())
-        return it->value;
+        return it->second.value;
     return 0.0;
 }
 
@@ -759,21 +818,25 @@ EvaluationResult ParameterEngine::evaluate()
     if (d->hasCircular) {
         result.success = false;
         result.errorCount = 1;
-        result.errorMessages.append(
-            QStringLiteral("Circular dependency detected: %1")
-                .arg(d->circularChain.join(" -> ")));
+        // Build chain string: "a -> b -> c -> a"
+        std::string chainStr;
+        for (size_t i = 0; i < d->circularChain.size(); ++i) {
+            if (i > 0) chainStr += " -> ";
+            chainStr += d->circularChain[i];
+        }
+        result.errorMessages.push_back("Circular dependency detected: " + chainStr);
         return result;
     }
 
     // Build current values map
-    QMap<QString, double> values;
+    std::map<std::string, double> values;
 
     // Evaluate in topological order
-    for (const QString& name : d->evaluationOrder) {
+    for (const std::string& name : d->evaluationOrder) {
         Parameter& p = d->parameters[name];
 
         double val;
-        QString error;
+        std::string error;
         ExpressionEvaluator eval(values);
 
         if (eval.evaluate(p.expression, val, error)) {
@@ -785,16 +848,16 @@ EvaluationResult ParameterEngine::evaluate()
             p.isValid = false;
             p.errorMessage = error;
             result.errorCount++;
-            result.errorMessages.append(
-                QStringLiteral("%1: %2").arg(name, error));
+            result.errorMessages.push_back(name + ": " + error);
         }
     }
 
     // Also evaluate parameters with unresolved dependencies
     for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
-        if (!d->evaluationOrder.contains(it->name)) {
-            it->isValid = false;
-            it->errorMessage = QStringLiteral("Circular dependency or unresolved reference");
+        if (std::find(d->evaluationOrder.begin(), d->evaluationOrder.end(),
+                      it->second.name) == d->evaluationOrder.end()) {
+            it->second.isValid = false;
+            it->second.errorMessage = "Circular dependency or unresolved reference";
             result.errorCount++;
         }
     }
@@ -803,18 +866,18 @@ EvaluationResult ParameterEngine::evaluate()
     return result;
 }
 
-bool ParameterEngine::evaluateExpression(const QString& expression, double& result,
-                                          QString* errorMsg) const
+bool ParameterEngine::evaluateExpression(const std::string& expression, double& result,
+                                          std::string* errorMsg) const
 {
     // Build values map from current parameters
-    QMap<QString, double> values;
+    std::map<std::string, double> values;
     for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
-        if (it->isValid) {
-            values[it->name] = it->value;
+        if (it->second.isValid) {
+            values[it->second.name] = it->second.value;
         }
     }
 
-    QString error;
+    std::string error;
     ExpressionEvaluator eval(values);
     bool ok = eval.evaluate(expression, result, error);
 
@@ -825,19 +888,19 @@ bool ParameterEngine::evaluateExpression(const QString& expression, double& resu
     return ok;
 }
 
-bool ParameterEngine::evaluateExpression(const QString& expression, double& result,
+bool ParameterEngine::evaluateExpression(const std::string& expression, double& result,
                                           LengthUnit defaultUnit,
-                                          QString* errorMsg) const
+                                          std::string* errorMsg) const
 {
     // Build values map from current parameters
-    QMap<QString, double> values;
+    std::map<std::string, double> values;
     for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
-        if (it->isValid) {
-            values[it->name] = it->value;
+        if (it->second.isValid) {
+            values[it->second.name] = it->second.value;
         }
     }
 
-    QString error;
+    std::string error;
     ExpressionEvaluator eval(values, defaultUnit, /*unitAware=*/true);
     bool ok = eval.evaluate(expression, result, error);
 
@@ -848,26 +911,27 @@ bool ParameterEngine::evaluateExpression(const QString& expression, double& resu
     return ok;
 }
 
-QStringList ParameterEngine::evaluationOrder() const
+std::vector<std::string> ParameterEngine::evaluationOrder() const
 {
     return d->evaluationOrder;
 }
 
-QStringList ParameterEngine::dependenciesOf(const QString& name) const
+std::vector<std::string> ParameterEngine::dependenciesOf(const std::string& name) const
 {
     auto it = d->parameters.find(name);
     if (it != d->parameters.end()) {
-        return it->dependencies;
+        return it->second.dependencies;
     }
     return {};
 }
 
-QStringList ParameterEngine::dependentsOf(const QString& name) const
+std::vector<std::string> ParameterEngine::dependentsOf(const std::string& name) const
 {
-    QStringList result;
+    std::vector<std::string> result;
     for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
-        if (it->dependencies.contains(name)) {
-            result.append(it->name);
+        const auto& deps = it->second.dependencies;
+        if (std::find(deps.begin(), deps.end(), name) != deps.end()) {
+            result.push_back(it->second.name);
         }
     }
     return result;
@@ -878,42 +942,44 @@ bool ParameterEngine::hasCircularDependencies() const
     return d->hasCircular;
 }
 
-QStringList ParameterEngine::circularDependencyChain() const
+std::vector<std::string> ParameterEngine::circularDependencyChain() const
 {
     return d->circularChain;
 }
 
-bool ParameterEngine::isValidName(const QString& name)
+bool ParameterEngine::isValidName(const std::string& name)
 {
-    if (name.isEmpty())
+    if (name.empty())
         return false;
 
     // Must start with letter or underscore
-    if (!name[0].isLetter() && name[0] != '_')
+    if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_')
         return false;
 
     // Must contain only alphanumeric and underscore
-    for (int i = 1; i < name.length(); ++i) {
-        QChar c = name[i];
-        if (!c.isLetterOrNumber() && c != '_')
+    for (size_t i = 1; i < name.length(); ++i) {
+        char c = name[i];
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_')
             return false;
     }
 
     // Cannot be a reserved word
-    static QSet<QString> reserved = {
+    static std::unordered_set<std::string> reserved = {
         "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
         "sqrt", "abs", "floor", "ceil", "round",
         "min", "max", "pow", "log", "log10", "log2", "exp",
         "pi", "e", "tau", "if", "mod", "sign"
     };
 
-    return !reserved.contains(name.toLower());
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return reserved.find(lower) == reserved.end();
 }
 
-bool ParameterEngine::isValidSyntax(const QString& expression, QString* errorMsg) const
+bool ParameterEngine::isValidSyntax(const std::string& expression, std::string* errorMsg) const
 {
     double result;
-    QString error;
+    std::string error;
 
     // Use empty parameter map for syntax check
     ExpressionEvaluator eval({});
@@ -922,8 +988,9 @@ bool ParameterEngine::isValidSyntax(const QString& expression, QString* errorMsg
     eval.evaluate(expression, result, error);
 
     // Check for syntax errors (not "Unknown parameter" errors)
-    if (error.startsWith("Unexpected") || error.startsWith("Missing") ||
-        error.startsWith("Invalid number")) {
+    if (error.substr(0, 10) == "Unexpected" ||
+        error.substr(0, 7) == "Missing" ||
+        error.substr(0, 14) == "Invalid number") {
         if (errorMsg) *errorMsg = error;
         return false;
     }
@@ -931,25 +998,26 @@ bool ParameterEngine::isValidSyntax(const QString& expression, QString* errorMsg
     return true;
 }
 
-QStringList ParameterEngine::usedParameters(const QString& expression)
+std::vector<std::string> ParameterEngine::usedParameters(const std::string& expression)
 {
     // Static wrapper for Impl method
     ParameterEngine temp;
     return temp.d->usedParams(expression);
 }
 
+#if HOBBYCAD_HAS_QT
 QJsonObject ParameterEngine::toJson() const
 {
     QJsonArray params;
     for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
         QJsonObject p;
-        p["name"] = it->name;
-        p["expression"] = it->expression;
-        if (!it->unit.isEmpty())
-            p["unit"] = it->unit;
-        if (!it->comment.isEmpty())
-            p["comment"] = it->comment;
-        if (!it->isUserParam)
+        p["name"] = QString::fromStdString(it->second.name);
+        p["expression"] = QString::fromStdString(it->second.expression);
+        if (!it->second.unit.empty())
+            p["unit"] = QString::fromStdString(it->second.unit);
+        if (!it->second.comment.empty())
+            p["comment"] = QString::fromStdString(it->second.comment);
+        if (!it->second.isUserParam)
             p["isUserParam"] = false;
         params.append(p);
     }
@@ -959,7 +1027,7 @@ QJsonObject ParameterEngine::toJson() const
     return obj;
 }
 
-bool ParameterEngine::fromJson(const QJsonObject& json, QString* errorMsg)
+bool ParameterEngine::fromJson(const QJsonObject& json, std::string* errorMsg)
 {
     clear();
 
@@ -972,13 +1040,13 @@ bool ParameterEngine::fromJson(const QJsonObject& json, QString* errorMsg)
         QJsonObject p = val.toObject();
 
         Parameter param;
-        param.name = p["name"].toString();
-        param.expression = p["expression"].toString();
-        param.unit = p["unit"].toString();
-        param.comment = p["comment"].toString();
+        param.name = p["name"].toString().toStdString();
+        param.expression = p["expression"].toString().toStdString();
+        param.unit = p["unit"].toString().toStdString();
+        param.comment = p["comment"].toString().toStdString();
         param.isUserParam = p.value("isUserParam").toBool(true);
 
-        if (param.name.isEmpty()) {
+        if (param.name.empty()) {
             if (errorMsg) *errorMsg = "Parameter missing name";
             return false;
         }
@@ -990,13 +1058,66 @@ bool ParameterEngine::fromJson(const QJsonObject& json, QString* errorMsg)
     return true;
 }
 
+#else  // !HOBBYCAD_HAS_QT — nlohmann/json fallback
+
+nlohmann::json ParameterEngine::toJson() const
+{
+    nlohmann::json params = nlohmann::json::array();
+    for (auto it = d->parameters.begin(); it != d->parameters.end(); ++it) {
+        nlohmann::json p;
+        p["name"] = it->second.name;
+        p["expression"] = it->second.expression;
+        if (!it->second.unit.empty())
+            p["unit"] = it->second.unit;
+        if (!it->second.comment.empty())
+            p["comment"] = it->second.comment;
+        if (!it->second.isUserParam)
+            p["isUserParam"] = false;
+        params.push_back(p);
+    }
+
+    nlohmann::json obj;
+    obj["parameters"] = params;
+    return obj;
+}
+
+bool ParameterEngine::fromJson(const nlohmann::json& json, std::string* errorMsg)
+{
+    clear();
+
+    if (!json.contains("parameters")) {
+        return true;  // Empty is valid
+    }
+
+    for (const auto& p : json["parameters"]) {
+        Parameter param;
+        param.name = p.value("name", std::string{});
+        param.expression = p.value("expression", std::string{});
+        param.unit = p.value("unit", std::string{});
+        param.comment = p.value("comment", std::string{});
+        param.isUserParam = p.value("isUserParam", true);
+
+        if (param.name.empty()) {
+            if (errorMsg) *errorMsg = "Parameter missing name";
+            return false;
+        }
+
+        d->parameters[param.name] = param;
+    }
+
+    d->buildDependencyGraph();
+    return true;
+}
+
+#endif  // HOBBYCAD_HAS_QT
+
 // ---- Standalone expression evaluation ----
 
-bool evaluateExpression(const QString& expression, double& result,
-                        const QMap<QString, double>& params,
-                        QString* errorMsg)
+bool evaluateExpression(const std::string& expression, double& result,
+                        const std::map<std::string, double>& params,
+                        std::string* errorMsg)
 {
-    QString error;
+    std::string error;
     ExpressionEvaluator eval(params);
     bool ok = eval.evaluate(expression, result, error);
 

@@ -81,9 +81,9 @@ jobs:
         run: |
           pacman -S --noconfirm --needed \
             base-devel cmake ninja pkgconf curl patch xz tar \
-            qt6-base qt6-svg qt6-tools \
+            qt6-base qt6-svg qt6-tools qt6-imageformats \
             opencascade tbb \
-            libpng libjpeg-turbo \
+            libpng libjpeg-turbo libwebp \
             libzip minizip \
             libgit2 \
             lib3mf \

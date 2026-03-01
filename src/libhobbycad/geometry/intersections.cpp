@@ -9,6 +9,12 @@
 
 #include <hobbycad/geometry/intersections.h>
 
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace hobbycad {
 namespace geometry {
 
@@ -17,31 +23,31 @@ namespace geometry {
 // =====================================================================
 
 LineLineIntersection lineLineIntersection(
-    const QPointF& p1, const QPointF& p2,
-    const QPointF& p3, const QPointF& p4)
+    const Point2D& p1, const Point2D& p2,
+    const Point2D& p3, const Point2D& p4)
 {
     LineLineIntersection result;
 
     // Direction vectors
-    double d1x = p2.x() - p1.x();
-    double d1y = p2.y() - p1.y();
-    double d2x = p4.x() - p3.x();
-    double d2y = p4.y() - p3.y();
+    double d1x = p2.x - p1.x;
+    double d1y = p2.y - p1.y;
+    double d2x = p4.x - p3.x;
+    double d2y = p4.y - p3.y;
 
     // Cross product of directions (determinant)
     double cross = d1x * d2y - d1y * d2x;
 
     // Vector from p1 to p3
-    double dx = p3.x() - p1.x();
-    double dy = p3.y() - p1.y();
+    double dx = p3.x - p1.x;
+    double dy = p3.y - p1.y;
 
     // Check for parallel lines
-    if (qAbs(cross) < DEFAULT_TOLERANCE) {
+    if (std::abs(cross) < DEFAULT_TOLERANCE) {
         result.parallel = true;
 
         // Check if coincident (p3 lies on line through p1, p2)
         double crossCheck = dx * d1y - dy * d1x;
-        result.coincident = (qAbs(crossCheck) < DEFAULT_TOLERANCE);
+        result.coincident = (std::abs(crossCheck) < DEFAULT_TOLERANCE);
 
         return result;
     }
@@ -51,7 +57,7 @@ LineLineIntersection lineLineIntersection(
     result.t2 = (dx * d1y - dy * d1x) / cross;
 
     // Compute intersection point
-    result.point = QPointF(p1.x() + result.t1 * d1x, p1.y() + result.t1 * d1y);
+    result.point = Point2D(p1.x + result.t1 * d1x, p1.y + result.t1 * d1y);
     result.intersects = true;
 
     // Check if within segments
@@ -62,8 +68,8 @@ LineLineIntersection lineLineIntersection(
 }
 
 LineLineIntersection infiniteLineIntersection(
-    const QPointF& p1, const QPointF& p2,
-    const QPointF& p3, const QPointF& p4)
+    const Point2D& p1, const Point2D& p2,
+    const Point2D& p3, const Point2D& p4)
 {
     // Same as line-line but don't care about segment bounds
     return lineLineIntersection(p1, p2, p3, p4);
@@ -74,15 +80,15 @@ LineLineIntersection infiniteLineIntersection(
 // =====================================================================
 
 LineCircleIntersection lineCircleIntersection(
-    const QPointF& lineStart, const QPointF& lineEnd,
-    const QPointF& center, double radius)
+    const Point2D& lineStart, const Point2D& lineEnd,
+    const Point2D& center, double radius)
 {
     LineCircleIntersection result;
 
     // Direction vector
-    double dx = lineEnd.x() - lineStart.x();
-    double dy = lineEnd.y() - lineStart.y();
-    double len = qSqrt(dx * dx + dy * dy);
+    double dx = lineEnd.x - lineStart.x;
+    double dy = lineEnd.y - lineStart.y;
+    double len = std::sqrt(dx * dx + dy * dy);
 
     if (len < DEFAULT_TOLERANCE) {
         // Degenerate line
@@ -90,10 +96,10 @@ LineCircleIntersection lineCircleIntersection(
     }
 
     // Vector from line start to circle center
-    double fx = lineStart.x() - center.x();
-    double fy = lineStart.y() - center.y();
+    double fx = lineStart.x - center.x;
+    double fy = lineStart.y - center.y;
 
-    // Quadratic coefficients: at² + bt + c = 0
+    // Quadratic coefficients: at^2 + bt + c = 0
     double a = dx * dx + dy * dy;
     double b = 2.0 * (fx * dx + fy * dy);
     double c = fx * fx + fy * fy - radius * radius;
@@ -105,7 +111,7 @@ LineCircleIntersection lineCircleIntersection(
         return result;
     }
 
-    discriminant = qSqrt(discriminant);
+    discriminant = std::sqrt(discriminant);
 
     // Two solutions (may be the same if tangent)
     double t1 = (-b - discriminant) / (2.0 * a);
@@ -114,15 +120,15 @@ LineCircleIntersection lineCircleIntersection(
     result.t1 = t1;
     result.t2 = t2;
 
-    result.point1 = QPointF(lineStart.x() + t1 * dx, lineStart.y() + t1 * dy);
+    result.point1 = Point2D(lineStart.x + t1 * dx, lineStart.y + t1 * dy);
     result.point1InSegment = (t1 >= 0.0 && t1 <= 1.0);
 
-    if (qAbs(discriminant) < DEFAULT_TOLERANCE) {
+    if (std::abs(discriminant) < DEFAULT_TOLERANCE) {
         // Tangent - single intersection
         result.count = 1;
     } else {
         result.count = 2;
-        result.point2 = QPointF(lineStart.x() + t2 * dx, lineStart.y() + t2 * dy);
+        result.point2 = Point2D(lineStart.x + t2 * dx, lineStart.y + t2 * dy);
         result.point2InSegment = (t2 >= 0.0 && t2 <= 1.0);
     }
 
@@ -130,8 +136,8 @@ LineCircleIntersection lineCircleIntersection(
 }
 
 LineCircleIntersection infiniteLineCircleIntersection(
-    const QPointF& linePoint1, const QPointF& linePoint2,
-    const QPointF& center, double radius)
+    const Point2D& linePoint1, const Point2D& linePoint2,
+    const Point2D& center, double radius)
 {
     // Same calculation, ignore segment flags
     return lineCircleIntersection(linePoint1, linePoint2, center, radius);
@@ -142,18 +148,18 @@ LineCircleIntersection infiniteLineCircleIntersection(
 // =====================================================================
 
 CircleCircleIntersection circleCircleIntersection(
-    const QPointF& center1, double radius1,
-    const QPointF& center2, double radius2)
+    const Point2D& center1, double radius1,
+    const Point2D& center2, double radius2)
 {
     CircleCircleIntersection result;
 
     // Distance between centers
-    double dx = center2.x() - center1.x();
-    double dy = center2.y() - center1.y();
-    double d = qSqrt(dx * dx + dy * dy);
+    double dx = center2.x - center1.x;
+    double dy = center2.y - center1.y;
+    double d = std::sqrt(dx * dx + dy * dy);
 
     // Check for coincident circles
-    if (d < DEFAULT_TOLERANCE && qAbs(radius1 - radius2) < DEFAULT_TOLERANCE) {
+    if (d < DEFAULT_TOLERANCE && std::abs(radius1 - radius2) < DEFAULT_TOLERANCE) {
         result.coincident = true;
         return result;
     }
@@ -164,7 +170,7 @@ CircleCircleIntersection circleCircleIntersection(
     }
 
     // Check for no intersection (one inside the other)
-    if (d < qAbs(radius1 - radius2) - DEFAULT_TOLERANCE) {
+    if (d < std::abs(radius1 - radius2) - DEFAULT_TOLERANCE) {
         result.internal = true;
         return result;
     }
@@ -174,24 +180,24 @@ CircleCircleIntersection circleCircleIntersection(
     double h2 = radius1 * radius1 - a * a;
 
     if (h2 < 0) h2 = 0;  // Numerical stability
-    double h = qSqrt(h2);
+    double h = std::sqrt(h2);
 
     // Point on line between centers
-    double px = center1.x() + a * dx / d;
-    double py = center1.y() + a * dy / d;
+    double px = center1.x + a * dx / d;
+    double py = center1.y + a * dy / d;
 
     // Perpendicular offset
     double offX = h * dy / d;
     double offY = h * dx / d;
 
-    result.point1 = QPointF(px + offX, py - offY);
+    result.point1 = Point2D(px + offX, py - offY);
 
     if (h < DEFAULT_TOLERANCE) {
         // Tangent - single intersection
         result.count = 1;
     } else {
         result.count = 2;
-        result.point2 = QPointF(px - offX, py + offY);
+        result.point2 = Point2D(px - offX, py + offY);
     }
 
     return result;
@@ -202,7 +208,7 @@ CircleCircleIntersection circleCircleIntersection(
 // =====================================================================
 
 LineArcIntersection lineArcIntersection(
-    const QPointF& lineStart, const QPointF& lineEnd,
+    const Point2D& lineStart, const Point2D& lineEnd,
     const Arc& arc)
 {
     LineArcIntersection result;
@@ -216,10 +222,10 @@ LineArcIntersection lineArcIntersection(
     }
 
     // Check if intersection points are on the arc
-    auto checkPoint = [&arc](const QPointF& point) -> bool {
-        double angle = qRadiansToDegrees(qAtan2(
-            point.y() - arc.center.y(),
-            point.x() - arc.center.x()));
+    auto checkPoint = [&arc](const Point2D& point) -> bool {
+        double angle = std::atan2(
+            point.y - arc.center.y,
+            point.x - arc.center.x) * 180.0 / M_PI;
         return arc.containsAngle(angle);
     };
 
@@ -267,10 +273,10 @@ CircleCircleIntersection arcArcIntersection(const Arc& arc1, const Arc& arc2)
     }
 
     // Filter by arc sweeps
-    auto checkPoint = [](const Arc& arc, const QPointF& point) -> bool {
-        double angle = qRadiansToDegrees(qAtan2(
-            point.y() - arc.center.y(),
-            point.x() - arc.center.x()));
+    auto checkPoint = [](const Arc& arc, const Point2D& point) -> bool {
+        double angle = std::atan2(
+            point.y - arc.center.y,
+            point.x - arc.center.x) * 180.0 / M_PI;
         return arc.containsAngle(angle);
     };
 
@@ -294,12 +300,12 @@ CircleCircleIntersection arcArcIntersection(const Arc& arc1, const Arc& arc2)
 //  Closest Point Functions
 // =====================================================================
 
-QPointF closestPointOnLine(
-    const QPointF& point,
-    const QPointF& lineStart, const QPointF& lineEnd)
+Point2D closestPointOnLine(
+    const Point2D& point,
+    const Point2D& lineStart, const Point2D& lineEnd)
 {
-    double dx = lineEnd.x() - lineStart.x();
-    double dy = lineEnd.y() - lineStart.y();
+    double dx = lineEnd.x - lineStart.x;
+    double dy = lineEnd.y - lineStart.y;
     double lenSq = dx * dx + dy * dy;
 
     if (lenSq < DEFAULT_TOLERANCE * DEFAULT_TOLERANCE) {
@@ -307,40 +313,40 @@ QPointF closestPointOnLine(
     }
 
     // Project point onto line
-    double t = ((point.x() - lineStart.x()) * dx +
-                (point.y() - lineStart.y()) * dy) / lenSq;
+    double t = ((point.x - lineStart.x) * dx +
+                (point.y - lineStart.y) * dy) / lenSq;
 
     // Clamp to segment
-    t = qBound(0.0, t, 1.0);
+    t = std::clamp(t, 0.0, 1.0);
 
-    return QPointF(lineStart.x() + t * dx, lineStart.y() + t * dy);
+    return Point2D(lineStart.x + t * dx, lineStart.y + t * dy);
 }
 
-QPointF closestPointOnCircle(
-    const QPointF& point,
-    const QPointF& center, double radius)
+Point2D closestPointOnCircle(
+    const Point2D& point,
+    const Point2D& center, double radius)
 {
-    double dx = point.x() - center.x();
-    double dy = point.y() - center.y();
-    double len = qSqrt(dx * dx + dy * dy);
+    double dx = point.x - center.x;
+    double dy = point.y - center.y;
+    double len = std::sqrt(dx * dx + dy * dy);
 
     if (len < DEFAULT_TOLERANCE) {
         // Point at center - return arbitrary point on circle
-        return QPointF(center.x() + radius, center.y());
+        return Point2D(center.x + radius, center.y);
     }
 
-    return QPointF(
-        center.x() + radius * dx / len,
-        center.y() + radius * dy / len
+    return Point2D(
+        center.x + radius * dx / len,
+        center.y + radius * dy / len
     );
 }
 
-QPointF closestPointOnArc(const QPointF& point, const Arc& arc)
+Point2D closestPointOnArc(const Point2D& point, const Arc& arc)
 {
     // Get angle to point
-    double angle = qRadiansToDegrees(qAtan2(
-        point.y() - arc.center.y(),
-        point.x() - arc.center.x()));
+    double angle = std::atan2(
+        point.y - arc.center.y,
+        point.x - arc.center.x) * 180.0 / M_PI;
 
     if (arc.containsAngle(angle)) {
         // Point projects onto arc
@@ -348,11 +354,11 @@ QPointF closestPointOnArc(const QPointF& point, const Arc& arc)
     }
 
     // Point doesn't project onto arc - return nearest endpoint
-    QPointF startPt = arc.startPoint();
-    QPointF endPt = arc.endPoint();
+    Point2D startPt = arc.startPoint();
+    Point2D endPt = arc.endPoint();
 
-    double distStart = QLineF(point, startPt).length();
-    double distEnd = QLineF(point, endPt).length();
+    double distStart = std::hypot(point.x - startPt.x, point.y - startPt.y);
+    double distEnd = std::hypot(point.x - endPt.x, point.y - endPt.y);
 
     return (distStart < distEnd) ? startPt : endPt;
 }
@@ -362,72 +368,72 @@ QPointF closestPointOnArc(const QPointF& point, const Arc& arc)
 // =====================================================================
 
 double pointToLineDistance(
-    const QPointF& point,
-    const QPointF& lineStart, const QPointF& lineEnd)
+    const Point2D& point,
+    const Point2D& lineStart, const Point2D& lineEnd)
 {
-    QPointF closest = closestPointOnLine(point, lineStart, lineEnd);
-    return QLineF(point, closest).length();
+    Point2D closest = closestPointOnLine(point, lineStart, lineEnd);
+    return std::hypot(point.x - closest.x, point.y - closest.y);
 }
 
 double pointToInfiniteLineDistance(
-    const QPointF& point,
-    const QPointF& linePoint1, const QPointF& linePoint2)
+    const Point2D& point,
+    const Point2D& linePoint1, const Point2D& linePoint2)
 {
-    double dx = linePoint2.x() - linePoint1.x();
-    double dy = linePoint2.y() - linePoint1.y();
-    double len = qSqrt(dx * dx + dy * dy);
+    double dx = linePoint2.x - linePoint1.x;
+    double dy = linePoint2.y - linePoint1.y;
+    double len = std::sqrt(dx * dx + dy * dy);
 
     if (len < DEFAULT_TOLERANCE) {
-        return QLineF(point, linePoint1).length();
+        return std::hypot(point.x - linePoint1.x, point.y - linePoint1.y);
     }
 
     // Cross product gives signed area of parallelogram
-    double cross = (point.x() - linePoint1.x()) * dy -
-                   (point.y() - linePoint1.y()) * dx;
+    double cross = (point.x - linePoint1.x) * dy -
+                   (point.y - linePoint1.y) * dx;
 
-    return qAbs(cross) / len;
+    return std::abs(cross) / len;
 }
 
 double pointToCircleDistance(
-    const QPointF& point,
-    const QPointF& center, double radius)
+    const Point2D& point,
+    const Point2D& center, double radius)
 {
-    double distToCenter = QLineF(point, center).length();
-    return qAbs(distToCenter - radius);
+    double distToCenter = std::hypot(point.x - center.x, point.y - center.y);
+    return std::abs(distToCenter - radius);
 }
 
-double pointToArcDistance(const QPointF& point, const Arc& arc)
+double pointToArcDistance(const Point2D& point, const Arc& arc)
 {
-    QPointF closest = closestPointOnArc(point, arc);
-    return QLineF(point, closest).length();
+    Point2D closest = closestPointOnArc(point, arc);
+    return std::hypot(point.x - closest.x, point.y - closest.y);
 }
 
 // =====================================================================
 //  Utility Functions
 // =====================================================================
 
-bool pointsCoincident(const QPointF& p1, const QPointF& p2, double tolerance)
+bool pointsCoincident(const Point2D& p1, const Point2D& p2, double tolerance)
 {
-    return QLineF(p1, p2).length() < tolerance;
+    return std::hypot(p2.x - p1.x, p2.y - p1.y) < tolerance;
 }
 
 bool pointOnLine(
-    const QPointF& point,
-    const QPointF& lineStart, const QPointF& lineEnd,
+    const Point2D& point,
+    const Point2D& lineStart, const Point2D& lineEnd,
     double tolerance)
 {
     return pointToLineDistance(point, lineStart, lineEnd) < tolerance;
 }
 
 bool pointOnCircle(
-    const QPointF& point,
-    const QPointF& center, double radius,
+    const Point2D& point,
+    const Point2D& center, double radius,
     double tolerance)
 {
     return pointToCircleDistance(point, center, radius) < tolerance;
 }
 
-bool pointOnArc(const QPointF& point, const Arc& arc, double tolerance)
+bool pointOnArc(const Point2D& point, const Arc& arc, double tolerance)
 {
     // Check distance to circle
     if (pointToCircleDistance(point, arc.center, arc.radius) >= tolerance) {
@@ -435,9 +441,9 @@ bool pointOnArc(const QPointF& point, const Arc& arc, double tolerance)
     }
 
     // Check if angle is within sweep
-    double angle = qRadiansToDegrees(qAtan2(
-        point.y() - arc.center.y(),
-        point.x() - arc.center.x()));
+    double angle = std::atan2(
+        point.y - arc.center.y,
+        point.x - arc.center.x) * 180.0 / M_PI;
 
     return arc.containsAngle(angle);
 }

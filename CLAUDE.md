@@ -9,7 +9,8 @@ viewer, BREP I/O, tiered startup.
 ## Tech Stack
 
 - **Kernel:** OpenCASCADE (OCCT) 7.9 — B-Rep modeling, AIS viewer
-- **GUI:** Qt 6 — widgets, no QML
+- **Core Types:** Custom Point2D/Rect2D/Vec3 (types.h) — Qt-free, implicit Qt conversions when available
+- **GUI:** Qt 6.4.2+ — widgets, no QML
 - **3D Viewport:** OCCT AIS + OpenGL 3.3+ (WA_PaintOnScreen, not QOpenGLWidget)
 - **Build:** CMake 3.20+ / Ninja / C++17 (C++20 preferred)
 - **Primary platform:** Ubuntu 24.04, GCC 13
@@ -19,7 +20,11 @@ viewer, BREP I/O, tiered startup.
 ```
 HobbyCAD/                    ayourk/hobbycad (main project)
 ├── src/hobbycad/            Application source (gui/, core/, etc.)
-├── src/libhobbycad/         Shared library
+├── src/libhobbycad/         Shared library (Qt-free core types)
+│   └── hobbycad/
+│       ├── types.h          Point2D, Rect2D, Vec3, container helpers
+│       ├── qt_compat.h      Qt interop (toQt/fromQt conversions)
+│       └── format.h         String formatting (replaces QString::number)
 ├── docs/                    Plain text documentation
 ├── tools/linux/             Linux build/setup scripts
 ├── tools/windows/           Windows build/setup scripts  
@@ -89,6 +94,16 @@ Release build sizes (as of 2026-02-14):
 - Library functions don't need to be used by the main project to justify their existence
 - The library is designed to be useful to third-party developers and plugins
 - Include utility functions that may be helpful even if we use alternatives internally
+- **When moving code from GUI to library:** Be prepared to improve the library version
+  based on the GUI implementation, especially during code duplication checks. The GUI
+  often has more complete handling (e.g., additional entity types, edge cases) that the
+  library version lacks. Merge the best parts from both sides rather than blindly
+  replacing the GUI code with the existing library version.
+- **Qt-free public API:** The library's public API uses Qt-free types (Point2D, Rect2D,
+  Vec3, std::string, std::vector). When Qt 6.4.2+ is available (HOBBYCAD_HAS_QT),
+  implicit conversion operators enable seamless interop with QPointF, QRectF, etc. The
+  GUI uses these implicit conversions at the boundary. For containers and strings,
+  explicit conversion functions are provided in qt_compat.h.
 
 ## Key Technical Constraints
 
@@ -114,6 +129,14 @@ Release build sizes (as of 2026-02-14):
 ### libhobbycad Library
 
 The core library (`src/libhobbycad/`) provides reusable CAD functionality:
+
+**Core Types** (`hobbycad/types.h`, `hobbycad/qt_compat.h`, `hobbycad/format.h`):
+- Point2D, Rect2D, Vec3 — Qt-free geometry types with implicit Qt conversion when available
+- Container helpers: contains(), indexOf(), removeOne(), removeAll(), removeAt(), valueAt()
+- Numeric helpers: fuzzyCompare(), fuzzyIsNull()
+- Qt interop: toQt()/fromQt() for points, rects, strings; toQVector()/fromQVector() for containers
+- String formatting: formatDouble(), formatStorageDouble(), format() (printf-style)
+- HOBBYCAD_HAS_QT macro — set to 1 when Qt 6.4.2+ is detected, 0 otherwise
 
 **Units** (`hobbycad/units.h`):
 - Length unit conversion (mm, cm, m, in, ft)
@@ -206,6 +229,31 @@ The core library (`src/libhobbycad/`) provides reusable CAD functionality:
 1. **CI verification** — all three platforms need clean pass
 2. **ViewCube bottom view** — may still have 45° rotation issue
 3. **vcpkg baseline hash** — vcpkg-configuration.json placeholder
+
+## Chat History
+
+Claude Code stores session data under `~/.claude/` in several directories:
+
+| Directory | Format | HobbyCAD Files | Content |
+|-----------|--------|----------------|---------|
+| `debug/` | UUID `.txt` | 68 | Full conversation transcripts (prompts + responses + tool calls) |
+| `todos/` | UUID `.json` | 101 | Per-session todo/task lists |
+| `plans/` | named `.md` | 1 | Implementation plans (`cuddly-watching-cerf.md`, 268 lines) |
+| `shell-snapshots/` | timestamped `.sh` | 0 | Zsh environment snapshots (no conversation content) |
+| `session-env/` | UUID dirs | 0 | Session environment variables |
+| `history.jsonl` | JSONL | 0 | Minimal session index |
+
+### Key debug sessions
+
+| File | Mentions | Lines | Date Range | Content |
+|------|----------|-------|------------|---------|
+| `a70b2b6e-a326-4c85-8fe2-b617c9b6e0fe.txt` | 10,487 | 2.8M | Feb 12–24 | Main dev log — 84 session continuations covering Phase 0/1 build-out |
+| `42e8e323-13c9-4f72-83fb-cfcd248aa997.txt` | 73 | 11K | Feb 24–25 | CI/CD overhaul, PPA packaging, Phase 1 completion |
+| `2c0385a1-5e24-49c2-b709-10039f4a37e1.txt` | 6 | 873 | Feb 14 | Dark mode QSS theme editing |
+
+The remaining 65 debug files have 1 mention each (inherited system context only).
+
+To search: `grep -rli "keyword" ~/.claude/debug/`
 
 ## Preferences
 

@@ -13,7 +13,31 @@
 # ---- Dependencies ---------------------------------------------------
 
 find_package(OpenCASCADE REQUIRED)
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui OpenGL)
+
+# Qt is optional for the library.  When found (>= 6.4.2), it enables:
+#   - JSON project serialization (QJsonDocument)
+#   - Background image loading (QImage)
+#   - OpenGL capability probing (QOpenGLContext)
+# Without Qt, the library builds as a pure C++ library with these
+# features compiled out via #if HOBBYCAD_HAS_QT guards.
+find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} QUIET COMPONENTS Core Gui OpenGL)
+set(HOBBYCAD_LIB_HAS_QT ${Qt6_FOUND})
+
+# nlohmann/json — header-only JSON library used as a Qt-free fallback
+# for project serialization, parameter import/export, etc.
+find_package(nlohmann_json CONFIG REQUIRED)
+
+# Optional EGL for headless OpenGL probing without Qt
+set(HOBBYCAD_HAS_EGL FALSE)
+if(NOT HOBBYCAD_LIB_HAS_QT)
+    find_package(OpenGL COMPONENTS EGL QUIET)
+    if(OpenGL_EGL_FOUND)
+        set(HOBBYCAD_HAS_EGL TRUE)
+        message(STATUS "libhobbycad: EGL found — OpenGL probing enabled without Qt")
+    else()
+        message(STATUS "libhobbycad: EGL not found — OpenGL probing will return stub data")
+    endif()
+endif()
 
 # Required: libslvs for constraint solving (Phase 1)
 # Try pkg-config first, then CMake config, then manual detection.
@@ -122,6 +146,8 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/crashhandler.h
     hobbycad/opengl_info.h
     hobbycad/project.h
+    hobbycad/base64.h
+    hobbycad/image_buffer.h
     # Geometry module
     hobbycad/geometry/types.h
     hobbycad/geometry/intersections.h
@@ -230,13 +256,73 @@ set(HOBBYCAD_OCCT_LIBS
 )
 
 target_link_libraries(hobbycad-lib
-    PUBLIC
-        Qt6::Core
-        Qt6::Gui
-        Qt6::OpenGL
     PRIVATE
         ${HOBBYCAD_OCCT_LIBS}
+        nlohmann_json::nlohmann_json
 )
+
+# Conditionally link Qt when available
+if(HOBBYCAD_LIB_HAS_QT)
+    target_link_libraries(hobbycad-lib
+        PUBLIC
+            Qt6::Core
+            Qt6::Gui
+            Qt6::OpenGL
+    )
+    # qtimageformats — runtime plugin for additional formats (WebP, TIFF, etc.)
+    # No linking needed; Qt discovers imageformat plugins automatically at runtime.
+    # We just check whether the WebP plugin is available and report status.
+    find_file(_WEBP_PLUGIN libqwebp.so
+        PATHS "${QT6_INSTALL_PREFIX}/plugins/imageformats"
+              "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qt6/plugins/imageformats"
+        NO_DEFAULT_PATH)
+    if(_WEBP_PLUGIN)
+        message(STATUS "libhobbycad: Qt ${Qt6_VERSION} enabled (JSON, image, OpenGL support)")
+        message(STATUS "libhobbycad: Qt WebP plugin found — WebP image support enabled")
+    else()
+        message(STATUS "libhobbycad: Qt ${Qt6_VERSION} enabled (JSON, image, OpenGL support)")
+        message(STATUS "libhobbycad: Qt WebP plugin NOT found — install qtimageformats for WebP")
+        message(STATUS "  Ubuntu: sudo apt install qt6-image-formats-plugins")
+    endif()
+    unset(_WEBP_PLUGIN CACHE)
+else()
+    message(STATUS "libhobbycad: Qt not found — building with nlohmann/json fallback")
+
+    # stb_image — header-only image loader for background image support.
+    # Only needed without Qt (the Qt path uses QImage/QImageReader).
+    # Provides: image_buffer.cpp with stb_image decoding.
+    find_path(STB_INCLUDE_DIR stb/stb_image.h
+        HINTS /usr/include /usr/local/include)
+    if(STB_INCLUDE_DIR)
+        target_sources(hobbycad-lib PRIVATE image_buffer.cpp)
+        target_include_directories(hobbycad-lib SYSTEM PRIVATE ${STB_INCLUDE_DIR})
+        target_compile_definitions(hobbycad-lib PRIVATE HOBBYCAD_HAS_STB_IMAGE=1)
+        message(STATUS "libhobbycad: stb_image found — background image support enabled")
+    else()
+        message(STATUS "libhobbycad: stb_image not found — background image loading disabled")
+        message(STATUS "  Install: sudo apt install libstb-dev")
+    endif()
+
+    # libwebp — optional WebP image format support.
+    # Only needed without Qt (the Qt path can use qtimageformats for WebP).
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBWEBP IMPORTED_TARGET libwebp)
+    endif()
+    if(LIBWEBP_FOUND)
+        target_link_libraries(hobbycad-lib PRIVATE PkgConfig::LIBWEBP)
+        target_compile_definitions(hobbycad-lib PRIVATE HOBBYCAD_HAS_WEBP=1)
+        message(STATUS "libhobbycad: libwebp found — WebP image support enabled")
+    else()
+        message(STATUS "libhobbycad: libwebp not found — WebP support disabled")
+        message(STATUS "  Install: sudo apt install libwebp-dev")
+    endif()
+
+    # Link EGL for headless OpenGL probing without Qt
+    if(HOBBYCAD_HAS_EGL)
+        target_link_libraries(hobbycad-lib PRIVATE OpenGL::EGL OpenGL::GL)
+        target_compile_definitions(hobbycad-lib PRIVATE HOBBYCAD_HAS_EGL=1)
+    endif()
+endif()
 
 # Link libslvs (required for Phase 1)
 if(SLVS_TARGET)

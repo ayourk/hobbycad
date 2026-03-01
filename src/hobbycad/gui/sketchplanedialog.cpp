@@ -163,8 +163,8 @@ void SketchPlaneDialog::updateConstructionPlaneVisibility()
     m_constructionGroup->setVisible(isConstruction);
 
     // Hide construction plane option if no planes available
-    m_constructionButton->setVisible(!m_availablePlanes.isEmpty());
-    if (m_availablePlanes.isEmpty() && isConstruction) {
+    m_constructionButton->setVisible(!m_availablePlanes.empty());
+    if (m_availablePlanes.empty() && isConstruction) {
         m_xyButton->setChecked(true);
     }
 
@@ -180,7 +180,7 @@ void SketchPlaneDialog::updatePreviewText()
     if (m_planeGroup->checkedId() == 100) {
         int idx = m_constructionPlaneCombo->currentIndex();
         if (idx >= 0 && idx < m_availablePlanes.size()) {
-            QString planeName = m_availablePlanes[idx].name;
+            QString planeName = QString::fromStdString(m_availablePlanes[idx].name);
             if (qFuzzyIsNull(off)) {
                 text = tr("Sketch on construction plane \"%1\"").arg(planeName);
             } else {
@@ -309,18 +309,18 @@ int SketchPlaneDialog::constructionPlaneId() const
     return -1;
 }
 
-void SketchPlaneDialog::setAvailableConstructionPlanes(const QVector<ConstructionPlaneData>& planes)
+void SketchPlaneDialog::setAvailableConstructionPlanes(const std::vector<ConstructionPlaneData>& planes)
 {
     m_availablePlanes = planes;
 
     m_constructionPlaneCombo->clear();
     for (const auto& plane : planes) {
-        m_constructionPlaneCombo->addItem(plane.name, plane.id);
+        m_constructionPlaneCombo->addItem(QString::fromStdString(plane.name), plane.id);
     }
 
     // Show/hide construction plane option based on availability
-    m_constructionButton->setVisible(!planes.isEmpty());
-    if (planes.isEmpty() && m_planeGroup->checkedId() == 100) {
+    m_constructionButton->setVisible(!planes.empty());
+    if (planes.empty() && m_planeGroup->checkedId() == 100) {
         m_xyButton->setChecked(true);
     }
 

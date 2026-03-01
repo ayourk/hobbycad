@@ -14,11 +14,12 @@
 #define HOBBYCAD_SKETCH_PARSING_H
 
 #include "../core.h"
+#include "../types.h"
 
-#include <QPointF>
-#include <QString>
-#include <QStringList>
+#include <cctype>
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -31,7 +32,7 @@ namespace sketch {
 struct ParsedValue {
     bool valid = false;          ///< Whether parsing succeeded
     double numericValue = 0.0;   ///< Numeric value (if directly parseable)
-    QString expression;          ///< Original expression string
+    std::string expression;      ///< Original expression string
     bool isNumeric = false;      ///< True if value is a plain number
     bool isParameter = false;    ///< True if value is a parameter name
     bool isExpression = false;   ///< True if value is a parenthesized expression
@@ -45,14 +46,14 @@ struct ParsedValue {
 /// - "25" -> { valid=true, numericValue=25, isNumeric=true }
 /// - "myRadius" -> { valid=true, expression="myRadius", isParameter=true }
 /// - "(width/2)" -> { valid=true, expression="(width/2)", isExpression=true }
-HOBBYCAD_EXPORT ParsedValue parseValue(const QString& str);
+HOBBYCAD_EXPORT ParsedValue parseValue(const std::string& str);
 
 /// Parse a value string and return numeric value if possible
 /// @param str Input string to parse
 /// @param value Output numeric value
 /// @param expression Output expression string (for non-numeric values)
 /// @return True if parsing succeeded
-HOBBYCAD_EXPORT bool parseValue(const QString& str, double& value, QString& expression);
+HOBBYCAD_EXPORT bool parseValue(const std::string& str, double& value, std::string& expression);
 
 // =====================================================================
 //  Coordinate Parsing
@@ -69,12 +70,12 @@ struct ParsedCoordinate {
 /// e.g., "(a+b),(c*d)" splits into ["(a+b)", "(c*d)"]
 /// @param str Coordinate string like "x,y" or "(expr),(expr)"
 /// @return List of parts (should have 2 elements for valid coordinates)
-HOBBYCAD_EXPORT QStringList splitCoordinate(const QString& str);
+HOBBYCAD_EXPORT std::vector<std::string> splitCoordinate(const std::string& str);
 
 /// Parse a coordinate string like "x,y" or "(expr1),(expr2)"
 /// @param str Input coordinate string
 /// @return ParsedCoordinate with x and y values
-HOBBYCAD_EXPORT ParsedCoordinate parseCoordinate(const QString& str);
+HOBBYCAD_EXPORT ParsedCoordinate parseCoordinate(const std::string& str);
 
 /// Parse a coordinate string and extract numeric values
 /// @param str Input coordinate string
@@ -83,13 +84,13 @@ HOBBYCAD_EXPORT ParsedCoordinate parseCoordinate(const QString& str);
 /// @param xExpr Output X expression (optional)
 /// @param yExpr Output Y expression (optional)
 /// @return True if parsing succeeded
-HOBBYCAD_EXPORT bool parseCoordinate(const QString& str, double& x, double& y,
-                                      QString* xExpr = nullptr, QString* yExpr = nullptr);
+HOBBYCAD_EXPORT bool parseCoordinate(const std::string& str, double& x, double& y,
+                                      std::string* xExpr = nullptr, std::string* yExpr = nullptr);
 
-/// Parse a coordinate string and return as QPointF
+/// Parse a coordinate string and return as Point2D
 /// @param str Input coordinate string
 /// @return Point if parsing succeeded, nullopt otherwise
-HOBBYCAD_EXPORT std::optional<QPointF> parsePoint(const QString& str);
+HOBBYCAD_EXPORT std::optional<Point2D> parsePoint(const std::string& str);
 
 // =====================================================================
 //  Identifier Validation
@@ -99,17 +100,17 @@ HOBBYCAD_EXPORT std::optional<QPointF> parsePoint(const QString& str);
 /// Must start with letter, contain only letters/digits/underscore
 /// @param str String to check
 /// @return True if valid identifier
-HOBBYCAD_EXPORT bool isValidIdentifier(const QString& str);
+HOBBYCAD_EXPORT bool isValidIdentifier(const std::string& str);
 
 /// Check if a string looks like a numeric value
 /// @param str String to check
 /// @return True if starts with digit, minus, or decimal point
-HOBBYCAD_EXPORT bool looksNumeric(const QString& str);
+HOBBYCAD_EXPORT bool looksNumeric(const std::string& str);
 
 /// Check if a string is a parenthesized expression
 /// @param str String to check
 /// @return True if starts with '(' and ends with ')'
-HOBBYCAD_EXPORT bool isParenthesizedExpression(const QString& str);
+HOBBYCAD_EXPORT bool isParenthesizedExpression(const std::string& str);
 
 // =====================================================================
 //  Command Tokenization
@@ -123,36 +124,36 @@ HOBBYCAD_EXPORT bool isParenthesizedExpression(const QString& str);
 ///
 /// @param line Input command string
 /// @return List of tokens
-inline QStringList tokenizeLine(const QString& line)
+inline std::vector<std::string> tokenizeLine(const std::string& line)
 {
-    QStringList tokens;
-    QString current;
+    std::vector<std::string> tokens;
+    std::string current;
     int parenDepth = 0;
     bool inQuote = false;
     bool inToken = false;
 
-    for (int i = 0; i < line.length(); ++i) {
-        QChar c = line[i];
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
 
-        if (c == QLatin1Char('"') && parenDepth == 0) {
-            // Toggle quote mode — quotes are stripped, content kept as one token
+        if (c == '"' && parenDepth == 0) {
+            // Toggle quote mode -- quotes are stripped, content kept as one token
             inQuote = !inQuote;
             inToken = true;
         } else if (inQuote) {
             // Inside quotes: everything is part of the current token
             current += c;
-        } else if (c == QLatin1Char('(')) {
+        } else if (c == '(') {
             parenDepth++;
             current += c;
             inToken = true;
-        } else if (c == QLatin1Char(')')) {
+        } else if (c == ')') {
             parenDepth--;
             current += c;
             inToken = true;
-        } else if (c.isSpace() && parenDepth == 0) {
+        } else if (std::isspace(static_cast<unsigned char>(c)) && parenDepth == 0) {
             // End of token (unless inside parentheses)
-            if (inToken && !current.isEmpty()) {
-                tokens.append(current);
+            if (inToken && !current.empty()) {
+                tokens.push_back(current);
                 current.clear();
                 inToken = false;
             }
@@ -163,8 +164,8 @@ inline QStringList tokenizeLine(const QString& line)
     }
 
     // Don't forget the last token
-    if (!current.isEmpty()) {
-        tokens.append(current);
+    if (!current.empty()) {
+        tokens.push_back(current);
     }
 
     return tokens;

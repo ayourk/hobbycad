@@ -35,6 +35,7 @@
 #include <hobbycad/project.h>
 #include <hobbycad/sketch/parsing.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -546,11 +547,20 @@ int main(int argc, char* argv[])
     using hobbycad::SketchPlane;
 
     auto resolveExecSketchPlane = [](const QString& cmd) -> std::optional<SketchPlane> {
-        QStringList tokens = hobbycad::sketch::tokenizeLine(cmd);
+        auto tokens = hobbycad::sketch::tokenizeLine(cmd.toStdString());
         // Expect: create sketch [XY|XZ|YZ | on [plane] <name>]
+        auto toLower = [](std::string s) {
+            std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+            return s;
+        };
+        auto toUpper = [](std::string s) {
+            std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+            return s;
+        };
+
         if (tokens.size() < 2
-            || tokens[0].toLower() != QLatin1String("create")
-            || tokens[1].toLower() != QLatin1String("sketch")) {
+            || toLower(tokens[0]) != "create"
+            || toLower(tokens[1]) != "sketch") {
             return std::nullopt;
         }
 
@@ -558,20 +568,20 @@ int main(int argc, char* argv[])
             return SketchPlane::XY;  // bare "create sketch"
 
         // Check for built-in plane name at tokens[2]
-        QString arg = tokens[2].toUpper();
-        if (arg == QLatin1String("XY")) return SketchPlane::XY;
-        if (arg == QLatin1String("XZ")) return SketchPlane::XZ;
-        if (arg == QLatin1String("YZ")) return SketchPlane::YZ;
+        std::string arg = toUpper(tokens[2]);
+        if (arg == "XY") return SketchPlane::XY;
+        if (arg == "XZ") return SketchPlane::XZ;
+        if (arg == "YZ") return SketchPlane::YZ;
 
         // Check for "on [plane] <name>"
-        if (tokens[2].toLower() == QLatin1String("on") && tokens.size() >= 4) {
-            int idx = 3;
-            if (tokens[idx].toLower() == QLatin1String("plane") && tokens.size() >= 5)
+        if (toLower(tokens[2]) == "on" && tokens.size() >= 4) {
+            size_t idx = 3;
+            if (toLower(tokens[idx]) == "plane" && tokens.size() >= 5)
                 idx = 4;
-            QString pArg = tokens[idx].toUpper();
-            if (pArg == QLatin1String("XY")) return SketchPlane::XY;
-            if (pArg == QLatin1String("XZ")) return SketchPlane::XZ;
-            if (pArg == QLatin1String("YZ")) return SketchPlane::YZ;
+            std::string pArg = toUpper(tokens[idx]);
+            if (pArg == "XY") return SketchPlane::XY;
+            if (pArg == "XZ") return SketchPlane::XZ;
+            if (pArg == "YZ") return SketchPlane::YZ;
             // TODO: named construction planes
             return SketchPlane::Custom;
         }

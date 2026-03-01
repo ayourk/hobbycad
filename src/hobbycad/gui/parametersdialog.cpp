@@ -5,6 +5,10 @@
 #include "parametersdialog.h"
 #include "formulaedit.h"
 
+#include <cctype>
+#include <limits>
+#include <map>
+
 #include <QAbstractItemDelegate>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -159,8 +163,8 @@ void ParametersDialog::setParameters(const QList<Parameter>& params)
     // should also be applied during Document::loadParameters() to catch invalid
     // names before they reach the UI.
     for (auto& param : m_parameters) {
-        if (!param.name.isEmpty() && param.name[0].isDigit()) {
-            param.name = QLatin1Char('_') + param.name;
+        if (!param.name.empty() && std::isdigit(static_cast<unsigned char>(param.name[0]))) {
+            param.name = "_" + param.name;
         }
     }
 
@@ -198,9 +202,12 @@ void ParametersDialog::refreshTable()
 
         // Apply text filter
         if (!filter.isEmpty()) {
-            bool matches = param.name.toLower().contains(filter) ||
-                          param.expression.toLower().contains(filter) ||
-                          param.comment.toLower().contains(filter);
+            QString qName = QString::fromStdString(param.name);
+            QString qExpr = QString::fromStdString(param.expression);
+            QString qComment = QString::fromStdString(param.comment);
+            bool matches = qName.toLower().contains(filter) ||
+                          qExpr.toLower().contains(filter) ||
+                          qComment.toLower().contains(filter);
             if (!matches) continue;
         }
 
@@ -208,7 +215,7 @@ void ParametersDialog::refreshTable()
         m_table->insertRow(row);
 
         // Name
-        auto* nameItem = new QTableWidgetItem(param.name);
+        auto* nameItem = new QTableWidgetItem(QString::fromStdString(param.name));
         nameItem->setData(Qt::UserRole, i);  // Store original index
         if (!param.isUserParam) {
             nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
@@ -228,7 +235,7 @@ void ParametersDialog::refreshTable()
                 QStringLiteral("ft"),
                 QStringLiteral("deg")
             });
-            int idx = unitCombo->findText(param.unit);
+            int idx = unitCombo->findText(QString::fromStdString(param.unit));
             if (idx >= 0) unitCombo->setCurrentIndex(idx);
 
             connect(unitCombo, &QComboBox::currentTextChanged,
@@ -237,20 +244,20 @@ void ParametersDialog::refreshTable()
                 if (!item) return;
                 int paramIdx = item->data(Qt::UserRole).toInt();
                 if (paramIdx >= 0 && paramIdx < m_parameters.size()) {
-                    m_parameters[paramIdx].unit = text;
+                    m_parameters[paramIdx].unit = text.toStdString();
                 }
             });
 
             m_table->setCellWidget(row, ColUnit, unitCombo);
         } else {
-            auto* unitItem = new QTableWidgetItem(param.unit);
+            auto* unitItem = new QTableWidgetItem(QString::fromStdString(param.unit));
             unitItem->setFlags(unitItem->flags() & ~Qt::ItemIsEditable);
             unitItem->setForeground(QColor(100, 100, 100));
             m_table->setItem(row, ColUnit, unitItem);
         }
 
         // Expression
-        auto* exprItem = new QTableWidgetItem(param.expression);
+        auto* exprItem = new QTableWidgetItem(QString::fromStdString(param.expression));
         if (!param.isUserParam) {
             exprItem->setFlags(exprItem->flags() & ~Qt::ItemIsEditable);
             exprItem->setForeground(QColor(100, 100, 100));
@@ -262,21 +269,21 @@ void ParametersDialog::refreshTable()
         valueItem->setFlags(valueItem->flags() & ~Qt::ItemIsEditable);
         valueItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-        double val = evaluateExpression(param.expression);
+        double val = evaluateExpression(QString::fromStdString(param.expression));
         if (std::isnan(val)) {
             valueItem->setText(tr("Error"));
             valueItem->setForeground(Qt::red);
         } else {
             QString valStr = QString::number(val, 'g', 10);
-            if (!param.unit.isEmpty()) {
-                valStr += QStringLiteral(" ") + param.unit;
+            if (!param.unit.empty()) {
+                valStr += QStringLiteral(" ") + QString::fromStdString(param.unit);
             }
             valueItem->setText(valStr);
         }
         m_table->setItem(row, ColValue, valueItem);
 
         // Comment
-        auto* commentItem = new QTableWidgetItem(param.comment);
+        auto* commentItem = new QTableWidgetItem(QString::fromStdString(param.comment));
         if (!param.isUserParam) {
             commentItem->setFlags(commentItem->flags() & ~Qt::ItemIsEditable);
             commentItem->setForeground(QColor(100, 100, 100));
@@ -298,14 +305,14 @@ void ParametersDialog::onAddParameter()
     do {
         newName = baseName + QString::number(num++);
     } while (std::any_of(m_parameters.begin(), m_parameters.end(),
-                         [&newName](const Parameter& p) { return p.name == newName; }));
+                         [&newName](const Parameter& p) { return QString::fromStdString(p.name) == newName; }));
 
     Parameter param;
-    param.name = newName;
-    param.expression = QStringLiteral("0");
+    param.name = newName.toStdString();
+    param.expression = "0";
     param.value = 0.0;
-    param.unit = m_defaultUnit;
-    param.comment = QString();
+    param.unit = m_defaultUnit.toStdString();
+    param.comment = std::string();
     param.isUserParam = true;
 
     m_parameters.append(param);
@@ -338,11 +345,12 @@ void ParametersDialog::onDeleteParameter()
     }
 
     // Check if parameter is used by other expressions
-    QString paramName = param.name;
+    QString paramName = QString::fromStdString(param.name);
     QStringList usedBy;
     for (const auto& p : m_parameters) {
-        if (p.name != paramName && p.expression.contains(paramName)) {
-            usedBy << p.name;
+        QString pName = QString::fromStdString(p.name);
+        if (pName != paramName && QString::fromStdString(p.expression).contains(paramName)) {
+            usedBy << pName;
         }
     }
 
@@ -377,7 +385,7 @@ void ParametersDialog::onCellChanged(int row, int column)
 
         // Only update param name if valid
         if (!m_errorCells.contains(row) || !m_errorCells[row].contains(ColName)) {
-            param.name = newName;
+            param.name = newName.toStdString();
         }
         break;
     }
@@ -387,7 +395,7 @@ void ParametersDialog::onCellChanged(int row, int column)
         if (!item) return;
 
         QString newExpr = item->text().trimmed();
-        param.expression = newExpr;
+        param.expression = newExpr.toStdString();
 
         // Re-evaluate value
         double val = evaluateExpression(newExpr);
@@ -402,8 +410,8 @@ void ParametersDialog::onCellChanged(int row, int column)
                 showError(row, ColExpression, tr("Invalid expression"));
             } else {
                 QString valStr = QString::number(val, 'g', 10);
-                if (!param.unit.isEmpty()) {
-                    valStr += QStringLiteral(" ") + param.unit;
+                if (!param.unit.empty()) {
+                    valStr += QStringLiteral(" ") + QString::fromStdString(param.unit);
                 }
                 valueItem->setText(valStr);
                 valueItem->setForeground(QPalette().text().color());
@@ -420,7 +428,7 @@ void ParametersDialog::onCellChanged(int row, int column)
     case ColComment: {
         auto* item = m_table->item(row, ColComment);
         if (item) {
-            param.comment = item->text();
+            param.comment = item->text().toStdString();
         }
         break;
     }
@@ -450,7 +458,7 @@ void ParametersDialog::updateParameterValues()
     // Build parameter map for evaluation
     QMap<QString, double> paramMap;
     for (const auto& p : m_parameters) {
-        paramMap[p.name] = p.value;
+        paramMap[QString::fromStdString(p.name)] = p.value;
     }
 
     // Re-evaluate all expressions with updated parameter values
@@ -461,10 +469,10 @@ void ParametersDialog::updateParameterValues()
     while (changed && iterations++ < maxIterations) {
         changed = false;
         for (auto& param : m_parameters) {
-            double newVal = evaluateExpression(param.expression);
+            double newVal = evaluateExpression(QString::fromStdString(param.expression));
             if (!std::isnan(newVal) && newVal != param.value) {
                 param.value = newVal;
-                paramMap[param.name] = newVal;
+                paramMap[QString::fromStdString(param.name)] = newVal;
                 changed = true;
             }
         }
@@ -488,8 +496,8 @@ void ParametersDialog::updateParameterValues()
                 valueItem->setForeground(Qt::red);
             } else {
                 QString valStr = QString::number(val, 'g', 10);
-                if (!param.unit.isEmpty()) {
-                    valStr += QStringLiteral(" ") + param.unit;
+                if (!param.unit.empty()) {
+                    valStr += QStringLiteral(" ") + QString::fromStdString(param.unit);
                 }
                 valueItem->setText(valStr);
                 valueItem->setForeground(QPalette().text().color());
@@ -507,15 +515,17 @@ void ParametersDialog::onFilterChanged(const QString& /*text*/)
 double ParametersDialog::evaluateExpression(const QString& expr) const
 {
     // Build parameter map
-    QMap<QString, double> paramMap;
+    std::map<std::string, double> paramMap;
     for (const auto& p : m_parameters) {
         paramMap[p.name] = p.value;
     }
 
     // Use the expression evaluator from ParametricValue
     ParametricValue pv;
-    pv.setExpression(expr);
-    return pv.evaluate(paramMap);
+    pv.setExpression(expr.toStdString());
+    if (!pv.evaluate(paramMap))
+        return std::numeric_limits<double>::quiet_NaN();
+    return pv.value();
 }
 
 bool ParametersDialog::isValidParameterName(const QString& name) const
@@ -662,7 +672,7 @@ void ParametersDialog::validateNameCell(int row, const QString& text)
 
     // Check for duplicates
     for (int i = 0; i < m_parameters.size(); ++i) {
-        if (i != paramIdx && m_parameters[i].name == name) {
+        if (i != paramIdx && QString::fromStdString(m_parameters[i].name) == name) {
             showError(row, ColName, tr("Parameter '%1' already exists.").arg(name));
             return;
         }

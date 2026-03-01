@@ -72,25 +72,25 @@ AboutDialog::AboutDialog(const OpenGLInfo& glInfo, QWidget* parent)
     auto* glForm = new QFormLayout(glGroup);
 
     glForm->addRow(tr("OpenGL Version:"),
-        valueLabel(glInfo.version.isEmpty()
-            ? QStringLiteral("N/A") : glInfo.version));
+        valueLabel(glInfo.version.empty()
+            ? QStringLiteral("N/A") : QString::fromStdString(glInfo.version)));
     glForm->addRow(tr("GLSL Version:"),
-        valueLabel(glInfo.glslVersion.isEmpty()
-            ? QStringLiteral("N/A") : glInfo.glslVersion));
+        valueLabel(glInfo.glslVersion.empty()
+            ? QStringLiteral("N/A") : QString::fromStdString(glInfo.glslVersion)));
     glForm->addRow(tr("Renderer:"),
-        valueLabel(glInfo.renderer.isEmpty()
-            ? QStringLiteral("N/A") : glInfo.renderer));
+        valueLabel(glInfo.renderer.empty()
+            ? QStringLiteral("N/A") : QString::fromStdString(glInfo.renderer)));
     glForm->addRow(tr("Vendor:"),
-        valueLabel(glInfo.vendor.isEmpty()
-            ? QStringLiteral("N/A") : glInfo.vendor));
+        valueLabel(glInfo.vendor.empty()
+            ? QStringLiteral("N/A") : QString::fromStdString(glInfo.vendor)));
 
     QString status;
     if (glInfo.contextCreated) {
         status = QStringLiteral("success");
     } else {
         status = QStringLiteral("failed");
-        if (!glInfo.errorMessage.isEmpty())
-            status += QStringLiteral(" — ") + glInfo.errorMessage;
+        if (!glInfo.errorMessage.empty())
+            status += QStringLiteral(" — ") + QString::fromStdString(glInfo.errorMessage);
     }
     glForm->addRow(tr("Context Creation:"), valueLabel(status));
 

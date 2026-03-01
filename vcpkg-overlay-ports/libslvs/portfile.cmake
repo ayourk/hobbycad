@@ -5,8 +5,6 @@
 #
 # Source tarball from Launchpad PPA includes all necessary submodules.
 
-vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
-
 set(VERSION 3.2)
 
 # Eigen is provided by the eigen3 vcpkg dependency
@@ -53,6 +51,22 @@ endif()
 file(READ "${SOURCE_PATH}/CMakeLists.txt" _cmakelists)
 string(REPLACE "set(CMAKE_CXX_STANDARD 11)" "set(CMAKE_CXX_STANDARD 14)" _cmakelists "${_cmakelists}")
 file(WRITE "${SOURCE_PATH}/CMakeLists.txt" "${_cmakelists}")
+
+# Allow static builds: remove hardcoded SHARED from the slvs library target
+# so BUILD_SHARED_LIBS (set by vcpkg based on triplet) controls linkage.
+file(READ "${SOURCE_PATH}/src/slvs/CMakeLists.txt" _slvs_cmake)
+string(REPLACE "add_library(slvs SHARED)" "add_library(slvs)" _slvs_cmake "${_slvs_cmake}")
+
+# For static builds: define STATIC_LIB instead of EXPORT_DLL so that
+# slvs.h's DLL macro expands to nothing (no dllexport/dllimport).
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    string(REPLACE
+        "target_compile_definitions(slvs PRIVATE -DEXPORT_DLL)"
+        "target_compile_definitions(slvs PUBLIC -DSTATIC_LIB)"
+        _slvs_cmake "${_slvs_cmake}")
+endif()
+
+file(WRITE "${SOURCE_PATH}/src/slvs/CMakeLists.txt" "${_slvs_cmake}")
 
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"

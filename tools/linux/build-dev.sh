@@ -102,7 +102,7 @@ fi
 exec > >(tee "${LOG}") 2>&1
 
 echo "====================================================================="
-echo "  HobbyCAD Developer Build"
+echo "  HobbyCAD Developer Build — Phase 2 (Parametric Features)"
 echo "====================================================================="
 echo ""
 echo "  Project root : ${PROJECT_ROOT}"

@@ -161,6 +161,12 @@
   HobbyMesh to share the same codebase, and allows third-party
   applications or scripts to use HobbyCAD's functionality.
 
+  The library's public API is Qt-free, using custom types (Point2D,
+  Rect2D, Vec3, std::string, std::vector). When Qt 6.4.2+ is
+  available, implicit conversion operators enable seamless interop
+  with QPointF, QRectF, etc. The library can be built without Qt
+  as a pure C++ library (HOBBYCAD_HAS_QT=0).
+
   Library:     libhobbycad.so
 
   3.4  Python Bindings
@@ -1186,7 +1192,7 @@
   | Layer                   | Library                    | License        |
   +-------------------------+----------------------------+----------------+
   | Modeling Kernel         | OpenCascade (OCCT)         | LGPL 2.1       |
-  | GUI Framework           | Qt 6                       | LGPL 3.0       |
+  | GUI Framework           | Qt 6.4.2+                  | LGPL 3.0       |
   | 3D Viewport             | OCCT AIS + OpenGL 3.3+     | LGPL 2.1       |
   | Constraint Solver       | SolveSpace Solver          | GPL 3.0        |
   | Native File Format      | BREP (OCCT built-in)       | LGPL 2.1       |
@@ -1195,6 +1201,12 @@
   | OBJ I/O                 | OCCT / Assimp              | LGPL 2.1 / BSD |
   | Python Scripting        | CPython + pybind11         | PSF / BSD      |
   +-------------------------+----------------------------+----------------+
+
+  Note: libhobbycad uses Qt-free custom types (Point2D, Rect2D,
+  Vec3) in its public API, with optional Qt interop when Qt 6.4.2+
+  is available (controlled by the HOBBYCAD_HAS_QT compile
+  definition). The library can be built as a pure C++ library
+  with no Qt dependency at all.
 
   HobbyMesh Additional Stack:
   +---------------------------+-----------------------------+-----------+
@@ -1659,8 +1671,9 @@
   -------------------------
   Goal: Minimal buildable application with basic geometry display.
 
-    - Set up CMake build system with OCCT and Qt 6 dependencies
-    - Create main application window with Qt 6
+    - Set up CMake build system with OCCT and Qt 6.4.2+ dependencies
+      (GUI auto-disabled if Qt < 6.4.2; library builds Qt-free)
+    - Create main application window with Qt 6.4.2+
     - Embed OCCT AIS viewer in a QOpenGLWidget
     - Tiered startup based on OpenGL capability (see below)
     - Implement BREP file read/write (native format)
@@ -1787,7 +1800,9 @@
 
   Deliverable: An application that opens, displays, and saves BREP
   files with camera navigation, and degrades gracefully on hardware
-  without OpenGL 3.3 support.
+  without OpenGL 3.3 support. The libhobbycad library is Qt-free
+  in its public API (custom Point2D, Rect2D, Vec3 types) and can
+  be built without Qt as a pure C++ library.
 
   13.2  PHASE 1: BASIC MODELING
   -----------------------------

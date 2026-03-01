@@ -103,12 +103,13 @@ jobs:
 
           # Qt6 (from EPEL)
           dnf install -y \
-            qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel
+            qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel \
+            qt6-qtimageformats
 
           # Other dependencies
           dnf install -y \
             mesa-libGL-devel mesa-libGLU-devel libxkbcommon-devel \
-            tbb-devel libpng-devel libjpeg-devel \
+            tbb-devel libpng-devel libjpeg-devel libwebp-devel \
             libzip-devel minizip-devel \
             libgit2-devel \
             lib3mf-devel \
@@ -192,10 +193,11 @@ jobs:
             gcc-c++ cmake ninja-build rpm-build \
             pkg-config git curl xz patch \
             qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel \
+            qt6-qtimageformats \
             opencascade-devel \
             mesa-libGL-devel mesa-libGLU-devel mesa-libEGL-devel \
             libxkbcommon-devel \
-            tbb-devel libpng-devel libjpeg-devel \
+            tbb-devel libpng-devel libjpeg-devel libwebp-devel \
             libzip-devel minizip-devel \
             libgit2-devel \
             lib3mf-devel OpenMesh-devel \

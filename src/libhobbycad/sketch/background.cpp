@@ -9,15 +9,34 @@
 
 #include <hobbycad/sketch/background.h>
 
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <regex>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#if HOBBYCAD_HAS_QT
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
-#include <QBuffer>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
-#include <QtMath>
+#else
+#if HOBBYCAD_HAS_STB_IMAGE
+#include <hobbycad/image_buffer.h>
+#endif
+#include <hobbycad/base64.h>
+#include <nlohmann/json.hpp>
+#endif
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace hobbycad {
 namespace sketch {
@@ -35,29 +54,29 @@ geometry::BoundingBox BackgroundImage::bounds() const
     // Simple bounds without rotation
     // TODO: Handle rotation properly
     return geometry::BoundingBox(
-        position.x(),
-        position.y(),
-        position.x() + width,
-        position.y() + height
+        position.x,
+        position.y,
+        position.x + width,
+        position.y + height
     );
 }
 
-QPointF BackgroundImage::center() const
+Point2D BackgroundImage::center() const
 {
-    return QPointF(position.x() + width / 2.0,
-                   position.y() + height / 2.0);
+    return Point2D(position.x + width / 2.0,
+                   position.y + height / 2.0);
 }
 
-bool BackgroundImage::containsPoint(const QPointF& point) const
+bool BackgroundImage::containsPoint(const Point2D& point) const
 {
     if (!enabled) return false;
 
     // Simple check without rotation
     // TODO: Handle rotation properly
-    return point.x() >= position.x() &&
-           point.x() <= position.x() + width &&
-           point.y() >= position.y() &&
-           point.y() <= position.y() + height;
+    return point.x >= position.x &&
+           point.x <= position.x + width &&
+           point.y >= position.y &&
+           point.y <= position.y + height;
 }
 
 double BackgroundImage::getScaleFactor() const
@@ -98,16 +117,19 @@ void BackgroundImage::setScaleFactor(double scale)
 //  Background Image Loading
 // =====================================================================
 
-BackgroundImage loadBackgroundImage(const QString& filePath, bool embed)
+BackgroundImage loadBackgroundImage(const std::string& filePath, bool embed)
 {
     BackgroundImage bg;
     bg.enabled = false;
 
-    if (!QFile::exists(filePath)) {
+#if HOBBYCAD_HAS_QT
+    QString qFilePath = QString::fromStdString(filePath);
+
+    if (!QFile::exists(qFilePath)) {
         return bg;
     }
 
-    QImageReader reader(filePath);
+    QImageReader reader(qFilePath);
     if (!reader.canRead()) {
         return bg;
     }
@@ -130,20 +152,24 @@ BackgroundImage loadBackgroundImage(const QString& filePath, bool embed)
     bg.originalPixelHeight = size.height();
 
     // Determine MIME type from extension
-    QFileInfo fileInfo(filePath);
-    QString ext = fileInfo.suffix().toLower();
+    std::filesystem::path fsPath(filePath);
+    std::string ext = fsPath.extension().string();
+    // Remove the leading dot and convert to lowercase
+    if (!ext.empty() && ext[0] == '.') ext = ext.substr(1);
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
     if (ext == "png") {
-        bg.mimeType = QStringLiteral("image/png");
+        bg.mimeType = "image/png";
     } else if (ext == "jpg" || ext == "jpeg") {
-        bg.mimeType = QStringLiteral("image/jpeg");
+        bg.mimeType = "image/jpeg";
     } else if (ext == "bmp") {
-        bg.mimeType = QStringLiteral("image/bmp");
+        bg.mimeType = "image/bmp";
     } else if (ext == "gif") {
-        bg.mimeType = QStringLiteral("image/gif");
+        bg.mimeType = "image/gif";
     } else if (ext == "webp") {
-        bg.mimeType = QStringLiteral("image/webp");
+        bg.mimeType = "image/webp";
     } else {
-        bg.mimeType = QStringLiteral("image/png");
+        bg.mimeType = "image/png";
     }
 
     // Set default size based on image dimensions (assume 96 DPI for initial sizing)
@@ -154,32 +180,109 @@ BackgroundImage loadBackgroundImage(const QString& filePath, bool embed)
 
     if (embed) {
         // Read and embed the image data
-        QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly)) {
+        std::ifstream file(filePath, std::ios::binary);
+        if (file) {
             bg.storage = BackgroundStorage::Embedded;
-            bg.imageData = file.readAll();
+            file.seekg(0, std::ios::end);
+            auto fileSize = file.tellg();
+            file.seekg(0, std::ios::beg);
+            bg.imageData.resize(static_cast<size_t>(fileSize));
+            file.read(reinterpret_cast<char*>(bg.imageData.data()),
+                      static_cast<std::streamsize>(fileSize));
         }
     } else {
         bg.storage = BackgroundStorage::FilePath;
     }
+#else
+    // Non-Qt path
+    if (!std::filesystem::exists(filePath)) {
+        return bg;
+    }
+
+    bg.filePath = filePath;
+
+    // Determine MIME type from extension
+    std::filesystem::path fsPath(filePath);
+    std::string ext = fsPath.extension().string();
+    if (!ext.empty() && ext[0] == '.') ext = ext.substr(1);
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    if (ext == "png") {
+        bg.mimeType = "image/png";
+    } else if (ext == "jpg" || ext == "jpeg") {
+        bg.mimeType = "image/jpeg";
+    } else if (ext == "bmp") {
+        bg.mimeType = "image/bmp";
+    } else if (ext == "gif") {
+        bg.mimeType = "image/gif";
+    } else if (ext == "tga") {
+        bg.mimeType = "image/x-tga";
+    } else if (ext == "psd") {
+        bg.mimeType = "image/vnd.adobe.photoshop";
+    } else if (ext == "hdr") {
+        bg.mimeType = "image/vnd.radiance";
+    } else if (ext == "webp") {
+        bg.mimeType = "image/webp";
+    } else {
+        bg.mimeType = "image/png";
+    }
+
+#if HOBBYCAD_HAS_STB_IMAGE
+    // Query image dimensions via stb_image (does not fully decode)
+    int imgW = 0, imgH = 0;
+    if (!hobbycad::queryImageDimensions(filePath, imgW, imgH) ||
+        imgW <= 0 || imgH <= 0) {
+        return bg;
+    }
+
+    // Store original pixel dimensions for scale factor calculations
+    bg.originalPixelWidth  = imgW;
+    bg.originalPixelHeight = imgH;
+
+    // Set default size based on image dimensions (assume 96 DPI)
+    const double pixelsPerMm = 96.0 / 25.4;
+    bg.width  = imgW / pixelsPerMm;
+    bg.height = imgH / pixelsPerMm;
+#endif  // HOBBYCAD_HAS_STB_IMAGE
+
+    bg.enabled = true;
+
+    if (embed) {
+        std::ifstream file(filePath, std::ios::binary);
+        if (file) {
+            bg.storage = BackgroundStorage::Embedded;
+            file.seekg(0, std::ios::end);
+            auto fileSize = file.tellg();
+            file.seekg(0, std::ios::beg);
+            bg.imageData.resize(static_cast<size_t>(fileSize));
+            file.read(reinterpret_cast<char*>(bg.imageData.data()),
+                      static_cast<std::streamsize>(fileSize));
+        }
+    } else {
+        bg.storage = BackgroundStorage::FilePath;
+    }
+#endif
 
     return bg;
 }
 
 BackgroundImage loadBackgroundImageFromData(
-    const QByteArray& data,
-    const QString& mimeType)
+    const std::vector<uint8_t>& data,
+    const std::string& mimeType)
 {
     BackgroundImage bg;
     bg.enabled = false;
 
-    if (data.isEmpty()) {
+    if (data.empty()) {
         return bg;
     }
 
+#if HOBBYCAD_HAS_QT
     // Load image to get dimensions
+    QByteArray qData(reinterpret_cast<const char*>(data.data()),
+                     static_cast<int>(data.size()));
     QImage image;
-    if (!image.loadFromData(data)) {
+    if (!image.loadFromData(qData)) {
         return bg;
     }
 
@@ -196,6 +299,29 @@ BackgroundImage loadBackgroundImageFromData(
     const double pixelsPerMm = 96.0 / 25.4;
     bg.width = image.width() / pixelsPerMm;
     bg.height = image.height() / pixelsPerMm;
+#else
+    // Non-Qt path
+#if HOBBYCAD_HAS_STB_IMAGE
+    // Query dimensions via stb_image
+    int imgW = 0, imgH = 0;
+    if (hobbycad::queryImageDimensionsFromMemory(data.data(), data.size(),
+                                                 imgW, imgH) &&
+        imgW > 0 && imgH > 0) {
+        bg.originalPixelWidth  = imgW;
+        bg.originalPixelHeight = imgH;
+
+        // Set default size (assume 96 DPI)
+        const double pixelsPerMm = 96.0 / 25.4;
+        bg.width  = imgW / pixelsPerMm;
+        bg.height = imgH / pixelsPerMm;
+    }
+#endif  // HOBBYCAD_HAS_STB_IMAGE
+
+    bg.enabled = true;
+    bg.storage = BackgroundStorage::Embedded;
+    bg.imageData = data;
+    bg.mimeType = mimeType;
+#endif
 
     return bg;
 }
@@ -204,6 +330,7 @@ BackgroundImage loadBackgroundImageFromData(
 //  Image Retrieval
 // =====================================================================
 
+#if HOBBYCAD_HAS_QT
 QImage getBackgroundQImage(const BackgroundImage& background)
 {
     if (!background.enabled) {
@@ -213,9 +340,11 @@ QImage getBackgroundQImage(const BackgroundImage& background)
     QImage image;
 
     if (background.storage == BackgroundStorage::Embedded) {
-        image.loadFromData(background.imageData);
+        QByteArray qData(reinterpret_cast<const char*>(background.imageData.data()),
+                         static_cast<int>(background.imageData.size()));
+        image.loadFromData(qData);
     } else {
-        image.load(background.filePath);
+        image.load(QString::fromStdString(background.filePath));
     }
 
     return image;
@@ -249,8 +378,8 @@ QImage applyBackgroundAdjustments(
     }
 
     // Apply contrast and brightness
-    if (qAbs(background.contrast - 1.0) > 0.001 ||
-        qAbs(background.brightness) > 0.001) {
+    if (std::abs(background.contrast - 1.0) > 0.001 ||
+        std::abs(background.brightness) > 0.001) {
 
         double contrast = background.contrast;
         double brightness = background.brightness * 255;  // Convert to 0-255 range
@@ -264,9 +393,9 @@ QImage applyBackgroundAdjustments(
                 int a = qAlpha(line[x]);
 
                 // Apply contrast around mid-gray, then add brightness
-                r = qBound(0, static_cast<int>((r - 128) * contrast + 128 + brightness), 255);
-                g = qBound(0, static_cast<int>((g - 128) * contrast + 128 + brightness), 255);
-                b = qBound(0, static_cast<int>((b - 128) * contrast + 128 + brightness), 255);
+                r = std::clamp(static_cast<int>((r - 128) * contrast + 128 + brightness), 0, 255);
+                g = std::clamp(static_cast<int>((g - 128) * contrast + 128 + brightness), 0, 255);
+                b = std::clamp(static_cast<int>((b - 128) * contrast + 128 + brightness), 0, 255);
 
                 line[x] = qRgba(r, g, b, a);
             }
@@ -287,6 +416,99 @@ QImage applyBackgroundAdjustments(
 
     return result;
 }
+#elif HOBBYCAD_HAS_STB_IMAGE  // stb_image path
+
+ImageBuffer getBackgroundImage(const BackgroundImage& background)
+{
+    if (!background.enabled) {
+        return {};
+    }
+
+    if (background.storage == BackgroundStorage::Embedded) {
+        return hobbycad::loadImageFromMemory(background.imageData);
+    } else {
+        return hobbycad::loadImageFile(background.filePath);
+    }
+}
+
+ImageBuffer applyBackgroundAdjustments(
+    const ImageBuffer& image,
+    const BackgroundImage& background)
+{
+    if (image.isNull()) {
+        return image;
+    }
+
+    ImageBuffer result = image;
+
+    // Apply flip/mirror transformations
+    if (background.flipHorizontal) {
+        result = hobbycad::flipHorizontal(result);
+    }
+    if (background.flipVertical) {
+        result = hobbycad::flipVertical(result);
+    }
+
+    // Apply grayscale conversion
+    if (background.grayscale) {
+        for (int y = 0; y < result.height; ++y) {
+            for (int x = 0; x < result.width; ++x) {
+                uint8_t r = result.red(x, y);
+                uint8_t g = result.green(x, y);
+                uint8_t b = result.blue(x, y);
+                uint8_t a = result.alpha(x, y);
+                uint8_t gray = ImageBuffer::grayValue(r, g, b);
+                result.setPixel(x, y, gray, gray, gray, a);
+            }
+        }
+    }
+
+    // Apply contrast and brightness
+    if (std::abs(background.contrast - 1.0) > 0.001 ||
+        std::abs(background.brightness) > 0.001) {
+
+        double contrast   = background.contrast;
+        double brightness = background.brightness * 255;  // Convert to 0-255 range
+
+        for (int y = 0; y < result.height; ++y) {
+            for (int x = 0; x < result.width; ++x) {
+                int r = result.red(x, y);
+                int g = result.green(x, y);
+                int b = result.blue(x, y);
+                uint8_t a = result.alpha(x, y);
+
+                // Apply contrast around mid-gray, then add brightness
+                r = std::clamp(static_cast<int>((r - 128) * contrast + 128 + brightness), 0, 255);
+                g = std::clamp(static_cast<int>((g - 128) * contrast + 128 + brightness), 0, 255);
+                b = std::clamp(static_cast<int>((b - 128) * contrast + 128 + brightness), 0, 255);
+
+                result.setPixel(x, y,
+                                static_cast<uint8_t>(r),
+                                static_cast<uint8_t>(g),
+                                static_cast<uint8_t>(b), a);
+            }
+        }
+    }
+
+    // Apply opacity
+    if (background.opacity < 1.0) {
+        int alphaMultiplier = static_cast<int>(background.opacity * 255);
+        for (int y = 0; y < result.height; ++y) {
+            for (int x = 0; x < result.width; ++x) {
+                int a = (result.alpha(x, y) * alphaMultiplier) / 255;
+                result.setPixel(x, y,
+                                result.red(x, y),
+                                result.green(x, y),
+                                result.blue(x, y),
+                                static_cast<uint8_t>(a));
+            }
+        }
+    }
+
+    return result;
+}
+
+#endif  // HOBBYCAD_HAS_QT
 
 // =====================================================================
 //  Utility Functions
@@ -309,8 +531,8 @@ void calculateAspectRatio(
 
 BackgroundImage calibrateBackground(
     const BackgroundImage& background,
-    const QPointF& point1,
-    const QPointF& point2,
+    const Point2D& point1,
+    const Point2D& point2,
     double realDistance)
 {
     BackgroundImage result = background;
@@ -320,9 +542,9 @@ BackgroundImage calibrateBackground(
     }
 
     // Calculate pixel distance
-    double dx = point2.x() - point1.x();
-    double dy = point2.y() - point1.y();
-    double pixelDistance = qSqrt(dx * dx + dy * dy);
+    double dx = point2.x - point1.x;
+    double dy = point2.y - point1.y;
+    double pixelDistance = std::sqrt(dx * dx + dy * dy);
 
     if (pixelDistance < 1.0) {
         return result;
@@ -332,41 +554,65 @@ BackgroundImage calibrateBackground(
     result.calibrationScale = pixelDistance / realDistance;
     result.calibrated = true;
 
+#if HOBBYCAD_HAS_QT
     // Adjust width/height based on calibration
     QImage image = getBackgroundQImage(background);
     if (!image.isNull()) {
         result.width = image.width() / result.calibrationScale;
         result.height = image.height() / result.calibrationScale;
     }
+#else
+    // Non-Qt path: use stored pixel dimensions for calibration
+    if (background.originalPixelWidth > 0 && background.originalPixelHeight > 0) {
+        result.width  = background.originalPixelWidth  / result.calibrationScale;
+        result.height = background.originalPixelHeight / result.calibrationScale;
+    }
+#endif
 
     return result;
 }
 
-QPointF sketchToImageCoords(
+Point2D sketchToImageCoords(
     const BackgroundImage& background,
-    const QPointF& sketchPoint)
+    const Point2D& sketchPoint)
 {
+#if HOBBYCAD_HAS_QT
     // Convert from sketch coordinates (mm) to image pixel coordinates
     QImage image = getBackgroundQImage(background);
     if (image.isNull()) {
-        return QPointF(0, 0);
+        return Point2D(0, 0);
     }
 
     // Calculate offset from background position
-    double offsetX = sketchPoint.x() - background.position.x();
-    double offsetY = sketchPoint.y() - background.position.y();
+    double offsetX = sketchPoint.x - background.position.x;
+    double offsetY = sketchPoint.y - background.position.y;
 
     // Convert mm to pixels
     double scaleX = image.width() / background.width;
     double scaleY = image.height() / background.height;
 
-    return QPointF(offsetX * scaleX, offsetY * scaleY);
+    return Point2D(offsetX * scaleX, offsetY * scaleY);
+#else
+    // Without Qt, approximate using stored pixel dimensions
+    if (background.originalPixelWidth <= 0 || background.width <= 0) {
+        return Point2D(0, 0);
+    }
+
+    double offsetX = sketchPoint.x - background.position.x;
+    double offsetY = sketchPoint.y - background.position.y;
+
+    double scaleX = background.originalPixelWidth / background.width;
+    double scaleY = background.originalPixelHeight / background.height;
+
+    return Point2D(offsetX * scaleX, offsetY * scaleY);
+#endif
 }
 
-QPointF imageToSketchCoords(
+Point2D imageToSketchCoords(
     const BackgroundImage& background,
-    const QPointF& imagePoint)
+    const Point2D& imagePoint)
 {
+#if HOBBYCAD_HAS_QT
     // Convert from image pixel coordinates to sketch coordinates (mm)
     QImage image = getBackgroundQImage(background);
     if (image.isNull()) {
@@ -377,22 +623,37 @@ QPointF imageToSketchCoords(
     double scaleX = background.width / image.width();
     double scaleY = background.height / image.height();
 
-    double offsetX = imagePoint.x() * scaleX;
-    double offsetY = imagePoint.y() * scaleY;
+    double offsetX = imagePoint.x * scaleX;
+    double offsetY = imagePoint.y * scaleY;
 
-    return QPointF(background.position.x() + offsetX,
-                   background.position.y() + offsetY);
+    return Point2D(background.position.x + offsetX,
+                   background.position.y + offsetY);
+#else
+    // Without Qt, approximate using stored pixel dimensions
+    if (background.originalPixelWidth <= 0) {
+        return background.position;
+    }
+
+    double scaleX = background.width / background.originalPixelWidth;
+    double scaleY = background.height / background.originalPixelHeight;
+
+    double offsetX = imagePoint.x * scaleX;
+    double offsetY = imagePoint.y * scaleY;
+
+    return Point2D(background.position.x + offsetX,
+                   background.position.y + offsetY);
+#endif
 }
 
 // =====================================================================
 //  Alignment Utilities
 // =====================================================================
 
-double calculateLineAngle(const QPointF& point1, const QPointF& point2)
+double calculateLineAngle(const Point2D& point1, const Point2D& point2)
 {
-    double dx = point2.x() - point1.x();
-    double dy = point2.y() - point1.y();
-    return qRadiansToDegrees(qAtan2(dy, dx));
+    double dx = point2.x - point1.x;
+    double dy = point2.y - point1.y;
+    return std::atan2(dy, dx) * 180.0 / M_PI;
 }
 
 double calculateAlignmentRotation(double currentAngle, double targetAngle)
@@ -425,119 +686,128 @@ double normalizeAngle180(double degrees)
 //  Project Integration
 // =====================================================================
 
-bool isFileInProject(const QString& filePath, const QString& projectDir)
+bool isFileInProject(const std::string& filePath, const std::string& projectDir)
 {
-    if (projectDir.isEmpty() || filePath.isEmpty()) {
+    if (projectDir.empty() || filePath.empty()) {
         return false;
     }
 
-    QFileInfo fileInfo(filePath);
-    QFileInfo projectInfo(projectDir);
+    std::filesystem::path absFilePath = std::filesystem::absolute(filePath);
+    std::filesystem::path absProjectDir = std::filesystem::absolute(projectDir);
 
-    QString absFilePath = fileInfo.absoluteFilePath();
-    QString absProjectDir = projectInfo.absoluteFilePath();
+    // Normalize paths
+    absFilePath = absFilePath.lexically_normal();
+    absProjectDir = absProjectDir.lexically_normal();
 
     // Ensure project dir ends with separator for proper prefix matching
-    if (!absProjectDir.endsWith('/') && !absProjectDir.endsWith('\\')) {
-        absProjectDir += '/';
+    std::string projectStr = absProjectDir.string();
+    if (!projectStr.empty() && projectStr.back() != '/' && projectStr.back() != '\\') {
+        projectStr += '/';
     }
 
-    return absFilePath.startsWith(absProjectDir);
+    std::string fileStr = absFilePath.string();
+    return fileStr.compare(0, projectStr.size(), projectStr) == 0;
 }
 
-QString toRelativePath(const QString& absolutePath, const QString& projectDir)
+std::string toRelativePath(const std::string& absolutePath, const std::string& projectDir)
 {
-    if (projectDir.isEmpty() || absolutePath.isEmpty()) {
+    if (projectDir.empty() || absolutePath.empty()) {
         return absolutePath;
     }
 
-    QDir dir(projectDir);
-    return dir.relativeFilePath(absolutePath);
+    std::filesystem::path absPath = std::filesystem::absolute(absolutePath);
+    std::filesystem::path projPath = std::filesystem::absolute(projectDir);
+
+    return absPath.lexically_relative(projPath).string();
 }
 
-QString toAbsolutePath(const QString& relativePath, const QString& projectDir)
+std::string toAbsolutePath(const std::string& relativePath, const std::string& projectDir)
 {
-    if (projectDir.isEmpty() || relativePath.isEmpty()) {
+    if (projectDir.empty() || relativePath.empty()) {
         return relativePath;
     }
 
     // If already absolute, return as-is
-    QFileInfo info(relativePath);
-    if (info.isAbsolute()) {
+    std::filesystem::path relPath(relativePath);
+    if (relPath.is_absolute()) {
         return relativePath;
     }
 
-    QDir dir(projectDir);
-    return dir.absoluteFilePath(relativePath);
+    std::filesystem::path projPath(projectDir);
+    return (projPath / relPath).lexically_normal().string();
 }
 
 BackgroundImage exportBackgroundToProject(
     const BackgroundImage& background,
-    const QString& projectDir,
-    const QString& sketchName)
+    const std::string& projectDir,
+    const std::string& sketchName)
 {
     BackgroundImage result = background;
 
-    if (!background.enabled || projectDir.isEmpty()) {
+    if (!background.enabled || projectDir.empty()) {
         return result;
     }
 
     // Create backgrounds directory if needed
-    QString bgDir = projectDir + QStringLiteral("/sketches/backgrounds");
-    QDir dir(bgDir);
-    if (!dir.exists()) {
-        dir.mkpath(".");
-    }
+    std::string bgDir = projectDir + "/sketches/backgrounds";
+    std::filesystem::create_directories(bgDir);
 
     // Determine file extension from MIME type
-    QString ext = QStringLiteral("png");
-    if (background.mimeType == QStringLiteral("image/jpeg")) {
-        ext = QStringLiteral("jpg");
-    } else if (background.mimeType == QStringLiteral("image/bmp")) {
-        ext = QStringLiteral("bmp");
-    } else if (background.mimeType == QStringLiteral("image/gif")) {
-        ext = QStringLiteral("gif");
-    } else if (background.mimeType == QStringLiteral("image/webp")) {
-        ext = QStringLiteral("webp");
+    std::string ext = "png";
+    if (background.mimeType == "image/jpeg") {
+        ext = "jpg";
+    } else if (background.mimeType == "image/bmp") {
+        ext = "bmp";
+    } else if (background.mimeType == "image/gif") {
+        ext = "gif";
+    } else if (background.mimeType == "image/webp") {
+        ext = "webp";
     }
 
     // Generate filename from sketch name
-    QString safeName = sketchName;
-    safeName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")), QStringLiteral("_"));
-    if (safeName.isEmpty()) {
-        safeName = QStringLiteral("background");
+    std::string safeName = sketchName;
+    std::regex unsafeChars("[^a-zA-Z0-9_-]");
+    safeName = std::regex_replace(safeName, unsafeChars, "_");
+    if (safeName.empty()) {
+        safeName = "background";
     }
 
-    QString fileName = QStringLiteral("%1_bg.%2").arg(safeName, ext);
-    QString fullPath = bgDir + "/" + fileName;
+    std::string fileName = safeName + "_bg." + ext;
+    std::string fullPath = bgDir + "/" + fileName;
 
     // Handle name conflicts
     int counter = 1;
-    while (QFile::exists(fullPath)) {
-        fileName = QStringLiteral("%1_bg_%2.%3").arg(safeName).arg(counter++).arg(ext);
+    while (std::filesystem::exists(fullPath)) {
+        fileName = safeName + "_bg_" + std::to_string(counter++) + "." + ext;
         fullPath = bgDir + "/" + fileName;
     }
 
     // Get image data to save
-    QByteArray imageData;
+    std::vector<uint8_t> imageDataToWrite;
     if (background.storage == BackgroundStorage::Embedded) {
-        imageData = background.imageData;
+        imageDataToWrite = background.imageData;
     } else {
         // Read from file
-        QFile file(background.filePath);
-        if (file.open(QIODevice::ReadOnly)) {
-            imageData = file.readAll();
+        std::ifstream file(background.filePath, std::ios::binary);
+        if (file) {
+            file.seekg(0, std::ios::end);
+            auto fileSize = file.tellg();
+            file.seekg(0, std::ios::beg);
+            imageDataToWrite.resize(static_cast<size_t>(fileSize));
+            file.read(reinterpret_cast<char*>(imageDataToWrite.data()),
+                      static_cast<std::streamsize>(fileSize));
         }
     }
 
-    if (imageData.isEmpty()) {
+    if (imageDataToWrite.empty()) {
         return result;
     }
 
     // Write to project
-    QFile outFile(fullPath);
-    if (outFile.open(QIODevice::WriteOnly)) {
-        outFile.write(imageData);
+    std::ofstream outFile(fullPath, std::ios::binary);
+    if (outFile) {
+        outFile.write(reinterpret_cast<const char*>(imageDataToWrite.data()),
+                      static_cast<std::streamsize>(imageDataToWrite.size()));
         outFile.close();
 
         // Update result to use file path storage
@@ -550,8 +820,8 @@ BackgroundImage exportBackgroundToProject(
 }
 
 BackgroundImage updateBackgroundFromFile(
-    const QString& filePath,
-    const QString& projectDir)
+    const std::string& filePath,
+    const std::string& projectDir)
 {
     // Load the image
     BackgroundImage bg = loadBackgroundImage(filePath, false);
@@ -561,17 +831,22 @@ BackgroundImage updateBackgroundFromFile(
     }
 
     // Check if file is inside project
-    if (!projectDir.isEmpty() && isFileInProject(filePath, projectDir)) {
+    if (!projectDir.empty() && isFileInProject(filePath, projectDir)) {
         // Inside project - store as relative path
         bg.storage = BackgroundStorage::FilePath;
         bg.filePath = toRelativePath(filePath, projectDir);
         bg.imageData.clear();
     } else {
-        // Outside project - embed as base64
-        QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly)) {
+        // Outside project - embed the data
+        std::ifstream file(filePath, std::ios::binary);
+        if (file) {
             bg.storage = BackgroundStorage::Embedded;
-            bg.imageData = file.readAll();
+            file.seekg(0, std::ios::end);
+            auto fileSize = file.tellg();
+            file.seekg(0, std::ios::beg);
+            bg.imageData.resize(static_cast<size_t>(fileSize));
+            file.read(reinterpret_cast<char*>(bg.imageData.data()),
+                      static_cast<std::streamsize>(fileSize));
             // Keep absolute path for display purposes
             bg.filePath = filePath;
         }
@@ -584,7 +859,9 @@ BackgroundImage updateBackgroundFromFile(
 //  Serialization
 // =====================================================================
 
-QString backgroundToJson(
+#if HOBBYCAD_HAS_QT
+
+std::string backgroundToJson(
     const BackgroundImage& background,
     bool includeImageData)
 {
@@ -592,11 +869,11 @@ QString backgroundToJson(
 
     obj["enabled"] = background.enabled;
     obj["storage"] = static_cast<int>(background.storage);
-    obj["filePath"] = background.filePath;
-    obj["mimeType"] = background.mimeType;
+    obj["filePath"] = QString::fromStdString(background.filePath);
+    obj["mimeType"] = QString::fromStdString(background.mimeType);
 
-    obj["positionX"] = background.position.x();
-    obj["positionY"] = background.position.y();
+    obj["positionX"] = background.position.x;
+    obj["positionY"] = background.position.y;
     obj["width"] = background.width;
     obj["height"] = background.height;
     obj["rotation"] = background.rotation;
@@ -616,18 +893,20 @@ QString backgroundToJson(
     obj["originalPixelHeight"] = background.originalPixelHeight;
 
     if (includeImageData && background.storage == BackgroundStorage::Embedded) {
-        obj["imageData"] = QString::fromLatin1(background.imageData.toBase64());
+        QByteArray qData(reinterpret_cast<const char*>(background.imageData.data()),
+                         static_cast<int>(background.imageData.size()));
+        obj["imageData"] = QString::fromLatin1(qData.toBase64());
     }
 
     QJsonDocument doc(obj);
-    return QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    return doc.toJson(QJsonDocument::Compact).toStdString();
 }
 
-BackgroundImage backgroundFromJson(const QString& json)
+BackgroundImage backgroundFromJson(const std::string& json)
 {
     BackgroundImage bg;
 
-    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(json));
     if (!doc.isObject()) {
         return bg;
     }
@@ -636,10 +915,10 @@ BackgroundImage backgroundFromJson(const QString& json)
 
     bg.enabled = obj["enabled"].toBool(false);
     bg.storage = static_cast<BackgroundStorage>(obj["storage"].toInt(0));
-    bg.filePath = obj["filePath"].toString();
-    bg.mimeType = obj["mimeType"].toString();
+    bg.filePath = obj["filePath"].toString().toStdString();
+    bg.mimeType = obj["mimeType"].toString().toStdString();
 
-    bg.position = QPointF(obj["positionX"].toDouble(0),
+    bg.position = Point2D(obj["positionX"].toDouble(0),
                           obj["positionY"].toDouble(0));
     bg.width = obj["width"].toDouble(100);
     bg.height = obj["height"].toDouble(100);
@@ -660,42 +939,185 @@ BackgroundImage backgroundFromJson(const QString& json)
     bg.originalPixelHeight = obj["originalPixelHeight"].toInt(0);
 
     if (obj.contains("imageData")) {
-        bg.imageData = QByteArray::fromBase64(
+        QByteArray decoded = QByteArray::fromBase64(
             obj["imageData"].toString().toLatin1());
+        bg.imageData.assign(
+            reinterpret_cast<const uint8_t*>(decoded.constData()),
+            reinterpret_cast<const uint8_t*>(decoded.constData()) + decoded.size());
     }
 
     return bg;
 }
 
+#else  // !HOBBYCAD_HAS_QT — nlohmann/json path
+
+std::string backgroundToJson(
+    const BackgroundImage& background,
+    bool includeImageData)
+{
+    nlohmann::json obj;
+
+    obj["enabled"]   = background.enabled;
+    obj["storage"]   = static_cast<int>(background.storage);
+    obj["filePath"]  = background.filePath;
+    obj["mimeType"]  = background.mimeType;
+
+    obj["positionX"] = background.position.x;
+    obj["positionY"] = background.position.y;
+    obj["width"]     = background.width;
+    obj["height"]    = background.height;
+    obj["rotation"]  = background.rotation;
+
+    obj["opacity"]          = background.opacity;
+    obj["lockAspectRatio"]  = background.lockAspectRatio;
+    obj["flipHorizontal"]   = background.flipHorizontal;
+    obj["flipVertical"]     = background.flipVertical;
+    obj["grayscale"]        = background.grayscale;
+    obj["contrast"]         = background.contrast;
+    obj["brightness"]       = background.brightness;
+
+    obj["calibrated"]       = background.calibrated;
+    obj["calibrationScale"] = background.calibrationScale;
+
+    obj["originalPixelWidth"]  = background.originalPixelWidth;
+    obj["originalPixelHeight"] = background.originalPixelHeight;
+
+    if (includeImageData && background.storage == BackgroundStorage::Embedded &&
+        !background.imageData.empty()) {
+        obj["imageData"] = hobbycad::base64Encode(background.imageData);
+    }
+
+    return obj.dump();
+}
+
+BackgroundImage backgroundFromJson(const std::string& json)
+{
+    BackgroundImage bg;
+
+    nlohmann::json obj;
+    try {
+        obj = nlohmann::json::parse(json);
+    } catch (...) {
+        return bg;
+    }
+
+    if (!obj.is_object()) {
+        return bg;
+    }
+
+    bg.enabled  = obj.value("enabled", false);
+    bg.storage  = static_cast<BackgroundStorage>(obj.value("storage", 0));
+    bg.filePath = obj.value("filePath", std::string{});
+    bg.mimeType = obj.value("mimeType", std::string{});
+
+    bg.position = Point2D(obj.value("positionX", 0.0),
+                          obj.value("positionY", 0.0));
+    bg.width    = obj.value("width", 100.0);
+    bg.height   = obj.value("height", 100.0);
+    bg.rotation = obj.value("rotation", 0.0);
+
+    bg.opacity         = obj.value("opacity", 0.5);
+    bg.lockAspectRatio = obj.value("lockAspectRatio", true);
+    bg.flipHorizontal  = obj.value("flipHorizontal", false);
+    bg.flipVertical    = obj.value("flipVertical", false);
+    bg.grayscale       = obj.value("grayscale", false);
+    bg.contrast        = obj.value("contrast", 1.0);
+    bg.brightness      = obj.value("brightness", 0.0);
+
+    bg.calibrated       = obj.value("calibrated", false);
+    bg.calibrationScale = obj.value("calibrationScale", 1.0);
+
+    bg.originalPixelWidth  = obj.value("originalPixelWidth", 0);
+    bg.originalPixelHeight = obj.value("originalPixelHeight", 0);
+
+    if (obj.contains("imageData") && obj["imageData"].is_string()) {
+        bg.imageData = hobbycad::base64Decode(obj["imageData"].get<std::string>());
+    }
+
+    return bg;
+}
+
+#endif  // HOBBYCAD_HAS_QT
+
 // =====================================================================
 //  Supported Formats
 // =====================================================================
 
-QStringList supportedImageFormats()
+#if HOBBYCAD_HAS_QT
+
+std::vector<std::string> supportedImageFormats()
 {
-    QStringList formats;
+    std::vector<std::string> formats;
     for (const QByteArray& format : QImageReader::supportedImageFormats()) {
-        formats.append(QString::fromLatin1(format));
+        formats.push_back(QString::fromLatin1(format).toStdString());
     }
     return formats;
 }
 
-QString imageFileFilter()
+std::string imageFileFilter()
 {
-    QStringList formats = supportedImageFormats();
-    QStringList patterns;
-    for (const QString& format : formats) {
-        patterns.append(QStringLiteral("*.%1").arg(format));
+    std::vector<std::string> formats = supportedImageFormats();
+    std::string patterns;
+    for (size_t i = 0; i < formats.size(); ++i) {
+        if (i > 0) patterns += ' ';
+        patterns += "*." + formats[i];
     }
-    return QStringLiteral("Images (%1)").arg(patterns.join(' '));
+    return "Images (" + patterns + ")";
 }
 
-bool isImageFormatSupported(const QString& filePath)
+bool isImageFormatSupported(const std::string& filePath)
 {
-    QFileInfo info(filePath);
-    QString ext = info.suffix().toLower();
-    return supportedImageFormats().contains(ext);
+    std::filesystem::path fsPath(filePath);
+    std::string ext = fsPath.extension().string();
+    if (!ext.empty() && ext[0] == '.') ext = ext.substr(1);
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    std::vector<std::string> formats = supportedImageFormats();
+    for (const auto& fmt : formats) {
+        if (fmt == ext) return true;
+    }
+    return false;
 }
+
+#else  // !HOBBYCAD_HAS_QT — stb_image (+ optional libwebp) supported formats
+
+std::vector<std::string> supportedImageFormats()
+{
+    // Formats supported by stb_image
+    std::vector<std::string> formats = {
+        "png", "jpg", "jpeg", "bmp", "gif", "tga", "psd", "hdr", "pnm"
+    };
+#if HOBBYCAD_HAS_WEBP
+    formats.push_back("webp");
+#endif
+    return formats;
+}
+
+std::string imageFileFilter()
+{
+    std::string filter = "Images (*.png *.jpg *.jpeg *.bmp *.gif *.tga *.psd *.hdr *.pnm";
+#if HOBBYCAD_HAS_WEBP
+    filter += " *.webp";
+#endif
+    filter += ")";
+    return filter;
+}
+
+bool isImageFormatSupported(const std::string& filePath)
+{
+    std::filesystem::path fsPath(filePath);
+    std::string ext = fsPath.extension().string();
+    if (!ext.empty() && ext[0] == '.') ext = ext.substr(1);
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    std::vector<std::string> formats = supportedImageFormats();
+    for (const auto& fmt : formats) {
+        if (fmt == ext) return true;
+    }
+    return false;
+}
+
+#endif  // HOBBYCAD_HAS_QT
 
 }  // namespace sketch
 }  // namespace hobbycad

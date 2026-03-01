@@ -18,6 +18,7 @@
 
 class QLabel;
 class QStackedWidget;
+class QTreeWidgetItem;
 
 namespace hobbycad {
 
@@ -80,6 +81,7 @@ private slots:
     void onSketchSelectionChanged(int entityId);
     void onSketchEntityCreated(int entityId);
     void onSketchEntityModified(int entityId);
+    void onSketchPropertyItemChanged(QTreeWidgetItem* item, int column);
 
     // Timeline context menu handlers
     void onEditFeature(int index);
@@ -102,6 +104,7 @@ private:
     void showFeatureProperties(int index);
     void initDefaultParameters();
     void showSketchEntityProperties(int entityId);
+    void showSketchConstraintProperties(int constraintId);
     void showSketchProperties();
     void saveCurrentSketch();
     void discardCurrentSketch();

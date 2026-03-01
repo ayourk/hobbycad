@@ -4,6 +4,9 @@
 
 #include "formulaedit.h"
 
+#include <map>
+#include <string>
+
 #include <QCompleter>
 #include <QPainter>
 #include <QStringListModel>
@@ -58,7 +61,7 @@ ParametricValue FormulaEdit::parametricValue() const
 void FormulaEdit::setParametricValue(const ParametricValue& value)
 {
     m_value = value;
-    setText(value.expression());
+    setText(QString::fromStdString(value.expression()));
     updateValidation();
 }
 
@@ -74,13 +77,18 @@ bool FormulaEdit::isValid() const
 
 void FormulaEdit::onTextChanged(const QString& text)
 {
-    m_value.setExpression(text);
+    m_value.setExpression(text.toStdString());
     updateValidation();
 }
 
 void FormulaEdit::updateValidation()
 {
-    m_value.evaluate(m_parameterValues);
+    // Convert QMap<QString,double> to std::map<std::string,double> for library
+    std::map<std::string, double> stdParams;
+    for (auto it = m_parameterValues.constBegin(); it != m_parameterValues.constEnd(); ++it) {
+        stdParams[it.key().toStdString()] = it.value();
+    }
+    m_value.evaluate(stdParams);
 
     // Update dynamic properties for styling
     setProperty("hasFormula", m_value.type() != ParametricValue::Type::Number);
@@ -90,7 +98,7 @@ void FormulaEdit::updateValidation()
 
     updateResultDisplay();
 
-    emit validationChanged(m_value.isValid(), m_value.errorMessage());
+    emit validationChanged(m_value.isValid(), QString::fromStdString(m_value.errorMessage()));
 
     if (m_value.isValid()) {
         emit valueChanged(m_value.value());

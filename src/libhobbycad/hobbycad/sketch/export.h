@@ -15,9 +15,10 @@
 #include "entity.h"
 #include "constraint.h"
 #include "../core.h"
+#include "../types.h"
 
-#include <QString>
-#include <QVector>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -28,14 +29,14 @@ namespace sketch {
 
 /// Options for SVG export
 struct SVGExportOptions {
-    double strokeWidth = 0.5;          ///< Stroke width in mm
-    QString strokeColor = "#000000";   ///< Stroke color (hex)
-    QString fillColor = "none";        ///< Fill color (hex or "none")
-    QString constructionColor = "#0000FF";  ///< Color for construction geometry
-    bool includeConstraints = false;   ///< Show constraint annotations
-    bool includeDimensions = true;     ///< Show dimension values
-    double margin = 5.0;               ///< Margin around sketch in mm
-    double scale = 1.0;                ///< Scale factor (1.0 = 1mm per SVG unit)
+    double strokeWidth = 0.5;                   ///< Stroke width in mm
+    std::string strokeColor = "#000000";        ///< Stroke color (hex)
+    std::string fillColor = "none";             ///< Fill color (hex or "none")
+    std::string constructionColor = "#0000FF";  ///< Color for construction geometry
+    bool includeConstraints = false;            ///< Show constraint annotations
+    bool includeDimensions = true;              ///< Show dimension values
+    double margin = 5.0;                        ///< Margin around sketch in mm
+    double scale = 1.0;                         ///< Scale factor (1.0 = 1mm per SVG unit)
 };
 
 /// Export sketch to SVG string
@@ -43,9 +44,9 @@ struct SVGExportOptions {
 /// @param constraints Sketch constraints (optional, for dimension display)
 /// @param options Export options
 /// @return SVG document as string
-HOBBYCAD_EXPORT QString sketchToSVG(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints = {},
+HOBBYCAD_EXPORT std::string sketchToSVG(
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints = {},
     const SVGExportOptions& options = {});
 
 /// Export sketch to SVG file
@@ -55,9 +56,9 @@ HOBBYCAD_EXPORT QString sketchToSVG(
 /// @param options Export options
 /// @return True on success
 HOBBYCAD_EXPORT bool exportSketchToSVG(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints,
-    const QString& filePath,
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints,
+    const std::string& filePath,
     const SVGExportOptions& options = {});
 
 // =====================================================================
@@ -66,19 +67,19 @@ HOBBYCAD_EXPORT bool exportSketchToSVG(
 
 /// Options for DXF export
 struct DXFExportOptions {
-    QString layerName = "0";           ///< Default layer name
-    QString constructionLayer = "CONSTRUCTION";  ///< Layer for construction geometry
-    int colorIndex = 7;                ///< DXF color index (7 = white/black)
-    int constructionColorIndex = 5;    ///< Color index for construction
-    bool usePolylines = true;          ///< Use LWPOLYLINE for complex shapes
+    std::string layerName = "0";                      ///< Default layer name
+    std::string constructionLayer = "CONSTRUCTION";   ///< Layer for construction geometry
+    int colorIndex = 7;                               ///< DXF color index (7 = white/black)
+    int constructionColorIndex = 5;                   ///< Color index for construction
+    bool usePolylines = true;                         ///< Use LWPOLYLINE for complex shapes
 };
 
 /// Export sketch to DXF string
 /// @param entities Sketch entities
 /// @param options Export options
 /// @return DXF document as string
-HOBBYCAD_EXPORT QString sketchToDXF(
-    const QVector<Entity>& entities,
+HOBBYCAD_EXPORT std::string sketchToDXF(
+    const std::vector<Entity>& entities,
     const DXFExportOptions& options = {});
 
 /// Export sketch to DXF file
@@ -87,8 +88,8 @@ HOBBYCAD_EXPORT QString sketchToDXF(
 /// @param options Export options
 /// @return True on success
 HOBBYCAD_EXPORT bool exportSketchToDXF(
-    const QVector<Entity>& entities,
-    const QString& filePath,
+    const std::vector<Entity>& entities,
+    const std::string& filePath,
     const DXFExportOptions& options = {});
 
 // =====================================================================
@@ -101,14 +102,14 @@ struct SVGImportOptions {
     bool flipY = true;                 ///< Flip Y axis (SVG Y grows down)
     double tolerance = 0.1;            ///< Curve approximation tolerance
     bool convertArcsToLines = false;   ///< Convert arcs to polylines
-    QPointF offset = QPointF(0, 0);    ///< Offset to apply to all points
+    Point2D offset;                    ///< Offset to apply to all points
 };
 
 /// Result of SVG import
 struct SVGImportResult {
     bool success = false;
-    QVector<Entity> entities;
-    QString errorMessage;
+    std::vector<Entity> entities;
+    std::string errorMessage;
     int entityCount = 0;               ///< Number of entities created
     geometry::BoundingBox bounds;      ///< Bounds of imported geometry
 };
@@ -119,7 +120,7 @@ struct SVGImportResult {
 /// @param options Import options
 /// @return Import result with entities
 HOBBYCAD_EXPORT SVGImportResult importSVGPath(
-    const QString& svgPathData,
+    const std::string& svgPathData,
     int startId = 1,
     const SVGImportOptions& options = {});
 
@@ -129,7 +130,7 @@ HOBBYCAD_EXPORT SVGImportResult importSVGPath(
 /// @param options Import options
 /// @return Import result with entities
 HOBBYCAD_EXPORT SVGImportResult importSVGFile(
-    const QString& filePath,
+    const std::string& filePath,
     int startId = 1,
     const SVGImportOptions& options = {});
 
@@ -139,7 +140,7 @@ HOBBYCAD_EXPORT SVGImportResult importSVGFile(
 /// @param options Import options
 /// @return Import result with entities
 HOBBYCAD_EXPORT SVGImportResult importSVGString(
-    const QString& svgContent,
+    const std::string& svgContent,
     int startId = 1,
     const SVGImportOptions& options = {});
 
@@ -149,24 +150,24 @@ HOBBYCAD_EXPORT SVGImportResult importSVGString(
 
 /// Options for DXF import
 struct DXFImportOptions {
-    double scale = 1.0;                ///< Scale factor (1.0 = 1 DXF unit = 1mm)
-    QPointF offset = QPointF(0, 0);    ///< Offset to apply to all points
-    bool importBlocks = true;          ///< Import block references (INSERT)
-    bool importHatch = false;          ///< Import hatch boundaries
-    QStringList layerFilter;           ///< Only import these layers (empty = all)
-    bool ignoreConstructionLayers = false;  ///< Skip layers named "CONSTRUCTION", "DEFPOINTS", etc.
-    double splineTolerance = 0.1;      ///< Tolerance for spline approximation
+    double scale = 1.0;                      ///< Scale factor (1.0 = 1 DXF unit = 1mm)
+    Point2D offset;                          ///< Offset to apply to all points
+    bool importBlocks = true;                ///< Import block references (INSERT)
+    bool importHatch = false;                ///< Import hatch boundaries
+    std::vector<std::string> layerFilter;    ///< Only import these layers (empty = all)
+    bool ignoreConstructionLayers = false;    ///< Skip layers named "CONSTRUCTION", "DEFPOINTS", etc.
+    double splineTolerance = 0.1;            ///< Tolerance for spline approximation
 };
 
 /// Result of DXF import
 struct DXFImportResult {
     bool success = false;
-    QVector<Entity> entities;
-    QString errorMessage;
-    int entityCount = 0;               ///< Number of entities created
-    geometry::BoundingBox bounds;      ///< Bounds of imported geometry
-    QStringList layers;                ///< Layers found in file
-    QStringList blocks;                ///< Block names found in file
+    std::vector<Entity> entities;
+    std::string errorMessage;
+    int entityCount = 0;                     ///< Number of entities created
+    geometry::BoundingBox bounds;            ///< Bounds of imported geometry
+    std::vector<std::string> layers;         ///< Layers found in file
+    std::vector<std::string> blocks;         ///< Block names found in file
 };
 
 /// Import entities from DXF file
@@ -175,7 +176,7 @@ struct DXFImportResult {
 /// @param options Import options
 /// @return Import result with entities
 HOBBYCAD_EXPORT DXFImportResult importDXFFile(
-    const QString& filePath,
+    const std::string& filePath,
     int startId = 1,
     const DXFImportOptions& options = {});
 
@@ -185,7 +186,7 @@ HOBBYCAD_EXPORT DXFImportResult importDXFFile(
 /// @param options Import options
 /// @return Import result with entities
 HOBBYCAD_EXPORT DXFImportResult importDXFString(
-    const QString& dxfContent,
+    const std::string& dxfContent,
     int startId = 1,
     const DXFImportOptions& options = {});
 

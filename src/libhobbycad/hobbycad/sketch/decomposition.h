@@ -20,11 +20,10 @@
 #include "constraint.h"
 #include "group.h"
 
-#include <QPair>
-#include <QString>
-#include <QVector>
-
 #include <functional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -36,9 +35,9 @@ namespace sketch {
 /// Result of decomposing a compound entity
 struct DecompositionResult {
     bool success = false;
-    QVector<Entity> entities;          ///< Lines + optional construction Circle
-    QVector<Constraint> constraints;   ///< Coincident, Equal, Parallel, etc.
-    Group group;                       ///< Named group containing all produced IDs
+    std::vector<Entity> entities;          ///< Lines + optional construction Circle
+    std::vector<Constraint> constraints;   ///< Coincident, Equal, Parallel, etc.
+    Group group;                           ///< Named group containing all produced IDs
 };
 
 // =====================================================================
@@ -52,7 +51,7 @@ struct DecompositionResult {
 /// the entities/constraints/group into its own data structures.
 ///
 /// @param compound       The compound entity to decompose
-/// @param lockedDims     Locked dimension fields (label → value) for constraint creation
+/// @param lockedDims     Locked dimension fields (label -> value) for constraint creation
 /// @param nextEntityId   Callable returning the next unique entity ID
 /// @param nextConstraintId Callable returning the next unique constraint ID
 /// @param groupId        The group ID to assign
@@ -61,12 +60,12 @@ struct DecompositionResult {
 /// @param isFreeform     For Polygon: true = freeform (no construction circle, no Equal)
 HOBBYCAD_EXPORT DecompositionResult decomposeEntity(
     const Entity& compound,
-    const QVector<QPair<QString, double>>& lockedDims,
+    const std::vector<std::pair<std::string, double>>& lockedDims,
     std::function<int()> nextEntityId,
     std::function<int()> nextConstraintId,
     int groupId,
-    const QVector<Group>& existingGroups,
-    const QString& typeName,
+    const std::vector<Group>& existingGroups,
+    const std::string& typeName,
     bool isFreeform = false);
 
 }  // namespace sketch
