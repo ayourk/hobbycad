@@ -44,7 +44,7 @@ set(APP_SOURCES
     gui/sketchcanvas.cpp
     gui/sketchsolver.cpp
     gui/sketchactionbar.cpp
-    gui/sketchmodecontroller.cpp
+
     gui/sketchplanedialog.cpp
     gui/constructionplanedialog.cpp
     gui/backgroundimagedialog.cpp
@@ -98,7 +98,7 @@ set(APP_HEADERS
     gui/sketchcanvas.h
     gui/sketchsolver.h
     gui/sketchactionbar.h
-    gui/sketchmodecontroller.h
+
     gui/sketchplanedialog.h
     gui/constructionplanedialog.h
     gui/backgroundimagedialog.h

@@ -111,6 +111,7 @@ jobs:
             mesa-libGL-devel mesa-libGLU-devel libxkbcommon-devel \
             tbb-devel libpng-devel libjpeg-devel libwebp-devel \
             libzip-devel minizip-devel \
+            json-devel \
             libgit2-devel \
             lib3mf-devel \
             librsvg2-tools \
@@ -199,6 +200,7 @@ jobs:
             libxkbcommon-devel \
             tbb-devel libpng-devel libjpeg-devel libwebp-devel \
             libzip-devel minizip-devel \
+            json-devel \
             libgit2-devel \
             lib3mf-devel OpenMesh-devel \
             librsvg2-tools \

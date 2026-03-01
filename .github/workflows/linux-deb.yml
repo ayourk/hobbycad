@@ -163,6 +163,7 @@ jobs:
             libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
             libpng-dev libjpeg-dev libwebp-dev \
             libzip-dev libminizip-dev \
+            nlohmann-json3-dev \
             libgit2-dev \
             lib3mf-dev libopenmesh-dev \
             libeigen3-dev \

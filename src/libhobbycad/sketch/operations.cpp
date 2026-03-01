@@ -874,5 +874,190 @@ int findConnectedLineAtCorner(
     return -1;
 }
 
+// =====================================================================
+//  Tangency Maintenance
+// =====================================================================
+
+ReestablishTangencyResult reestablishTangency(
+    const Entity& arc,
+    const Entity& parentEntity)
+{
+    ReestablishTangencyResult result;
+
+    if (arc.type != EntityType::Arc || arc.points.size() < 3) {
+        result.errorMessage = "Entity must be an arc with 3 points";
+        return result;
+    }
+
+    // --- Project tangent point onto parent entity ---
+    Point2D tanPt = arc.points[1];
+    Point2D edgeDir(1.0, 0.0);
+
+    if (parentEntity.type == EntityType::Line && parentEntity.points.size() >= 2) {
+        tanPt = closestPointOnLine(arc.points[1],
+                                   parentEntity.points[0], parentEntity.points[1]);
+        edgeDir = parentEntity.points[1] - parentEntity.points[0];
+    } else if (parentEntity.type == EntityType::Rectangle && parentEntity.points.size() >= 2) {
+        // Expand rectangle to 4 corners
+        Point2D corners[4];
+        if (parentEntity.points.size() >= 4) {
+            for (int i = 0; i < 4; ++i)
+                corners[i] = parentEntity.points[i];
+        } else {
+            corners[0] = parentEntity.points[0];
+            corners[1] = Point2D(parentEntity.points[1].x, parentEntity.points[0].y);
+            corners[2] = parentEntity.points[1];
+            corners[3] = Point2D(parentEntity.points[0].x, parentEntity.points[1].y);
+        }
+
+        // Find closest edge for projection and direction
+        double minD = std::numeric_limits<double>::max();
+        for (int i = 0; i < 4; ++i) {
+            Point2D p = closestPointOnLine(arc.points[1],
+                                           corners[i], corners[(i + 1) % 4]);
+            double d = length(arc.points[1] - p);
+            if (d < minD) {
+                minD = d;
+                tanPt = p;
+                edgeDir = corners[(i + 1) % 4] - corners[i];
+            }
+        }
+    } else {
+        result.errorMessage = "Parent entity must be a Line or Rectangle";
+        return result;
+    }
+
+    double edgeLen = length(edgeDir);
+    if (edgeLen < 1e-6) {
+        result.errorMessage = "Parent entity edge has zero length";
+        return result;
+    }
+
+    Point2D normal(-edgeDir.y / edgeLen, edgeDir.x / edgeLen);
+    // Orient normal toward current center side
+    Point2D off = arc.points[0] - tanPt;
+    if (dot(off, normal) < 0)
+        normal = Point2D(-normal.x, -normal.y);
+
+    double radius = arc.radius;
+    Point2D newCenter(tanPt.x + normal.x * radius,
+                      tanPt.y + normal.y * radius);
+
+    double newStartAngle = std::atan2(
+        tanPt.y - newCenter.y,
+        tanPt.x - newCenter.x) * 180.0 / M_PI;
+
+    double sweepAngle = arc.sweepAngle;
+    double endRad = (newStartAngle + sweepAngle) * M_PI / 180.0;
+
+    result.arc = arc;
+    result.arc.points[0] = newCenter;
+    result.arc.points[1] = tanPt;
+    result.arc.points[2] = Point2D(
+        newCenter.x + radius * std::cos(endRad),
+        newCenter.y + radius * std::sin(endRad));
+    result.arc.startAngle = newStartAngle;
+    // radius and sweepAngle preserved
+    result.success = true;
+
+    return result;
+}
+
+// =====================================================================
+//  Collinear Segment Rejoining
+// =====================================================================
+
+RejoinResult validateCollinearRejoin(
+    const std::vector<Entity>& entities,
+    double angleTolerance,
+    double endpointTolerance)
+{
+    RejoinResult result;
+
+    if (entities.size() < 2) {
+        result.errorMessage = "At least 2 line segments are required.";
+        return result;
+    }
+
+    // Validate: all must be lines with at least 2 points
+    for (const Entity& e : entities) {
+        if (e.type != EntityType::Line || e.points.size() < 2) {
+            result.errorMessage = "All selected entities must be line segments.";
+            return result;
+        }
+    }
+
+    // Reference direction from first line
+    Point2D refDir = entities[0].points[1] - entities[0].points[0];
+    double refLen = length(refDir);
+    if (refLen < 1e-9) {
+        result.errorMessage = "Selected line has zero length.";
+        return result;
+    }
+    refDir = Point2D(refDir.x / refLen, refDir.y / refLen);
+
+    // Validate collinearity
+    for (size_t i = 1; i < entities.size(); ++i) {
+        Point2D d = entities[i].points[1] - entities[i].points[0];
+        double len = length(d);
+        if (len < 1e-9) continue;
+        d = Point2D(d.x / len, d.y / len);
+        double crossVal = std::abs(refDir.x * d.y - refDir.y * d.x);
+        if (crossVal > angleTolerance) {
+            result.errorMessage = "Selected lines are not collinear.";
+            return result;
+        }
+    }
+
+    // Project all endpoints onto reference line and sort by parameter
+    Point2D refP0 = entities[0].points[0];
+    struct Seg {
+        int id;
+        double t0, t1;
+        Point2D p0, p1;
+    };
+    std::vector<Seg> segs;
+    for (const Entity& e : entities) {
+        Point2D d0 = e.points[0] - refP0;
+        Point2D d1 = e.points[1] - refP0;
+        double t0 = d0.x * refDir.x + d0.y * refDir.y;
+        double t1 = d1.x * refDir.x + d1.y * refDir.y;
+        if (t0 > t1) {
+            std::swap(t0, t1);
+            segs.push_back({e.id, t0, t1, e.points[1], e.points[0]});
+        } else {
+            segs.push_back({e.id, t0, t1, e.points[0], e.points[1]});
+        }
+    }
+
+    std::sort(segs.begin(), segs.end(),
+              [](const Seg& a, const Seg& b) { return a.t0 < b.t0; });
+
+    // Check contiguity
+    for (size_t i = 1; i < segs.size(); ++i) {
+        if (std::abs(segs[i].t0 - segs[i - 1].t1) > endpointTolerance) {
+            result.errorMessage = "Selected lines do not form a contiguous chain.\n"
+                                  "There is a gap between segments.";
+            return result;
+        }
+    }
+
+    // Collect junction points (interior endpoints between consecutive segments)
+    for (size_t i = 0; i + 1 < segs.size(); ++i) {
+        result.junctionPoints.push_back(segs[i].p1);
+    }
+
+    // Collect IDs of entities to remove
+    for (const Seg& s : segs) {
+        result.removedIds.push_back(s.id);
+    }
+
+    result.mergedStart = segs.front().p0;
+    result.mergedEnd = segs.back().p1;
+    result.success = true;
+
+    return result;
+}
+
 }  // namespace sketch
 }  // namespace hobbycad

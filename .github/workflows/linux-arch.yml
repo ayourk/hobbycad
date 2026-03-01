@@ -85,6 +85,7 @@ jobs:
             opencascade tbb \
             libpng libjpeg-turbo libwebp \
             libzip minizip \
+            nlohmann-json \
             libgit2 \
             lib3mf \
             librsvg \
@@ -180,6 +181,7 @@ jobs:
             'cmake'
             'ninja'
             'qt6-tools'
+            'nlohmann-json'
             'librsvg'
           )
           source=()
