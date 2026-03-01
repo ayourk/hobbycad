@@ -16,6 +16,8 @@
 
 #include <QDialog>
 
+#include <vector>
+
 class QButtonGroup;
 class QComboBox;
 class QDoubleSpinBox;
@@ -54,7 +56,7 @@ public:
     void setOffset(double offset);
 
     /// Set available construction planes for selection.
-    void setAvailableConstructionPlanes(const QVector<ConstructionPlaneData>& planes);
+    void setAvailableConstructionPlanes(const std::vector<ConstructionPlaneData>& planes);
 
 private:
     void setupUi();
@@ -76,7 +78,7 @@ private:
     QDoubleSpinBox*  m_offsetSpin     = nullptr;
     QLabel*          m_previewLabel   = nullptr;
 
-    QVector<ConstructionPlaneData> m_availablePlanes;
+    std::vector<ConstructionPlaneData> m_availablePlanes;
 };
 
 }  // namespace hobbycad

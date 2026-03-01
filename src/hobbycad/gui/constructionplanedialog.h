@@ -17,6 +17,8 @@
 
 #include <QDialog>
 
+#include <vector>
+
 class QButtonGroup;
 class QCheckBox;
 class QComboBox;
@@ -43,7 +45,7 @@ public:
     ConstructionPlaneData planeData() const;
 
     /// Set available construction planes for "offset from plane" option.
-    void setAvailablePlanes(const QVector<ConstructionPlaneData>& planes);
+    void setAvailablePlanes(const std::vector<ConstructionPlaneData>& planes);
 
     /// Set whether this is creating a new plane or editing existing.
     void setEditMode(bool editing);
@@ -107,7 +109,7 @@ private:
     QLabel* m_previewLabel = nullptr;
 
     // Available planes for reference
-    QVector<ConstructionPlaneData> m_availablePlanes;
+    std::vector<ConstructionPlaneData> m_availablePlanes;
 };
 
 }  // namespace hobbycad

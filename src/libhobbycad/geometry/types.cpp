@@ -9,6 +9,13 @@
 
 #include <hobbycad/geometry/types.h>
 
+#include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace hobbycad {
 namespace geometry {
 
@@ -27,7 +34,7 @@ bool Arc::containsAngle(double angle) const
     while (normAngle < 0) normAngle += 360.0;
     while (normAngle >= 360.0) normAngle -= 360.0;
 
-    if (qFuzzyCompare(qAbs(sweepAngle), 360.0)) {
+    if (std::abs(sweepAngle) >= 360.0 - 1e-12) {
         return true;  // Full circle
     }
 
@@ -57,23 +64,23 @@ bool Arc::containsAngle(double angle) const
     }
 }
 
-QPointF Arc::startPoint() const
+Point2D Arc::startPoint() const
 {
-    double rad = qDegreesToRadians(startAngle);
-    return center + QPointF(radius * qCos(rad), radius * qSin(rad));
+    double rad = startAngle * M_PI / 180.0;
+    return center + Point2D(radius * std::cos(rad), radius * std::sin(rad));
 }
 
-QPointF Arc::endPoint() const
+Point2D Arc::endPoint() const
 {
-    double rad = qDegreesToRadians(startAngle + sweepAngle);
-    return center + QPointF(radius * qCos(rad), radius * qSin(rad));
+    double rad = (startAngle + sweepAngle) * M_PI / 180.0;
+    return center + Point2D(radius * std::cos(rad), radius * std::sin(rad));
 }
 
-QPointF Arc::pointAt(double t) const
+Point2D Arc::pointAt(double t) const
 {
     double angle = startAngle + t * sweepAngle;
-    double rad = qDegreesToRadians(angle);
-    return center + QPointF(radius * qCos(rad), radius * qSin(rad));
+    double rad = angle * M_PI / 180.0;
+    return center + Point2D(radius * std::cos(rad), radius * std::sin(rad));
 }
 
 // =====================================================================
@@ -81,15 +88,15 @@ QPointF Arc::pointAt(double t) const
 // =====================================================================
 
 BoundingBox::BoundingBox(double x1, double y1, double x2, double y2)
-    : minX(qMin(x1, x2))
-    , minY(qMin(y1, y2))
-    , maxX(qMax(x1, x2))
-    , maxY(qMax(y1, y2))
+    : minX(std::min(x1, x2))
+    , minY(std::min(y1, y2))
+    , maxX(std::max(x1, x2))
+    , maxY(std::max(y1, y2))
     , valid(true)
 {
 }
 
-BoundingBox::BoundingBox(const QRectF& rect)
+BoundingBox::BoundingBox(const Rect2D& rect)
     : minX(rect.left())
     , minY(rect.top())
     , maxX(rect.right())
@@ -98,26 +105,26 @@ BoundingBox::BoundingBox(const QRectF& rect)
 {
 }
 
-BoundingBox::BoundingBox(const QPointF& point)
-    : minX(point.x())
-    , minY(point.y())
-    , maxX(point.x())
-    , maxY(point.y())
+BoundingBox::BoundingBox(const Point2D& point)
+    : minX(point.x)
+    , minY(point.y)
+    , maxX(point.x)
+    , maxY(point.y)
     , valid(true)
 {
 }
 
-void BoundingBox::include(const QPointF& point)
+void BoundingBox::include(const Point2D& point)
 {
     if (!valid) {
-        minX = maxX = point.x();
-        minY = maxY = point.y();
+        minX = maxX = point.x;
+        minY = maxY = point.y;
         valid = true;
     } else {
-        minX = qMin(minX, point.x());
-        minY = qMin(minY, point.y());
-        maxX = qMax(maxX, point.x());
-        maxY = qMax(maxY, point.y());
+        minX = std::min(minX, point.x);
+        minY = std::min(minY, point.y);
+        maxX = std::max(maxX, point.x);
+        maxY = std::max(maxY, point.y);
     }
 }
 
@@ -128,28 +135,28 @@ void BoundingBox::include(const BoundingBox& other)
     if (!valid) {
         *this = other;
     } else {
-        minX = qMin(minX, other.minX);
-        minY = qMin(minY, other.minY);
-        maxX = qMax(maxX, other.maxX);
-        maxY = qMax(maxY, other.maxY);
+        minX = std::min(minX, other.minX);
+        minY = std::min(minY, other.minY);
+        maxX = std::max(maxX, other.maxX);
+        maxY = std::max(maxY, other.maxY);
     }
 }
 
-QPointF BoundingBox::center() const
+Point2D BoundingBox::center() const
 {
-    return QPointF((minX + maxX) / 2.0, (minY + maxY) / 2.0);
+    return Point2D((minX + maxX) / 2.0, (minY + maxY) / 2.0);
 }
 
-QRectF BoundingBox::toRect() const
+Rect2D BoundingBox::toRect() const
 {
-    return QRectF(minX, minY, maxX - minX, maxY - minY);
+    return Rect2D(minX, minY, maxX - minX, maxY - minY);
 }
 
-bool BoundingBox::contains(const QPointF& point) const
+bool BoundingBox::contains(const Point2D& point) const
 {
     if (!valid) return false;
-    return point.x() >= minX && point.x() <= maxX &&
-           point.y() >= minY && point.y() <= maxY;
+    return point.x >= minX && point.x <= maxX &&
+           point.y >= minY && point.y <= maxY;
 }
 
 bool BoundingBox::intersects(const BoundingBox& other) const
@@ -178,9 +185,9 @@ Transform2D Transform2D::translation(double dx, double dy)
 
 Transform2D Transform2D::rotation(double angleDegrees)
 {
-    double rad = qDegreesToRadians(angleDegrees);
-    double c = qCos(rad);
-    double s = qSin(rad);
+    double rad = angleDegrees * M_PI / 180.0;
+    double c = std::cos(rad);
+    double s = std::sin(rad);
 
     Transform2D t;
     t.m11 = c;
@@ -190,12 +197,12 @@ Transform2D Transform2D::rotation(double angleDegrees)
     return t;
 }
 
-Transform2D Transform2D::rotation(double angleDegrees, const QPointF& center)
+Transform2D Transform2D::rotation(double angleDegrees, const Point2D& center)
 {
     // Translate to origin, rotate, translate back
-    Transform2D t1 = translation(-center.x(), -center.y());
+    Transform2D t1 = translation(-center.x, -center.y);
     Transform2D r = rotation(angleDegrees);
-    Transform2D t2 = translation(center.x(), center.y());
+    Transform2D t2 = translation(center.x, center.y);
     return t2 * r * t1;
 }
 
@@ -212,48 +219,48 @@ Transform2D Transform2D::scale(double sx, double sy)
     return t;
 }
 
-Transform2D Transform2D::scale(double factor, const QPointF& center)
+Transform2D Transform2D::scale(double factor, const Point2D& center)
 {
-    Transform2D t1 = translation(-center.x(), -center.y());
+    Transform2D t1 = translation(-center.x, -center.y);
     Transform2D s = scale(factor);
-    Transform2D t2 = translation(center.x(), center.y());
+    Transform2D t2 = translation(center.x, center.y);
     return t2 * s * t1;
 }
 
-Transform2D Transform2D::mirrorHorizontal(const QPointF& center)
+Transform2D Transform2D::mirrorHorizontal(const Point2D& center)
 {
     // Mirror around horizontal axis (flip Y)
-    Transform2D t1 = translation(-center.x(), -center.y());
+    Transform2D t1 = translation(-center.x, -center.y);
     Transform2D m;
     m.m22 = -1.0;
-    Transform2D t2 = translation(center.x(), center.y());
+    Transform2D t2 = translation(center.x, center.y);
     return t2 * m * t1;
 }
 
-Transform2D Transform2D::mirrorVertical(const QPointF& center)
+Transform2D Transform2D::mirrorVertical(const Point2D& center)
 {
     // Mirror around vertical axis (flip X)
-    Transform2D t1 = translation(-center.x(), -center.y());
+    Transform2D t1 = translation(-center.x, -center.y);
     Transform2D m;
     m.m11 = -1.0;
-    Transform2D t2 = translation(center.x(), center.y());
+    Transform2D t2 = translation(center.x, center.y);
     return t2 * m * t1;
 }
 
-QPointF Transform2D::apply(const QPointF& point) const
+Point2D Transform2D::apply(const Point2D& point) const
 {
-    return QPointF(
-        m11 * point.x() + m12 * point.y() + m13,
-        m21 * point.x() + m22 * point.y() + m23
+    return Point2D(
+        m11 * point.x + m12 * point.y + m13,
+        m21 * point.x + m22 * point.y + m23
     );
 }
 
-QVector<QPointF> Transform2D::apply(const QVector<QPointF>& points) const
+std::vector<Point2D> Transform2D::apply(const std::vector<Point2D>& points) const
 {
-    QVector<QPointF> result;
+    std::vector<Point2D> result;
     result.reserve(points.size());
-    for (const QPointF& p : points) {
-        result.append(apply(p));
+    for (const Point2D& p : points) {
+        result.push_back(apply(p));
     }
     return result;
 }

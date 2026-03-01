@@ -22,18 +22,21 @@
 #define HOBBYCAD_PROJECT_H
 
 #include "core.h"
+#include "types.h"
 #include "sketch/background.h"
 #include "sketch/constraint.h"
 #include "sketch/entity.h"
 
 #include <TopoDS_Shape.hxx>
 
-#include <QDateTime>
+#include <string>
+#include <vector>
+
+#if HOBBYCAD_HAS_QT
 #include <QJsonObject>
-#include <QList>
-#include <QPointF>
-#include <QString>
-#include <QVector>
+#else
+#include <nlohmann/json.hpp>
+#endif
 
 namespace hobbycad {
 
@@ -70,7 +73,7 @@ enum class ConstructionPlaneType {
 /// A construction plane - a first-class object in the project
 struct ConstructionPlaneData {
     int id = 0;                          ///< Unique ID within the project
-    QString name;                        ///< User-visible name
+    std::string name;                    ///< User-visible name
 
     ConstructionPlaneType type = ConstructionPlaneType::OffsetFromOrigin;
 
@@ -106,7 +109,9 @@ struct ConstructionPlaneData {
 
     /// Check if the plane has a non-zero origin (not at global 0,0,0)
     bool hasCustomOrigin() const {
-        return !qFuzzyIsNull(originX) || !qFuzzyIsNull(originY) || !qFuzzyIsNull(originZ);
+        return !hobbycad::fuzzyIsNull(originX) ||
+               !hobbycad::fuzzyIsNull(originY) ||
+               !hobbycad::fuzzyIsNull(originZ);
     }
 };
 
@@ -117,18 +122,18 @@ using SketchEntityData = sketch::Entity;
 struct ConstraintData {
     int id = 0;
     ConstraintType type = ConstraintType::Distance;
-    QVector<int> entityIds;        ///< IDs of entities involved in constraint
-    QVector<int> pointIndices;     ///< Point indices within entities (for multi-point entities)
-    double value = 0.0;            ///< Constraint value (distance in mm, angle in degrees, etc.)
-    bool isDriving = true;         ///< True = driving constraint, False = reference (display only)
-    QPointF labelPosition;         ///< Where to display the dimension label in 2D sketch space
-    bool labelVisible = true;      ///< Show/hide dimension text
-    bool enabled = true;           ///< Whether constraint is active
+    std::vector<int> entityIds;        ///< IDs of entities involved in constraint
+    std::vector<int> pointIndices;     ///< Point indices within entities (for multi-point entities)
+    double value = 0.0;                ///< Constraint value (distance in mm, angle in degrees, etc.)
+    bool isDriving = true;             ///< True = driving constraint, False = reference (display only)
+    Point2D labelPosition;             ///< Where to display the dimension label in 2D sketch space
+    bool labelVisible = true;          ///< Show/hide dimension text
+    bool enabled = true;               ///< Whether constraint is active
 };
 
 /// A complete sketch
 struct SketchData {
-    QString name;
+    std::string name;
 
     // Plane reference - either an origin plane or a construction plane
     SketchPlane plane = SketchPlane::XY;     ///< XY/XZ/YZ for origin, Custom for construction plane
@@ -139,8 +144,8 @@ struct SketchData {
     PlaneRotationAxis rotationAxis = PlaneRotationAxis::X;  ///< Axis to rotate around
     double rotationAngle = 0.0;               ///< Rotation angle in degrees
 
-    QVector<SketchEntityData> entities;
-    QVector<ConstraintData> constraints;   ///< Parametric constraints (dimensions, geometric)
+    std::vector<SketchEntityData> entities;
+    std::vector<ConstraintData> constraints;   ///< Parametric constraints (dimensions, geometric)
     double gridSpacing = 10.0;
 
     // Background image for tracing
@@ -151,11 +156,11 @@ struct SketchData {
 
 /// A single parameter
 struct ParameterData {
-    QString name;
-    QString expression;
+    std::string name;
+    std::string expression;
     double value = 0.0;
-    QString unit;
-    QString comment;
+    std::string unit;
+    std::string comment;
     bool isUserParam = true;
 };
 
@@ -163,9 +168,9 @@ struct ParameterData {
 
 /// A foreign file entry (non-CAD file tracked by the project)
 struct ForeignFileData {
-    QString path;           ///< Relative path from project root
-    QString description;    ///< Optional description
-    QString category;       ///< Category (version_control, documentation, etc.)
+    std::string path;           ///< Relative path from project root
+    std::string description;    ///< Optional description
+    std::string category;       ///< Category (version_control, documentation, etc.)
 };
 
 // ---- Feature types ----
@@ -202,12 +207,16 @@ enum class FeatureState {
 struct FeatureData {
     int id = 0;
     FeatureType type = FeatureType::Origin;
-    QString name;
+    std::string name;
+#if HOBBYCAD_HAS_QT
     QJsonObject properties;  ///< Feature-specific properties
-    QVector<int> dependsOn;  ///< IDs of features this depends on (parents)
+#else
+    nlohmann::json properties = nlohmann::json::object();  ///< Feature-specific properties
+#endif
+    std::vector<int> dependsOn;  ///< IDs of features this depends on (parents)
     bool suppressed = false; ///< True if feature is suppressed
     FeatureState state = FeatureState::Normal;  ///< Validation state
-    QString stateMessage;    ///< Human-readable error/warning message
+    std::string stateMessage;    ///< Human-readable error/warning message
 };
 
 // ---- Project class ----
@@ -219,28 +228,31 @@ public:
 
     // ---- Project metadata ----
 
-    QString name() const { return m_name; }
-    void setName(const QString& name) { m_name = name; }
+    std::string name() const { return m_name; }
+    void setName(const std::string& name) { m_name = name; }
 
-    QString author() const { return m_author; }
-    void setAuthor(const QString& author) { m_author = author; }
+    std::string author() const { return m_author; }
+    void setAuthor(const std::string& author) { m_author = author; }
 
-    QString description() const { return m_description; }
-    void setDescription(const QString& desc) { m_description = desc; }
+    std::string description() const { return m_description; }
+    void setDescription(const std::string& desc) { m_description = desc; }
 
-    QString units() const { return m_units; }
-    void setUnits(const QString& units) { m_units = units; }
+    std::string units() const { return m_units; }
+    void setUnits(const std::string& units) { m_units = units; }
 
-    QDateTime created() const { return m_created; }
-    QDateTime modified() const { return m_modified_time; }
+    /// Created timestamp as ISO 8601 string
+    std::string created() const { return m_created; }
+
+    /// Modified timestamp as ISO 8601 string
+    std::string modified() const { return m_modified_time; }
 
     // ---- Project path ----
 
     /// Directory path of the project (empty if unsaved)
-    QString projectPath() const { return m_projectPath; }
+    std::string projectPath() const { return m_projectPath; }
 
     /// True if the project has never been saved
-    bool isNew() const { return m_projectPath.isEmpty(); }
+    bool isNew() const { return m_projectPath.empty(); }
 
     /// True if the project has unsaved changes
     bool isModified() const { return m_modified_flag; }
@@ -248,14 +260,14 @@ public:
 
     // ---- Geometry ----
 
-    const QList<TopoDS_Shape>& shapes() const { return m_shapes; }
+    const std::vector<TopoDS_Shape>& shapes() const { return m_shapes; }
     void addShape(const TopoDS_Shape& shape);
-    void setShapes(const QList<TopoDS_Shape>& shapes);
+    void setShapes(const std::vector<TopoDS_Shape>& shapes);
     void clearShapes();
 
     // ---- Construction Planes ----
 
-    const QVector<ConstructionPlaneData>& constructionPlanes() const { return m_constructionPlanes; }
+    const std::vector<ConstructionPlaneData>& constructionPlanes() const { return m_constructionPlanes; }
     void addConstructionPlane(const ConstructionPlaneData& plane);
     void setConstructionPlane(int index, const ConstructionPlaneData& plane);
     void removeConstructionPlane(int index);
@@ -265,7 +277,7 @@ public:
 
     // ---- Sketches ----
 
-    const QVector<SketchData>& sketches() const { return m_sketches; }
+    const std::vector<SketchData>& sketches() const { return m_sketches; }
     void addSketch(const SketchData& sketch);
     void setSketch(int index, const SketchData& sketch);
     void removeSketch(int index);
@@ -273,43 +285,43 @@ public:
 
     // ---- Parameters ----
 
-    const QList<ParameterData>& parameters() const { return m_parameters; }
-    void setParameters(const QList<ParameterData>& params);
+    const std::vector<ParameterData>& parameters() const { return m_parameters; }
+    void setParameters(const std::vector<ParameterData>& params);
     void addParameter(const ParameterData& param);
     void clearParameters();
 
     // ---- Features ----
 
-    const QVector<FeatureData>& features() const { return m_features; }
+    const std::vector<FeatureData>& features() const { return m_features; }
     void addFeature(const FeatureData& feature);
-    void setFeatures(const QVector<FeatureData>& features);
+    void setFeatures(const std::vector<FeatureData>& features);
     void clearFeatures();
 
     // ---- Foreign Files ----
 
-    const QVector<ForeignFileData>& foreignFiles() const { return m_foreignFiles; }
+    const std::vector<ForeignFileData>& foreignFiles() const { return m_foreignFiles; }
     void addForeignFile(const ForeignFileData& file);
-    void addForeignFile(const QString& path, const QString& category = QString(),
-                        const QString& description = QString());
-    void removeForeignFile(const QString& path);
-    void setForeignFiles(const QVector<ForeignFileData>& files);
+    void addForeignFile(const std::string& path, const std::string& category = {},
+                        const std::string& description = {});
+    void removeForeignFile(const std::string& path);
+    void setForeignFiles(const std::vector<ForeignFileData>& files);
     void clearForeignFiles();
-    bool isForeignFile(const QString& relativePath) const;
-    const ForeignFileData* foreignFileByPath(const QString& path) const;
+    bool isForeignFile(const std::string& relativePath) const;
+    const ForeignFileData* foreignFileByPath(const std::string& path) const;
 
     // ---- File I/O ----
 
     /// Load a project from a .hcad directory
     /// Returns true on success
-    bool load(const QString& path, QString* errorMsg = nullptr);
+    bool load(const std::string& path, std::string* errorMsg = nullptr);
 
     /// Save the project to a .hcad directory
     /// If path is empty, uses the current projectPath()
     /// Returns true on success
-    bool save(const QString& path = QString(), QString* errorMsg = nullptr);
+    bool save(const std::string& path = {}, std::string* errorMsg = nullptr);
 
     /// Create a new empty project
-    void createNew(const QString& name = QString());
+    void createNew(const std::string& name = {});
 
     /// Close the project and clear all data
     void close();
@@ -320,7 +332,8 @@ public:
     static const char* HOBBYCAD_VERSION;
 
 private:
-    // JSON serialization helpers
+#if HOBBYCAD_HAS_QT
+    // JSON serialization helpers (Qt path — QJsonDocument)
     QJsonObject sketchToJson(const SketchData& sketch) const;
     SketchData sketchFromJson(const QJsonObject& json) const;
 
@@ -334,47 +347,64 @@ private:
     ConstructionPlaneData constructionPlaneFromJson(const QJsonObject& json) const;
 
     QJsonObject manifestToJson() const;
-    bool manifestFromJson(const QJsonObject& json, QString* errorMsg);
+    bool manifestFromJson(const QJsonObject& json, std::string* errorMsg);
+#else
+    // JSON serialization helpers (non-Qt path — nlohmann/json)
+    nlohmann::json sketchToJson(const SketchData& sketch) const;
+    SketchData sketchFromJson(const nlohmann::json& json) const;
+
+    nlohmann::json parametersToJson() const;
+    void parametersFromJson(const nlohmann::json& json);
+
+    nlohmann::json featuresToJson() const;
+    void featuresFromJson(const nlohmann::json& json);
+
+    nlohmann::json constructionPlaneToJson(const ConstructionPlaneData& plane) const;
+    ConstructionPlaneData constructionPlaneFromJson(const nlohmann::json& json) const;
+
+    nlohmann::json manifestToJson() const;
+    bool manifestFromJson(const nlohmann::json& json, std::string* errorMsg);
+#endif
 
     // File I/O helpers
-    bool saveManifest(const QString& dir, QString* errorMsg);
-    bool saveGeometry(const QString& dir, QString* errorMsg);
-    bool saveConstructionPlanes(const QString& dir, QString* errorMsg);
-    bool saveSketches(const QString& dir, QString* errorMsg);
-    bool saveParameters(const QString& dir, QString* errorMsg);
-    bool saveFeatures(const QString& dir, QString* errorMsg);
+    bool saveManifest(const std::string& dir, std::string* errorMsg);
+    bool saveGeometry(const std::string& dir, std::string* errorMsg);
+    bool saveConstructionPlanes(const std::string& dir, std::string* errorMsg);
+    bool saveSketches(const std::string& dir, std::string* errorMsg);
+    bool saveParameters(const std::string& dir, std::string* errorMsg);
+    bool saveFeatures(const std::string& dir, std::string* errorMsg);
 
-    bool loadManifestFile(const QString& manifestPath, QString* errorMsg);
-    bool loadGeometry(const QString& dir, QString* errorMsg);
-    bool loadConstructionPlanes(const QString& dir, QString* errorMsg);
-    bool loadSketches(const QString& dir, QString* errorMsg);
-    bool loadParameters(const QString& dir, QString* errorMsg);
-    bool loadFeatures(const QString& dir, QString* errorMsg);
+    bool loadManifestFile(const std::string& manifestPath, std::string* errorMsg);
+    bool loadGeometry(const std::string& dir, std::string* errorMsg);
+    bool loadConstructionPlanes(const std::string& dir, std::string* errorMsg);
+    bool loadSketches(const std::string& dir, std::string* errorMsg);
+    bool loadParameters(const std::string& dir, std::string* errorMsg);
+    bool loadFeatures(const std::string& dir, std::string* errorMsg);
 
     // Metadata
-    QString m_name;
-    QString m_author;
-    QString m_description;
-    QString m_units = "mm";
-    QDateTime m_created;
-    QDateTime m_modified_time;
+    std::string m_name;
+    std::string m_author;
+    std::string m_description;
+    std::string m_units = "mm";
+    std::string m_created;         ///< ISO 8601 timestamp string
+    std::string m_modified_time;   ///< ISO 8601 timestamp string
 
     // Project state
-    QString m_projectPath;
+    std::string m_projectPath;
     bool m_modified_flag = false;
 
     // Content
-    QList<TopoDS_Shape> m_shapes;
-    QVector<ConstructionPlaneData> m_constructionPlanes;
-    QVector<SketchData> m_sketches;
-    QList<ParameterData> m_parameters;
-    QVector<FeatureData> m_features;
-    QVector<ForeignFileData> m_foreignFiles;
+    std::vector<TopoDS_Shape> m_shapes;
+    std::vector<ConstructionPlaneData> m_constructionPlanes;
+    std::vector<SketchData> m_sketches;
+    std::vector<ParameterData> m_parameters;
+    std::vector<FeatureData> m_features;
+    std::vector<ForeignFileData> m_foreignFiles;
 
     // File references (relative paths within project)
-    QStringList m_geometryFiles;
-    QStringList m_constructionPlaneFiles;
-    QStringList m_sketchFiles;
+    std::vector<std::string> m_geometryFiles;
+    std::vector<std::string> m_constructionPlaneFiles;
+    std::vector<std::string> m_sketchFiles;
 };
 
 }  // namespace hobbycad

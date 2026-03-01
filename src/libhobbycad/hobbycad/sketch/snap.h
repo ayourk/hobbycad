@@ -15,9 +15,9 @@
 
 #include "entity.h"
 #include "../core.h"
+#include "../types.h"
 
-#include <QPointF>
-#include <QVector>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -43,7 +43,7 @@ enum class SnapType {
 
 /// A snap point with position, type, and source entity
 struct HOBBYCAD_EXPORT SnapPoint {
-    QPointF position;                       ///< World-space position
+    Point2D position;                       ///< World-space position
     SnapType type = SnapType::Endpoint;     ///< Type of snap point
     int entityId = -1;                      ///< Source entity ID (-1 for origin/axis)
 };
@@ -74,7 +74,7 @@ HOBBYCAD_EXPORT double defaultSnapWeight(SnapType type);
 ///
 /// @param entity The entity to extract snap points from
 /// @return Vector of snap points for this entity
-HOBBYCAD_EXPORT QVector<SnapPoint> collectSnapPoints(const Entity& entity);
+HOBBYCAD_EXPORT std::vector<SnapPoint> collectSnapPoints(const Entity& entity);
 
 /// Collect all explicit snap points from all entities.
 ///
@@ -85,8 +85,8 @@ HOBBYCAD_EXPORT QVector<SnapPoint> collectSnapPoints(const Entity& entity);
 /// @param entities All sketch entities
 /// @param excludeEntityId Entity ID to skip (-1 for none)
 /// @return Vector of all snap points
-HOBBYCAD_EXPORT QVector<SnapPoint> collectAllSnapPoints(
-    const QVector<Entity>& entities,
+HOBBYCAD_EXPORT std::vector<SnapPoint> collectAllSnapPoints(
+    const std::vector<Entity>& entities,
     int excludeEntityId = -1);
 
 /// Collect intersection snap points between all entity pairs.
@@ -97,8 +97,8 @@ HOBBYCAD_EXPORT QVector<SnapPoint> collectAllSnapPoints(
 /// @param entities All sketch entities
 /// @param excludeEntityId Entity ID to skip (-1 for none)
 /// @return Vector of intersection snap points
-HOBBYCAD_EXPORT QVector<SnapPoint> collectIntersectionSnapPoints(
-    const QVector<Entity>& entities,
+HOBBYCAD_EXPORT std::vector<SnapPoint> collectIntersectionSnapPoints(
+    const std::vector<Entity>& entities,
     int excludeEntityId = -1);
 
 /// Collect points where entities cross the X axis (Y=0) and Y axis (X=0).
@@ -109,8 +109,8 @@ HOBBYCAD_EXPORT QVector<SnapPoint> collectIntersectionSnapPoints(
 /// @param entities All sketch entities
 /// @param excludeEntityId Entity ID to skip (-1 for none)
 /// @return Vector of axis-crossing snap points
-HOBBYCAD_EXPORT QVector<SnapPoint> collectAxisCrossingSnapPoints(
-    const QVector<Entity>& entities,
+HOBBYCAD_EXPORT std::vector<SnapPoint> collectAxisCrossingSnapPoints(
+    const std::vector<Entity>& entities,
     int excludeEntityId = -1);
 
 // =====================================================================
@@ -128,8 +128,8 @@ HOBBYCAD_EXPORT QVector<SnapPoint> collectAxisCrossingSnapPoints(
 /// @param excludeEntityId Entity ID to skip (-1 for none)
 /// @return Snap point with type Nearest, or entityId=-1 if none found
 HOBBYCAD_EXPORT SnapPoint findNearestOnPerimeter(
-    const QVector<Entity>& entities,
-    const QPointF& point,
+    const std::vector<Entity>& entities,
+    const Point2D& point,
     double tolerance,
     int excludeEntityId = -1);
 
@@ -163,8 +163,8 @@ struct HOBBYCAD_EXPORT SnapResult {
 /// @param excludeEntityId Entity ID to skip (-1 for none)
 /// @return SnapResult with the winning snap point, or found=false
 HOBBYCAD_EXPORT SnapResult findBestSnap(
-    const QVector<Entity>& entities,
-    const QPointF& worldPos,
+    const std::vector<Entity>& entities,
+    const Point2D& worldPos,
     double worldTolerance,
     int excludeEntityId = -1);
 
@@ -181,7 +181,7 @@ HOBBYCAD_EXPORT SnapResult findBestSnap(
 /// @param e1 First entity
 /// @param e2 Second entity
 /// @return Vector of intersection points
-HOBBYCAD_EXPORT QVector<QPointF> computeEntityIntersectionPoints(
+HOBBYCAD_EXPORT std::vector<Point2D> computeEntityIntersectionPoints(
     const Entity& e1, const Entity& e2);
 
 }  // namespace sketch

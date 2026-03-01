@@ -10,10 +10,16 @@
 #include <hobbycad/sketch/profiles.h>
 #include <hobbycad/geometry/utils.h>
 
-#include <QMap>
-#include <QSet>
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_set>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace hobbycad {
 namespace sketch {
@@ -27,7 +33,7 @@ using namespace geometry;
 namespace {
 
 /// Find entity by ID in a vector
-const Entity* findEntityById(const QVector<Entity>& entities, int id)
+const Entity* findEntityById(const std::vector<Entity>& entities, int id)
 {
     for (const Entity& e : entities) {
         if (e.id == id) {
@@ -38,70 +44,70 @@ const Entity* findEntityById(const QVector<Entity>& entities, int id)
 }
 
 /// Get endpoints of an entity (returns 0, 1, or 2 points)
-QVector<QPointF> getEndpoints(const Entity& entity)
+std::vector<Point2D> getEndpoints(const Entity& entity)
 {
     return entity.endpoints();
 }
 
 /// Discretize an entity into a series of points
-QVector<QPointF> discretizeEntity(const Entity& entity, int segments)
+std::vector<Point2D> discretizeEntity(const Entity& entity, int segments)
 {
-    QVector<QPointF> points;
+    std::vector<Point2D> points;
 
     switch (entity.type) {
     case EntityType::Point:
-        if (!entity.points.isEmpty()) {
-            points.append(entity.points[0]);
+        if (!entity.points.empty()) {
+            points.push_back(entity.points[0]);
         }
         break;
 
     case EntityType::Line:
         if (entity.points.size() >= 2) {
-            points.append(entity.points[0]);
-            points.append(entity.points[1]);
+            points.push_back(entity.points[0]);
+            points.push_back(entity.points[1]);
         }
         break;
 
     case EntityType::Rectangle:
         if (entity.points.size() >= 2) {
-            QPointF p1 = entity.points[0];
-            QPointF p2 = entity.points[1];
-            points.append(p1);
-            points.append(QPointF(p2.x(), p1.y()));
-            points.append(p2);
-            points.append(QPointF(p1.x(), p2.y()));
+            Point2D p1 = entity.points[0];
+            Point2D p2 = entity.points[1];
+            points.push_back(p1);
+            points.push_back(Point2D(p2.x, p1.y));
+            points.push_back(p2);
+            points.push_back(Point2D(p1.x, p2.y));
         }
         break;
 
     case EntityType::Circle:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             for (int i = 0; i <= segments; ++i) {
                 double angle = 2.0 * M_PI * i / segments;
-                double x = entity.points[0].x() + entity.radius * qCos(angle);
-                double y = entity.points[0].y() + entity.radius * qSin(angle);
-                points.append(QPointF(x, y));
+                double x = entity.points[0].x + entity.radius * std::cos(angle);
+                double y = entity.points[0].y + entity.radius * std::sin(angle);
+                points.push_back(Point2D(x, y));
             }
         }
         break;
 
     case EntityType::Arc:
-        if (!entity.points.isEmpty()) {
-            double startRad = qDegreesToRadians(entity.startAngle);
-            double sweepRad = qDegreesToRadians(entity.sweepAngle);
+        if (!entity.points.empty()) {
+            double startRad = entity.startAngle * M_PI / 180.0;
+            double sweepRad = entity.sweepAngle * M_PI / 180.0;
             for (int i = 0; i <= segments; ++i) {
                 double t = static_cast<double>(i) / segments;
                 double angle = startRad + t * sweepRad;
-                double x = entity.points[0].x() + entity.radius * qCos(angle);
-                double y = entity.points[0].y() + entity.radius * qSin(angle);
-                points.append(QPointF(x, y));
+                double x = entity.points[0].x + entity.radius * std::cos(angle);
+                double y = entity.points[0].y + entity.radius * std::sin(angle);
+                points.push_back(Point2D(x, y));
             }
         }
         break;
 
     case EntityType::Polygon:
         points = entity.points;
-        if (!points.isEmpty() && points.first() != points.last()) {
-            points.append(points.first());
+        if (!points.empty() && !(points.front() == points.back())) {
+            points.push_back(points.front());
         }
         break;
 
@@ -112,12 +118,12 @@ QVector<QPointF> discretizeEntity(const Entity& entity, int segments)
         break;
 
     case EntityType::Ellipse:
-        if (!entity.points.isEmpty()) {
+        if (!entity.points.empty()) {
             for (int i = 0; i <= segments; ++i) {
                 double angle = 2.0 * M_PI * i / segments;
-                double x = entity.points[0].x() + entity.majorRadius * qCos(angle);
-                double y = entity.points[0].y() + entity.minorRadius * qSin(angle);
-                points.append(QPointF(x, y));
+                double x = entity.points[0].x + entity.majorRadius * std::cos(angle);
+                double y = entity.points[0].y + entity.minorRadius * std::sin(angle);
+                points.push_back(Point2D(x, y));
             }
         }
         break;
@@ -125,31 +131,31 @@ QVector<QPointF> discretizeEntity(const Entity& entity, int segments)
     case EntityType::Slot:
         // Slot is two semicircles connected by lines
         if (entity.points.size() >= 2) {
-            QPointF p1 = entity.points[0];
-            QPointF p2 = entity.points[1];
-            QPointF dir = p2 - p1;
+            Point2D p1 = entity.points[0];
+            Point2D p2 = entity.points[1];
+            Point2D dir = p2 - p1;
             double len = length(dir);
             if (len > DEFAULT_TOLERANCE) {
                 dir = dir / len;
-                QPointF perp(-dir.y(), dir.x());
+                Point2D perp(-dir.y, dir.x);
 
                 // First semicircle around p1
-                double baseAngle = qRadiansToDegrees(qAtan2(perp.y(), perp.x()));
+                double baseAngle = std::atan2(perp.y, perp.x) * 180.0 / M_PI;
                 for (int i = 0; i <= segments / 2; ++i) {
                     double t = static_cast<double>(i) / (segments / 2);
-                    double angle = qDegreesToRadians(baseAngle + 180 * t);
-                    double x = p1.x() + entity.radius * qCos(angle);
-                    double y = p1.y() + entity.radius * qSin(angle);
-                    points.append(QPointF(x, y));
+                    double angle = (baseAngle + 180 * t) * M_PI / 180.0;
+                    double x = p1.x + entity.radius * std::cos(angle);
+                    double y = p1.y + entity.radius * std::sin(angle);
+                    points.push_back(Point2D(x, y));
                 }
 
                 // Second semicircle around p2
                 for (int i = 0; i <= segments / 2; ++i) {
                     double t = static_cast<double>(i) / (segments / 2);
-                    double angle = qDegreesToRadians(baseAngle + 180 + 180 * t);
-                    double x = p2.x() + entity.radius * qCos(angle);
-                    double y = p2.y() + entity.radius * qSin(angle);
-                    points.append(QPointF(x, y));
+                    double angle = (baseAngle + 180 + 180 * t) * M_PI / 180.0;
+                    double x = p2.x + entity.radius * std::cos(angle);
+                    double y = p2.y + entity.radius * std::sin(angle);
+                    points.push_back(Point2D(x, y));
                 }
             }
         }
@@ -164,9 +170,9 @@ QVector<QPointF> discretizeEntity(const Entity& entity, int segments)
 }
 
 /// Check if two points are the same within tolerance
-bool pointsEqual(const QPointF& a, const QPointF& b, double tolerance)
+bool pointsEqual(const Point2D& a, const Point2D& b, double tolerance)
 {
-    return QLineF(a, b).length() < tolerance;
+    return std::hypot(b.x - a.x, b.y - a.y) < tolerance;
 }
 
 /// DFS to find cycles in the connectivity graph
@@ -174,17 +180,17 @@ void findCyclesDFS(
     const ConnectivityGraph& graph,
     int currentNode,
     int startNode,
-    QVector<int>& currentPath,
-    QSet<QPair<int, int>>& usedEdges,
-    QVector<QVector<int>>& cycles,
+    std::vector<int>& currentPath,
+    std::set<std::pair<int, int>>& usedEdges,
+    std::vector<std::vector<int>>& cycles,
     int maxCycles,
     int depth)
 {
-    if (cycles.size() >= maxCycles || depth > 50) {
+    if (static_cast<int>(cycles.size()) >= maxCycles || depth > 50) {
         return;  // Limit search
     }
 
-    const QVector<int>& adjacentEdges = graph.adjacency[currentNode];
+    const std::vector<int>& adjacentEdges = graph.adjacency[currentNode];
 
     for (int edgeIdx : adjacentEdges) {
         const ConnectivityEdge& edge = graph.edges[edgeIdx];
@@ -193,34 +199,34 @@ void findCyclesDFS(
         int otherNode = (edge.startNode == currentNode) ? edge.endNode : edge.startNode;
 
         // Check if this edge was already used in current path
-        QPair<int, int> edgePair = qMakePair(qMin(currentNode, otherNode),
-                                              qMax(currentNode, otherNode));
-        if (usedEdges.contains(edgePair)) {
+        std::pair<int, int> edgePair = {std::min(currentNode, otherNode),
+                                         std::max(currentNode, otherNode)};
+        if (usedEdges.count(edgePair) > 0) {
             continue;
         }
 
         if (otherNode == startNode && currentPath.size() >= 2) {
             // Found a cycle
-            QVector<int> cycle = currentPath;
-            cycle.append(startNode);
-            cycles.append(cycle);
+            std::vector<int> cycle = currentPath;
+            cycle.push_back(startNode);
+            cycles.push_back(cycle);
             continue;
         }
 
         // Check if we've already visited this node in current path
-        if (currentPath.contains(otherNode)) {
+        if (hobbycad::contains(currentPath, otherNode)) {
             continue;
         }
 
         // Continue DFS
-        currentPath.append(otherNode);
+        currentPath.push_back(otherNode);
         usedEdges.insert(edgePair);
 
         findCyclesDFS(graph, otherNode, startNode, currentPath, usedEdges,
                       cycles, maxCycles, depth + 1);
 
-        currentPath.removeLast();
-        usedEdges.remove(edgePair);
+        currentPath.pop_back();
+        usedEdges.erase(edgePair);
     }
 }
 
@@ -233,7 +239,7 @@ void findCyclesDFS(
 bool Profile::contains(const Profile& other) const
 {
     // Check if any point of other is inside this profile
-    if (other.polygon.isEmpty()) {
+    if (other.polygon.empty()) {
         return false;
     }
 
@@ -247,14 +253,14 @@ bool Profile::contains(const Profile& other) const
         return false;
     }
 
-    // Check if centroid of other is inside this polygon
-    QPointF centroid = other.polygon.boundingRect().center();
-    return polygon.containsPoint(centroid, Qt::OddEvenFill);
+    // Check if centroid of other is inside this polygon using ray casting
+    Point2D centroid = geometry::polygonCentroid(other.polygon);
+    return geometry::pointInPolygon(centroid, polygon);
 }
 
-bool Profile::containsPoint(const QPointF& point) const
+bool Profile::containsPoint(const Point2D& point) const
 {
-    return polygon.containsPoint(point, Qt::OddEvenFill);
+    return geometry::pointInPolygon(point, polygon);
 }
 
 // =====================================================================
@@ -262,26 +268,27 @@ bool Profile::containsPoint(const QPointF& point) const
 // =====================================================================
 
 ConnectivityGraph buildConnectivityGraph(
-    const QVector<Entity>& entities,
+    const std::vector<Entity>& entities,
     double tolerance)
 {
     ConnectivityGraph graph;
 
     // Map from position hash to node index
-    QMap<QString, int> positionToNode;
+    std::map<std::string, int> positionToNode;
 
-    auto positionKey = [tolerance](const QPointF& p) {
+    auto positionKey = [tolerance](const Point2D& p) {
         // Round to tolerance to group nearby points
-        int xi = static_cast<int>(p.x() / tolerance + 0.5);
-        int yi = static_cast<int>(p.y() / tolerance + 0.5);
-        return QString("%1,%2").arg(xi).arg(yi);
+        int xi = static_cast<int>(p.x / tolerance + 0.5);
+        int yi = static_cast<int>(p.y / tolerance + 0.5);
+        return std::to_string(xi) + "," + std::to_string(yi);
     };
 
-    auto getOrCreateNode = [&](const QPointF& pos, int entityId, int pointIdx) -> int {
-        QString key = positionKey(pos);
+    auto getOrCreateNode = [&](const Point2D& pos, int entityId, int pointIdx) -> int {
+        std::string key = positionKey(pos);
 
-        if (positionToNode.contains(key)) {
-            return positionToNode[key];
+        auto it = positionToNode.find(key);
+        if (it != positionToNode.end()) {
+            return it->second;
         }
 
         int nodeIdx = graph.nodes.size();
@@ -289,7 +296,7 @@ ConnectivityGraph buildConnectivityGraph(
         node.entityId = entityId;
         node.pointIndex = pointIdx;
         node.position = pos;
-        graph.nodes.append(node);
+        graph.nodes.push_back(node);
         positionToNode[key] = nodeIdx;
         return nodeIdx;
     };
@@ -301,7 +308,7 @@ ConnectivityGraph buildConnectivityGraph(
             continue;
         }
 
-        QVector<QPointF> endpoints = getEndpoints(entity);
+        std::vector<Point2D> endpoints = getEndpoints(entity);
 
         if (endpoints.size() == 2) {
             // Entity with two endpoints (line, arc, etc.)
@@ -312,10 +319,11 @@ ConnectivityGraph buildConnectivityGraph(
             edge.entityId = entity.id;
             edge.startNode = startNode;
             edge.endNode = endNode;
-            edge.length = QLineF(endpoints[0], endpoints[1]).length();
+            edge.length = std::hypot(endpoints[1].x - endpoints[0].x,
+                                     endpoints[1].y - endpoints[0].y);
             edge.isConstruction = entity.isConstruction;
 
-            graph.edges.append(edge);
+            graph.edges.push_back(edge);
         } else if (endpoints.size() == 1) {
             // Point entity - just create node
             getOrCreateNode(endpoints[0], entity.id, 0);
@@ -326,82 +334,82 @@ ConnectivityGraph buildConnectivityGraph(
 
     // Build adjacency list
     graph.adjacency.resize(graph.nodes.size());
-    for (int i = 0; i < graph.edges.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(graph.edges.size()); ++i) {
         const ConnectivityEdge& edge = graph.edges[i];
-        graph.adjacency[edge.startNode].append(i);
+        graph.adjacency[edge.startNode].push_back(i);
         if (edge.startNode != edge.endNode) {
-            graph.adjacency[edge.endNode].append(i);
+            graph.adjacency[edge.endNode].push_back(i);
         }
     }
 
     return graph;
 }
 
-QVector<QVector<int>> findCycles(
+std::vector<std::vector<int>> findCycles(
     const ConnectivityGraph& graph,
     int maxCycles)
 {
-    QVector<QVector<int>> cycles;
+    std::vector<std::vector<int>> cycles;
 
-    if (graph.nodes.isEmpty()) {
+    if (graph.nodes.empty()) {
         return cycles;
     }
 
     // Try starting from each node
-    for (int startNode = 0; startNode < graph.nodes.size() && cycles.size() < maxCycles; ++startNode) {
-        QVector<int> currentPath;
-        currentPath.append(startNode);
-        QSet<QPair<int, int>> usedEdges;
+    for (int startNode = 0; startNode < static_cast<int>(graph.nodes.size()) && static_cast<int>(cycles.size()) < maxCycles; ++startNode) {
+        std::vector<int> currentPath;
+        currentPath.push_back(startNode);
+        std::set<std::pair<int, int>> usedEdges;
 
         findCyclesDFS(graph, startNode, startNode, currentPath, usedEdges,
                       cycles, maxCycles, 0);
     }
 
     // Remove duplicate cycles (same cycle starting at different points)
-    QVector<QVector<int>> uniqueCycles;
-    QSet<QString> seenCycles;
+    std::vector<std::vector<int>> uniqueCycles;
+    std::set<std::string> seenCycles;
 
-    for (const QVector<int>& cycle : cycles) {
+    for (const std::vector<int>& cycle : cycles) {
         if (cycle.size() < 3) continue;
 
         // Create canonical representation (start from minimum node, in sorted direction)
-        QVector<int> normalized = cycle;
-        normalized.removeLast();  // Remove duplicate end
+        std::vector<int> normalized = cycle;
+        normalized.pop_back();  // Remove duplicate end
 
         // Find minimum element
         int minIdx = 0;
-        for (int i = 1; i < normalized.size(); ++i) {
+        for (int i = 1; i < static_cast<int>(normalized.size()); ++i) {
             if (normalized[i] < normalized[minIdx]) {
                 minIdx = i;
             }
         }
 
         // Rotate to start from minimum
-        QVector<int> rotated;
-        for (int i = 0; i < normalized.size(); ++i) {
-            rotated.append(normalized[(minIdx + i) % normalized.size()]);
+        std::vector<int> rotated;
+        for (int i = 0; i < static_cast<int>(normalized.size()); ++i) {
+            rotated.push_back(normalized[(minIdx + i) % normalized.size()]);
         }
 
         // Check direction and reverse if needed for canonical form
-        if (rotated.size() >= 2 && rotated[1] > rotated.last()) {
-            QVector<int> reversed;
-            reversed.append(rotated[0]);
-            for (int i = rotated.size() - 1; i >= 1; --i) {
-                reversed.append(rotated[i]);
+        if (rotated.size() >= 2 && rotated[1] > rotated.back()) {
+            std::vector<int> reversed;
+            reversed.push_back(rotated[0]);
+            for (int i = static_cast<int>(rotated.size()) - 1; i >= 1; --i) {
+                reversed.push_back(rotated[i]);
             }
             rotated = reversed;
         }
 
         // Create key
-        QString key;
+        std::string key;
         for (int n : rotated) {
-            key += QString::number(n) + ",";
+            key += std::to_string(n) + ",";
         }
 
-        if (!seenCycles.contains(key)) {
+        if (seenCycles.count(key) == 0) {
             seenCycles.insert(key);
-            rotated.append(rotated.first());  // Re-add closing node
-            uniqueCycles.append(rotated);
+            rotated.push_back(rotated.front());  // Re-add closing node
+            uniqueCycles.push_back(rotated);
         }
     }
 
@@ -412,19 +420,19 @@ QVector<QVector<int>> findCycles(
 //  Profile Detection
 // =====================================================================
 
-QVector<Profile> detectProfiles(
-    const QVector<Entity>& entities,
+std::vector<Profile> detectProfiles(
+    const std::vector<Entity>& entities,
     const ProfileDetectionOptions& options)
 {
-    QVector<Profile> profiles;
+    std::vector<Profile> profiles;
 
     // Filter entities
-    QVector<Entity> filteredEntities;
+    std::vector<Entity> filteredEntities;
     for (const Entity& e : entities) {
         if (options.excludeConstruction && e.isConstruction) {
             continue;
         }
-        filteredEntities.append(e);
+        filteredEntities.push_back(e);
     }
 
     // Handle closed entities (circles, ellipses, closed polygons) as profiles
@@ -441,7 +449,7 @@ QVector<Profile> detectProfiles(
         case EntityType::Polygon:
             // Check if polygon is closed
             if (entity.points.size() >= 3) {
-                isClosed = pointsEqual(entity.points.first(), entity.points.last(),
+                isClosed = pointsEqual(entity.points.front(), entity.points.back(),
                                        options.tolerance);
             }
             break;
@@ -457,16 +465,16 @@ QVector<Profile> detectProfiles(
         if (isClosed) {
             Profile profile;
             profile.id = profileId++;
-            profile.entityIds.append(entity.id);
-            profile.reversed.append(false);
-            profile.polygon = QPolygonF(discretizeEntity(entity, options.polygonSegments));
-            profile.area = polygonArea(profile.polygon.toList().toVector());
+            profile.entityIds.push_back(entity.id);
+            profile.reversed.push_back(false);
+            profile.polygon = discretizeEntity(entity, options.polygonSegments);
+            profile.area = polygonArea(profile.polygon);
             profile.isOuter = true;
             profile.bounds = entity.boundingBox();
 
-            profiles.append(profile);
+            profiles.push_back(profile);
 
-            if (profiles.size() >= options.maxProfiles) {
+            if (static_cast<int>(profiles.size()) >= options.maxProfiles) {
                 return profiles;
             }
         }
@@ -476,11 +484,11 @@ QVector<Profile> detectProfiles(
     ConnectivityGraph graph = buildConnectivityGraph(filteredEntities, options.tolerance);
 
     // Find cycles
-    QVector<QVector<int>> cycles = findCycles(graph, options.maxProfiles - profiles.size());
+    std::vector<std::vector<int>> cycles = findCycles(graph, options.maxProfiles - profiles.size());
 
     // Convert cycles to profiles
-    for (const QVector<int>& cycle : cycles) {
-        if (profiles.size() >= options.maxProfiles) {
+    for (const std::vector<int>& cycle : cycles) {
+        if (static_cast<int>(profiles.size()) >= options.maxProfiles) {
             break;
         }
 
@@ -488,9 +496,9 @@ QVector<Profile> detectProfiles(
         profile.id = profileId++;
 
         // Convert node cycle to entity IDs
-        QVector<QPointF> polygonPoints;
+        std::vector<Point2D> polygonPoints;
 
-        for (int i = 0; i < cycle.size() - 1; ++i) {
+        for (int i = 0; i < static_cast<int>(cycle.size()) - 1; ++i) {
             int nodeA = cycle[i];
             int nodeB = cycle[i + 1];
 
@@ -500,21 +508,21 @@ QVector<Profile> detectProfiles(
                 if ((edge.startNode == nodeA && edge.endNode == nodeB) ||
                     (edge.startNode == nodeB && edge.endNode == nodeA)) {
 
-                    profile.entityIds.append(edge.entityId);
+                    profile.entityIds.push_back(edge.entityId);
                     bool reversed = (edge.endNode == nodeA);
-                    profile.reversed.append(reversed);
+                    profile.reversed.push_back(reversed);
 
                     // Add discretized points
                     const Entity* entity = findEntityById(filteredEntities, edge.entityId);
                     if (entity) {
-                        QVector<QPointF> pts = discretizeEntity(*entity, options.polygonSegments);
+                        std::vector<Point2D> pts = discretizeEntity(*entity, options.polygonSegments);
                         if (reversed) {
                             std::reverse(pts.begin(), pts.end());
                         }
-                        for (const QPointF& p : pts) {
-                            if (polygonPoints.isEmpty() ||
-                                !pointsEqual(polygonPoints.last(), p, options.tolerance)) {
-                                polygonPoints.append(p);
+                        for (const Point2D& p : pts) {
+                            if (polygonPoints.empty() ||
+                                !pointsEqual(polygonPoints.back(), p, options.tolerance)) {
+                                polygonPoints.push_back(p);
                             }
                         }
                     }
@@ -523,28 +531,28 @@ QVector<Profile> detectProfiles(
             }
         }
 
-        if (!polygonPoints.isEmpty()) {
-            profile.polygon = QPolygonF(polygonPoints);
+        if (!polygonPoints.empty()) {
+            profile.polygon = polygonPoints;
             profile.area = polygonArea(polygonPoints);
             profile.isOuter = true;
 
             // Calculate bounds
-            for (const QPointF& p : polygonPoints) {
+            for (const Point2D& p : polygonPoints) {
                 profile.bounds.include(p);
             }
 
-            profiles.append(profile);
+            profiles.push_back(profile);
         }
     }
 
     return profiles;
 }
 
-QVector<Profile> detectProfilesWithHoles(
-    const QVector<Entity>& entities,
+std::vector<Profile> detectProfilesWithHoles(
+    const std::vector<Entity>& entities,
     const ProfileDetectionOptions& options)
 {
-    QVector<Profile> profiles = detectProfiles(entities, options);
+    std::vector<Profile> profiles = detectProfiles(entities, options);
 
     if (profiles.size() < 2) {
         return profiles;
@@ -552,12 +560,12 @@ QVector<Profile> detectProfilesWithHoles(
 
     // Sort profiles by area (largest first)
     std::sort(profiles.begin(), profiles.end(), [](const Profile& a, const Profile& b) {
-        return qAbs(a.area) > qAbs(b.area);
+        return std::abs(a.area) > std::abs(b.area);
     });
 
     // Determine containment
-    for (int i = 0; i < profiles.size(); ++i) {
-        for (int j = i + 1; j < profiles.size(); ++j) {
+    for (int i = 0; i < static_cast<int>(profiles.size()); ++i) {
+        for (int j = i + 1; j < static_cast<int>(profiles.size()); ++j) {
             if (profiles[i].contains(profiles[j])) {
                 // j is inside i
                 // If i is outer, j is inner. If i is inner, j is outer again.
@@ -573,60 +581,60 @@ QVector<Profile> detectProfilesWithHoles(
 //  Profile Utilities
 // =====================================================================
 
-QPolygonF profileToPolygon(
+std::vector<Point2D> profileToPolygon(
     const Profile& profile,
-    const QVector<Entity>& entities,
+    const std::vector<Entity>& entities,
     int segments)
 {
-    QVector<QPointF> points;
+    std::vector<Point2D> points;
 
-    for (int i = 0; i < profile.entityIds.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(profile.entityIds.size()); ++i) {
         int entityId = profile.entityIds[i];
-        bool reversed = profile.reversed.value(i, false);
+        bool reversed = (i < static_cast<int>(profile.reversed.size())) ? profile.reversed[i] : false;
 
         const Entity* entity = findEntityById(entities, entityId);
         if (!entity) continue;
 
-        QVector<QPointF> entityPoints = discretizeEntity(*entity, segments);
+        std::vector<Point2D> entityPoints = discretizeEntity(*entity, segments);
         if (reversed) {
             std::reverse(entityPoints.begin(), entityPoints.end());
         }
 
-        for (const QPointF& p : entityPoints) {
-            if (points.isEmpty() ||
-                !pointsEqual(points.last(), p, POINT_TOLERANCE)) {
-                points.append(p);
+        for (const Point2D& p : entityPoints) {
+            if (points.empty() ||
+                !pointsEqual(points.back(), p, POINT_TOLERANCE)) {
+                points.push_back(p);
             }
         }
     }
 
-    return QPolygonF(points);
+    return points;
 }
 
 double profileArea(
     const Profile& profile,
-    const QVector<Entity>& entities)
+    const std::vector<Entity>& entities)
 {
-    QPolygonF polygon = profileToPolygon(profile, entities, 32);
-    return polygonArea(polygon.toList().toVector());
+    std::vector<Point2D> polygon = profileToPolygon(profile, entities, 32);
+    return polygonArea(polygon);
 }
 
 bool profilesShareEdge(const Profile& p1, const Profile& p2)
 {
     for (int id1 : p1.entityIds) {
-        if (p2.entityIds.contains(id1)) {
+        if (hobbycad::contains(p2.entityIds, id1)) {
             return true;
         }
     }
     return false;
 }
 
-QPointF profileCentroid(
+Point2D profileCentroid(
     const Profile& profile,
-    const QVector<Entity>& entities)
+    const std::vector<Entity>& entities)
 {
-    QPolygonF polygon = profileToPolygon(profile, entities, 32);
-    return polygonCentroid(polygon.toList().toVector());
+    std::vector<Point2D> polygon = profileToPolygon(profile, entities, 32);
+    return polygonCentroid(polygon);
 }
 
 bool profileIsCCW(const Profile& profile)
@@ -642,15 +650,15 @@ Profile reverseProfile(const Profile& profile)
     std::reverse(reversed.entityIds.begin(), reversed.entityIds.end());
 
     // Flip all reversed flags
-    for (bool& r : reversed.reversed) {
-        r = !r;
+    for (size_t i = 0; i < reversed.reversed.size(); ++i) {
+        reversed.reversed[i] = !reversed.reversed[i];
     }
     std::reverse(reversed.reversed.begin(), reversed.reversed.end());
 
     // Reverse polygon
-    QVector<QPointF> points = reversed.polygon.toList().toVector();
+    std::vector<Point2D> points = reversed.polygon;
     std::reverse(points.begin(), points.end());
-    reversed.polygon = QPolygonF(points);
+    reversed.polygon = points;
 
     // Negate area
     reversed.area = -reversed.area;

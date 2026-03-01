@@ -18,8 +18,8 @@
 
 #include <TopoDS_Shape.hxx>
 
-#include <QString>
-#include <QList>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 
@@ -31,7 +31,7 @@ public:
     // ---- File path --------------------------------------------------
 
     /// Path to the file on disk, or empty if unsaved.
-    QString filePath() const;
+    std::string filePath() const;
 
     /// True if the document has never been saved.
     bool isNew() const;
@@ -45,7 +45,7 @@ public:
     // ---- Shapes -----------------------------------------------------
 
     /// All shapes in the document.
-    const QList<TopoDS_Shape>& shapes() const;
+    const std::vector<TopoDS_Shape>& shapes() const;
 
     /// Add a shape to the document.  Marks document as modified.
     void addShape(const TopoDS_Shape& shape);
@@ -57,24 +57,23 @@ public:
 
     /// Load a BREP file.  Replaces current shapes.
     /// Returns true on success.
-    bool loadBrep(const QString& path);
+    bool loadBrep(const std::string& path);
 
     /// Save shapes to a BREP file.
     /// If path is empty, uses the current filePath().
     /// Returns true on success.
-    bool saveBrep(const QString& path = QString());
+    bool saveBrep(const std::string& path = {});
 
     /// Create a default test solid (a box) for initial display.
     /// Clears existing shapes and adds a single box.
     void createTestSolid();
 
 private:
-    QString       m_filePath;
-    bool          m_modified = false;
-    QList<TopoDS_Shape> m_shapes;
+    std::string       m_filePath;
+    bool              m_modified = false;
+    std::vector<TopoDS_Shape> m_shapes;
 };
 
 }  // namespace hobbycad
 
 #endif  // HOBBYCAD_DOCUMENT_H
-

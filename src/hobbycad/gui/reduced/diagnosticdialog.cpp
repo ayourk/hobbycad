@@ -43,7 +43,7 @@ DiagnosticDialog::DiagnosticDialog(const OpenGLInfo& glInfo,
     auto* infoText = new QPlainTextEdit();
     infoText->setReadOnly(true);
     infoText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    infoText->setPlainText(glInfo.summary());
+    infoText->setPlainText(QString::fromStdString(glInfo.summary()));
     infoText->setMaximumHeight(130);
     infoText->setFocusPolicy(Qt::ClickFocus);  // don't grab tab focus
     layout->addWidget(infoText);
@@ -112,7 +112,7 @@ QString DiagnosticDialog::buildGuidanceText(const OpenGLInfo& glInfo) const
                    tr("GPU Upgrade Guidance:") +
                    QStringLiteral("</b><br>");
 
-    QString vendorLower = glInfo.vendor.toLower();
+    QString vendorLower = QString::fromStdString(glInfo.vendor).toLower();
 
     if (vendorLower.contains(QLatin1String("nvidia"))) {
         text += tr("NVIDIA GPU detected. OpenGL 3.3 is supported by "

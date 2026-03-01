@@ -16,6 +16,14 @@ vcpkg_extract_source_archive(
     ARCHIVE "${ARCHIVE}"
 )
 
+# Allow static builds: remove hardcoded SHARED from the lib3mf library target
+# so BUILD_SHARED_LIBS (set by vcpkg based on triplet) controls linkage.
+# The consumer-side header (lib3mf.h) already handles this correctly:
+# when __LIB3MF_EXPORTS is not defined, LIB3MF_DECLSPEC is empty (no dllimport).
+file(READ "${SOURCE_PATH}/CMakeLists.txt" _lib3mf_cmake)
+string(REPLACE " SHARED " " " _lib3mf_cmake "${_lib3mf_cmake}")
+file(WRITE "${SOURCE_PATH}/CMakeLists.txt" "${_lib3mf_cmake}")
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS

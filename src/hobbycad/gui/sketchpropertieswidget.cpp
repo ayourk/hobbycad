@@ -331,9 +331,9 @@ void SketchPropertiesWidget::updateBackgroundUi()
     bool hasImage = m_background.enabled;
 
     // Update file path display
-    if (hasImage && !m_background.filePath.isEmpty()) {
-        m_bgFilePathEdit->setText(m_background.filePath);
-        m_bgFilePathEdit->setToolTip(m_background.filePath);
+    if (hasImage && !m_background.filePath.empty()) {
+        m_bgFilePathEdit->setText(QString::fromStdString(m_background.filePath));
+        m_bgFilePathEdit->setToolTip(QString::fromStdString(m_background.filePath));
 
         // Show storage type in label
         if (m_background.storage == sketch::BackgroundStorage::Embedded) {
@@ -376,8 +376,8 @@ void SketchPropertiesWidget::updateBackgroundUi()
     if (hasImage) {
         m_bgOpacitySlider->setValue(m_background.opacityPercent());
         m_bgOpacitySpinBox->setValue(m_background.opacityPercent());
-        m_bgPositionX->setValue(m_background.position.x());
-        m_bgPositionY->setValue(m_background.position.y());
+        m_bgPositionX->setValue(m_background.position.x);
+        m_bgPositionY->setValue(m_background.position.y);
         m_bgWidth->setValue(m_background.width);
         m_bgHeight->setValue(m_background.height);
         m_bgRotation->setValue(m_background.rotation);
@@ -414,14 +414,14 @@ void SketchPropertiesWidget::onOpacityChanged(int percent)
 void SketchPropertiesWidget::onPositionXChanged(double x)
 {
     if (m_updatingUi) return;
-    m_background.position.setX(x);
+    m_background.position.x = x;
     emitBackgroundChanged();
 }
 
 void SketchPropertiesWidget::onPositionYChanged(double y)
 {
     if (m_updatingUi) return;
-    m_background.position.setY(y);
+    m_background.position.y = y;
     emitBackgroundChanged();
 }
 
@@ -584,7 +584,7 @@ void SketchPropertiesWidget::emitBackgroundChanged()
 
 void SketchPropertiesWidget::onBrowseForImage()
 {
-    QString filter = sketch::imageFileFilter();
+    QString filter = QString::fromStdString(sketch::imageFileFilter());
     QString filePath = QFileDialog::getOpenFileName(
         this,
         tr("Select Background Image"),
@@ -597,7 +597,7 @@ void SketchPropertiesWidget::onBrowseForImage()
     }
 
     // Preserve current position/size/opacity settings if we already have an image
-    QPointF oldPosition = m_background.position;
+    Point2D oldPosition = m_background.position;
     double oldWidth = m_background.width;
     double oldHeight = m_background.height;
     double oldOpacity = m_background.opacity;
@@ -605,7 +605,7 @@ void SketchPropertiesWidget::onBrowseForImage()
     bool hadImage = m_background.enabled;
 
     // Load new image using project-aware function
-    m_background = sketch::updateBackgroundFromFile(filePath, m_projectDir);
+    m_background = sketch::updateBackgroundFromFile(filePath.toStdString(), m_projectDir.toStdString());
 
     if (!m_background.enabled) {
         QMessageBox::warning(this, tr("Load Failed"),
@@ -653,16 +653,16 @@ void SketchPropertiesWidget::onExportToProject()
     }
 
     sketch::BackgroundImage exported = sketch::exportBackgroundToProject(
-        m_background, m_projectDir, sketchName);
+        m_background, m_projectDir.toStdString(), sketchName.toStdString());
 
     if (exported.storage == sketch::BackgroundStorage::FilePath &&
-        !exported.filePath.isEmpty()) {
+        !exported.filePath.empty()) {
         m_background = exported;
         updateBackgroundUi();
         emitBackgroundChanged();
 
         QMessageBox::information(this, tr("Export Complete"),
-            tr("Background image exported to:\n%1").arg(exported.filePath));
+            tr("Background image exported to:\n%1").arg(QString::fromStdString(exported.filePath)));
     } else {
         QMessageBox::warning(this, tr("Export Failed"),
             tr("Failed to export the background image to the project directory."));

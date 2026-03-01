@@ -13,10 +13,13 @@
 #define HOBBYCAD_SKETCH_CONSTRAINT_H
 
 #include "../core.h"
+#include "../types.h"
 
-#include <QPointF>
-#include <QSet>
-#include <QVector>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <unordered_set>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -30,7 +33,7 @@ enum class ConstraintType {
     // Dimensional constraints
     Distance,      ///< Linear distance between two points or point-to-line
     Radius,        ///< Circle/arc radius
-    Diameter,      ///< Circle/arc diameter (2 × radius)
+    Diameter,      ///< Circle/arc diameter (2 x radius)
     Angle,         ///< Angle between two lines
 
     // Geometric constraints
@@ -61,8 +64,8 @@ struct HOBBYCAD_EXPORT Constraint {
     ConstraintType type = ConstraintType::Distance;
 
     // Entity references
-    QVector<int> entityIds;                ///< IDs of entities involved
-    QVector<int> pointIndices;             ///< Point indices within entities (for multi-point entities)
+    std::vector<int> entityIds;            ///< IDs of entities involved
+    std::vector<int> pointIndices;         ///< Point indices within entities (for multi-point entities)
 
     // Value (for dimensional constraints)
     double value = 0.0;                    ///< Constraint value (mm or degrees)
@@ -73,8 +76,30 @@ struct HOBBYCAD_EXPORT Constraint {
     bool satisfied = true;                 ///< Whether constraint is currently satisfied (solver feedback)
 
     // Display properties
-    QPointF labelPosition;                 ///< Where to display dimension label
+    Point2D labelPosition;                 ///< Where to display dimension label
     bool labelVisible = true;              ///< Show/hide dimension text
+
+    // Angle constraint display
+    //
+    // For Angle and FixedAngle constraints, these fields control where and
+    // how the angle arc + label are drawn.
+    //
+    // anchorPoint: the vertex where the two lines meet (or the computed ray
+    //   intersection for non-adjacent lines).  When invalid (NaN), the
+    //   drawing code computes it on the fly from the line geometry.
+    //
+    // supplementary: selects which of the two supplementary angles at the
+    //   vertex to display.  false = the acute/obtuse angle between the
+    //   direction vectors (SLVS_C_ANGLE value); true = 360 degrees minus that.
+    //   This lets the UI unambiguously show the interior vs exterior angle.
+    Point2D anchorPoint = Point2D(std::numeric_limits<double>::quiet_NaN(),
+                                  std::numeric_limits<double>::quiet_NaN());
+    bool supplementary = false;            ///< Show the supplementary (>180 degrees) angle
+
+    /// True when anchorPoint has been explicitly set (not NaN)
+    bool hasAnchorPoint() const {
+        return !std::isnan(anchorPoint.x) && !std::isnan(anchorPoint.y);
+    }
 };
 
 // =====================================================================
@@ -102,18 +127,22 @@ HOBBYCAD_EXPORT const char* constraintUnit(ConstraintType type);
 
 /// Suggest applicable constraint types between two entities
 /// Returns a list of constraint types that could be applied
-HOBBYCAD_EXPORT QVector<ConstraintType> suggestConstraints(
+HOBBYCAD_EXPORT std::vector<ConstraintType> suggestConstraints(
     const struct Entity& e1, const struct Entity& e2);
 
 /// Suggest applicable constraint types for a single entity
-HOBBYCAD_EXPORT QVector<ConstraintType> suggestConstraints(const struct Entity& entity);
+HOBBYCAD_EXPORT std::vector<ConstraintType> suggestConstraints(const struct Entity& entity);
+
+/// Callable that resolves an entity ID to a (const) Entity pointer.
+/// Used by overloads that avoid copying entity vectors.
+using EntityFinder = std::function<const struct Entity*(int id)>;
 
 /// Calculate the current value of a dimensional constraint
 /// (what the dimension would be if applied now)
 HOBBYCAD_EXPORT double calculateConstraintValue(
     ConstraintType type,
-    const QVector<struct Entity*>& entities,
-    const QVector<int>& pointIndices = {});
+    const std::vector<const struct Entity*>& entities,
+    const std::vector<int>& pointIndices = {});
 
 /// Suggest the most appropriate constraint type between two entities
 /// @param e1 First entity
@@ -130,29 +159,41 @@ HOBBYCAD_EXPORT ConstraintType suggestConstraintType(
 /// @return True if endpoints were found, false otherwise
 HOBBYCAD_EXPORT bool getConstraintEndpoints(
     const Constraint& constraint,
-    const QVector<struct Entity>& entities,
-    QPointF& p1, QPointF& p2);
+    const std::vector<struct Entity>& entities,
+    Point2D& p1, Point2D& p2);
+
+/// Entity-finder overload — avoids requiring a full entity vector.
+/// The caller provides a function that maps entity ID -> const Entity*.
+HOBBYCAD_EXPORT bool getConstraintEndpoints(
+    const Constraint& constraint,
+    EntityFinder findEntity,
+    Point2D& p1, Point2D& p2);
 
 /// Find the entity with a given ID in a vector
 /// @param entities Vector of entities to search
 /// @param id Entity ID to find
 /// @return Pointer to entity, or nullptr if not found
 HOBBYCAD_EXPORT const struct Entity* findEntityById(
-    const QVector<struct Entity>& entities, int id);
+    const std::vector<struct Entity>& entities, int id);
 
 // =====================================================================
 //  Constraint Utility Functions
 // =====================================================================
 
 /// Get the set of entity IDs that have at least one enabled driving constraint
-HOBBYCAD_EXPORT QSet<int> getConstrainedEntityIds(const QVector<Constraint>& constraints);
+HOBBYCAD_EXPORT std::unordered_set<int> getConstrainedEntityIds(const std::vector<Constraint>& constraints);
 
 /// Compute the current geometric value of a driven (non-driving) constraint
 /// by inspecting the referenced entity geometry.
 /// Returns the value (distance in mm, radius in mm, angle in degrees, etc.)
 HOBBYCAD_EXPORT double computeDrivenValue(
     const Constraint& constraint,
-    const QVector<Entity>& entities);
+    const std::vector<Entity>& entities);
+
+/// Entity-finder overload — avoids copying the full entity vector.
+HOBBYCAD_EXPORT double computeDrivenValue(
+    const Constraint& constraint,
+    EntityFinder findEntity);
 
 }  // namespace sketch
 }  // namespace hobbycad

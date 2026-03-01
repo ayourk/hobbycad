@@ -5,6 +5,7 @@
 #include "mainwindow.h"
 #include "aboutdialog.h"
 #include "bindingsdialog.h"
+#include "changelogpanel.h"
 #include "clipanel.h"
 #include "preferencesdialog.h"
 #include "projectbrowserwidget.h"
@@ -189,6 +190,11 @@ SketchActionBar* MainWindow::sketchActionBar() const
     return m_sketchActionBar;
 }
 
+hobbycad::ChangelogPanel* MainWindow::changelogPanel() const
+{
+    return m_changelogPanel;
+}
+
 void MainWindow::setSketchActionBarVisible(bool visible)
 {
     if (m_sketchActionBar) {
@@ -208,7 +214,7 @@ LengthUnit MainWindow::currentLengthUnit() const
 
 QString MainWindow::unitSuffix() const
 {
-    return unitSuffixQ(currentLengthUnit());
+    return QString::fromLatin1(hobbycad::unitSuffix(currentLengthUnit()));
 }
 
 void MainWindow::hideDockTerminal()
@@ -260,6 +266,8 @@ void MainWindow::finalizeLayout()
         m_actionToggleFeatureTree->setChecked(!m_featureTreeDock->isHidden());
     if (m_actionToggleTerminal && m_terminalDock)
         m_actionToggleTerminal->setChecked(!m_terminalDock->isHidden());
+    if (m_actionToggleChangelog && m_changelogDock)
+        m_actionToggleChangelog->setChecked(!m_changelogDock->isHidden());
 
     // Apply keyboard bindings from settings
     applyBindings();
@@ -336,7 +344,9 @@ void MainWindow::createMenus()
     m_actionUndo->setEnabled(false);  // Enabled when undo stack is not empty
 
     m_actionRedo = editMenu->addAction(tr("&Redo"));
-    m_actionRedo->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+    m_actionRedo->setShortcuts({QKeySequence::Redo,
+                                QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z),
+                                QKeySequence(Qt::CTRL | Qt::Key_Y)});
     m_actionRedo->setEnabled(false);  // Enabled when redo stack is not empty
 
     editMenu->addSeparator();
@@ -398,6 +408,10 @@ void MainWindow::createMenus()
     m_actionToggleToolbar = viewMenu->addAction(tr("Tool&bar"));
     m_actionToggleToolbar->setCheckable(true);
     m_actionToggleToolbar->setChecked(true);
+
+    m_actionToggleChangelog = viewMenu->addAction(tr("Change &History"));
+    m_actionToggleChangelog->setCheckable(true);
+    m_actionToggleChangelog->setChecked(false);
 
     viewMenu->addSeparator();
 
@@ -502,7 +516,7 @@ void MainWindow::createStatusBar()
             tr("OpenGL %1.%2 — %3")
                 .arg(m_glInfo.majorVersion)
                 .arg(m_glInfo.minorVersion)
-                .arg(m_glInfo.renderer));
+                .arg(QString::fromStdString(m_glInfo.renderer)));
     } else {
         // Warning triangle + reduced mode indicator
         m_glModeLabel->setText(
@@ -713,6 +727,26 @@ void MainWindow::createDockPanels()
     connect(m_propertiesDock, &QDockWidget::visibilityChanged,
             m_actionToggleProperties, &QAction::setChecked);
 
+    // Changelog / undo history panel
+    m_changelogDock = new QDockWidget(tr("History"), this);
+    m_changelogDock->setObjectName(QStringLiteral("ChangelogDock"));
+    m_changelogDock->setAllowedAreas(
+        Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
+    m_changelogPanel = new hobbycad::ChangelogPanel(m_changelogDock);
+    m_changelogDock->setWidget(m_changelogPanel);
+
+    addDockWidget(Qt::RightDockWidgetArea, m_changelogDock);
+
+    // Start hidden — toggled via View > Change History
+    m_changelogDock->setVisible(false);
+
+    // Connect View > Change History toggle to dock visibility
+    connect(m_actionToggleChangelog, &QAction::toggled,
+            m_changelogDock, &QDockWidget::setVisible);
+    connect(m_changelogDock, &QDockWidget::visibilityChanged,
+            m_actionToggleChangelog, &QAction::setChecked);
+
     // Embedded terminal panel
     m_terminalDock = new QDockWidget(tr("Terminal"), this);
     m_terminalDock->setObjectName(QStringLiteral("TerminalDock"));
@@ -796,8 +830,8 @@ void MainWindow::onFileOpen()
 
     if (isProject) {
         // Open as HobbyCAD project
-        QString errorMsg;
-        if (m_project.load(path, &errorMsg)) {
+        std::string errorMsg;
+        if (m_project.load(path.toStdString(), &errorMsg)) {
             // Sync document shapes from project
             m_document.clear();
             for (const auto& shape : m_project.shapes()) {
@@ -812,11 +846,11 @@ void MainWindow::onFileOpen()
 
             updateTitle();
             onDocumentLoaded();
-            m_statusLabel->setText(tr("Opened project: %1").arg(m_project.name()));
+            m_statusLabel->setText(tr("Opened project: %1").arg(QString::fromStdString(m_project.name())));
         } else {
             QMessageBox::warning(this,
                 tr("Open Failed"),
-                tr("Could not open project:\n%1\n\n%2").arg(path, errorMsg));
+                tr("Could not open project:\n%1\n\n%2").arg(path, QString::fromStdString(errorMsg)));
         }
     } else {
         // Open as standalone BREP file (raw geometry import)
@@ -828,7 +862,7 @@ void MainWindow::onFileOpen()
                 path = withExt;
         }
 
-        if (m_document.loadBrep(path)) {
+        if (m_document.loadBrep(path.toStdString())) {
             // Clear project state since we're loading raw geometry only
             m_project.close();
 
@@ -848,25 +882,25 @@ void MainWindow::onFileSave()
     // Check if we have an existing project or document
     if (!m_project.isNew()) {
         // Save to existing project
-        QString errorMsg;
-        if (m_project.save(QString(), &errorMsg)) {
+        std::string errorMsg;
+        if (m_project.save({}, &errorMsg)) {
             m_document.setModified(false);
             updateTitle();
-            m_statusLabel->setText(tr("Saved project: %1").arg(m_project.name()));
+            m_statusLabel->setText(tr("Saved project: %1").arg(QString::fromStdString(m_project.name())));
         } else {
             QMessageBox::warning(this,
                 tr("Save Failed"),
-                tr("Could not save project:\n%1").arg(errorMsg));
+                tr("Could not save project:\n%1").arg(QString::fromStdString(errorMsg)));
         }
     } else if (!m_document.isNew()) {
         // Save to existing BREP file
         if (m_document.saveBrep()) {
             updateTitle();
-            m_statusLabel->setText(tr("Saved: %1").arg(m_document.filePath()));
+            m_statusLabel->setText(tr("Saved: %1").arg(QString::fromStdString(m_document.filePath())));
         } else {
             QMessageBox::warning(this,
                 tr("Save Failed"),
-                tr("Could not save file:\n%1").arg(m_document.filePath()));
+                tr("Could not save file:\n%1").arg(QString::fromStdString(m_document.filePath())));
         }
     } else {
         // No existing file - prompt for location
@@ -907,10 +941,10 @@ void MainWindow::onFileSaveAs()
 
         // Set project name from directory name
         QFileInfo info(path);
-        m_project.setName(info.fileName());
+        m_project.setName(info.fileName().toStdString());
 
-        QString errorMsg;
-        if (m_project.save(path, &errorMsg)) {
+        std::string errorMsg;
+        if (m_project.save(path.toStdString(), &errorMsg)) {
             m_document.setModified(false);
 
             // Update project browser with new path
@@ -919,17 +953,17 @@ void MainWindow::onFileSaveAs()
             }
 
             updateTitle();
-            m_statusLabel->setText(tr("Saved project: %1").arg(m_project.name()));
+            m_statusLabel->setText(tr("Saved project: %1").arg(QString::fromStdString(m_project.name())));
         } else {
             QMessageBox::warning(this,
                 tr("Save Failed"),
-                tr("Could not save project:\n%1").arg(errorMsg));
+                tr("Could not save project:\n%1").arg(QString::fromStdString(errorMsg)));
         }
     } else {
         // Save as BREP
         path = ensureBrepExtension(path, selectedFilter);
 
-        if (m_document.saveBrep(path)) {
+        if (m_document.saveBrep(path.toStdString())) {
             updateTitle();
             m_statusLabel->setText(tr("Saved: %1").arg(path));
         } else {
@@ -958,11 +992,11 @@ void MainWindow::onFileImportStep()
     }
 
     // Read the STEP file
-    step_io::ReadResult result = step_io::readStep(filePath);
+    step_io::ReadResult result = step_io::readStep(filePath.toStdString());
 
     if (!result.success) {
         QMessageBox::critical(this, tr("Import Failed"),
-            tr("Failed to import STEP file:\n%1").arg(result.errorMessage));
+            tr("Failed to import STEP file:\n%1").arg(QString::fromStdString(result.errorMessage)));
         return;
     }
 
@@ -980,9 +1014,9 @@ void MainWindow::onFileImportStep()
 
 void MainWindow::onFileExportStep()
 {
-    QList<TopoDS_Shape> shapes = m_document.shapes();
+    const auto& shapes = m_document.shapes();
 
-    if (shapes.isEmpty()) {
+    if (shapes.empty()) {
         QMessageBox::information(this, tr("Export STEP"),
             tr("No geometry to export.\n"
                "Create some geometry first using extrude or other operations."));
@@ -1006,11 +1040,11 @@ void MainWindow::onFileExportStep()
     }
 
     // Write the STEP file
-    step_io::WriteResult result = step_io::writeStep(filePath, shapes);
+    step_io::WriteResult result = step_io::writeStep(filePath.toStdString(), shapes);
 
     if (!result.success) {
         QMessageBox::critical(this, tr("Export Failed"),
-            tr("Failed to export STEP file:\n%1").arg(result.errorMessage));
+            tr("Failed to export STEP file:\n%1").arg(QString::fromStdString(result.errorMessage)));
         return;
     }
 
@@ -1020,9 +1054,9 @@ void MainWindow::onFileExportStep()
 
 void MainWindow::onFileExportStl()
 {
-    QList<TopoDS_Shape> shapes = m_document.shapes();
+    const auto& shapes = m_document.shapes();
 
-    if (shapes.isEmpty()) {
+    if (shapes.empty()) {
         QMessageBox::information(this, tr("Export STL"),
             tr("No geometry to export.\n"
                "Create some geometry first using extrude or other operations."));
@@ -1045,11 +1079,11 @@ void MainWindow::onFileExportStl()
     }
 
     // Write the STL file with default quality
-    stl_io::WriteResult result = stl_io::writeStl(filePath, shapes);
+    stl_io::WriteResult result = stl_io::writeStl(filePath.toStdString(), shapes);
 
     if (!result.success) {
         QMessageBox::critical(this, tr("Export Failed"),
-            tr("Failed to export STL file:\n%1").arg(result.errorMessage));
+            tr("Failed to export STL file:\n%1").arg(QString::fromStdString(result.errorMessage)));
         return;
     }
 
@@ -1114,7 +1148,8 @@ void MainWindow::onFileExportDXF()
     }
 
     sketch::DXFExportOptions options;
-    bool success = sketch::exportSketchToDXF(entities, filePath, options);
+    std::vector<sketch::Entity> stdEntities(entities.begin(), entities.end());
+    bool success = sketch::exportSketchToDXF(stdEntities, filePath.toStdString(), options);
 
     if (!success) {
         QMessageBox::critical(this, tr("Export Failed"),
@@ -1185,7 +1220,9 @@ void MainWindow::onFileExportSVG()
     }
 
     sketch::SVGExportOptions options;
-    bool success = sketch::exportSketchToSVG(entities, constraints, filePath, options);
+    std::vector<sketch::Entity> stdEntities(entities.begin(), entities.end());
+    std::vector<sketch::Constraint> stdConstraints(constraints.begin(), constraints.end());
+    bool success = sketch::exportSketchToSVG(stdEntities, stdConstraints, filePath.toStdString(), options);
 
     if (!success) {
         QMessageBox::critical(this, tr("Export Failed"),
@@ -1287,11 +1324,11 @@ bool MainWindow::maybeSave()
         // Try to save
         if (!m_project.isNew()) {
             // Save to existing project
-            QString errorMsg;
-            if (!m_project.save(QString(), &errorMsg)) {
+            std::string errorMsg;
+            if (!m_project.save({}, &errorMsg)) {
                 QMessageBox::warning(this,
                     tr("Save Failed"),
-                    tr("Could not save project:\n%1").arg(errorMsg));
+                    tr("Could not save project:\n%1").arg(QString::fromStdString(errorMsg)));
                 return false;
             }
         } else if (!m_document.isNew()) {
@@ -1299,7 +1336,7 @@ bool MainWindow::maybeSave()
             if (!m_document.saveBrep()) {
                 QMessageBox::warning(this,
                     tr("Save Failed"),
-                    tr("Could not save file:\n%1").arg(m_document.filePath()));
+                    tr("Could not save file:\n%1").arg(QString::fromStdString(m_document.filePath())));
                 return false;
             }
         } else {
@@ -1323,18 +1360,18 @@ bool MainWindow::maybeSave()
                 }
                 m_project.setShapes(m_document.shapes());
                 QFileInfo info(path);
-                m_project.setName(info.baseName().replace(QStringLiteral(".hcad"), QString()));
+                m_project.setName(info.baseName().replace(QStringLiteral(".hcad"), QString()).toStdString());
 
-                QString errorMsg;
-                if (!m_project.save(path, &errorMsg)) {
+                std::string errorMsg;
+                if (!m_project.save(path.toStdString(), &errorMsg)) {
                     QMessageBox::warning(this,
                         tr("Save Failed"),
-                        tr("Could not save project:\n%1").arg(errorMsg));
+                        tr("Could not save project:\n%1").arg(QString::fromStdString(errorMsg)));
                     return false;
                 }
             } else {
                 path = ensureBrepExtension(path, selectedFilter);
-                if (!m_document.saveBrep(path)) {
+                if (!m_document.saveBrep(path.toStdString())) {
                     QMessageBox::warning(this,
                         tr("Save Failed"),
                         tr("Could not save file:\n%1").arg(path));
@@ -1421,9 +1458,16 @@ void MainWindow::applyBindings()
                 binding.contains(QStringLiteral("Click"), Qt::CaseInsensitive)) {
                 return;
             }
-            QKeySequence seq(binding);
-            if (!seq.isEmpty()) {
-                shortcuts.append(seq);
+            // A comma in a binding string means multiple separate shortcuts
+            // (e.g. "Ctrl+Shift+Z,Ctrl+Y"), not a multi-key chord.
+            // Split and add each as an independent shortcut.
+            const QStringList parts = binding.split(QLatin1Char(','),
+                                                     Qt::SkipEmptyParts);
+            for (const QString& part : parts) {
+                QKeySequence seq(part.trimmed());
+                if (!seq.isEmpty()) {
+                    shortcuts.append(seq);
+                }
             }
         };
 
@@ -1441,10 +1485,10 @@ void MainWindow::updateTitle()
 
     if (!m_project.isNew()) {
         // Show project name
-        title += QStringLiteral(" — ") + m_project.name();
+        title += QStringLiteral(" — ") + QString::fromStdString(m_project.name());
     } else if (!m_document.isNew()) {
         // Show legacy BREP file path
-        title += QStringLiteral(" — ") + m_document.filePath();
+        title += QStringLiteral(" — ") + QString::fromStdString(m_document.filePath());
     } else {
         title += QStringLiteral(" — [New Document]");
     }
@@ -1520,7 +1564,7 @@ void MainWindow::clearBodiesInTree()
 
 void MainWindow::setUnitsFromString(const QString& units)
 {
-    m_currentUnits = lengthUnitToIndex(parseUnitSuffix(units));
+    m_currentUnits = lengthUnitToIndex(parseUnitSuffix(units.toStdString()));
 }
 
 void MainWindow::addConstructionPlaneToTree(const QString& name, int id)

@@ -15,10 +15,10 @@
 
 #include "../core.h"
 #include "../geometry/types.h"
+#include "../types.h"
 
-#include <QPointF>
-#include <QString>
-#include <QVector>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -56,15 +56,15 @@ struct HOBBYCAD_EXPORT Entity {
     EntityType type = EntityType::Line;   ///< Entity type
 
     // Geometry data (interpretation depends on type)
-    QVector<QPointF> points;              ///< Control/definition points
+    std::vector<Point2D> points;          ///< Control/definition points
     double radius = 0.0;                  ///< For circles, arcs, slots, polygons
     double startAngle = 0.0;              ///< For arcs (degrees)
     double sweepAngle = 360.0;            ///< For arcs (degrees)
     int sides = 6;                        ///< For polygons
     double majorRadius = 0.0;             ///< For ellipses
     double minorRadius = 0.0;             ///< For ellipses
-    QString text;                         ///< For text entities
-    QString fontFamily;                   ///< Font family (empty = default)
+    std::string text;                     ///< For text entities
+    std::string fontFamily;               ///< Font family (empty = default)
     double fontSize = 12.0;               ///< Font size in mm
     bool fontBold = false;                ///< Bold text
     bool fontItalic = false;              ///< Italic text
@@ -85,16 +85,16 @@ struct HOBBYCAD_EXPORT Entity {
 
     /// Get endpoints for entities that have them (lines, arcs)
     /// Returns empty vector for other types
-    QVector<QPointF> endpoints() const;
+    std::vector<Point2D> endpoints() const;
 
     /// Check if a point is on this entity within tolerance
-    bool containsPoint(const QPointF& point, double tolerance = 0.5) const;
+    bool containsPoint(const Point2D& point, double tolerance = 0.5) const;
 
     /// Get the closest point on this entity to a given point
-    QPointF closestPoint(const QPointF& point) const;
+    Point2D closestPoint(const Point2D& point) const;
 
     /// Get distance from a point to this entity
-    double distanceTo(const QPointF& point) const;
+    double distanceTo(const Point2D& point) const;
 
     /// Transform the entity by a 2D transformation
     void transform(const geometry::Transform2D& t);
@@ -111,37 +111,37 @@ struct HOBBYCAD_EXPORT Entity {
 // =====================================================================
 
 /// Create a point entity
-HOBBYCAD_EXPORT Entity createPoint(int id, const QPointF& position);
+HOBBYCAD_EXPORT Entity createPoint(int id, const Point2D& position);
 
 /// Create a line entity
-HOBBYCAD_EXPORT Entity createLine(int id, const QPointF& start, const QPointF& end);
+HOBBYCAD_EXPORT Entity createLine(int id, const Point2D& start, const Point2D& end);
 
 /// Create a rectangle entity
-HOBBYCAD_EXPORT Entity createRectangle(int id, const QPointF& corner1, const QPointF& corner2);
+HOBBYCAD_EXPORT Entity createRectangle(int id, const Point2D& corner1, const Point2D& corner2);
 
 /// Create a circle entity
-HOBBYCAD_EXPORT Entity createCircle(int id, const QPointF& center, double radius);
+HOBBYCAD_EXPORT Entity createCircle(int id, const Point2D& center, double radius);
 
 /// Create an arc entity (from center, radius, angles)
-HOBBYCAD_EXPORT Entity createArc(int id, const QPointF& center, double radius,
+HOBBYCAD_EXPORT Entity createArc(int id, const Point2D& center, double radius,
                                   double startAngle, double sweepAngle);
 
 /// Create an arc entity from three points
-HOBBYCAD_EXPORT Entity createArcFromThreePoints(int id, const QPointF& start,
-                                                  const QPointF& mid, const QPointF& end);
+HOBBYCAD_EXPORT Entity createArcFromThreePoints(int id, const Point2D& start,
+                                                  const Point2D& mid, const Point2D& end);
 
 /// Create a spline entity
-HOBBYCAD_EXPORT Entity createSpline(int id, const QVector<QPointF>& controlPoints);
+HOBBYCAD_EXPORT Entity createSpline(int id, const std::vector<Point2D>& controlPoints);
 
 /// Create a polygon entity
-HOBBYCAD_EXPORT Entity createPolygon(int id, const QPointF& center, double radius, int sides);
+HOBBYCAD_EXPORT Entity createPolygon(int id, const Point2D& center, double radius, int sides);
 
 /// Create a linear slot entity (obround/stadium shape)
 /// @param id Entity ID
 /// @param center1 Center of first semicircular end
 /// @param center2 Center of second semicircular end
 /// @param radius Half-width of the slot (radius of end semicircles)
-HOBBYCAD_EXPORT Entity createSlot(int id, const QPointF& center1, const QPointF& center2, double radius);
+HOBBYCAD_EXPORT Entity createSlot(int id, const Point2D& center1, const Point2D& center2, double radius);
 
 /// Create an arc slot entity (curved slot following an arc path)
 /// Storage format: points[0] = arc center, points[1] = start endpoint, points[2] = end endpoint
@@ -151,15 +151,15 @@ HOBBYCAD_EXPORT Entity createSlot(int id, const QPointF& center1, const QPointF&
 /// @param end End endpoint (on the arc)
 /// @param radius Half-width of the slot
 /// @param flipped True for >180 degree arcs (inverts the sweep direction)
-HOBBYCAD_EXPORT Entity createArcSlot(int id, const QPointF& arcCenter, const QPointF& start,
-                                      const QPointF& end, double radius, bool flipped = false);
+HOBBYCAD_EXPORT Entity createArcSlot(int id, const Point2D& arcCenter, const Point2D& start,
+                                      const Point2D& end, double radius, bool flipped = false);
 
 /// Create an ellipse entity
-HOBBYCAD_EXPORT Entity createEllipse(int id, const QPointF& center, double majorRadius, double minorRadius);
+HOBBYCAD_EXPORT Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius);
 
 /// Create a text entity
-HOBBYCAD_EXPORT Entity createText(int id, const QPointF& position, const QString& text,
-                                   const QString& fontFamily = QString(),
+HOBBYCAD_EXPORT Entity createText(int id, const Point2D& position, const std::string& text,
+                                   const std::string& fontFamily = {},
                                    double fontSize = 12.0, bool bold = false,
                                    bool italic = false, double rotation = 0.0);
 
@@ -172,20 +172,20 @@ HOBBYCAD_EXPORT bool entitiesConnected(const Entity& e1, const Entity& e2,
                                         double tolerance = geometry::POINT_TOLERANCE);
 
 /// Get the connection point between two entities (if connected)
-HOBBYCAD_EXPORT std::optional<QPointF> connectionPoint(const Entity& e1, const Entity& e2,
+HOBBYCAD_EXPORT std::optional<Point2D> connectionPoint(const Entity& e1, const Entity& e2,
                                                         double tolerance = geometry::POINT_TOLERANCE);
 
 /// Check if entity intersects a rectangle
-HOBBYCAD_EXPORT bool entityIntersectsRect(const Entity& entity, const QRectF& rect);
+HOBBYCAD_EXPORT bool entityIntersectsRect(const Entity& entity, const Rect2D& rect);
 
 /// Check if entity is fully enclosed by a rectangle
-HOBBYCAD_EXPORT bool entityEnclosedByRect(const Entity& entity, const QRectF& rect);
+HOBBYCAD_EXPORT bool entityEnclosedByRect(const Entity& entity, const Rect2D& rect);
 
 /// Find the index of the nearest control point in the entity's points vector
 /// @param entity The entity to search
 /// @param point The reference point
 /// @return Index of nearest point, or -1 if entity has no points
-HOBBYCAD_EXPORT int nearestPointIndex(const Entity& entity, const QPointF& point);
+HOBBYCAD_EXPORT int nearestPointIndex(const Entity& entity, const Point2D& point);
 
 /// Get the angle of a line entity in degrees (0-360)
 /// @param entity The entity (must be a line)
@@ -197,7 +197,7 @@ HOBBYCAD_EXPORT double getEntityAngle(const Entity& entity);
 /// @param entity The entity
 /// @param segments Number of segments for curved entities (default 32)
 /// @return Vector of points representing the entity
-HOBBYCAD_EXPORT QVector<QPointF> entityToPolygon(const Entity& entity, int segments = 32);
+HOBBYCAD_EXPORT std::vector<Point2D> entityToPolygon(const Entity& entity, int segments = 32);
 
 }  // namespace sketch
 }  // namespace hobbycad

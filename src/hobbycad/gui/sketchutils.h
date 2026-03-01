@@ -60,21 +60,21 @@ inline SketchEntity toGuiEntity(const sketch::Entity& lib)
 }
 
 /// Convert a vector of GUI entities to library entities
-inline QVector<sketch::Entity> toLibraryEntities(const QVector<SketchEntity>& guiEntities)
+inline std::vector<sketch::Entity> toLibraryEntities(const QVector<SketchEntity>& guiEntities)
 {
-    QVector<sketch::Entity> libEntities;
-    libEntities.reserve(guiEntities.size());
+    std::vector<sketch::Entity> libEntities;
+    libEntities.reserve(static_cast<size_t>(guiEntities.size()));
     for (const SketchEntity& gui : guiEntities) {
-        libEntities.append(toLibraryEntity(gui));
+        libEntities.push_back(toLibraryEntity(gui));
     }
     return libEntities;
 }
 
 /// Convert a vector of library entities to GUI entities
-inline QVector<SketchEntity> toGuiEntities(const QVector<sketch::Entity>& libEntities)
+inline QVector<SketchEntity> toGuiEntities(const std::vector<sketch::Entity>& libEntities)
 {
     QVector<SketchEntity> guiEntities;
-    guiEntities.reserve(libEntities.size());
+    guiEntities.reserve(static_cast<int>(libEntities.size()));
     for (const sketch::Entity& lib : libEntities) {
         guiEntities.append(toGuiEntity(lib));
     }
@@ -90,19 +90,23 @@ inline SketchProfile toGuiProfile(const sketch::Profile& lib)
 {
     SketchProfile gui;
     gui.id = lib.id;
-    gui.entityIds = lib.entityIds;
-    gui.reversed = lib.reversed;
-    gui.polygon = lib.polygon;
+    gui.entityIds = QVector<int>(lib.entityIds.begin(), lib.entityIds.end());
+    gui.reversed = QVector<bool>(lib.reversed.begin(), lib.reversed.end());
+    // Convert std::vector<Point2D> to QPolygonF
+    gui.polygon.reserve(static_cast<int>(lib.polygon.size()));
+    for (const auto& pt : lib.polygon) {
+        gui.polygon.append(QPointF(pt.x, pt.y));
+    }
     gui.area = lib.area;
     gui.isOuter = lib.isOuter;
     return gui;
 }
 
 /// Convert a vector of library profiles to GUI profiles
-inline QVector<SketchProfile> toGuiProfiles(const QVector<sketch::Profile>& libProfiles)
+inline QVector<SketchProfile> toGuiProfiles(const std::vector<sketch::Profile>& libProfiles)
 {
     QVector<SketchProfile> guiProfiles;
-    guiProfiles.reserve(libProfiles.size());
+    guiProfiles.reserve(static_cast<int>(libProfiles.size()));
     for (const sketch::Profile& lib : libProfiles) {
         guiProfiles.append(toGuiProfile(lib));
     }
@@ -130,12 +134,12 @@ inline SketchConstraint toGuiConstraint(const sketch::Constraint& lib)
 }
 
 /// Convert a vector of GUI constraints to library constraints
-inline QVector<sketch::Constraint> toLibraryConstraints(const QVector<SketchConstraint>& guiConstraints)
+inline std::vector<sketch::Constraint> toLibraryConstraints(const QVector<SketchConstraint>& guiConstraints)
 {
-    QVector<sketch::Constraint> libConstraints;
-    libConstraints.reserve(guiConstraints.size());
+    std::vector<sketch::Constraint> libConstraints;
+    libConstraints.reserve(static_cast<size_t>(guiConstraints.size()));
     for (const SketchConstraint& gui : guiConstraints) {
-        libConstraints.append(toLibraryConstraint(gui));
+        libConstraints.push_back(toLibraryConstraint(gui));
     }
     return libConstraints;
 }
@@ -147,15 +151,15 @@ inline QVector<sketch::Constraint> toLibraryConstraints(const QVector<SketchCons
 /// Convert library Intersection to GUI Intersection
 inline SketchCanvas::Intersection toGuiIntersection(const sketch::Intersection& lib)
 {
-    return {lib.entityId1, lib.entityId2, lib.point, lib.param1, lib.param2};
+    return {lib.entityId1, lib.entityId2, QPointF(lib.point.x, lib.point.y), lib.param1, lib.param2};
 }
 
 /// Convert a vector of library intersections to GUI intersections
 inline QVector<SketchCanvas::Intersection> toGuiIntersections(
-    const QVector<sketch::Intersection>& libIntersections)
+    const std::vector<sketch::Intersection>& libIntersections)
 {
     QVector<SketchCanvas::Intersection> guiIntersections;
-    guiIntersections.reserve(libIntersections.size());
+    guiIntersections.reserve(static_cast<int>(libIntersections.size()));
     for (const sketch::Intersection& lib : libIntersections) {
         guiIntersections.append(toGuiIntersection(lib));
     }

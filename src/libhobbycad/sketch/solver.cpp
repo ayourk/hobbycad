@@ -13,7 +13,11 @@
 #include <slvs.h>
 #endif
 
-#include <QDebug>
+#include <algorithm>
+#include <cstdio>
+#include <map>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -26,9 +30,9 @@ class Solver::Impl {
 public:
 #ifdef HAVE_SLVS
     // Map HobbyCAD entity IDs to solver handles
-    QMap<int, Slvs_hEntity> entityHandles;
-    QMap<int, Slvs_hParam> paramHandles;
-    QMap<int, Slvs_hConstraint> constraintHandles;
+    std::map<int, Slvs_hEntity> entityHandles;
+    std::map<int, Slvs_hParam> paramHandles;
+    std::map<int, Slvs_hConstraint> constraintHandles;
 
     static constexpr Slvs_hGroup workplaneGroupId = 1;  // Group for workplane definition
     static constexpr Slvs_hGroup sketchGroupId = 2;    // Group for sketch entities/constraints
@@ -46,38 +50,38 @@ public:
         nextConstraintHandle = 1;
     }
 
-    Slvs_hParam addParam(QVector<Slvs_Param>& params, double value,
+    Slvs_hParam addParam(std::vector<Slvs_Param>& params, double value,
                          Slvs_hGroup group = 0) {
         Slvs_hParam h = nextParamHandle++;
-        params.append(Slvs_MakeParam(h, group ? group : sketchGroupId, value));
+        params.push_back(Slvs_MakeParam(h, group ? group : sketchGroupId, value));
         return h;
     }
 
-    Slvs_hEntity addPoint2d(QVector<Slvs_Param>& params, QVector<Slvs_Entity>& entities,
-                            const QPointF& pt, int entityId) {
+    Slvs_hEntity addPoint2d(std::vector<Slvs_Param>& params, std::vector<Slvs_Entity>& entities,
+                            const Point2D& pt, int entityId) {
         Slvs_hEntity h = nextEntityHandle++;
         entityHandles[entityId] = h;
 
-        Slvs_hParam u = addParam(params, pt.x(), sketchGroupId);
-        Slvs_hParam v = addParam(params, pt.y(), sketchGroupId);
+        Slvs_hParam u = addParam(params, pt.x, sketchGroupId);
+        Slvs_hParam v = addParam(params, pt.y, sketchGroupId);
 
         paramHandles[entityId * 10 + 0] = u;
         paramHandles[entityId * 10 + 1] = v;
 
-        entities.append(Slvs_MakePoint2d(h, sketchGroupId, workplaneHandle, u, v));
+        entities.push_back(Slvs_MakePoint2d(h, sketchGroupId, workplaneHandle, u, v));
         return h;
     }
 
-    Slvs_hEntity addLineSegment(QVector<Slvs_Entity>& entities,
+    Slvs_hEntity addLineSegment(std::vector<Slvs_Entity>& entities,
                                 Slvs_hEntity p1, Slvs_hEntity p2, int entityId) {
         Slvs_hEntity h = nextEntityHandle++;
         entityHandles[entityId] = h;
-        entities.append(Slvs_MakeLineSegment(h, sketchGroupId, workplaneHandle, p1, p2));
+        entities.push_back(Slvs_MakeLineSegment(h, sketchGroupId, workplaneHandle, p1, p2));
         return h;
     }
 
-    Slvs_hEntity addCircle(QVector<Slvs_Param>& params, QVector<Slvs_Entity>& entities,
-                           const QPointF& center, double radius, int entityId,
+    Slvs_hEntity addCircle(std::vector<Slvs_Param>& params, std::vector<Slvs_Entity>& entities,
+                           const Point2D& center, double radius, int entityId,
                            Slvs_hEntity normalHandle) {
         Slvs_hEntity h = nextEntityHandle++;
         entityHandles[entityId] = h;
@@ -85,10 +89,13 @@ public:
         // Create center point
         Slvs_hEntity centerHandle = addPoint2d(params, entities, center, entityId * 1000);
 
-        // Create radius parameter
+        // Create radius as a distance entity (SolveSpace requires SLVS_E_DISTANCE,
+        // not a raw parameter, for the circle's distance sub-entity)
         Slvs_hParam radiusParam = addParam(params, radius, sketchGroupId);
+        Slvs_hEntity distHandle = nextEntityHandle++;
+        entities.push_back(Slvs_MakeDistance(distHandle, sketchGroupId, workplaneHandle, radiusParam));
 
-        entities.append(Slvs_MakeCircle(h, sketchGroupId, workplaneHandle, centerHandle, normalHandle, radiusParam));
+        entities.push_back(Slvs_MakeCircle(h, sketchGroupId, workplaneHandle, centerHandle, normalHandle, distHandle));
         return h;
     }
 
@@ -97,12 +104,12 @@ public:
         // Lines register endpoints as entityId*1000+0 and entityId*1000+1.
         // Circles/arcs register centers as entityId*1000.
         int pointId = entityId * 1000 + pointIndex;
-        if (entityHandles.contains(pointId)) {
+        if (entityHandles.count(pointId) > 0) {
             return entityHandles[pointId];
         }
 
         // Fall back to direct handle (point entities are registered directly).
-        if (entityHandles.contains(entityId)) {
+        if (entityHandles.count(entityId) > 0) {
             return entityHandles[entityId];
         }
 
@@ -111,20 +118,22 @@ public:
 
     void buildSolverSystem(
         Slvs_System& sys,
-        QVector<Slvs_Param>& params,
-        QVector<Slvs_Entity>& slvsEntities,
-        QVector<Slvs_Constraint>& slvsConstraints,
-        const QVector<Entity>& entities,
-        const QVector<Constraint>& constraints);
+        std::vector<Slvs_Param>& params,
+        std::vector<Slvs_Entity>& slvsEntities,
+        std::vector<Slvs_Constraint>& slvsConstraints,
+        const std::vector<Entity>& entities,
+        const std::vector<Constraint>& constraints);
 
     void extractSolution(
         const Slvs_System& sys,
-        QVector<Entity>& entities);
+        std::vector<Entity>& entities);
 
     void addConstraintToSolver(
         const Constraint& constraint,
-        QVector<Slvs_Constraint>& slvsConstraints,
-        const QVector<Entity>& entities);
+        std::vector<Slvs_Param>& params,
+        std::vector<Slvs_Entity>& slvsEntities,
+        std::vector<Slvs_Constraint>& slvsConstraints,
+        const std::vector<Entity>& entities);
 #endif
 };
 
@@ -152,21 +161,21 @@ bool Solver::isAvailable()
 }
 
 SolveResult Solver::solve(
-    QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+    std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
 #ifndef HAVE_SLVS
     SolveResult result;
     result.success = false;
-    result.errorMessage = QStringLiteral("Solver not available (libslvs not compiled)");
+    result.errorMessage = "Solver not available (libslvs not compiled)";
     return result;
 #else
     m_impl->reset();
 
     // Prepare solver data structures
-    QVector<Slvs_Param> params;
-    QVector<Slvs_Entity> slvsEntities;
-    QVector<Slvs_Constraint> slvsConstraints;
+    std::vector<Slvs_Param> params;
+    std::vector<Slvs_Entity> slvsEntities;
+    std::vector<Slvs_Constraint> slvsConstraints;
 
     // Build solver system
     Slvs_System sys = {};
@@ -181,7 +190,7 @@ SolveResult Solver::solve(
     sys.constraints = slvsConstraints.size();
 
     // Allocate space for failed constraints
-    QVector<Slvs_hConstraint> failed(qMax(1, slvsConstraints.size()));
+    std::vector<Slvs_hConstraint> failed(std::max(1, static_cast<int>(slvsConstraints.size())));
     sys.failed = failed.data();
     sys.faileds = failed.size();
     sys.calculateFaileds = 1;
@@ -202,8 +211,8 @@ SolveResult Solver::solve(
         // Map failed constraint handles back to HobbyCAD IDs
         for (int i = 0; i < sys.faileds; ++i) {
             for (auto it = m_impl->constraintHandles.begin(); it != m_impl->constraintHandles.end(); ++it) {
-                if (it.value() == sys.failed[i]) {
-                    result.failedConstraintIds.append(it.key());
+                if (it->second == sys.failed[i]) {
+                    result.failedConstraintIds.push_back(it->first);
                 }
             }
         }
@@ -216,8 +225,8 @@ SolveResult Solver::solve(
 }
 
 bool Solver::wouldOverConstrain(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& existingConstraints,
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& existingConstraints,
     const Constraint& newConstraint)
 {
     OverConstraintInfo info = checkOverConstrain(entities, existingConstraints, newConstraint);
@@ -225,8 +234,8 @@ bool Solver::wouldOverConstrain(
 }
 
 OverConstraintInfo Solver::checkOverConstrain(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& existingConstraints,
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& existingConstraints,
     const Constraint& newConstraint)
 {
     OverConstraintInfo info;
@@ -236,18 +245,18 @@ OverConstraintInfo Solver::checkOverConstrain(
     return info;
 #else
     // Create a temporary list with the new constraint added
-    QVector<Constraint> testConstraints = existingConstraints;
-    testConstraints.append(newConstraint);
+    std::vector<Constraint> testConstraints = existingConstraints;
+    testConstraints.push_back(newConstraint);
 
     // Make a copy of entities (solve modifies them)
-    QVector<Entity> testEntities = entities;
+    std::vector<Entity> testEntities = entities;
 
     m_impl->reset();
 
     // Prepare solver data structures
-    QVector<Slvs_Param> params;
-    QVector<Slvs_Entity> slvsEntities;
-    QVector<Slvs_Constraint> slvsConstraints;
+    std::vector<Slvs_Param> params;
+    std::vector<Slvs_Entity> slvsEntities;
+    std::vector<Slvs_Constraint> slvsConstraints;
 
     // Build solver system
     Slvs_System sys = {};
@@ -262,7 +271,7 @@ OverConstraintInfo Solver::checkOverConstrain(
     sys.constraints = slvsConstraints.size();
 
     // Allocate space for failed constraints
-    QVector<Slvs_hConstraint> failed(qMax(1, slvsConstraints.size()));
+    std::vector<Slvs_hConstraint> failed(std::max(1, static_cast<int>(slvsConstraints.size())));
     sys.failed = failed.data();
     sys.faileds = failed.size();
     sys.calculateFaileds = 1;
@@ -280,8 +289,8 @@ OverConstraintInfo Solver::checkOverConstrain(
         for (int i = 0; i < sys.faileds; ++i) {
             Slvs_hConstraint failedHandle = sys.failed[i];
             for (auto it = m_impl->constraintHandles.begin(); it != m_impl->constraintHandles.end(); ++it) {
-                if (it.value() == failedHandle && it.key() != newConstraint.id) {
-                    info.conflictingConstraintIds.append(it.key());
+                if (it->second == failedHandle && it->first != newConstraint.id) {
+                    info.conflictingConstraintIds.push_back(it->first);
                 }
             }
         }
@@ -294,20 +303,20 @@ OverConstraintInfo Solver::checkOverConstrain(
 }
 
 int Solver::degreesOfFreedom(
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
 #ifndef HAVE_SLVS
     return -1;  // Unknown
 #else
     // Make a copy of entities (solve may modify them)
-    QVector<Entity> testEntities = entities;
+    std::vector<Entity> testEntities = entities;
 
     m_impl->reset();
 
-    QVector<Slvs_Param> params;
-    QVector<Slvs_Entity> slvsEntities;
-    QVector<Slvs_Constraint> slvsConstraints;
+    std::vector<Slvs_Param> params;
+    std::vector<Slvs_Entity> slvsEntities;
+    std::vector<Slvs_Constraint> slvsConstraints;
 
     Slvs_System sys = {};
     m_impl->buildSolverSystem(sys, params, slvsEntities, slvsConstraints, testEntities, constraints);
@@ -319,7 +328,7 @@ int Solver::degreesOfFreedom(
     sys.constraint = slvsConstraints.data();
     sys.constraints = slvsConstraints.size();
 
-    QVector<Slvs_hConstraint> failed(qMax(1, slvsConstraints.size()));
+    std::vector<Slvs_hConstraint> failed(std::max(1, static_cast<int>(slvsConstraints.size())));
     sys.failed = failed.data();
     sys.faileds = failed.size();
 
@@ -337,11 +346,11 @@ int Solver::degreesOfFreedom(
 
 void Solver::Impl::buildSolverSystem(
     Slvs_System& sys,
-    QVector<Slvs_Param>& params,
-    QVector<Slvs_Entity>& slvsEntities,
-    QVector<Slvs_Constraint>& slvsConstraints,
-    const QVector<Entity>& entities,
-    const QVector<Constraint>& constraints)
+    std::vector<Slvs_Param>& params,
+    std::vector<Slvs_Entity>& slvsEntities,
+    std::vector<Slvs_Constraint>& slvsConstraints,
+    const std::vector<Entity>& entities,
+    const std::vector<Constraint>& constraints)
 {
     // Create 2D workplane (fixed XY plane) in group 1.
     // Solvespace requires the workplane to be in a lower-numbered group
@@ -356,7 +365,7 @@ void Solver::Impl::buildSolverSystem(
     Slvs_hParam originY = addParam(params, 0.0, workplaneGroupId);
     Slvs_hParam originZ = addParam(params, 0.0, workplaneGroupId);
 
-    slvsEntities.append(Slvs_MakePoint3d(originHandle, workplaneGroupId, originX, originY, originZ));
+    slvsEntities.push_back(Slvs_MakePoint3d(originHandle, workplaneGroupId, originX, originY, originZ));
 
     // Normal quaternion for XY plane (basis vectors (1,0,0) and (0,1,0))
     double qw, qx, qy, qz;
@@ -369,16 +378,16 @@ void Solver::Impl::buildSolverSystem(
     Slvs_hParam normalYP = addParam(params, qy, workplaneGroupId);
     Slvs_hParam normalZP = addParam(params, qz, workplaneGroupId);
 
-    slvsEntities.append(Slvs_MakeNormal3d(normalHandle, workplaneGroupId, normalW, normalXP, normalYP, normalZP));
+    slvsEntities.push_back(Slvs_MakeNormal3d(normalHandle, workplaneGroupId, normalW, normalXP, normalYP, normalZP));
 
     // Workplane
-    slvsEntities.append(Slvs_MakeWorkplane(workplaneHandle, workplaneGroupId, originHandle, normalHandle));
+    slvsEntities.push_back(Slvs_MakeWorkplane(workplaneHandle, workplaneGroupId, originHandle, normalHandle));
 
     // Create solver entities from library entities
     for (const Entity& entity : entities) {
         switch (entity.type) {
         case EntityType::Point:
-            if (!entity.points.isEmpty()) {
+            if (!entity.points.empty()) {
                 addPoint2d(params, slvsEntities, entity.points[0], entity.id);
             }
             break;
@@ -393,7 +402,7 @@ void Solver::Impl::buildSolverSystem(
 
         case EntityType::Circle:
         case EntityType::Arc:
-            if (!entity.points.isEmpty()) {
+            if (!entity.points.empty()) {
                 addCircle(params, slvsEntities, entity.points[0], entity.radius, entity.id, normalHandle);
             }
             break;
@@ -407,18 +416,18 @@ void Solver::Impl::buildSolverSystem(
     // Add constraints
     for (const Constraint& constraint : constraints) {
         if (!constraint.enabled) continue;
-        addConstraintToSolver(constraint, slvsConstraints, entities);
+        addConstraintToSolver(constraint, params, slvsEntities, slvsConstraints, entities);
     }
 }
 
 void Solver::Impl::extractSolution(
     const Slvs_System& sys,
-    QVector<Entity>& entities)
+    std::vector<Entity>& entities)
 {
     for (Entity& entity : entities) {
         switch (entity.type) {
         case EntityType::Point:
-            if (!entity.points.isEmpty() && entityHandles.contains(entity.id)) {
+            if (!entity.points.empty() && entityHandles.count(entity.id) > 0) {
                 Slvs_hEntity pointHandle = entityHandles[entity.id];
                 for (int i = 0; i < sys.entities; ++i) {
                     if (sys.entity[i].h == pointHandle) {
@@ -426,10 +435,10 @@ void Solver::Impl::extractSolution(
                         Slvs_hParam vParam = sys.entity[i].param[1];
                         for (int j = 0; j < sys.params; ++j) {
                             if (sys.param[j].h == uParam) {
-                                entity.points[0].setX(sys.param[j].val);
+                                entity.points[0].x = sys.param[j].val;
                             }
                             if (sys.param[j].h == vParam) {
-                                entity.points[0].setY(sys.param[j].val);
+                                entity.points[0].y = sys.param[j].val;
                             }
                         }
                         break;
@@ -442,7 +451,7 @@ void Solver::Impl::extractSolution(
             if (entity.points.size() >= 2) {
                 for (int idx = 0; idx < 2; ++idx) {
                     int pointId = entity.id * 1000 + idx;
-                    if (entityHandles.contains(pointId)) {
+                    if (entityHandles.count(pointId) > 0) {
                         Slvs_hEntity pointHandle = entityHandles[pointId];
                         for (int i = 0; i < sys.entities; ++i) {
                             if (sys.entity[i].h == pointHandle) {
@@ -450,10 +459,10 @@ void Solver::Impl::extractSolution(
                                 Slvs_hParam vParam = sys.entity[i].param[1];
                                 for (int j = 0; j < sys.params; ++j) {
                                     if (sys.param[j].h == uParam) {
-                                        entity.points[idx].setX(sys.param[j].val);
+                                        entity.points[idx].x = sys.param[j].val;
                                     }
                                     if (sys.param[j].h == vParam) {
-                                        entity.points[idx].setY(sys.param[j].val);
+                                        entity.points[idx].y = sys.param[j].val;
                                     }
                                 }
                                 break;
@@ -466,7 +475,7 @@ void Solver::Impl::extractSolution(
 
         case EntityType::Circle:
         case EntityType::Arc:
-            if (!entity.points.isEmpty() && entityHandles.contains(entity.id)) {
+            if (!entity.points.empty() && entityHandles.count(entity.id) > 0) {
                 Slvs_hEntity circleHandle = entityHandles[entity.id];
                 for (int i = 0; i < sys.entities; ++i) {
                     if (sys.entity[i].h == circleHandle) {
@@ -480,20 +489,26 @@ void Solver::Impl::extractSolution(
                                 Slvs_hParam vParam = sys.entity[j].param[1];
                                 for (int k = 0; k < sys.params; ++k) {
                                     if (sys.param[k].h == uParam) {
-                                        entity.points[0].setX(sys.param[k].val);
+                                        entity.points[0].x = sys.param[k].val;
                                     }
                                     if (sys.param[k].h == vParam) {
-                                        entity.points[0].setY(sys.param[k].val);
+                                        entity.points[0].y = sys.param[k].val;
                                     }
                                 }
                                 break;
                             }
                         }
 
-                        // Extract radius
-                        for (int k = 0; k < sys.params; ++k) {
-                            if (sys.param[k].h == radiusHandle) {
-                                entity.radius = sys.param[k].val;
+                        // Extract radius (distance entity → param)
+                        for (int j = 0; j < sys.entities; ++j) {
+                            if (sys.entity[j].h == radiusHandle) {
+                                Slvs_hParam rParam = sys.entity[j].param[0];
+                                for (int k = 0; k < sys.params; ++k) {
+                                    if (sys.param[k].h == rParam) {
+                                        entity.radius = sys.param[k].val;
+                                        break;
+                                    }
+                                }
                                 break;
                             }
                         }
@@ -511,32 +526,39 @@ void Solver::Impl::extractSolution(
 
 void Solver::Impl::addConstraintToSolver(
     const Constraint& constraint,
-    QVector<Slvs_Constraint>& slvsConstraints,
-    const QVector<Entity>& entities)
+    std::vector<Slvs_Param>& params,
+    std::vector<Slvs_Entity>& slvsEntities,
+    std::vector<Slvs_Constraint>& slvsConstraints,
+    const std::vector<Entity>& entities)
 {
     Slvs_hConstraint ch = nextConstraintHandle++;
     constraintHandles[constraint.id] = ch;
 
+    // Helper to safely get a value from a vector with a default
+    auto safeGet = [](const std::vector<int>& vec, size_t index, int defaultVal) -> int {
+        return (index < vec.size()) ? vec[index] : defaultVal;
+    };
+
     switch (constraint.type) {
     case ConstraintType::Distance:
         if (constraint.entityIds.size() < 2) {
-            qWarning("Solver: Distance constraint %d has only %d entityIds (need 2), skipping",
+            fprintf(stderr, "Solver: Distance constraint %d has only %d entityIds (need 2), skipping\n",
                      constraint.id, static_cast<int>(constraint.entityIds.size()));
             break;
         }
         {
-            Slvs_hEntity pt1 = getPointHandle(constraint.entityIds[0], constraint.pointIndices.value(0, 0));
-            Slvs_hEntity pt2 = getPointHandle(constraint.entityIds[1], constraint.pointIndices.value(1, 0));
+            Slvs_hEntity pt1 = getPointHandle(constraint.entityIds[0], safeGet(constraint.pointIndices, 0, 0));
+            Slvs_hEntity pt2 = getPointHandle(constraint.entityIds[1], safeGet(constraint.pointIndices, 1, 0));
 
             if (!pt1 || !pt2) {
-                qWarning("Solver: Distance constraint %d: failed to resolve point handles "
-                         "(entity %d -> handle %u, entity %d -> handle %u), skipping",
+                fprintf(stderr, "Solver: Distance constraint %d: failed to resolve point handles "
+                         "(entity %d -> handle %u, entity %d -> handle %u), skipping\n",
                          constraint.id,
                          constraint.entityIds[0], pt1,
                          constraint.entityIds[1], pt2);
                 break;
             }
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_PT_PT_DISTANCE,
@@ -551,13 +573,13 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Radius:
     case ConstraintType::Diameter:
-        if (constraint.entityIds.isEmpty()) {
-            qWarning("Solver: Radius/Diameter constraint %d has no entityIds, skipping",
+        if (constraint.entityIds.empty()) {
+            fprintf(stderr, "Solver: Radius/Diameter constraint %d has no entityIds, skipping\n",
                      constraint.id);
             break;
         }
-        if (!entityHandles.contains(constraint.entityIds[0])) {
-            qWarning("Solver: Radius/Diameter constraint %d: entity %d not in solver, skipping",
+        if (entityHandles.count(constraint.entityIds[0]) == 0) {
+            fprintf(stderr, "Solver: Radius/Diameter constraint %d: entity %d not in solver, skipping\n",
                      constraint.id, constraint.entityIds[0]);
             break;
         }
@@ -567,7 +589,7 @@ void Solver::Impl::addConstraintToSolver(
                                    ? constraint.value
                                    : constraint.value * 2.0;
 
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_DIAMETER,
@@ -582,13 +604,13 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Angle:
         if (constraint.entityIds.size() < 2) {
-            qWarning("Solver: Angle constraint %d has only %d entityIds (need 2), skipping",
+            fprintf(stderr, "Solver: Angle constraint %d has only %d entityIds (need 2), skipping\n",
                      constraint.id, static_cast<int>(constraint.entityIds.size()));
             break;
         }
-        if (!entityHandles.contains(constraint.entityIds[0]) ||
-            !entityHandles.contains(constraint.entityIds[1])) {
-            qWarning("Solver: Angle constraint %d: entity not in solver (e0=%d, e1=%d), skipping",
+        if (entityHandles.count(constraint.entityIds[0]) == 0 ||
+            entityHandles.count(constraint.entityIds[1]) == 0) {
+            fprintf(stderr, "Solver: Angle constraint %d: entity not in solver (e0=%d, e1=%d), skipping\n",
                      constraint.id, constraint.entityIds[0], constraint.entityIds[1]);
             break;
         }
@@ -596,7 +618,7 @@ void Solver::Impl::addConstraintToSolver(
             Slvs_hEntity line1 = entityHandles[constraint.entityIds[0]];
             Slvs_hEntity line2 = entityHandles[constraint.entityIds[1]];
 
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_ANGLE,
@@ -610,14 +632,14 @@ void Solver::Impl::addConstraintToSolver(
         break;
 
     case ConstraintType::Horizontal:
-        if (constraint.entityIds.isEmpty() || !entityHandles.contains(constraint.entityIds[0])) {
-            qWarning("Solver: Horizontal constraint %d: entity not in solver, skipping",
+        if (constraint.entityIds.empty() || entityHandles.count(constraint.entityIds[0]) == 0) {
+            fprintf(stderr, "Solver: Horizontal constraint %d: entity not in solver, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity line = entityHandles[constraint.entityIds[0]];
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_HORIZONTAL,
@@ -631,14 +653,14 @@ void Solver::Impl::addConstraintToSolver(
         break;
 
     case ConstraintType::Vertical:
-        if (constraint.entityIds.isEmpty() || !entityHandles.contains(constraint.entityIds[0])) {
-            qWarning("Solver: Vertical constraint %d: entity not in solver, skipping",
+        if (constraint.entityIds.empty() || entityHandles.count(constraint.entityIds[0]) == 0) {
+            fprintf(stderr, "Solver: Vertical constraint %d: entity not in solver, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity line = entityHandles[constraint.entityIds[0]];
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_VERTICAL,
@@ -653,16 +675,16 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Parallel:
         if (constraint.entityIds.size() < 2 ||
-            !entityHandles.contains(constraint.entityIds[0]) ||
-            !entityHandles.contains(constraint.entityIds[1])) {
-            qWarning("Solver: Parallel constraint %d: missing entities, skipping",
+            entityHandles.count(constraint.entityIds[0]) == 0 ||
+            entityHandles.count(constraint.entityIds[1]) == 0) {
+            fprintf(stderr, "Solver: Parallel constraint %d: missing entities, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity line1 = entityHandles[constraint.entityIds[0]];
             Slvs_hEntity line2 = entityHandles[constraint.entityIds[1]];
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_PARALLEL,
@@ -677,16 +699,16 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Perpendicular:
         if (constraint.entityIds.size() < 2 ||
-            !entityHandles.contains(constraint.entityIds[0]) ||
-            !entityHandles.contains(constraint.entityIds[1])) {
-            qWarning("Solver: Perpendicular constraint %d: missing entities, skipping",
+            entityHandles.count(constraint.entityIds[0]) == 0 ||
+            entityHandles.count(constraint.entityIds[1]) == 0) {
+            fprintf(stderr, "Solver: Perpendicular constraint %d: missing entities, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity line1 = entityHandles[constraint.entityIds[0]];
             Slvs_hEntity line2 = entityHandles[constraint.entityIds[1]];
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_PERPENDICULAR,
@@ -701,19 +723,19 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Coincident:
         if (constraint.entityIds.size() < 2) {
-            qWarning("Solver: Coincident constraint %d has only %d entityIds (need 2), skipping",
+            fprintf(stderr, "Solver: Coincident constraint %d has only %d entityIds (need 2), skipping\n",
                      constraint.id, static_cast<int>(constraint.entityIds.size()));
             break;
         }
         {
-            Slvs_hEntity pt1 = getPointHandle(constraint.entityIds[0], constraint.pointIndices.value(0, 0));
-            Slvs_hEntity pt2 = getPointHandle(constraint.entityIds[1], constraint.pointIndices.value(1, 0));
+            Slvs_hEntity pt1 = getPointHandle(constraint.entityIds[0], safeGet(constraint.pointIndices, 0, 0));
+            Slvs_hEntity pt2 = getPointHandle(constraint.entityIds[1], safeGet(constraint.pointIndices, 1, 0));
             if (!pt1 || !pt2) {
-                qWarning("Solver: Coincident constraint %d: failed to resolve point handles, skipping",
+                fprintf(stderr, "Solver: Coincident constraint %d: failed to resolve point handles, skipping\n",
                          constraint.id);
                 break;
             }
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_POINTS_COINCIDENT,
@@ -728,16 +750,16 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Equal:
         if (constraint.entityIds.size() < 2 ||
-            !entityHandles.contains(constraint.entityIds[0]) ||
-            !entityHandles.contains(constraint.entityIds[1])) {
-            qWarning("Solver: Equal constraint %d: missing entities, skipping",
+            entityHandles.count(constraint.entityIds[0]) == 0 ||
+            entityHandles.count(constraint.entityIds[1]) == 0) {
+            fprintf(stderr, "Solver: Equal constraint %d: missing entities, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity e1 = entityHandles[constraint.entityIds[0]];
             Slvs_hEntity e2 = entityHandles[constraint.entityIds[1]];
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_EQUAL_LENGTH_LINES,
@@ -752,16 +774,16 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Tangent:
         if (constraint.entityIds.size() < 2 ||
-            !entityHandles.contains(constraint.entityIds[0]) ||
-            !entityHandles.contains(constraint.entityIds[1])) {
-            qWarning("Solver: Tangent constraint %d: missing entities, skipping",
+            entityHandles.count(constraint.entityIds[0]) == 0 ||
+            entityHandles.count(constraint.entityIds[1]) == 0) {
+            fprintf(stderr, "Solver: Tangent constraint %d: missing entities, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity e1 = entityHandles[constraint.entityIds[0]];
             Slvs_hEntity e2 = entityHandles[constraint.entityIds[1]];
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_CURVE_CURVE_TANGENT,
@@ -776,23 +798,23 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Midpoint:
         if (constraint.entityIds.size() < 2) {
-            qWarning("Solver: Midpoint constraint %d has only %d entityIds (need 2), skipping",
+            fprintf(stderr, "Solver: Midpoint constraint %d has only %d entityIds (need 2), skipping\n",
                      constraint.id, static_cast<int>(constraint.entityIds.size()));
             break;
         }
         {
             Slvs_hEntity pt = getPointHandle(constraint.entityIds[0], 0);
             Slvs_hEntity line = 0;
-            if (entityHandles.contains(constraint.entityIds[1])) {
+            if (entityHandles.count(constraint.entityIds[1]) > 0) {
                 line = entityHandles[constraint.entityIds[1]];
             }
             if (!pt || !line) {
-                qWarning("Solver: Midpoint constraint %d: failed to resolve handles "
-                         "(pt=%u, line=%u), skipping",
+                fprintf(stderr, "Solver: Midpoint constraint %d: failed to resolve handles "
+                         "(pt=%u, line=%u), skipping\n",
                          constraint.id, pt, line);
                 break;
             }
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_AT_MIDPOINT,
@@ -807,24 +829,24 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::Symmetric:
         if (constraint.entityIds.size() < 3) {
-            qWarning("Solver: Symmetric constraint %d has only %d entityIds (need 3), skipping",
+            fprintf(stderr, "Solver: Symmetric constraint %d has only %d entityIds (need 3), skipping\n",
                      constraint.id, static_cast<int>(constraint.entityIds.size()));
             break;
         }
         {
-            Slvs_hEntity pt1 = getPointHandle(constraint.entityIds[0], constraint.pointIndices.value(0, 0));
-            Slvs_hEntity pt2 = getPointHandle(constraint.entityIds[1], constraint.pointIndices.value(1, 0));
+            Slvs_hEntity pt1 = getPointHandle(constraint.entityIds[0], safeGet(constraint.pointIndices, 0, 0));
+            Slvs_hEntity pt2 = getPointHandle(constraint.entityIds[1], safeGet(constraint.pointIndices, 1, 0));
             Slvs_hEntity line = 0;
-            if (entityHandles.contains(constraint.entityIds[2])) {
+            if (entityHandles.count(constraint.entityIds[2]) > 0) {
                 line = entityHandles[constraint.entityIds[2]];
             }
             if (!pt1 || !pt2 || !line) {
-                qWarning("Solver: Symmetric constraint %d: failed to resolve handles "
-                         "(pt1=%u, pt2=%u, line=%u), skipping",
+                fprintf(stderr, "Solver: Symmetric constraint %d: failed to resolve handles "
+                         "(pt1=%u, pt2=%u, line=%u), skipping\n",
                          constraint.id, pt1, pt2, line);
                 break;
             }
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_SYMMETRIC_LINE,
@@ -839,20 +861,20 @@ void Solver::Impl::addConstraintToSolver(
 
     case ConstraintType::FixedPoint:
         // SLVS_C_WHERE_DRAGGED: tells the solver "keep this point where it is"
-        if (constraint.entityIds.isEmpty()) {
-            qWarning("Solver: FixedPoint constraint %d has no entityIds, skipping",
+        if (constraint.entityIds.empty()) {
+            fprintf(stderr, "Solver: FixedPoint constraint %d has no entityIds, skipping\n",
                      constraint.id);
             break;
         }
         {
             Slvs_hEntity pt = getPointHandle(constraint.entityIds[0],
-                                              constraint.pointIndices.value(0, 0));
+                                              safeGet(constraint.pointIndices, 0, 0));
             if (!pt) {
-                qWarning("Solver: FixedPoint constraint %d: failed to resolve point handle, skipping",
+                fprintf(stderr, "Solver: FixedPoint constraint %d: failed to resolve point handle, skipping\n",
                          constraint.id);
                 break;
             }
-            slvsConstraints.append(
+            slvsConstraints.push_back(
                 Slvs_MakeConstraint(
                     ch, sketchGroupId,
                     SLVS_C_WHERE_DRAGGED,
@@ -865,8 +887,50 @@ void Solver::Impl::addConstraintToSolver(
         }
         break;
 
+    case ConstraintType::FixedAngle:
+        // Fix a line's angle from horizontal using an internal reference line.
+        // The reference is placed in workplaneGroupId (group 1) so the solver
+        // treats it as frozen geometry.
+        if (constraint.entityIds.empty() || entityHandles.count(constraint.entityIds[0]) == 0) {
+            fprintf(stderr, "Solver: FixedAngle constraint %d: entity not in solver, skipping\n",
+                     constraint.id);
+            break;
+        }
+        {
+            Slvs_hEntity targetLine = entityHandles[constraint.entityIds[0]];
+
+            // Create internal horizontal reference line pinned at the origin
+            Slvs_hParam ru1 = addParam(params, 0.0, workplaneGroupId);
+            Slvs_hParam rv1 = addParam(params, 0.0, workplaneGroupId);
+            Slvs_hEntity rp1 = nextEntityHandle++;
+            slvsEntities.push_back(Slvs_MakePoint2d(rp1, workplaneGroupId,
+                                                  workplaneHandle, ru1, rv1));
+
+            Slvs_hParam ru2 = addParam(params, 100.0, workplaneGroupId);
+            Slvs_hParam rv2 = addParam(params, 0.0, workplaneGroupId);
+            Slvs_hEntity rp2 = nextEntityHandle++;
+            slvsEntities.push_back(Slvs_MakePoint2d(rp2, workplaneGroupId,
+                                                  workplaneHandle, ru2, rv2));
+
+            Slvs_hEntity refLine = nextEntityHandle++;
+            slvsEntities.push_back(Slvs_MakeLineSegment(refLine, workplaneGroupId,
+                                                      workplaneHandle, rp1, rp2));
+
+            slvsConstraints.push_back(
+                Slvs_MakeConstraint(
+                    ch, sketchGroupId,
+                    SLVS_C_ANGLE,
+                    workplaneHandle,
+                    constraint.value,
+                    0, 0,
+                    refLine, targetLine
+                )
+            );
+        }
+        break;
+
     default:
-        qWarning("Solver: constraint %d has unsupported type %d, skipping",
+        fprintf(stderr, "Solver: constraint %d has unsupported type %d, skipping\n",
                  constraint.id, static_cast<int>(constraint.type));
         break;
     }
@@ -878,21 +942,21 @@ void Solver::Impl::addConstraintToSolver(
 //  Utility Functions
 // =====================================================================
 
-QString solveResultName(SolveResult::ResultCode code)
+std::string solveResultName(SolveResult::ResultCode code)
 {
     switch (code) {
     case SolveResult::Okay:
-        return QStringLiteral("Solved successfully");
+        return "Solved successfully";
     case SolveResult::Inconsistent:
-        return QStringLiteral("Constraints are inconsistent (conflicting)");
+        return "Constraints are inconsistent (conflicting)";
     case SolveResult::DidntConverge:
-        return QStringLiteral("Solver didn't converge (too complex or ill-conditioned)");
+        return "Solver didn't converge (too complex or ill-conditioned)";
     case SolveResult::TooManyUnknowns:
-        return QStringLiteral("Too many unknowns for solver");
+        return "Too many unknowns for solver";
     case SolveResult::RedundantOkay:
-        return QStringLiteral("Solved with redundant constraints");
+        return "Solved with redundant constraints";
     default:
-        return QStringLiteral("Unknown solver result");
+        return "Unknown solver result";
     }
 }
 
@@ -913,13 +977,14 @@ bool constraintSupported(ConstraintType type)
     case ConstraintType::Midpoint:
     case ConstraintType::Symmetric:
     case ConstraintType::FixedPoint:
+    case ConstraintType::FixedAngle:
         return true;
     default:
         return false;
     }
 }
 
-QVector<ConstraintType> supportedConstraintTypes()
+std::vector<ConstraintType> supportedConstraintTypes()
 {
     return {
         ConstraintType::Distance,
@@ -934,7 +999,8 @@ QVector<ConstraintType> supportedConstraintTypes()
         ConstraintType::Equal,
         ConstraintType::Tangent,
         ConstraintType::Midpoint,
-        ConstraintType::Symmetric
+        ConstraintType::Symmetric,
+        ConstraintType::FixedAngle
     };
 }
 

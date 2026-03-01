@@ -18,10 +18,10 @@
 #include "constraint.h"
 #include "group.h"
 
-#include <QString>
-#include <QVector>
 #include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -58,7 +58,7 @@ enum class CommandType {
 /// A single undoable command
 struct HOBBYCAD_EXPORT UndoCommand {
     CommandType type = CommandType::ModifyEntity;
-    QString description;              ///< Human-readable description
+    std::string description;              ///< Human-readable description
 
     // Entity data
     Entity entity;                    ///< Current/new entity state
@@ -73,41 +73,41 @@ struct HOBBYCAD_EXPORT UndoCommand {
     Group previousGroup;              ///< Previous group state (for modify)
 
     // For compound commands
-    QVector<UndoCommand> subCommands; ///< Child commands (for Compound type)
+    std::vector<UndoCommand> subCommands; ///< Child commands (for Compound type)
 
     /// Create an entity add command
-    static UndoCommand addEntity(const Entity& entity, const QString& desc = QString());
+    static UndoCommand addEntity(const Entity& entity, const std::string& desc = {});
 
     /// Create an entity delete command
-    static UndoCommand deleteEntity(const Entity& entity, const QString& desc = QString());
+    static UndoCommand deleteEntity(const Entity& entity, const std::string& desc = {});
 
     /// Create an entity modify command
     static UndoCommand modifyEntity(const Entity& before, const Entity& after,
-                                     const QString& desc = QString());
+                                     const std::string& desc = {});
 
     /// Create a constraint add command
-    static UndoCommand addConstraint(const Constraint& constraint, const QString& desc = QString());
+    static UndoCommand addConstraint(const Constraint& constraint, const std::string& desc = {});
 
     /// Create a constraint delete command
-    static UndoCommand deleteConstraint(const Constraint& constraint, const QString& desc = QString());
+    static UndoCommand deleteConstraint(const Constraint& constraint, const std::string& desc = {});
 
     /// Create a constraint modify command
     static UndoCommand modifyConstraint(const Constraint& before, const Constraint& after,
-                                         const QString& desc = QString());
+                                         const std::string& desc = {});
 
     /// Create a group add command
-    static UndoCommand addGroup(const Group& group, const QString& desc = QString());
+    static UndoCommand addGroup(const Group& group, const std::string& desc = {});
 
     /// Create a group delete command
-    static UndoCommand deleteGroup(const Group& group, const QString& desc = QString());
+    static UndoCommand deleteGroup(const Group& group, const std::string& desc = {});
 
     /// Create a group modify command
     static UndoCommand modifyGroup(const Group& before, const Group& after,
-                                    const QString& desc = QString());
+                                    const std::string& desc = {});
 
     /// Create a compound command from multiple sub-commands
-    static UndoCommand compound(const QVector<UndoCommand>& commands,
-                                 const QString& desc = QString());
+    static UndoCommand compound(const std::vector<UndoCommand>& commands,
+                                 const std::string& desc = {});
 
     /// Check if this is a compound command
     bool isCompound() const { return type == CommandType::Compound; }
@@ -130,19 +130,19 @@ public:
     void push(const UndoCommand& command);
 
     /// Push multiple commands as a single compound operation
-    void pushCompound(const QVector<UndoCommand>& commands, const QString& description = QString());
+    void pushCompound(const std::vector<UndoCommand>& commands, const std::string& description = {});
 
     /// Check if undo is available
-    bool canUndo() const { return !m_undoStack.isEmpty(); }
+    bool canUndo() const { return !m_undoStack.empty(); }
 
     /// Check if redo is available
-    bool canRedo() const { return !m_redoStack.isEmpty(); }
+    bool canRedo() const { return !m_redoStack.empty(); }
 
     /// Get the number of available undo levels
-    int undoLevels() const { return m_undoStack.size(); }
+    int undoLevels() const { return static_cast<int>(m_undoStack.size()); }
 
     /// Get the number of available redo levels
-    int redoLevels() const { return m_redoStack.size(); }
+    int redoLevels() const { return static_cast<int>(m_redoStack.size()); }
 
     /// Pop the top command from undo stack and push to redo stack
     /// @return The command that was undone (empty if stack was empty)
@@ -155,24 +155,24 @@ public:
     /// Undo multiple levels at once
     /// @param levels Number of undo operations to perform
     /// @return Commands that were undone
-    QVector<UndoCommand> undoMultiple(int levels);
+    std::vector<UndoCommand> undoMultiple(int levels);
 
     /// Redo multiple levels at once
     /// @param levels Number of redo operations to perform
     /// @return Commands that were redone
-    QVector<UndoCommand> redoMultiple(int levels);
+    std::vector<UndoCommand> redoMultiple(int levels);
 
     /// Get the description of the next undo operation
-    QString undoDescription() const;
+    std::string undoDescription() const;
 
     /// Get the description of the next redo operation
-    QString redoDescription() const;
+    std::string redoDescription() const;
 
     /// Get descriptions of all available undo operations
-    QStringList undoDescriptions() const;
+    std::vector<std::string> undoDescriptions() const;
 
     /// Get descriptions of all available redo operations
-    QStringList redoDescriptions() const;
+    std::vector<std::string> redoDescriptions() const;
 
     /// Clear both undo and redo stacks
     void clear();
@@ -193,7 +193,7 @@ public:
     void setUnmodified() { m_modified = false; }
 
     /// Begin a compound operation (all pushes until endCompound are grouped)
-    void beginCompound(const QString& description = QString());
+    void beginCompound(const std::string& description = {});
 
     /// End a compound operation
     void endCompound();
@@ -202,15 +202,15 @@ public:
     bool isRecordingCompound() const { return m_recordingCompound; }
 
 private:
-    QVector<UndoCommand> m_undoStack;
-    QVector<UndoCommand> m_redoStack;
+    std::vector<UndoCommand> m_undoStack;
+    std::vector<UndoCommand> m_redoStack;
     int m_maxSize = 100;
     bool m_modified = false;
 
     // Compound recording state
     bool m_recordingCompound = false;
-    QVector<UndoCommand> m_compoundCommands;
-    QString m_compoundDescription;
+    std::vector<UndoCommand> m_compoundCommands;
+    std::string m_compoundDescription;
 
     void enforceMaxSize();
 };
@@ -248,7 +248,7 @@ enum class AlignmentType {
 HOBBYCAD_EXPORT const char* entityTypeName(EntityType type);
 
 /// Get localized/translated name for an entity type (uses QObject::tr)
-HOBBYCAD_EXPORT QString entityTypeDisplayName(EntityType type);
+HOBBYCAD_EXPORT std::string entityTypeDisplayName(EntityType type);
 
 }  // namespace sketch
 }  // namespace hobbycad

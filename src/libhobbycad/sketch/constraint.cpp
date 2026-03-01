@@ -11,7 +11,9 @@
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/geometry/utils.h>
 
-#include <QLineF>
+#include <cmath>
+#include <algorithm>
+#include <unordered_set>
 
 namespace hobbycad {
 namespace sketch {
@@ -112,7 +114,7 @@ const char* constraintUnit(ConstraintType type)
         return "mm";
     case ConstraintType::Angle:
     case ConstraintType::FixedAngle:
-        return "°";
+        return "\xC2\xB0";
     default:
         return "";
     }
@@ -122,87 +124,87 @@ const char* constraintUnit(ConstraintType type)
 //  Constraint Detection
 // =====================================================================
 
-QVector<ConstraintType> suggestConstraints(const Entity& e1, const Entity& e2)
+std::vector<ConstraintType> suggestConstraints(const Entity& e1, const Entity& e2)
 {
-    QVector<ConstraintType> suggestions;
+    std::vector<ConstraintType> suggestions;
 
     // Line-Line constraints
     if (e1.type == EntityType::Line && e2.type == EntityType::Line) {
-        suggestions.append(ConstraintType::Parallel);
-        suggestions.append(ConstraintType::Perpendicular);
-        suggestions.append(ConstraintType::Equal);
-        suggestions.append(ConstraintType::Collinear);
-        suggestions.append(ConstraintType::Angle);
+        suggestions.push_back(ConstraintType::Parallel);
+        suggestions.push_back(ConstraintType::Perpendicular);
+        suggestions.push_back(ConstraintType::Equal);
+        suggestions.push_back(ConstraintType::Collinear);
+        suggestions.push_back(ConstraintType::Angle);
 
         // Check if they share an endpoint
         if (entitiesConnected(e1, e2)) {
-            suggestions.append(ConstraintType::Coincident);
+            suggestions.push_back(ConstraintType::Coincident);
         }
     }
     // Point-Line constraints
     else if ((e1.type == EntityType::Point && e2.type == EntityType::Line) ||
              (e1.type == EntityType::Line && e2.type == EntityType::Point)) {
-        suggestions.append(ConstraintType::PointOnLine);
-        suggestions.append(ConstraintType::Distance);
-        suggestions.append(ConstraintType::Midpoint);
+        suggestions.push_back(ConstraintType::PointOnLine);
+        suggestions.push_back(ConstraintType::Distance);
+        suggestions.push_back(ConstraintType::Midpoint);
     }
     // Point-Point constraints
     else if (e1.type == EntityType::Point && e2.type == EntityType::Point) {
-        suggestions.append(ConstraintType::Coincident);
-        suggestions.append(ConstraintType::Distance);
+        suggestions.push_back(ConstraintType::Coincident);
+        suggestions.push_back(ConstraintType::Distance);
     }
     // Circle/Arc constraints
     else if ((e1.type == EntityType::Circle || e1.type == EntityType::Arc) &&
              (e2.type == EntityType::Circle || e2.type == EntityType::Arc)) {
-        suggestions.append(ConstraintType::Concentric);
-        suggestions.append(ConstraintType::Equal);
-        suggestions.append(ConstraintType::Tangent);
+        suggestions.push_back(ConstraintType::Concentric);
+        suggestions.push_back(ConstraintType::Equal);
+        suggestions.push_back(ConstraintType::Tangent);
     }
     // Line-Circle constraints
     else if ((e1.type == EntityType::Line &&
               (e2.type == EntityType::Circle || e2.type == EntityType::Arc)) ||
              ((e1.type == EntityType::Circle || e1.type == EntityType::Arc) &&
               e2.type == EntityType::Line)) {
-        suggestions.append(ConstraintType::Tangent);
-        suggestions.append(ConstraintType::Distance);
+        suggestions.push_back(ConstraintType::Tangent);
+        suggestions.push_back(ConstraintType::Distance);
     }
     // Point-Circle constraints
     else if ((e1.type == EntityType::Point &&
               (e2.type == EntityType::Circle || e2.type == EntityType::Arc)) ||
              ((e1.type == EntityType::Circle || e1.type == EntityType::Arc) &&
               e2.type == EntityType::Point)) {
-        suggestions.append(ConstraintType::PointOnCircle);
-        suggestions.append(ConstraintType::Coincident);  // Coincident with center
+        suggestions.push_back(ConstraintType::PointOnCircle);
+        suggestions.push_back(ConstraintType::Coincident);  // Coincident with center
     }
 
     // Always suggest distance as fallback
-    if (!suggestions.contains(ConstraintType::Distance)) {
-        suggestions.append(ConstraintType::Distance);
+    if (!hobbycad::contains(suggestions, ConstraintType::Distance)) {
+        suggestions.push_back(ConstraintType::Distance);
     }
 
     return suggestions;
 }
 
-QVector<ConstraintType> suggestConstraints(const Entity& entity)
+std::vector<ConstraintType> suggestConstraints(const Entity& entity)
 {
-    QVector<ConstraintType> suggestions;
+    std::vector<ConstraintType> suggestions;
 
     switch (entity.type) {
     case EntityType::Line:
-        suggestions.append(ConstraintType::Horizontal);
-        suggestions.append(ConstraintType::Vertical);
-        suggestions.append(ConstraintType::FixedAngle);
-        suggestions.append(ConstraintType::Distance);  // Length
+        suggestions.push_back(ConstraintType::Horizontal);
+        suggestions.push_back(ConstraintType::Vertical);
+        suggestions.push_back(ConstraintType::FixedAngle);
+        suggestions.push_back(ConstraintType::Distance);  // Length
         break;
 
     case EntityType::Circle:
     case EntityType::Arc:
-        suggestions.append(ConstraintType::Radius);
-        suggestions.append(ConstraintType::Diameter);
+        suggestions.push_back(ConstraintType::Radius);
+        suggestions.push_back(ConstraintType::Diameter);
         break;
 
     case EntityType::Point:
-        suggestions.append(ConstraintType::FixedPoint);
+        suggestions.push_back(ConstraintType::FixedPoint);
         break;
 
     default:
@@ -214,10 +216,10 @@ QVector<ConstraintType> suggestConstraints(const Entity& entity)
 
 double calculateConstraintValue(
     ConstraintType type,
-    const QVector<Entity*>& entities,
-    const QVector<int>& pointIndices)
+    const std::vector<const Entity*>& entities,
+    const std::vector<int>& pointIndices)
 {
-    if (entities.isEmpty()) return 0.0;
+    if (entities.empty()) return 0.0;
 
     switch (type) {
     case ConstraintType::Distance:
@@ -228,7 +230,7 @@ double calculateConstraintValue(
 
             // Point to point
             if (e1->type == EntityType::Point && e2->type == EntityType::Point) {
-                if (!e1->points.isEmpty() && !e2->points.isEmpty()) {
+                if (!e1->points.empty() && !e2->points.empty()) {
                     return lineLength(e1->points[0], e2->points[0]);
                 }
             }
@@ -246,7 +248,7 @@ double calculateConstraintValue(
         break;
 
     case ConstraintType::Radius:
-        if (!entities.isEmpty()) {
+        if (!entities.empty()) {
             const Entity* e = entities[0];
             if (e->type == EntityType::Circle || e->type == EntityType::Arc) {
                 return e->radius;
@@ -255,7 +257,7 @@ double calculateConstraintValue(
         break;
 
     case ConstraintType::Diameter:
-        if (!entities.isEmpty()) {
+        if (!entities.empty()) {
             const Entity* e = entities[0];
             if (e->type == EntityType::Circle || e->type == EntityType::Arc) {
                 return e->radius * 2.0;
@@ -270,8 +272,8 @@ double calculateConstraintValue(
 
             if (e1->type == EntityType::Line && e2->type == EntityType::Line) {
                 if (e1->points.size() >= 2 && e2->points.size() >= 2) {
-                    QPointF d1 = e1->points[1] - e1->points[0];
-                    QPointF d2 = e2->points[1] - e2->points[0];
+                    Point2D d1 = e1->points[1] - e1->points[0];
+                    Point2D d2 = e2->points[1] - e2->points[0];
                     return angleBetween(d1, d2);
                 }
             }
@@ -279,11 +281,10 @@ double calculateConstraintValue(
         break;
 
     case ConstraintType::FixedAngle:
-        if (!entities.isEmpty()) {
+        if (!entities.empty()) {
             const Entity* e = entities[0];
             if (e->type == EntityType::Line && e->points.size() >= 2) {
-                QPointF d = e->points[1] - e->points[0];
-                return vectorAngle(d);
+                return getEntityAngle(*e);  // returns [0, 360)
             }
         }
         break;
@@ -329,7 +330,7 @@ ConstraintType suggestConstraintType(const Entity& e1, const Entity& e2)
     return ConstraintType::Distance;
 }
 
-const Entity* findEntityById(const QVector<Entity>& entities, int id)
+const Entity* findEntityById(const std::vector<Entity>& entities, int id)
 {
     for (const Entity& e : entities) {
         if (e.id == id) {
@@ -339,16 +340,48 @@ const Entity* findEntityById(const QVector<Entity>& entities, int id)
     return nullptr;
 }
 
+// ---- Helper: resolve a point index on an entity ----
+// For Rectangle entities, indices 2 and 3 are virtual corners:
+//   0 = points[0] = (x1,y1)   1 = points[1] = (x2,y2)
+//   2 = (x1,y2)               3 = (x2,y1)
+static Point2D resolveEntityPoint(const Entity* e, int idx)
+{
+    if (e->type == EntityType::Rectangle && e->points.size() >= 2) {
+        switch (idx) {
+        case 0: return e->points[0];
+        case 1: return e->points[1];
+        case 2: return Point2D(e->points[0].x, e->points[1].y);
+        case 3: return Point2D(e->points[1].x, e->points[0].y);
+        default: break;
+        }
+    }
+    if (idx >= 0 && idx < static_cast<int>(e->points.size()))
+        return e->points[idx];
+    return e->points.empty() ? Point2D() : e->points[std::min(idx, static_cast<int>(e->points.size()) - 1)];
+}
+
+// ---- Helper: resolve a Distance endpoint for one entity ----
+static Point2D resolveDistancePoint(const Entity* e, int pointIndex)
+{
+    if (e->type == EntityType::Point) {
+        return e->points.empty() ? Point2D() : e->points[0];
+    }
+    if (e->type == EntityType::Circle || e->type == EntityType::Arc) {
+        return e->points.empty() ? Point2D() : e->points[0];  // center
+    }
+    return resolveEntityPoint(e, pointIndex);
+}
+
 bool getConstraintEndpoints(
     const Constraint& constraint,
-    const QVector<Entity>& entities,
-    QPointF& p1, QPointF& p2)
+    EntityFinder findEntity,
+    Point2D& p1, Point2D& p2)
 {
-    if (constraint.entityIds.isEmpty()) {
+    if (constraint.entityIds.empty()) {
         return false;
     }
 
-    const Entity* e1 = findEntityById(entities, constraint.entityIds[0]);
+    const Entity* e1 = findEntity(constraint.entityIds[0]);
     if (!e1) {
         return false;
     }
@@ -356,34 +389,14 @@ bool getConstraintEndpoints(
     switch (constraint.type) {
     case ConstraintType::Distance:
         if (constraint.entityIds.size() >= 2) {
-            const Entity* e2 = findEntityById(entities, constraint.entityIds[1]);
+            const Entity* e2 = findEntity(constraint.entityIds[1]);
             if (!e2) return false;
 
-            // Point-Point
-            if (e1->type == EntityType::Point && e2->type == EntityType::Point) {
-                if (e1->points.isEmpty() || e2->points.isEmpty()) return false;
-                p1 = e1->points[0];
-                p2 = e2->points[0];
-                return true;
-            }
-
-            // Point indices within entities
-            if (constraint.pointIndices.size() >= 2) {
-                int idx1 = constraint.pointIndices[0];
-                int idx2 = constraint.pointIndices[1];
-                if (idx1 < e1->points.size() && idx2 < e2->points.size()) {
-                    p1 = e1->points[idx1];
-                    p2 = e2->points[idx2];
-                    return true;
-                }
-            }
-
-            // Fallback: first points
-            if (!e1->points.isEmpty() && !e2->points.isEmpty()) {
-                p1 = e1->points[0];
-                p2 = e2->points[0];
-                return true;
-            }
+            int idx1 = (constraint.pointIndices.size() > 0) ? constraint.pointIndices[0] : 0;
+            int idx2 = (constraint.pointIndices.size() > 1) ? constraint.pointIndices[1] : 0;
+            p1 = resolveDistancePoint(e1, idx1);
+            p2 = resolveDistancePoint(e2, idx2);
+            return true;
         } else {
             // Single line: endpoints
             if (e1->type == EntityType::Line && e1->points.size() >= 2) {
@@ -397,24 +410,32 @@ bool getConstraintEndpoints(
     case ConstraintType::Radius:
     case ConstraintType::Diameter:
         if (e1->type == EntityType::Circle || e1->type == EntityType::Arc) {
-            if (e1->points.isEmpty()) return false;
+            if (e1->points.empty()) return false;
             p1 = e1->points[0];  // Center
             // Point on circle at 0 degrees
-            p2 = p1 + QPointF(e1->radius, 0);
+            p2 = p1 + Point2D(e1->radius, 0);
             return true;
         }
         break;
 
     case ConstraintType::Angle:
         if (constraint.entityIds.size() >= 2) {
-            const Entity* e2 = findEntityById(entities, constraint.entityIds[1]);
+            const Entity* e2 = findEntity(constraint.entityIds[1]);
             if (!e2) return false;
 
             if (e1->type == EntityType::Line && e2->type == EntityType::Line) {
                 if (e1->points.size() < 2 || e2->points.size() < 2) return false;
-                // Use midpoints of lines
-                p1 = (e1->points[0] + e1->points[1]) / 2.0;
-                p2 = (e2->points[0] + e2->points[1]) / 2.0;
+                if (constraint.hasAnchorPoint()) {
+                    // Use the explicit anchor vertex as p1, midpoint of far
+                    // edges as p2 (for hit-testing / bounding box purposes)
+                    p1 = constraint.anchorPoint;
+                    p2 = ((e1->points[0] + e1->points[1]) / 2.0 +
+                          (e2->points[0] + e2->points[1]) / 2.0) / 2.0;
+                } else {
+                    // Legacy: use midpoints of lines
+                    p1 = (e1->points[0] + e1->points[1]) / 2.0;
+                    p2 = (e2->points[0] + e2->points[1]) / 2.0;
+                }
                 return true;
             }
         }
@@ -433,10 +454,10 @@ bool getConstraintEndpoints(
     case ConstraintType::Coincident:
     case ConstraintType::Concentric:
         if (constraint.entityIds.size() >= 2) {
-            const Entity* e2 = findEntityById(entities, constraint.entityIds[1]);
+            const Entity* e2 = findEntity(constraint.entityIds[1]);
             if (!e2) return false;
 
-            if (!e1->points.isEmpty() && !e2->points.isEmpty()) {
+            if (!e1->points.empty() && !e2->points.empty()) {
                 p1 = e1->points[0];
                 p2 = e2->points[0];
                 return true;
@@ -450,16 +471,16 @@ bool getConstraintEndpoints(
     case ConstraintType::Equal:
     case ConstraintType::Collinear:
         if (constraint.entityIds.size() >= 2) {
-            const Entity* e2 = findEntityById(entities, constraint.entityIds[1]);
+            const Entity* e2 = findEntity(constraint.entityIds[1]);
             if (!e2) return false;
 
             // Use centroids of entities
-            if (!e1->points.isEmpty() && !e2->points.isEmpty()) {
-                QPointF c1(0, 0), c2(0, 0);
-                for (const QPointF& p : e1->points) c1 += p;
-                for (const QPointF& p : e2->points) c2 += p;
-                p1 = c1 / e1->points.size();
-                p2 = c2 / e2->points.size();
+            if (!e1->points.empty() && !e2->points.empty()) {
+                Point2D c1(0, 0), c2(0, 0);
+                for (const Point2D& p : e1->points) c1 = c1 + p;
+                for (const Point2D& p : e2->points) c2 = c2 + p;
+                p1 = c1 / static_cast<double>(e1->points.size());
+                p2 = c2 / static_cast<double>(e2->points.size());
                 return true;
             }
         }
@@ -472,13 +493,24 @@ bool getConstraintEndpoints(
     return false;
 }
 
+bool getConstraintEndpoints(
+    const Constraint& constraint,
+    const std::vector<Entity>& entities,
+    Point2D& p1, Point2D& p2)
+{
+    return getConstraintEndpoints(
+        constraint,
+        [&entities](int id) -> const Entity* { return findEntityById(entities, id); },
+        p1, p2);
+}
+
 // =====================================================================
 //  Constraint Utility Functions
 // =====================================================================
 
-QSet<int> getConstrainedEntityIds(const QVector<Constraint>& constraints)
+std::unordered_set<int> getConstrainedEntityIds(const std::vector<Constraint>& constraints)
 {
-    QSet<int> ids;
+    std::unordered_set<int> ids;
     for (const Constraint& c : constraints) {
         if (c.enabled && c.isDriving) {
             for (int eid : c.entityIds) {
@@ -490,19 +522,19 @@ QSet<int> getConstrainedEntityIds(const QVector<Constraint>& constraints)
 }
 
 double computeDrivenValue(const Constraint& constraint,
-                          const QVector<Entity>& entities)
+                          EntityFinder findEntity)
 {
     switch (constraint.type) {
     case ConstraintType::Distance: {
-        QPointF p1, p2;
-        if (getConstraintEndpoints(constraint, entities, p1, p2)) {
-            return QLineF(p1, p2).length();
+        Point2D p1, p2;
+        if (getConstraintEndpoints(constraint, findEntity, p1, p2)) {
+            return std::hypot(p2.x - p1.x, p2.y - p1.y);
         }
         break;
     }
     case ConstraintType::Radius: {
-        if (!constraint.entityIds.isEmpty()) {
-            const Entity* entity = findEntityById(entities, constraint.entityIds[0]);
+        if (!constraint.entityIds.empty()) {
+            const Entity* entity = findEntity(constraint.entityIds[0]);
             if (entity && (entity->type == EntityType::Circle ||
                            entity->type == EntityType::Arc)) {
                 return entity->radius;
@@ -511,8 +543,8 @@ double computeDrivenValue(const Constraint& constraint,
         break;
     }
     case ConstraintType::Diameter: {
-        if (!constraint.entityIds.isEmpty()) {
-            const Entity* entity = findEntityById(entities, constraint.entityIds[0]);
+        if (!constraint.entityIds.empty()) {
+            const Entity* entity = findEntity(constraint.entityIds[0]);
             if (entity && (entity->type == EntityType::Circle ||
                            entity->type == EntityType::Arc)) {
                 return entity->radius * 2.0;
@@ -522,16 +554,23 @@ double computeDrivenValue(const Constraint& constraint,
     }
     case ConstraintType::Angle: {
         if (constraint.entityIds.size() >= 2) {
-            const Entity* e1 = findEntityById(entities, constraint.entityIds[0]);
-            const Entity* e2 = findEntityById(entities, constraint.entityIds[1]);
+            const Entity* e1 = findEntity(constraint.entityIds[0]);
+            const Entity* e2 = findEntity(constraint.entityIds[1]);
             if (e1 && e2 && e1->type == EntityType::Line &&
                 e2->type == EntityType::Line &&
                 e1->points.size() >= 2 && e2->points.size() >= 2) {
-                QLineF line1(e1->points[0], e1->points[1]);
-                QLineF line2(e2->points[0], e2->points[1]);
-                double angle = qAbs(line1.angleTo(line2));
-                if (angle > 180) angle = 360 - angle;
-                return angle;
+                Point2D d1 = e1->points[1] - e1->points[0];
+                Point2D d2 = e2->points[1] - e2->points[0];
+                return angleBetween(d1, d2);
+            }
+        }
+        break;
+    }
+    case ConstraintType::FixedAngle: {
+        if (!constraint.entityIds.empty()) {
+            const Entity* e = findEntity(constraint.entityIds[0]);
+            if (e && e->type == EntityType::Line && e->points.size() >= 2) {
+                return getEntityAngle(*e);  // returns [0, 360)
             }
         }
         break;
@@ -540,6 +579,14 @@ double computeDrivenValue(const Constraint& constraint,
         break;
     }
     return constraint.value;  // Return existing value if no computation possible
+}
+
+double computeDrivenValue(const Constraint& constraint,
+                          const std::vector<Entity>& entities)
+{
+    return computeDrivenValue(
+        constraint,
+        [&entities](int id) -> const Entity* { return findEntityById(entities, id); });
 }
 
 }  // namespace sketch

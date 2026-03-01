@@ -4,6 +4,7 @@
 
 #include "fullmodewindow.h"
 #include "viewportwidget.h"
+#include "gui/changelogpanel.h"
 #include "gui/clipanel.h"
 #include "gui/modeltoolbar.h"
 #include "gui/toolbarbutton.h"
@@ -36,6 +37,9 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <QtMath>
+
+#include <cmath>
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ListOfInteractive.hxx>
@@ -200,6 +204,11 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
                 redoAction(), &QAction::setEnabled);
     }
 
+    // Connect changelog panel to sketch canvas
+    if (changelogPanel()) {
+        changelogPanel()->setSketchCanvas(m_sketchCanvas);
+    }
+
     // Connect delete action to sketch canvas
     if (deleteAction()) {
         connect(deleteAction(), &QAction::triggered,
@@ -328,6 +337,12 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
 
     finalizeLayout();
 
+    // Connect properties tree item editing to handler
+    if (QTreeWidget* propsTree = propertiesTree()) {
+        connect(propsTree, &QTreeWidget::itemChanged,
+                this, &FullModeWindow::onSketchPropertyItemChanged);
+    }
+
     // Axis indicator in the status bar (added after finalizeLayout
     // so restoreState doesn't interfere with widget ordering)
     m_axisLabel = new QLabel(tr("Axis: X"), this);
@@ -408,7 +423,8 @@ bool FullModeWindow::getSelectedSketchForExport(
         return false;
 
     // Convert GUI entities to library entities
-    outEntities = toLibraryEntities(sketch.entities);
+    std::vector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
+    outEntities = QVector<sketch::Entity>(libEntities.begin(), libEntities.end());
 
     // Completed sketches don't store constraints separately, so
     // outConstraints remains empty (constraints are already baked
@@ -918,66 +934,66 @@ void FullModeWindow::initDefaultParameters()
     m_parameters.clear();
 
     Parameter width;
-    width.name = QStringLiteral("width");
-    width.expression = QStringLiteral("50");
+    width.name = "width";
+    width.expression = "50";
     width.value = 50.0;
-    width.unit = unitSuffix();
-    width.comment = tr("Base width dimension");
+    width.unit = unitSuffix().toStdString();
+    width.comment = tr("Base width dimension").toStdString();
     width.isUserParam = true;
     m_parameters.append(width);
 
     Parameter height;
-    height.name = QStringLiteral("height");
-    height.expression = QStringLiteral("30");
+    height.name = "height";
+    height.expression = "30";
     height.value = 30.0;
-    height.unit = unitSuffix();
-    height.comment = tr("Base height dimension");
+    height.unit = unitSuffix().toStdString();
+    height.comment = tr("Base height dimension").toStdString();
     height.isUserParam = true;
     m_parameters.append(height);
 
     Parameter depth;
-    depth.name = QStringLiteral("depth");
-    depth.expression = QStringLiteral("20");
+    depth.name = "depth";
+    depth.expression = "20";
     depth.value = 20.0;
-    depth.unit = unitSuffix();
-    depth.comment = tr("Base depth dimension");
+    depth.unit = unitSuffix().toStdString();
+    depth.comment = tr("Base depth dimension").toStdString();
     depth.isUserParam = true;
     m_parameters.append(depth);
 
     Parameter radius;
-    radius.name = QStringLiteral("radius");
-    radius.expression = QStringLiteral("5");
+    radius.name = "radius";
+    radius.expression = "5";
     radius.value = 5.0;
-    radius.unit = unitSuffix();
-    radius.comment = tr("Default fillet radius");
+    radius.unit = unitSuffix().toStdString();
+    radius.comment = tr("Default fillet radius").toStdString();
     radius.isUserParam = true;
     m_parameters.append(radius);
 
     Parameter angle;
-    angle.name = QStringLiteral("angle");
-    angle.expression = QStringLiteral("45");
+    angle.name = "angle";
+    angle.expression = "45";
     angle.value = 45.0;
-    angle.unit = QStringLiteral("deg");
-    angle.comment = tr("Default angle");
+    angle.unit = "deg";
+    angle.comment = tr("Default angle").toStdString();
     angle.isUserParam = true;
     m_parameters.append(angle);
 
     // Example object parameters (from features - read-only)
     Parameter extrude1Dist;
-    extrude1Dist.name = QStringLiteral("Extrude1_Distance");
-    extrude1Dist.expression = QStringLiteral("10");
+    extrude1Dist.name = "Extrude1_Distance";
+    extrude1Dist.expression = "10";
     extrude1Dist.value = 10.0;
-    extrude1Dist.unit = unitSuffix();
-    extrude1Dist.comment = tr("Extrude1 distance");
+    extrude1Dist.unit = unitSuffix().toStdString();
+    extrude1Dist.comment = tr("Extrude1 distance").toStdString();
     extrude1Dist.isUserParam = false;
     m_parameters.append(extrude1Dist);
 
     Parameter fillet1Rad;
-    fillet1Rad.name = QStringLiteral("Fillet1_Radius");
-    fillet1Rad.expression = QStringLiteral("radius");
+    fillet1Rad.name = "Fillet1_Radius";
+    fillet1Rad.expression = "radius";
     fillet1Rad.value = 5.0;
-    fillet1Rad.unit = unitSuffix();
-    fillet1Rad.comment = tr("Fillet1 radius (uses 'radius' param)");
+    fillet1Rad.unit = unitSuffix().toStdString();
+    fillet1Rad.comment = tr("Fillet1 radius (uses 'radius' param)").toStdString();
     fillet1Rad.isUserParam = false;
     m_parameters.append(fillet1Rad);
 }
@@ -986,7 +1002,7 @@ QMap<QString, double> FullModeWindow::parameterValues() const
 {
     QMap<QString, double> values;
     for (const auto& p : m_parameters) {
-        values[p.name] = p.value;
+        values[QString::fromStdString(p.name)] = p.value;
     }
     return values;
 }
@@ -1091,7 +1107,7 @@ void FullModeWindow::onNewConstructionPlane()
 
     // Pre-fill placeholder text
     ConstructionPlaneData defaultData;
-    defaultData.name = defaultName;
+    defaultData.name = defaultName.toStdString();
     dialog.setPlaneData(defaultData);
 
     if (dialog.exec() != QDialog::Accepted) {
@@ -1105,7 +1121,7 @@ void FullModeWindow::onNewConstructionPlane()
     m_project.addConstructionPlane(planeData);
 
     // Add to feature tree
-    addConstructionPlaneToTree(planeData.name, planeData.id);
+    addConstructionPlaneToTree(QString::fromStdString(planeData.name), planeData.id);
 
     // Display in viewport if visible
     if (planeData.visible) {
@@ -1116,7 +1132,7 @@ void FullModeWindow::onNewConstructionPlane()
     selectConstructionPlaneInTree(planeData.id);
 
     statusBar()->showMessage(
-        tr("Construction plane '%1' created").arg(planeData.name),
+        tr("Construction plane '%1' created").arg(QString::fromStdString(planeData.name)),
         3000);
 }
 
@@ -1134,7 +1150,7 @@ void FullModeWindow::onConstructionPlaneSelected(int planeId)
     // Name
     auto* nameItem = new QTreeWidgetItem(props);
     nameItem->setText(0, tr("Name"));
-    nameItem->setText(1, planeData->name);
+    nameItem->setText(1, QString::fromStdString(planeData->name));
     nameItem->setFlags(nameItem->flags() | Qt::ItemIsEditable);
 
     // Type
@@ -1173,7 +1189,7 @@ void FullModeWindow::onConstructionPlaneSelected(int planeId)
         auto* refPlaneItem = new QTreeWidgetItem(props);
         refPlaneItem->setText(0, tr("Reference Plane"));
         const ConstructionPlaneData* refPlane = m_project.constructionPlaneById(planeData->basePlaneId);
-        refPlaneItem->setText(1, refPlane ? refPlane->name : tr("(none)"));
+        refPlaneItem->setText(1, refPlane ? QString::fromStdString(refPlane->name) : tr("(none)"));
     }
 
     // Offset
@@ -1421,7 +1437,13 @@ void FullModeWindow::onSketchToolSelected(SketchTool tool)
 void FullModeWindow::onSketchSelectionChanged(int entityId)
 {
     if (entityId < 0) {
-        // Entity deselected - show sketch properties (re-select sketch)
+        // Entity deselected — check if a constraint is selected instead
+        int cid = m_sketchCanvas->selectedConstraintId();
+        if (cid >= 0) {
+            showSketchConstraintProperties(cid);
+            return;
+        }
+        // No constraint either — show sketch properties (re-select sketch)
         m_sketchCanvas->setSketchSelected(true);
         showSketchProperties();
         return;
@@ -1451,8 +1473,13 @@ void FullModeWindow::onSketchEntityCreated(int entityId)
 
 void FullModeWindow::onSketchEntityModified(int entityId)
 {
-    // Refresh the properties panel to show updated values
-    showSketchEntityProperties(entityId);
+    // Defer tree refresh so Qt can close any active inline editor
+    // before we destroy its item via clear().
+    QTimer::singleShot(0, this, [this, entityId]() {
+        if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(true);
+        showSketchEntityProperties(entityId);
+        if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(false);
+    });
 }
 
 void FullModeWindow::showSketchEntityProperties(int entityId)
@@ -1504,14 +1531,16 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
     // Entity-specific properties
     switch (entity->type) {
     case SketchEntityType::Point:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* posItem = new QTreeWidgetItem(geomHeader);
             posItem->setText(0, tr("Position"));
             posItem->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[0].x(), 0, 'f', 2)
-                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(entity->points[0].x, 0, 'f', 2)
+                             .arg(entity->points[0].y, 0, 'f', 2)
                              .arg(units));
             posItem->setFlags(posItem->flags() | Qt::ItemIsEditable);
+            posItem->setData(0, Qt::UserRole, entityId);
+            posItem->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
         }
         break;
 
@@ -1520,24 +1549,30 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
             auto* p1Item = new QTreeWidgetItem(geomHeader);
             p1Item->setText(0, tr("Start"));
             p1Item->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[0].x(), 0, 'f', 2)
-                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(entity->points[0].x, 0, 'f', 2)
+                             .arg(entity->points[0].y, 0, 'f', 2)
                              .arg(units));
             p1Item->setFlags(p1Item->flags() | Qt::ItemIsEditable);
+            p1Item->setData(0, Qt::UserRole, entityId);
+            p1Item->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
 
             auto* p2Item = new QTreeWidgetItem(geomHeader);
             p2Item->setText(0, tr("End"));
             p2Item->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[1].x(), 0, 'f', 2)
-                             .arg(entity->points[1].y(), 0, 'f', 2)
+                             .arg(entity->points[1].x, 0, 'f', 2)
+                             .arg(entity->points[1].y, 0, 'f', 2)
                              .arg(units));
             p2Item->setFlags(p2Item->flags() | Qt::ItemIsEditable);
+            p2Item->setData(0, Qt::UserRole, entityId);
+            p2Item->setData(0, Qt::UserRole + 1, QStringLiteral("point1"));
 
             auto* lenItem = new QTreeWidgetItem(geomHeader);
             lenItem->setText(0, tr("Length"));
             double len = QLineF(entity->points[0], entity->points[1]).length();
             lenItem->setText(1, QStringLiteral("%1 %2").arg(len, 0, 'f', 2).arg(units));
             lenItem->setFlags(lenItem->flags() | Qt::ItemIsEditable);
+            lenItem->setData(0, Qt::UserRole, entityId);
+            lenItem->setData(0, Qt::UserRole + 1, QStringLiteral("length"));
         }
         break;
 
@@ -1546,98 +1581,120 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
             auto* p1Item = new QTreeWidgetItem(geomHeader);
             p1Item->setText(0, tr("Corner 1"));
             p1Item->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[0].x(), 0, 'f', 2)
-                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(entity->points[0].x, 0, 'f', 2)
+                             .arg(entity->points[0].y, 0, 'f', 2)
                              .arg(units));
 
             auto* p2Item = new QTreeWidgetItem(geomHeader);
             p2Item->setText(0, tr("Corner 2"));
             p2Item->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[1].x(), 0, 'f', 2)
-                             .arg(entity->points[1].y(), 0, 'f', 2)
+                             .arg(entity->points[1].x, 0, 'f', 2)
+                             .arg(entity->points[1].y, 0, 'f', 2)
                              .arg(units));
 
             auto* widthItem = new QTreeWidgetItem(geomHeader);
             widthItem->setText(0, tr("Width"));
-            double w = qAbs(entity->points[1].x() - entity->points[0].x());
+            double w = qAbs(entity->points[1].x - entity->points[0].x);
             widthItem->setText(1, QStringLiteral("%1 %2").arg(w, 0, 'f', 2).arg(units));
             widthItem->setFlags(widthItem->flags() | Qt::ItemIsEditable);
+            widthItem->setData(0, Qt::UserRole, entityId);
+            widthItem->setData(0, Qt::UserRole + 1, QStringLiteral("width"));
 
             auto* heightItem = new QTreeWidgetItem(geomHeader);
             heightItem->setText(0, tr("Height"));
-            double h = qAbs(entity->points[1].y() - entity->points[0].y());
+            double h = qAbs(entity->points[1].y - entity->points[0].y);
             heightItem->setText(1, QStringLiteral("%1 %2").arg(h, 0, 'f', 2).arg(units));
             heightItem->setFlags(heightItem->flags() | Qt::ItemIsEditable);
+            heightItem->setData(0, Qt::UserRole, entityId);
+            heightItem->setData(0, Qt::UserRole + 1, QStringLiteral("height"));
         }
         break;
 
     case SketchEntityType::Circle:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* centerItem = new QTreeWidgetItem(geomHeader);
             centerItem->setText(0, tr("Center"));
             centerItem->setText(1, QStringLiteral("(%1, %2) %3")
-                                .arg(entity->points[0].x(), 0, 'f', 2)
-                                .arg(entity->points[0].y(), 0, 'f', 2)
+                                .arg(entity->points[0].x, 0, 'f', 2)
+                                .arg(entity->points[0].y, 0, 'f', 2)
                                 .arg(units));
             centerItem->setFlags(centerItem->flags() | Qt::ItemIsEditable);
+            centerItem->setData(0, Qt::UserRole, entityId);
+            centerItem->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
 
             auto* radiusItem = new QTreeWidgetItem(geomHeader);
             radiusItem->setText(0, tr("Radius"));
             radiusItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius, 0, 'f', 2).arg(units));
             radiusItem->setFlags(radiusItem->flags() | Qt::ItemIsEditable);
+            radiusItem->setData(0, Qt::UserRole, entityId);
+            radiusItem->setData(0, Qt::UserRole + 1, QStringLiteral("radius"));
 
             auto* diamItem = new QTreeWidgetItem(geomHeader);
             diamItem->setText(0, tr("Diameter"));
             diamItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius * 2, 0, 'f', 2).arg(units));
             diamItem->setFlags(diamItem->flags() | Qt::ItemIsEditable);
+            diamItem->setData(0, Qt::UserRole, entityId);
+            diamItem->setData(0, Qt::UserRole + 1, QStringLiteral("diameter"));
         }
         break;
 
     case SketchEntityType::Arc:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* centerItem = new QTreeWidgetItem(geomHeader);
             centerItem->setText(0, tr("Center"));
             centerItem->setText(1, QStringLiteral("(%1, %2) %3")
-                                .arg(entity->points[0].x(), 0, 'f', 2)
-                                .arg(entity->points[0].y(), 0, 'f', 2)
+                                .arg(entity->points[0].x, 0, 'f', 2)
+                                .arg(entity->points[0].y, 0, 'f', 2)
                                 .arg(units));
 
             auto* radiusItem = new QTreeWidgetItem(geomHeader);
             radiusItem->setText(0, tr("Radius"));
             radiusItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius, 0, 'f', 2).arg(units));
             radiusItem->setFlags(radiusItem->flags() | Qt::ItemIsEditable);
+            radiusItem->setData(0, Qt::UserRole, entityId);
+            radiusItem->setData(0, Qt::UserRole + 1, QStringLiteral("radius"));
 
             auto* startItem = new QTreeWidgetItem(geomHeader);
             startItem->setText(0, tr("Start Angle"));
             startItem->setText(1, QStringLiteral("%1°").arg(entity->startAngle, 0, 'f', 1));
             startItem->setFlags(startItem->flags() | Qt::ItemIsEditable);
+            startItem->setData(0, Qt::UserRole, entityId);
+            startItem->setData(0, Qt::UserRole + 1, QStringLiteral("startAngle"));
 
             auto* sweepItem = new QTreeWidgetItem(geomHeader);
             sweepItem->setText(0, tr("Sweep Angle"));
             sweepItem->setText(1, QStringLiteral("%1°").arg(entity->sweepAngle, 0, 'f', 1));
             sweepItem->setFlags(sweepItem->flags() | Qt::ItemIsEditable);
+            sweepItem->setData(0, Qt::UserRole, entityId);
+            sweepItem->setData(0, Qt::UserRole + 1, QStringLiteral("sweepAngle"));
         }
         break;
 
     case SketchEntityType::Polygon:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* centerItem = new QTreeWidgetItem(geomHeader);
             centerItem->setText(0, tr("Center"));
             centerItem->setText(1, QStringLiteral("(%1, %2) %3")
-                                .arg(entity->points[0].x(), 0, 'f', 2)
-                                .arg(entity->points[0].y(), 0, 'f', 2)
+                                .arg(entity->points[0].x, 0, 'f', 2)
+                                .arg(entity->points[0].y, 0, 'f', 2)
                                 .arg(units));
             centerItem->setFlags(centerItem->flags() | Qt::ItemIsEditable);
+            centerItem->setData(0, Qt::UserRole, entityId);
+            centerItem->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
 
             auto* sidesItem = new QTreeWidgetItem(geomHeader);
             sidesItem->setText(0, tr("Sides"));
             sidesItem->setText(1, QString::number(entity->sides));
             sidesItem->setFlags(sidesItem->flags() | Qt::ItemIsEditable);
+            sidesItem->setData(0, Qt::UserRole, entityId);
+            sidesItem->setData(0, Qt::UserRole + 1, QStringLiteral("sides"));
 
             auto* radiusItem = new QTreeWidgetItem(geomHeader);
             radiusItem->setText(0, tr("Radius"));
             radiusItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius, 0, 'f', 2).arg(units));
             radiusItem->setFlags(radiusItem->flags() | Qt::ItemIsEditable);
+            radiusItem->setData(0, Qt::UserRole, entityId);
+            radiusItem->setData(0, Qt::UserRole + 1, QStringLiteral("radius"));
         }
         break;
 
@@ -1646,18 +1703,22 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
             auto* p1Item = new QTreeWidgetItem(geomHeader);
             p1Item->setText(0, tr("Center 1"));
             p1Item->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[0].x(), 0, 'f', 2)
-                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(entity->points[0].x, 0, 'f', 2)
+                             .arg(entity->points[0].y, 0, 'f', 2)
                              .arg(units));
             p1Item->setFlags(p1Item->flags() | Qt::ItemIsEditable);
+            p1Item->setData(0, Qt::UserRole, entityId);
+            p1Item->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
 
             auto* p2Item = new QTreeWidgetItem(geomHeader);
             p2Item->setText(0, tr("Center 2"));
             p2Item->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[1].x(), 0, 'f', 2)
-                             .arg(entity->points[1].y(), 0, 'f', 2)
+                             .arg(entity->points[1].x, 0, 'f', 2)
+                             .arg(entity->points[1].y, 0, 'f', 2)
                              .arg(units));
             p2Item->setFlags(p2Item->flags() | Qt::ItemIsEditable);
+            p2Item->setData(0, Qt::UserRole, entityId);
+            p2Item->setData(0, Qt::UserRole + 1, QStringLiteral("point1"));
 
             auto* lenItem = new QTreeWidgetItem(geomHeader);
             lenItem->setText(0, tr("Length"));
@@ -1668,33 +1729,41 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
             widthItem->setText(0, tr("Width"));
             widthItem->setText(1, QStringLiteral("%1 %2").arg(entity->radius * 2, 0, 'f', 2).arg(units));
             widthItem->setFlags(widthItem->flags() | Qt::ItemIsEditable);
+            widthItem->setData(0, Qt::UserRole, entityId);
+            widthItem->setData(0, Qt::UserRole + 1, QStringLiteral("radius"));
         }
         break;
 
     case SketchEntityType::Ellipse:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* centerItem = new QTreeWidgetItem(geomHeader);
             centerItem->setText(0, tr("Center"));
             centerItem->setText(1, QStringLiteral("(%1, %2) %3")
-                                .arg(entity->points[0].x(), 0, 'f', 2)
-                                .arg(entity->points[0].y(), 0, 'f', 2)
+                                .arg(entity->points[0].x, 0, 'f', 2)
+                                .arg(entity->points[0].y, 0, 'f', 2)
                                 .arg(units));
             centerItem->setFlags(centerItem->flags() | Qt::ItemIsEditable);
+            centerItem->setData(0, Qt::UserRole, entityId);
+            centerItem->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
 
             auto* majorItem = new QTreeWidgetItem(geomHeader);
             majorItem->setText(0, tr("Major Radius"));
             majorItem->setText(1, QStringLiteral("%1 %2").arg(entity->majorRadius, 0, 'f', 2).arg(units));
             majorItem->setFlags(majorItem->flags() | Qt::ItemIsEditable);
+            majorItem->setData(0, Qt::UserRole, entityId);
+            majorItem->setData(0, Qt::UserRole + 1, QStringLiteral("majorRadius"));
 
             auto* minorItem = new QTreeWidgetItem(geomHeader);
             minorItem->setText(0, tr("Minor Radius"));
             minorItem->setText(1, QStringLiteral("%1 %2").arg(entity->minorRadius, 0, 'f', 2).arg(units));
             minorItem->setFlags(minorItem->flags() | Qt::ItemIsEditable);
+            minorItem->setData(0, Qt::UserRole, entityId);
+            minorItem->setData(0, Qt::UserRole + 1, QStringLiteral("minorRadius"));
         }
         break;
 
     case SketchEntityType::Spline:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* pointsItem = new QTreeWidgetItem(geomHeader);
             pointsItem->setText(0, tr("Control Points"));
             pointsItem->setText(1, QString::number(entity->points.size()));
@@ -1704,33 +1773,48 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
                 auto* ptItem = new QTreeWidgetItem(geomHeader);
                 ptItem->setText(0, tr("Point %1").arg(i + 1));
                 ptItem->setText(1, QStringLiteral("(%1, %2) %3")
-                                 .arg(entity->points[i].x(), 0, 'f', 2)
-                                 .arg(entity->points[i].y(), 0, 'f', 2)
+                                 .arg(entity->points[i].x, 0, 'f', 2)
+                                 .arg(entity->points[i].y, 0, 'f', 2)
                                  .arg(units));
                 ptItem->setFlags(ptItem->flags() | Qt::ItemIsEditable);
+                ptItem->setData(0, Qt::UserRole, entityId);
+                ptItem->setData(0, Qt::UserRole + 1, QStringLiteral("point%1").arg(i));
             }
         }
         break;
 
     case SketchEntityType::Text:
-        if (!entity->points.isEmpty()) {
+        if (!entity->points.empty()) {
             auto* posItem = new QTreeWidgetItem(geomHeader);
             posItem->setText(0, tr("Position"));
             posItem->setText(1, QStringLiteral("(%1, %2) %3")
-                             .arg(entity->points[0].x(), 0, 'f', 2)
-                             .arg(entity->points[0].y(), 0, 'f', 2)
+                             .arg(entity->points[0].x, 0, 'f', 2)
+                             .arg(entity->points[0].y, 0, 'f', 2)
                              .arg(units));
             posItem->setFlags(posItem->flags() | Qt::ItemIsEditable);
+            posItem->setData(0, Qt::UserRole, entityId);
+            posItem->setData(0, Qt::UserRole + 1, QStringLiteral("point0"));
 
             auto* textItem = new QTreeWidgetItem(geomHeader);
             textItem->setText(0, tr("Text"));
-            textItem->setText(1, entity->text);
+            textItem->setText(1, QString::fromStdString(entity->text));
             textItem->setFlags(textItem->flags() | Qt::ItemIsEditable);
+            textItem->setData(0, Qt::UserRole, entityId);
+            textItem->setData(0, Qt::UserRole + 1, QStringLiteral("text"));
 
             auto* sizeItem = new QTreeWidgetItem(geomHeader);
             sizeItem->setText(0, tr("Font Size"));
             sizeItem->setText(1, QStringLiteral("%1 %2").arg(entity->fontSize, 0, 'f', 1).arg(units));
             sizeItem->setFlags(sizeItem->flags() | Qt::ItemIsEditable);
+            sizeItem->setData(0, Qt::UserRole, entityId);
+            sizeItem->setData(0, Qt::UserRole + 1, QStringLiteral("fontSize"));
+
+            auto* rotItem = new QTreeWidgetItem(geomHeader);
+            rotItem->setText(0, tr("Rotation"));
+            rotItem->setText(1, QStringLiteral("%1%2").arg(entity->textRotation, 0, 'f', 1).arg(QChar(0x00B0)));
+            rotItem->setFlags(rotItem->flags() | Qt::ItemIsEditable);
+            rotItem->setData(0, Qt::UserRole, entityId);
+            rotItem->setData(0, Qt::UserRole + 1, QStringLiteral("textRotation"));
         }
         break;
 
@@ -1744,6 +1828,142 @@ void FullModeWindow::showSketchEntityProperties(int entityId)
     constraintItem->setText(1, entity->constrained ? tr("Yes") : tr("No"));
 
     propsTree->expandAll();
+}
+
+void FullModeWindow::showSketchConstraintProperties(int constraintId)
+{
+    const SketchConstraint* constraint = m_sketchCanvas->constraintById(constraintId);
+    if (!constraint) return;
+
+    QTreeWidget* propsTree = propertiesTree();
+    if (!propsTree) return;
+
+    propsTree->blockSignals(true);
+    propsTree->clear();
+
+    // Constraint type name
+    auto* typeItem = new QTreeWidgetItem(propsTree);
+    typeItem->setText(0, tr("Type"));
+    QString typeName;
+    bool isSweep = false;
+    switch (constraint->type) {
+    case ConstraintType::Distance:     typeName = tr("Distance"); break;
+    case ConstraintType::Radius:       typeName = tr("Radius"); break;
+    case ConstraintType::Diameter:     typeName = tr("Diameter"); break;
+    case ConstraintType::Angle:
+        for (const auto& g : m_sketchCanvas->groups()) {
+            if (m_sketchCanvas->isSweepAngleGroup(g.id)
+                    && g.containsConstraint(constraintId)) {
+                isSweep = true;
+                break;
+            }
+        }
+        typeName = isSweep ? tr("Sweep Angle") : tr("Angle");
+        break;
+    case ConstraintType::FixedAngle:   typeName = tr("Fixed Angle"); break;
+    case ConstraintType::Horizontal:   typeName = tr("Horizontal"); break;
+    case ConstraintType::Vertical:     typeName = tr("Vertical"); break;
+    case ConstraintType::Parallel:     typeName = tr("Parallel"); break;
+    case ConstraintType::Perpendicular:typeName = tr("Perpendicular"); break;
+    case ConstraintType::Coincident:   typeName = tr("Coincident"); break;
+    case ConstraintType::Tangent:      typeName = tr("Tangent"); break;
+    case ConstraintType::Equal:        typeName = tr("Equal"); break;
+    case ConstraintType::Midpoint:     typeName = tr("Midpoint"); break;
+    case ConstraintType::Symmetric:    typeName = tr("Symmetric"); break;
+    case ConstraintType::Concentric:   typeName = tr("Concentric"); break;
+    case ConstraintType::Collinear:    typeName = tr("Collinear"); break;
+    case ConstraintType::PointOnLine:  typeName = tr("Point On Line"); break;
+    case ConstraintType::PointOnCircle:typeName = tr("Point On Circle"); break;
+    case ConstraintType::FixedPoint:   typeName = tr("Fixed Point"); break;
+    }
+    typeItem->setText(1, typeName);
+
+    // Constraint ID
+    auto* idItem = new QTreeWidgetItem(propsTree);
+    idItem->setText(0, tr("ID"));
+    idItem->setText(1, QString::number(constraint->id));
+
+    // Value (for dimensional constraints)
+    bool hasDimensionalValue = (constraint->type == ConstraintType::Distance
+                                || constraint->type == ConstraintType::Radius
+                                || constraint->type == ConstraintType::Diameter
+                                || constraint->type == ConstraintType::Angle
+                                || constraint->type == ConstraintType::FixedAngle);
+    if (hasDimensionalValue) {
+        auto* valueItem = new QTreeWidgetItem(propsTree);
+        valueItem->setText(0, tr("Value"));
+        bool isAngle = (constraint->type == ConstraintType::Angle
+                        || constraint->type == ConstraintType::FixedAngle);
+        QString suffix = isAngle ? QStringLiteral("\u00B0") : QStringLiteral(" ") + unitSuffix();
+        valueItem->setText(1, QStringLiteral("%1%2")
+                           .arg(constraint->value, 0, 'f', 2)
+                           .arg(suffix));
+        if (constraint->isDriving) {
+            valueItem->setFlags(valueItem->flags() | Qt::ItemIsEditable);
+            valueItem->setData(0, Qt::UserRole, constraintId);
+            valueItem->setData(0, Qt::UserRole + 1, QStringLiteral("constraintValue"));
+        }
+    }
+
+    // Driving / Reference
+    auto* drivingItem = new QTreeWidgetItem(propsTree);
+    drivingItem->setText(0, tr("Mode"));
+    drivingItem->setText(1, constraint->isDriving ? tr("Driving") : tr("Reference"));
+
+    // Enabled
+    auto* enabledItem = new QTreeWidgetItem(propsTree);
+    enabledItem->setText(0, tr("Enabled"));
+    enabledItem->setText(1, constraint->enabled ? tr("Yes") : tr("No"));
+
+    // Parent entities
+    auto* entitiesHeader = new QTreeWidgetItem(propsTree);
+    entitiesHeader->setText(0, tr("Entities"));
+
+    auto entityTypeName = [](SketchEntityType t) -> QString {
+        switch (t) {
+        case SketchEntityType::Point:     return QStringLiteral("Point");
+        case SketchEntityType::Line:      return QStringLiteral("Line");
+        case SketchEntityType::Rectangle: return QStringLiteral("Rectangle");
+        case SketchEntityType::Circle:    return QStringLiteral("Circle");
+        case SketchEntityType::Arc:       return QStringLiteral("Arc");
+        case SketchEntityType::Spline:    return QStringLiteral("Spline");
+        case SketchEntityType::Polygon:   return QStringLiteral("Polygon");
+        case SketchEntityType::Slot:      return QStringLiteral("Slot");
+        case SketchEntityType::Ellipse:   return QStringLiteral("Ellipse");
+        case SketchEntityType::Text:      return QStringLiteral("Text");
+        case SketchEntityType::Dimension: return QStringLiteral("Dimension");
+        default:                          return QStringLiteral("Unknown");
+        }
+    };
+
+    if (isSweep) {
+        for (const auto& g : m_sketchCanvas->groups()) {
+            if (m_sketchCanvas->isSweepAngleGroup(g.id)
+                    && g.containsConstraint(constraintId)) {
+                for (int eid : g.entityIds) {
+                    const SketchEntity* e = m_sketchCanvas->entityById(eid);
+                    if (e && e->type == SketchEntityType::Arc) {
+                        auto* eItem = new QTreeWidgetItem(entitiesHeader);
+                        eItem->setText(0, entityTypeName(e->type));
+                        eItem->setText(1, QStringLiteral("ID %1").arg(e->id));
+                    }
+                }
+                break;
+            }
+        }
+    } else {
+        for (int eid : constraint->entityIds) {
+            const SketchEntity* e = m_sketchCanvas->entityById(eid);
+            if (e) {
+                auto* eItem = new QTreeWidgetItem(entitiesHeader);
+                eItem->setText(0, entityTypeName(e->type));
+                eItem->setText(1, QStringLiteral("ID %1").arg(e->id));
+            }
+        }
+    }
+
+    propsTree->expandAll();
+    propsTree->blockSignals(false);
 }
 
 void FullModeWindow::showSketchProperties()
@@ -1889,7 +2109,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
     for (const SketchEntity& entity : sketch.entities) {
         switch (entity.type) {
         case SketchEntityType::Point:
-            if (!entity.points.isEmpty()) {
+            if (!entity.points.empty()) {
                 gp_Pnt pt = to3D(entity.points[0]);
                 BRepBuilderAPI_MakeVertex mv(pt);
                 if (mv.IsDone()) {
@@ -1915,9 +2135,9 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
         case SketchEntityType::Rectangle:
             if (entity.points.size() >= 2) {
                 gp_Pnt p1 = to3D(entity.points[0]);
-                gp_Pnt p2 = to3D(QPointF(entity.points[1].x(), entity.points[0].y()));
+                gp_Pnt p2 = to3D(QPointF(entity.points[1].x, entity.points[0].y));
                 gp_Pnt p3 = to3D(entity.points[1]);
-                gp_Pnt p4 = to3D(QPointF(entity.points[0].x(), entity.points[1].y()));
+                gp_Pnt p4 = to3D(QPointF(entity.points[0].x, entity.points[1].y));
 
                 auto addEdge = [&](const gp_Pnt& a, const gp_Pnt& b) {
                     if (a.Distance(b) > 1e-6) {
@@ -1936,7 +2156,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             break;
 
         case SketchEntityType::Circle:
-            if (!entity.points.isEmpty() && entity.radius > 1e-6) {
+            if (!entity.points.empty() && entity.radius > 1e-6) {
                 gp_Pnt center = to3D(entity.points[0]);
                 gp_Ax2 axis(center, planeNormal, planeXDir);
                 gp_Circ circle(axis, entity.radius);
@@ -1949,7 +2169,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             break;
 
         case SketchEntityType::Arc:
-            if (!entity.points.isEmpty() && entity.radius > 1e-6 &&
+            if (!entity.points.empty() && entity.radius > 1e-6 &&
                 std::abs(entity.sweepAngle) > 1e-6) {
                 gp_Pnt center = to3D(entity.points[0]);
                 gp_Ax2 axis(center, planeNormal, planeXDir);
@@ -2413,10 +2633,10 @@ void FullModeWindow::onExportSketchDXF(int index)
         filePath += QStringLiteral(".dxf");
     }
 
-    QVector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
+    std::vector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
 
     sketch::DXFExportOptions options;
-    bool success = sketch::exportSketchToDXF(entities, filePath, options);
+    bool success = sketch::exportSketchToDXF(entities, filePath.toStdString(), options);
 
     if (!success) {
         QMessageBox::critical(this, tr("Export Failed"),
@@ -2454,11 +2674,11 @@ void FullModeWindow::onExportSketchSVG(int index)
         filePath += QStringLiteral(".svg");
     }
 
-    QVector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
-    QVector<sketch::Constraint> constraints;  // No constraints for completed sketches
+    std::vector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
 
     sketch::SVGExportOptions options;
-    bool success = sketch::exportSketchToSVG(entities, constraints, filePath, options);
+    std::vector<sketch::Constraint> stdConstraints;  // No constraints for completed sketches
+    bool success = sketch::exportSketchToSVG(entities, stdConstraints, filePath.toStdString(), options);
 
     if (!success) {
         QMessageBox::critical(this, tr("Export Failed"),
@@ -2594,7 +2814,7 @@ void FullModeWindow::loadProjectData()
     clearProjectData();
 
     // Load project units
-    setUnitsFromString(m_project.units());
+    setUnitsFromString(QString::fromStdString(m_project.units()));
     if (m_sketchCanvas) {
         m_sketchCanvas->setUnitSuffix(unitSuffix());
     }
@@ -2710,7 +2930,7 @@ void FullModeWindow::populateTimeline()
             continue;  // Skip unknown types
         }
 
-        m_timeline->addItem(tlFeature, feature.name);
+        m_timeline->addItem(tlFeature, QString::fromStdString(feature.name));
     }
 }
 
@@ -2720,7 +2940,7 @@ void FullModeWindow::loadSketchesFromProject()
 
     for (const auto& sketchData : projectSketches) {
         CompletedSketch sketch;
-        sketch.name = sketchData.name;
+        sketch.name = QString::fromStdString(sketchData.name);
         sketch.plane = sketchData.plane;
         sketch.planeOffset = sketchData.planeOffset;
         sketch.rotationAxis = sketchData.rotationAxis;
@@ -2787,7 +3007,7 @@ void FullModeWindow::loadConstructionPlanesFromProject()
 
     for (const auto& planeData : planes) {
         // Add to feature tree
-        addConstructionPlaneToTree(planeData.name, planeData.id);
+        addConstructionPlaneToTree(QString::fromStdString(planeData.name), planeData.id);
 
         // Display in viewport if visible
         if (planeData.visible) {
@@ -2893,14 +3113,14 @@ void FullModeWindow::performExtrude()
     const CompletedSketch& sketch = m_completedSketches[sketchIdx];
 
     // Convert to library entities
-    QVector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
+    std::vector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
 
     // Detect profiles (closed loops)
     sketch::ProfileDetectionOptions options;
     options.excludeConstruction = true;
-    QVector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
+    std::vector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
 
-    if (profiles.isEmpty()) {
+    if (profiles.empty()) {
         QMessageBox::warning(this, tr("Extrude"),
             tr("No closed profiles found in the sketch.\n"
                "Make sure the sketch contains a closed loop."));
@@ -2952,7 +3172,7 @@ void FullModeWindow::performExtrude()
 
     if (!result.success) {
         QMessageBox::critical(this, tr("Extrude Failed"),
-            tr("Extrusion failed: %1").arg(result.errorMessage));
+            tr("Extrusion failed: %1").arg(QString::fromStdString(result.errorMessage)));
         return;
     }
 
@@ -2990,7 +3210,7 @@ void FullModeWindow::performExtrude()
             ctx->Display(m_solidAisShapes.last(), Standard_True);
         } else {
             QMessageBox::warning(this, tr("Boolean Operation Failed"),
-                tr("Boolean operation failed: %1").arg(boolResult.errorMessage));
+                tr("Boolean operation failed: %1").arg(QString::fromStdString(boolResult.errorMessage)));
         }
     } else {
         // Add as new body
@@ -3046,14 +3266,14 @@ void FullModeWindow::performRevolve()
     const CompletedSketch& sketch = m_completedSketches[sketchIdx];
 
     // Convert to library entities
-    QVector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
+    std::vector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
 
     // Detect profiles
     sketch::ProfileDetectionOptions options;
     options.excludeConstruction = true;
-    QVector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
+    std::vector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
 
-    if (profiles.isEmpty()) {
+    if (profiles.empty()) {
         QMessageBox::warning(this, tr("Revolve"),
             tr("No closed profiles found in the sketch.\n"
                "Make sure the sketch contains a closed loop."));
@@ -3130,7 +3350,7 @@ void FullModeWindow::performRevolve()
 
     if (!result.success) {
         QMessageBox::critical(this, tr("Revolve Failed"),
-            tr("Revolution failed: %1").arg(result.errorMessage));
+            tr("Revolution failed: %1").arg(QString::fromStdString(result.errorMessage)));
         return;
     }
 
@@ -3165,7 +3385,7 @@ void FullModeWindow::performRevolve()
             ctx->Display(m_solidAisShapes.last(), Standard_True);
         } else {
             QMessageBox::warning(this, tr("Boolean Operation Failed"),
-                tr("Boolean operation failed: %1").arg(boolResult.errorMessage));
+                tr("Boolean operation failed: %1").arg(QString::fromStdString(boolResult.errorMessage)));
         }
     } else {
         m_solidBodies.append(finalShape);
@@ -3188,6 +3408,267 @@ void FullModeWindow::performRevolve()
     m_viewport->fitAll();
 
     statusBar()->showMessage(tr("Revolution completed"), 3000);
+}
+
+// Parse a scalar value from text like "10.00 mm" or "90.0deg"
+static double parseScalarFMW(const QString& text)
+{
+    QString cleaned;
+    for (const QChar& ch : text) {
+        if (ch.isDigit() || ch == QLatin1Char('.') || ch == QLatin1Char('-'))
+            cleaned += ch;
+    }
+    bool ok = false;
+    double val = cleaned.toDouble(&ok);
+    return ok ? val : std::numeric_limits<double>::quiet_NaN();
+}
+
+// Parse a point value from text like "(10.00, 20.00) mm"
+static bool parsePointFMW(const QString& text, double& x, double& y)
+{
+    int lp = text.indexOf(QLatin1Char('('));
+    int rp = text.indexOf(QLatin1Char(')'));
+    if (lp < 0 || rp < 0 || rp <= lp) return false;
+    QString inner = text.mid(lp + 1, rp - lp - 1);
+    QStringList parts = inner.split(QLatin1Char(','));
+    if (parts.size() != 2) return false;
+    bool okX = false, okY = false;
+    x = parts[0].trimmed().toDouble(&okX);
+    y = parts[1].trimmed().toDouble(&okY);
+    return okX && okY;
+}
+
+void FullModeWindow::onSketchPropertyItemChanged(QTreeWidgetItem* item, int column)
+{
+    if (!item || !m_sketchCanvas || column != 1) return;
+
+    QString propertyName = item->data(0, Qt::UserRole + 1).toString();
+    if (propertyName.isEmpty()) return;
+
+    // Handle constraint value edits
+    if (propertyName == QStringLiteral("constraintValue")) {
+        int constraintId = item->data(0, Qt::UserRole).toInt();
+        if (constraintId <= 0) return;
+
+        QString text = item->text(1);
+        double newValue = parseScalarFMW(text);
+        if (std::isnan(newValue)) return;
+
+        m_sketchCanvas->setConstraintValue(constraintId, newValue);
+
+        QTimer::singleShot(0, this, [this, constraintId]() {
+            if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(true);
+            showSketchConstraintProperties(constraintId);
+            if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(false);
+        });
+        return;
+    }
+
+    int entityId = item->data(0, Qt::UserRole).toInt();
+    if (entityId <= 0) return;
+
+    SketchEntity* entity = m_sketchCanvas->entityById(entityId);
+    if (!entity) return;
+
+    // Capture entity state before modification for undo
+    const SketchEntity oldEntity = *entity;
+
+    QString text = item->text(1);
+    bool changed = false;
+
+    if (propertyName.startsWith(QStringLiteral("point"))) {
+        // Point property: "point0", "point1", etc.
+        int idx = propertyName.mid(5).toInt();
+        if (idx >= 0 && idx < entity->points.size()) {
+            double x, y;
+            if (parsePointFMW(text, x, y)) {
+                entity->points[idx] = {x, y};
+                changed = true;
+            }
+        }
+    }
+    else if (propertyName == QStringLiteral("radius")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0) {
+            entity->radius = val;
+            // Recompute arc endpoint positions from center+radius+angles
+            if (entity->type == SketchEntityType::Arc
+                    && entity->points.size() >= 3) {
+                QPointF center(entity->points[0]);
+                double startRad = qDegreesToRadians(entity->startAngle);
+                double endRad = qDegreesToRadians(
+                    entity->startAngle + entity->sweepAngle);
+                entity->points[1] = {
+                    center.x() + val * qCos(startRad),
+                    center.y() + val * qSin(startRad)};
+                entity->points[2] = {
+                    center.x() + val * qCos(endRad),
+                    center.y() + val * qSin(endRad)};
+            } else if (entity->type == SketchEntityType::Circle) {
+                QPointF center(entity->points[0]);
+                for (int i = 1; i < entity->points.size(); ++i) {
+                    QPointF dir = QPointF(entity->points[i]) - center;
+                    double len = std::sqrt(dir.x() * dir.x()
+                                         + dir.y() * dir.y());
+                    if (len > 1e-6)
+                        entity->points[i] = center + dir * (val / len);
+                }
+            }
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("diameter")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0) {
+            double r = val / 2.0;
+            entity->radius = r;
+            if (entity->type == SketchEntityType::Circle) {
+                QPointF center(entity->points[0]);
+                for (int i = 1; i < entity->points.size(); ++i) {
+                    QPointF dir = QPointF(entity->points[i]) - center;
+                    double len = std::sqrt(dir.x() * dir.x()
+                                         + dir.y() * dir.y());
+                    if (len > 1e-6)
+                        entity->points[i] = center + dir * (r / len);
+                }
+            }
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("startAngle")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val)) {
+            entity->startAngle = val;
+            // Recompute start and end points from angles
+            if (entity->points.size() >= 3) {
+                QPointF center(entity->points[0]);
+                double r = entity->radius;
+                double startRad = qDegreesToRadians(val);
+                double endRad = qDegreesToRadians(
+                    val + entity->sweepAngle);
+                entity->points[1] = {
+                    center.x() + r * qCos(startRad),
+                    center.y() + r * qSin(startRad)};
+                entity->points[2] = {
+                    center.x() + r * qCos(endRad),
+                    center.y() + r * qSin(endRad)};
+            }
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("sweepAngle")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val)) {
+            entity->sweepAngle = val;
+            // Recompute end point from angles
+            if (entity->points.size() >= 3) {
+                QPointF center(entity->points[0]);
+                double r = entity->radius;
+                double endRad = qDegreesToRadians(
+                    entity->startAngle + val);
+                entity->points[2] = {
+                    center.x() + r * qCos(endRad),
+                    center.y() + r * qSin(endRad)};
+            }
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("length")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0
+                && entity->points.size() >= 2) {
+            // Keep start fixed, move end along same direction
+            QPointF p0(entity->points[0]);
+            QPointF p1(entity->points[1]);
+            QPointF dir = p1 - p0;
+            double curLen = std::sqrt(dir.x() * dir.x()
+                                    + dir.y() * dir.y());
+            if (curLen > 1e-6) {
+                QPointF unit = dir / curLen;
+                entity->points[1] = p0 + unit * val;
+                changed = true;
+            }
+        }
+    }
+    else if (propertyName == QStringLiteral("width")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0
+                && entity->points.size() >= 2) {
+            double sign = (entity->points[1].x >= entity->points[0].x)
+                ? 1.0 : -1.0;
+            entity->points[1].x = entity->points[0].x + sign * val;
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("height")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0
+                && entity->points.size() >= 2) {
+            double sign = (entity->points[1].y >= entity->points[0].y)
+                ? 1.0 : -1.0;
+            entity->points[1].y = entity->points[0].y + sign * val;
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("sides")) {
+        double val = parseScalarFMW(text);
+        int sides = static_cast<int>(val);
+        if (sides >= 3 && sides <= 100) {
+            entity->sides = sides;
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("majorRadius")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0) {
+            entity->majorRadius = val;
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("minorRadius")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0) {
+            entity->minorRadius = val;
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("text")) {
+        entity->text = text.toStdString();
+        changed = true;
+    }
+    else if (propertyName == QStringLiteral("fontSize")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val) && val > 0) {
+            entity->fontSize = val;
+            changed = true;
+        }
+    }
+    else if (propertyName == QStringLiteral("textRotation")) {
+        double val = parseScalarFMW(text);
+        if (!std::isnan(val)) {
+            entity->textRotation = val;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        // Keep text rotation handle in sync after property edits
+        SketchCanvas::recomputeTextRotationHandle(*entity);
+
+        // Push undo command for property edit
+        m_sketchCanvas->pushUndoCommand(sketch::UndoCommand::modifyEntity(
+            oldEntity, *entity,
+            "Edit " + propertyName.toStdString()));
+
+        m_sketchCanvas->notifyEntityChanged(entityId);
+        // Defer tree refresh so Qt can close the inline editor
+        // before we destroy its item via clear().
+        QTimer::singleShot(0, this, [this, entityId]() {
+            if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(true);
+            showSketchEntityProperties(entityId);
+            if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(false);
+        });
+    }
 }
 
 }  // namespace hobbycad

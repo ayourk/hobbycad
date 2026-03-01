@@ -831,19 +831,28 @@ void ViewportWidget::keyPressEvent(QKeyEvent* event)
             return;
 
         case Qt::Key_X:
-            setRotationAxis(AxisX);
-            event->accept();
-            return;
+            if (event->modifiers() == Qt::NoModifier) {
+                setRotationAxis(AxisX);
+                event->accept();
+                return;
+            }
+            break;
 
         case Qt::Key_Y:
-            setRotationAxis(AxisY);
-            event->accept();
-            return;
+            if (event->modifiers() == Qt::NoModifier) {
+                setRotationAxis(AxisY);
+                event->accept();
+                return;
+            }
+            break;
 
         case Qt::Key_Z:
-            setRotationAxis(AxisZ);
-            event->accept();
-            return;
+            if (event->modifiers() == Qt::NoModifier) {
+                setRotationAxis(AxisZ);
+                event->accept();
+                return;
+            }
+            break;
 
         default:
             break;

@@ -61,10 +61,19 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "edit.undo", tr("Undo"), tr("Edit"),
         QKeySequence(QKeySequence::Undo).toString()));
 
-    defaults.insert("edit.redo", ActionBinding(
-        "edit.redo", tr("Redo"), tr("Edit"),
-        QKeySequence(QKeySequence::Redo).toString() + "," +
-        QKeySequence(Qt::CTRL | Qt::Key_Y).toString()));
+    // Use platform Redo sequence as binding1 (Ctrl+Shift+Z on Linux,
+    // Cmd+Shift+Z on macOS), with explicit Ctrl+Y as binding2.
+    // If QKeySequence::Redo is empty on this platform, fall back to
+    // Ctrl+Shift+Z so that both shortcuts are always available.
+    {
+        QString redoDefault = QKeySequence(QKeySequence::Redo).toString();
+        if (redoDefault.isEmpty())
+            redoDefault = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z).toString();
+        defaults.insert("edit.redo", ActionBinding(
+            "edit.redo", tr("Redo"), tr("Edit"),
+            redoDefault,
+            QKeySequence(Qt::CTRL | Qt::Key_Y).toString()));
+    }
 
     defaults.insert("edit.cut", ActionBinding(
         "edit.cut", tr("Cut"), tr("Edit"),

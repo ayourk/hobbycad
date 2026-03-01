@@ -68,18 +68,49 @@ SolveResult SketchSolver::solve(
     QVector<SketchEntity>& entities,
     const QVector<SketchConstraint>& constraints)
 {
-    // Convert to library types
-    QVector<sketch::Entity> libEntities = toLibraryEntities(entities);
-    QVector<sketch::Constraint> libConstraints = toLibraryConstraints(constraints);
+    // Convert to library types (std::vector)
+    std::vector<sketch::Entity> libEntities;
+    libEntities.reserve(entities.size());
+    for (const SketchEntity& gui : entities) {
+        libEntities.push_back(toLibraryEntity(gui));
+    }
+    std::vector<sketch::Constraint> libConstraints;
+    libConstraints.reserve(constraints.size());
+    for (const SketchConstraint& gui : constraints) {
+        libConstraints.push_back(toLibraryConstraint(gui));
+    }
 
     // Solve using library solver
     SolveResult result = m_solver.solve(libEntities, libConstraints);
 
     // If successful, update GUI entities with solved positions
     if (result.success) {
-        updateGuiEntitiesFromSolution(entities, libEntities);
+        // Create a QVector wrapper for the update function
+        QVector<sketch::Entity> qLibEntities(libEntities.begin(), libEntities.end());
+        updateGuiEntitiesFromSolution(entities, qLibEntities);
     }
 
+    return result;
+}
+
+// Helper to convert GUI vectors to std::vector for library calls
+static std::vector<sketch::Entity> toStdLibEntities(const QVector<SketchEntity>& entities)
+{
+    std::vector<sketch::Entity> result;
+    result.reserve(entities.size());
+    for (const SketchEntity& gui : entities) {
+        result.push_back(toLibraryEntity(gui));
+    }
+    return result;
+}
+
+static std::vector<sketch::Constraint> toStdLibConstraints(const QVector<SketchConstraint>& constraints)
+{
+    std::vector<sketch::Constraint> result;
+    result.reserve(constraints.size());
+    for (const SketchConstraint& gui : constraints) {
+        result.push_back(toLibraryConstraint(gui));
+    }
     return result;
 }
 
@@ -88,8 +119,8 @@ bool SketchSolver::wouldOverConstrain(
     const QVector<SketchConstraint>& existingConstraints,
     const SketchConstraint& newConstraint)
 {
-    QVector<sketch::Entity> libEntities = toLibraryEntities(entities);
-    QVector<sketch::Constraint> libConstraints = toLibraryConstraints(existingConstraints);
+    std::vector<sketch::Entity> libEntities = toStdLibEntities(entities);
+    std::vector<sketch::Constraint> libConstraints = toStdLibConstraints(existingConstraints);
     sketch::Constraint libNewConstraint = toLibraryConstraint(newConstraint);
 
     return m_solver.wouldOverConstrain(libEntities, libConstraints, libNewConstraint);
@@ -100,8 +131,8 @@ OverConstraintInfo SketchSolver::checkOverConstrain(
     const QVector<SketchConstraint>& existingConstraints,
     const SketchConstraint& newConstraint)
 {
-    QVector<sketch::Entity> libEntities = toLibraryEntities(entities);
-    QVector<sketch::Constraint> libConstraints = toLibraryConstraints(existingConstraints);
+    std::vector<sketch::Entity> libEntities = toStdLibEntities(entities);
+    std::vector<sketch::Constraint> libConstraints = toStdLibConstraints(existingConstraints);
     sketch::Constraint libNewConstraint = toLibraryConstraint(newConstraint);
 
     return m_solver.checkOverConstrain(libEntities, libConstraints, libNewConstraint);
@@ -111,8 +142,8 @@ int SketchSolver::degreesOfFreedom(
     const QVector<SketchEntity>& entities,
     const QVector<SketchConstraint>& constraints)
 {
-    QVector<sketch::Entity> libEntities = toLibraryEntities(entities);
-    QVector<sketch::Constraint> libConstraints = toLibraryConstraints(constraints);
+    std::vector<sketch::Entity> libEntities = toStdLibEntities(entities);
+    std::vector<sketch::Constraint> libConstraints = toStdLibConstraints(constraints);
 
     return m_solver.degreesOfFreedom(libEntities, libConstraints);
 }

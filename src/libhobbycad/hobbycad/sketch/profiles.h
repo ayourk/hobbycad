@@ -15,9 +15,9 @@
 
 #include "entity.h"
 #include "../geometry/types.h"
+#include "../types.h"
 
-#include <QVector>
-#include <QPolygonF>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -29,9 +29,9 @@ namespace sketch {
 /// A closed profile (loop) detected in the sketch
 struct Profile {
     int id = 0;                       ///< Unique profile ID
-    QVector<int> entityIds;           ///< IDs of entities forming the loop (in order)
-    QVector<bool> reversed;           ///< Whether each entity is traversed in reverse
-    QPolygonF polygon;                ///< Approximated polygon for the profile
+    std::vector<int> entityIds;       ///< IDs of entities forming the loop (in order)
+    std::vector<bool> reversed;       ///< Whether each entity is traversed in reverse
+    std::vector<Point2D> polygon;     ///< Approximated polygon for the profile
     double area = 0.0;                ///< Signed area (positive = CCW, negative = CW)
     bool isOuter = true;              ///< True if outer profile, false if inner (hole)
     geometry::BoundingBox bounds;     ///< Bounding box of the profile
@@ -40,7 +40,7 @@ struct Profile {
     bool contains(const Profile& other) const;
 
     /// Check if a point is inside this profile
-    bool containsPoint(const QPointF& point) const;
+    bool containsPoint(const Point2D& point) const;
 };
 
 // =====================================================================
@@ -59,8 +59,8 @@ struct ProfileDetectionOptions {
 /// @param entities All entities in the sketch
 /// @param options Detection options
 /// @return List of detected profiles
-HOBBYCAD_EXPORT QVector<Profile> detectProfiles(
-    const QVector<Entity>& entities,
+HOBBYCAD_EXPORT std::vector<Profile> detectProfiles(
+    const std::vector<Entity>& entities,
     const ProfileDetectionOptions& options = {});
 
 /// Detect profiles and organize into outer/inner (hole) relationships
@@ -68,8 +68,8 @@ HOBBYCAD_EXPORT QVector<Profile> detectProfiles(
 /// @param entities All entities in the sketch
 /// @param options Detection options
 /// @return List of profiles with outer/inner classification
-HOBBYCAD_EXPORT QVector<Profile> detectProfilesWithHoles(
-    const QVector<Entity>& entities,
+HOBBYCAD_EXPORT std::vector<Profile> detectProfilesWithHoles(
+    const std::vector<Entity>& entities,
     const ProfileDetectionOptions& options = {});
 
 // =====================================================================
@@ -81,9 +81,9 @@ HOBBYCAD_EXPORT QVector<Profile> detectProfilesWithHoles(
 /// @param entities All entities (for looking up by ID)
 /// @param segments Segments per arc/curve
 /// @return Polygon approximation
-HOBBYCAD_EXPORT QPolygonF profileToPolygon(
+HOBBYCAD_EXPORT std::vector<Point2D> profileToPolygon(
     const Profile& profile,
-    const QVector<Entity>& entities,
+    const std::vector<Entity>& entities,
     int segments = 32);
 
 /// Calculate the area of a profile
@@ -92,7 +92,7 @@ HOBBYCAD_EXPORT QPolygonF profileToPolygon(
 /// @return Signed area (positive = CCW, negative = CW)
 HOBBYCAD_EXPORT double profileArea(
     const Profile& profile,
-    const QVector<Entity>& entities);
+    const std::vector<Entity>& entities);
 
 /// Check if two profiles share any edges
 HOBBYCAD_EXPORT bool profilesShareEdge(
@@ -100,9 +100,9 @@ HOBBYCAD_EXPORT bool profilesShareEdge(
     const Profile& p2);
 
 /// Get the centroid of a profile
-HOBBYCAD_EXPORT QPointF profileCentroid(
+HOBBYCAD_EXPORT Point2D profileCentroid(
     const Profile& profile,
-    const QVector<Entity>& entities);
+    const std::vector<Entity>& entities);
 
 /// Check if profile winding is counter-clockwise
 HOBBYCAD_EXPORT bool profileIsCCW(const Profile& profile);
@@ -118,7 +118,7 @@ HOBBYCAD_EXPORT Profile reverseProfile(const Profile& profile);
 struct ConnectivityNode {
     int entityId = 0;
     int pointIndex = 0;  ///< Which endpoint (0 = start, 1 = end)
-    QPointF position;
+    Point2D position;
 };
 
 /// Edge in the connectivity graph
@@ -132,18 +132,18 @@ struct ConnectivityEdge {
 
 /// Graph of entity connectivity for profile detection
 struct ConnectivityGraph {
-    QVector<ConnectivityNode> nodes;
-    QVector<ConnectivityEdge> edges;
-    QVector<QVector<int>> adjacency;  ///< Node -> list of edge indices
+    std::vector<ConnectivityNode> nodes;
+    std::vector<ConnectivityEdge> edges;
+    std::vector<std::vector<int>> adjacency;  ///< Node -> list of edge indices
 };
 
 /// Build a connectivity graph from entities
 HOBBYCAD_EXPORT ConnectivityGraph buildConnectivityGraph(
-    const QVector<Entity>& entities,
+    const std::vector<Entity>& entities,
     double tolerance = geometry::POINT_TOLERANCE);
 
 /// Find all cycles in the connectivity graph (potential profiles)
-HOBBYCAD_EXPORT QVector<QVector<int>> findCycles(
+HOBBYCAD_EXPORT std::vector<std::vector<int>> findCycles(
     const ConnectivityGraph& graph,
     int maxCycles = 100);
 

@@ -514,8 +514,13 @@
   5.3  QT 6 (22.04)
   -------------------
 
-  Ubuntu 22.04 provides Qt 6.2.4 (NOT 6.4.2):
+  Ubuntu 22.04 ships Qt 6.2.4, which is BELOW the enforced
+  minimum of Qt 6.4.2. The stock 22.04 packages are NOT sufficient
+  for the GUI. Ubuntu 22.04 users MUST use the HobbyCAD PPA to
+  get Qt 6.4.2:
 
+    sudo add-apt-repository ppa:ayourk/hobbycad
+    sudo apt-get update
     sudo apt-get install -y \
       qt6-base-dev \
       qt6-base-dev-tools \
@@ -526,9 +531,11 @@
       libqt6svg6-dev \
       qmake6
 
-  Note: Qt 6.2.4 is an LTS release but significantly older than
-  6.4.2. Some Qt 6.4 features may not be available. The CMakeLists
-  should specify find_package(Qt6 6.2 REQUIRED ...) as the minimum.
+  Note: Qt 6.4.2 is the MINIMUM enforced version. If CMake
+  detects Qt < 6.4.2 (or no Qt at all), it automatically disables
+  the GUI and builds libhobbycad as a library-only target with no
+  Qt dependency. To build the full application with GUI on 22.04,
+  the PPA is required.
 
   Qt3D is not used by HobbyCAD (see Section 4.3 note).
 
@@ -585,7 +592,7 @@
   | GCC / MSVC          | 11.x         | 13.x         | MSVC 2022    | Apple Clang  | Low       |
   | CMake               | 3.22.x       | 3.28.x       | (system)     | (system)     | Low       |
   | Python              | 3.10.x       | 3.12.x       | (system)     | (system)     | Medium    |
-  | Qt 6                | 6.2.4        | 6.4.2        | 6.4.2        | (not pinned) | Medium    |
+  | Qt 6 (min 6.4.2)   | 6.4.2 (PPA)  | 6.4.2        | 6.4.2        | (not pinned) | Medium    |
   | OCCT (system)       | 7.5.x        | 7.6.3        | —            | —            | —         |
   | OCCT (PPA/pinned)   | 7.9.2 *      | 7.9.2 *      | 7.9.2        | 7.9.2        | Medium    |
   | pybind11            | 2.9.x        | 2.11.1       | (not pinned) | (not pinned) | Low       |
@@ -636,20 +643,24 @@
       target_compile_definitions(hobbycad PRIVATE OCCT_PRE_78)
     endif()
 
-  6.2  QT 6.2 vs 6.4 NOTES
-  ---------------------------
+  6.2  QT VERSION REQUIREMENTS
+  ------------------------------
 
-  Qt 6.2.4 is a Long Term Support (LTS) release. Qt 6.4.2 adds:
+  Qt 6.4.2 is the MINIMUM ENFORCED version. The CMake build system
+  enforces this via find_package(Qt6 6.4.2 COMPONENTS ...). If Qt
+  6.4.2+ is not found, the GUI is automatically disabled and only
+  the library (libhobbycad) is built.
+
+  Qt 6.4.2 features relied upon by HobbyCAD:
     - Improved QOpenGLWidget performance
     - Additional QStyle features
     - Various bug fixes and new convenience APIs
 
-  CMake should require only the minimum version:
-
-    find_package(Qt6 6.2 REQUIRED COMPONENTS
-      Core Gui Widgets OpenGL OpenGLWidgets Svg)
-
-  Avoid using Qt 6.4-only APIs unless guarded with version checks.
+  The HOBBYCAD_HAS_QT compile definition controls Qt-dependent code
+  paths in the library. When Qt 6.4.2+ is detected, HOBBYCAD_HAS_QT
+  is set to 1, enabling optional Qt interop (JSON serialization,
+  image loading, OpenGL probing). When Qt is absent or too old,
+  HOBBYCAD_HAS_QT is set to 0 and these features are compiled out.
 
   6.3  PYTHON 3.10 vs 3.12 NOTES
   ---------------------------------
@@ -1306,6 +1317,25 @@
 
   Use -DCMAKE_BUILD_TYPE=Release for optimized builds.
 
+  LIBRARY-ONLY BUILD MODE:
+
+  If Qt 6.4.2+ is not found (or Qt is not installed at all), CMake
+  automatically disables the GUI target and builds only libhobbycad.
+  The library is a pure C++ library with NO Qt dependency in this
+  mode. Qt-dependent features are compiled out:
+
+    - JSON serialization (uses Qt's QJsonDocument when available)
+    - Image loading (uses Qt's QImage when available)
+    - OpenGL probing (uses Qt's QOffscreenSurface when available)
+
+  The HOBBYCAD_HAS_QT preprocessor macro is set to 0, and all
+  Qt-interop code in the library (implicit QPointF/QRectF
+  conversions, qt_compat.h helpers) is excluded.
+
+  To force a library-only build even when Qt is available:
+
+    cmake -B build -G Ninja -DHOBBYCAD_GUI=OFF
+
   Run from the build tree:
 
     ./build/src/hobbycad/hobbycad
@@ -1587,17 +1617,26 @@
   environment variables, offers to clone the repository, and
   bootstraps vcpkg.  See the script header for full parameter details.
 
-  CONTINUOUS INTEGRATION: The project's Windows CI workflow
-  (.github/workflows/windows-build.yml) runs two parallel jobs:
+  CONTINUOUS INTEGRATION: The project's Windows CI uses separate
+  workflows for each toolchain:
 
-    - "HobbyCAD via MSYS"  -- MSYS2 UCRT64 / GCC / pacman
+    - windows-build-msys2.yml  -- MSYS2 UCRT64 / GCC / pacman
       Matches the local developer setup from setup-env.ps1.
       Dependencies come from pre-built pacman packages (fast).
+      Produces a dynamic build (requires DLLs alongside the .exe).
 
-    - "HobbyCAD via MSVC"  -- Visual Studio / cl.exe / vcpkg
-      Tests MSVC compatibility using the version-pinned
-      dependencies in vcpkg.json.  Uses vcpkg binary caching
-      via the GitHub Actions cache.
+    - windows-build-msvc.yml       -- MSVC x64 static build
+    - windows-build-msvc-arm64.yml -- MSVC arm64 static build
+      Uses Visual Studio / cl.exe with vcpkg custom static
+      triplets (x64-windows-static-md, arm64-windows-static-md).
+      All dependencies are statically linked into hobbycad.exe,
+      producing a self-contained executable with no DLL
+      dependencies.  Uses vcpkg binary caching via the GitHub
+      Actions cache.
+
+    - windows-inno.yml  -- Inno Setup installer (static build)
+    - windows-msi.yml   -- WiX MSI installer (static build)
+      Package the static executables into installer artifacts.
 
 ================================================================================
   14. WINDOWS PREREQUISITES
@@ -2193,9 +2232,16 @@
     .\build\src\hobbycad\hobbycad.exe  (Ninja)
     .\build\Debug\src\hobbycad\hobbycad.exe  (Visual Studio generator)
 
-  Note: Ensure that OCCT, Qt, and other DLLs are in the system PATH
-  or copied to the executable directory. vcpkg usually handles this
-  via the toolchain file.
+  Note: For dynamic builds (the default when using the msvc presets
+  locally), ensure that OCCT, Qt, and other DLLs are in the system
+  PATH or copied to the executable directory.  vcpkg usually handles
+  this via the toolchain file when VCPKG_APPLOCAL_DEPS is enabled
+  (default).
+
+  CI release builds use custom static triplets (x64-windows-static-md,
+  arm64-windows-static-md) that link all dependencies into the .exe,
+  eliminating DLL requirements.  See vcpkg-custom-triplets/ in the
+  project root.
 
 ================================================================================
   19. WINDOWS TROUBLESHOOTING
@@ -2228,6 +2274,11 @@
 
   19.4  DLL NOT FOUND AT RUNTIME
   ---------------------------------
+
+  Note: This section applies to dynamic builds only (MSYS2/GCC or
+  MSVC with default triplets).  CI release builds use static triplets
+  that link everything into the .exe — no DLLs are needed.  See
+  Section 13 "Continuous Integration" for details.
 
   Windows does not have an equivalent of Linux's rpath. If the
   application fails to start due to missing DLLs:
@@ -2297,11 +2348,10 @@
   is open source (BSD 2-Clause license). Apple Clang is built on
   the open-source LLVM/Clang project.
 
-  The macOS build uses:
+  The macOS local development build uses:
     - Apple Clang (from Xcode Command Line Tools) as the compiler
     - CMake + Ninja as the build system (same as Linux)
     - Homebrew as the package manager for dependencies
-    - vcpkg as an alternative for dependencies not in Homebrew
 
   Alternative compilers available via Homebrew:
     - brew install gcc       (GCC — fully open source, GPL)
@@ -2310,6 +2360,22 @@
 
   Note: macOS support is community-maintained. It may lag behind
   the Linux build and may not receive the same level of testing.
+
+  CONTINUOUS INTEGRATION: The project's macOS CI uses vcpkg with
+  custom static triplets (arm64-osx-static, x64-osx-static) to
+  produce self-contained binaries.  Only macOS system frameworks
+  (AppKit, CoreFoundation, OpenGL, etc.) remain dynamic.
+
+    - macos-build.yml      -- arm64 (Apple Silicon) static build
+    - macos-build-x64.yml  -- x64 (Intel) static build
+    - macos-universal.yml  -- Universal binary (arm64 + x64 via lipo)
+      Cross-compiles both architectures on a single arm64 runner
+      using Apple Clang's native cross-compilation support.
+
+    - macos-homebrew.yml      -- Homebrew formula testing (arm64)
+    - macos-homebrew-x64.yml  -- Homebrew formula testing (x64)
+      Verify the Homebrew tap formulas build correctly.
+      These use Homebrew, not vcpkg.
 
   AUTOMATED SETUP: Interactive setup scripts automate the entire
   macOS environment configuration:

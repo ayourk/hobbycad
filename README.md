@@ -33,7 +33,7 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 
 - **Offline-first** — No cloud dependency, no account, no telemetry. Your data stays on your machine.
 - **Version control is our cloud** — All collaboration and sharing flows through git and GitHub/GitLab, not a proprietary backend.
-- **Linux-first, cross-platform ready** -- Developed and optimized for Linux. Windows CI builds with both MSYS2/GCC and MSVC toolchains. macOS CI builds with Homebrew/Clang.
+- **Linux-first, cross-platform ready** -- Developed and optimized for Linux. Windows CI builds with MSYS2/GCC (dynamic) and MSVC/vcpkg (static). macOS CI builds with vcpkg/Clang (static). Release binaries are fully self-contained.
 - **Depth over breadth** — Core mechanical CAD done exceptionally well, rather than a sprawling, half-finished feature set.
 - **Open standards** — BREP native format (open, documented), STEP/STL/OBJ interchange. No vendor lock-in.
 
@@ -77,7 +77,8 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 | Layer | Library | License |
 |---|---|---|
 | Modeling Kernel | OpenCASCADE (OCCT) | LGPL 2.1 |
-| GUI Framework | Qt 6 | LGPL 3.0 |
+| Core Types | Custom (types.h) | GPL 3.0 |
+| GUI Framework | Qt 6.4.2+ | LGPL 3.0 |
 | 3D Viewport | OCCT AIS + OpenGL 3.3+ | LGPL 2.1 |
 | Constraint Solver | SolveSpace Solver | GPL 3.0 |
 | Native File Format | BREP (OCCT built-in) | LGPL 2.1 |
@@ -87,6 +88,8 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 | Version Control | libgit2 | GPL 2.0 + LE |
 
 **Build requirements:** CMake 3.20+, GCC 12+ or Clang 15+, C++17 (C++20 preferred), Python 3.10+
+
+**Minimum Qt version:** 6.4.2 (auto-detected; library builds without Qt)
 
 **Primary development platform:** Ubuntu 24.04 LTS
 
@@ -145,7 +148,7 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 | | [Building](docs/dev_environment_setup.txt#L2038) (§18) | Build instructions for Windows |
 | | [Troubleshooting](docs/dev_environment_setup.txt#L2178) (§19) | Windows-specific issues |
 
-**CI:** The [Windows Build](.github/workflows/windows-build.yml) workflow runs two parallel jobs -- "HobbyCAD via MSYS" (MSYS2 UCRT64 / GCC, matching the local developer setup) and "HobbyCAD via MSVC" (Visual Studio / vcpkg manifest mode).
+**CI:** The [Windows MSYS2 Build](.github/workflows/windows-build-msys2.yml) workflow builds with MSYS2 UCRT64 / GCC, matching the local developer setup. The [Windows MSVC Build](.github/workflows/windows-build-msvc.yml) workflow builds with Visual Studio / vcpkg using static triplets (`x64-windows-static-md`, `arm64-windows-static-md`), producing self-contained executables with no DLL dependencies. Installer workflows ([Inno Setup](.github/workflows/windows-inno.yml), [WiX MSI](.github/workflows/windows-msi.yml)) package the static builds.
 
 ### macOS
 
@@ -161,7 +164,7 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 | | [Building](docs/dev_environment_setup.txt#L2658) (§25) | Build instructions for macOS |
 | | [Troubleshooting](docs/dev_environment_setup.txt#L2749) (§26) | macOS-specific issues |
 
-**CI:** The [macOS Build](.github/workflows/macos-build.yml) workflow builds with Homebrew/Clang on Apple Silicon, matching the local developer setup from `setup-env.sh`.
+**CI:** The [macOS Build](.github/workflows/macos-build.yml) workflow builds with vcpkg/Clang using static triplets (`arm64-osx-static`, `x64-osx-static`), producing self-contained binaries with only macOS system frameworks as dynamic dependencies. The [macOS Universal](.github/workflows/macos-universal.yml) workflow cross-compiles both architectures and merges them via `lipo` into a single universal binary. Local developer setup uses Homebrew (see `setup-env.sh`).
 
 ### General
 

@@ -16,8 +16,9 @@
 #include "entity.h"
 #include "../geometry/types.h"
 
-#include <QVector>
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -30,7 +31,7 @@ namespace sketch {
 struct Intersection {
     int entityId1 = 0;
     int entityId2 = 0;
-    QPointF point;
+    Point2D point;
     double param1 = 0.0;  ///< Parameter on entity 1 (0-1 for lines)
     double param2 = 0.0;  ///< Parameter on entity 2
 };
@@ -38,19 +39,19 @@ struct Intersection {
 /// Find all intersections between entities in a sketch
 /// @param entities List of entities to check
 /// @return List of all intersection points with entity IDs
-HOBBYCAD_EXPORT QVector<Intersection> findAllIntersections(
-    const QVector<Entity>& entities);
+HOBBYCAD_EXPORT std::vector<Intersection> findAllIntersections(
+    const std::vector<Entity>& entities);
 
 /// Find intersections of a specific entity with all others
 /// @param entity The entity to check
 /// @param others Other entities to check against
 /// @return List of intersections
-HOBBYCAD_EXPORT QVector<Intersection> findIntersections(
+HOBBYCAD_EXPORT std::vector<Intersection> findIntersections(
     const Entity& entity,
-    const QVector<Entity>& others);
+    const std::vector<Entity>& others);
 
 /// Find intersection between two specific entities
-HOBBYCAD_EXPORT QVector<Intersection> findIntersection(
+HOBBYCAD_EXPORT std::vector<Intersection> findIntersection(
     const Entity& e1, const Entity& e2);
 
 // =====================================================================
@@ -61,7 +62,7 @@ HOBBYCAD_EXPORT QVector<Intersection> findIntersection(
 struct OffsetResult {
     bool success = false;
     Entity entity;            ///< The new offset entity
-    QString errorMessage;
+    std::string errorMessage;
 };
 
 /// Create an offset copy of an entity
@@ -72,7 +73,7 @@ struct OffsetResult {
 HOBBYCAD_EXPORT OffsetResult offsetEntity(
     const Entity& entity,
     double distance,
-    const QPointF& clickPos,
+    const Point2D& clickPos,
     int newId);
 
 /// Create an offset copy with explicit side selection
@@ -96,7 +97,7 @@ struct FilletResult {
     Entity arc;               ///< The fillet arc
     Entity line1;             ///< Modified first line
     Entity line2;             ///< Modified second line
-    QString errorMessage;
+    std::string errorMessage;
 };
 
 /// Create a fillet (rounded corner) between two lines
@@ -112,7 +113,7 @@ HOBBYCAD_EXPORT FilletResult createFillet(
 
 /// Find the corner point between two lines (for fillet)
 /// Returns the shared endpoint, or nullopt if lines don't connect
-HOBBYCAD_EXPORT std::optional<QPointF> findCornerPoint(
+HOBBYCAD_EXPORT std::optional<Point2D> findCornerPoint(
     const Entity& line1,
     const Entity& line2,
     double tolerance = geometry::POINT_TOLERANCE);
@@ -127,7 +128,7 @@ struct ChamferResult {
     Entity chamferLine;       ///< The chamfer line
     Entity line1;             ///< Modified first line
     Entity line2;             ///< Modified second line
-    QString errorMessage;
+    std::string errorMessage;
 };
 
 /// Create a chamfer (beveled corner) between two lines
@@ -158,9 +159,9 @@ HOBBYCAD_EXPORT ChamferResult createChamfer(
 /// Result of a trim operation
 struct TrimResult {
     bool success = false;
-    QVector<Entity> newEntities;  ///< Entities after trimming (may be multiple)
-    int removedEntityId = -1;     ///< ID of entity that was trimmed
-    QString errorMessage;
+    std::vector<Entity> newEntities;  ///< Entities after trimming (may be multiple)
+    int removedEntityId = -1;         ///< ID of entity that was trimmed
+    std::string errorMessage;
 };
 
 /// Trim an entity at intersection points, removing the segment containing clickPos
@@ -170,8 +171,8 @@ struct TrimResult {
 /// @param nextId Function to get next entity ID
 HOBBYCAD_EXPORT TrimResult trimEntity(
     const Entity& entity,
-    const QVector<QPointF>& intersections,
-    const QPointF& clickPos,
+    const std::vector<Point2D>& intersections,
+    const Point2D& clickPos,
     std::function<int()> nextId);
 
 // =====================================================================
@@ -182,7 +183,7 @@ HOBBYCAD_EXPORT TrimResult trimEntity(
 struct ExtendResult {
     bool success = false;
     Entity entity;            ///< The extended entity
-    QString errorMessage;
+    std::string errorMessage;
 };
 
 /// Extend an entity to the nearest intersection with boundary entities
@@ -192,9 +193,9 @@ struct ExtendResult {
 /// @param clickPos Used to determine which end when extendEnd == -1
 HOBBYCAD_EXPORT ExtendResult extendEntity(
     const Entity& entity,
-    const QVector<Entity>& boundaries,
+    const std::vector<Entity>& boundaries,
     int extendEnd,
-    const QPointF& clickPos = QPointF());
+    const Point2D& clickPos = Point2D());
 
 // =====================================================================
 //  Split Operation
@@ -203,9 +204,9 @@ HOBBYCAD_EXPORT ExtendResult extendEntity(
 /// Result of a split operation
 struct SplitResult {
     bool success = false;
-    QVector<Entity> newEntities;  ///< Entities after splitting
-    int removedEntityId = -1;     ///< ID of original entity that was split
-    QString errorMessage;
+    std::vector<Entity> newEntities;  ///< Entities after splitting
+    int removedEntityId = -1;         ///< ID of original entity that was split
+    std::string errorMessage;
 };
 
 /// Split an entity at a specific point
@@ -214,7 +215,7 @@ struct SplitResult {
 /// @param nextId Function to get next entity ID
 HOBBYCAD_EXPORT SplitResult splitEntityAt(
     const Entity& entity,
-    const QPointF& splitPoint,
+    const Point2D& splitPoint,
     std::function<int()> nextId);
 
 /// Split an entity at all intersection points with other entities
@@ -223,7 +224,7 @@ HOBBYCAD_EXPORT SplitResult splitEntityAt(
 /// @param nextId Function to get next entity ID
 HOBBYCAD_EXPORT SplitResult splitEntityAtIntersections(
     const Entity& entity,
-    const QVector<QPointF>& intersections,
+    const std::vector<Point2D>& intersections,
     std::function<int()> nextId);
 
 // =====================================================================
@@ -236,9 +237,9 @@ HOBBYCAD_EXPORT SplitResult splitEntityAtIntersections(
 /// @param entities All entities in the sketch
 /// @param tolerance Distance tolerance for endpoint matching
 /// @return IDs of all connected entities (including startId)
-HOBBYCAD_EXPORT QVector<int> findConnectedChain(
+HOBBYCAD_EXPORT std::vector<int> findConnectedChain(
     int startId,
-    const QVector<Entity>& entities,
+    const std::vector<Entity>& entities,
     double tolerance = geometry::POINT_TOLERANCE);
 
 /// Find a line connected to the given line at a corner near the click position
@@ -249,8 +250,8 @@ HOBBYCAD_EXPORT QVector<int> findConnectedChain(
 /// @return ID of connected line, or -1 if none found
 HOBBYCAD_EXPORT int findConnectedLineAtCorner(
     const Entity& lineEntity,
-    const QVector<Entity>& allEntities,
-    const QPointF& cornerHint,
+    const std::vector<Entity>& allEntities,
+    const Point2D& cornerHint,
     double tolerance = geometry::POINT_TOLERANCE);
 
 }  // namespace sketch

@@ -62,6 +62,7 @@ jobs:
             mingw-w64-ucrt-x86_64-qt6-base
             mingw-w64-ucrt-x86_64-qt6-svg
             mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-qt6-imageformats
             mingw-w64-ucrt-x86_64-libgit2
             mingw-w64-ucrt-x86_64-librsvg
             mingw-w64-ucrt-x86_64-ntldd
@@ -146,13 +147,15 @@ jobs:
                       cp -n "$dll" "$BINDIR/" 2>/dev/null || true
                   done || true
 
-              # Qt plugins
+              # Qt plugins — copy all runtime-needed plugin directories
               QT_PLUGIN_DIR="/ucrt64/share/qt6/plugins"
-              if [ -d "$QT_PLUGIN_DIR/platforms" ]; then
-                  mkdir -p "$BINDIR/platforms"
-                  cp "$QT_PLUGIN_DIR/platforms/qwindows.dll" \
-                      "$BINDIR/platforms/" 2>/dev/null || true
-              fi
+              for plugin_dir in platforms imageformats iconengines styles tls; do
+                  if [ -d "$QT_PLUGIN_DIR/$plugin_dir" ]; then
+                      mkdir -p "$BINDIR/$plugin_dir"
+                      cp "$QT_PLUGIN_DIR/$plugin_dir"/*.dll \
+                          "$BINDIR/$plugin_dir/" 2>/dev/null || true
+                  fi
+              done
           fi
 
       - name: Upload artifact

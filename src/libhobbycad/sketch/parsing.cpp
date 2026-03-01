@@ -9,22 +9,37 @@
 
 #include <hobbycad/sketch/parsing.h>
 
+#include <cctype>
+#include <string>
+
 namespace hobbycad {
 namespace sketch {
+
+// =====================================================================
+//  Helper: trim whitespace from both ends of a string
+// =====================================================================
+
+static std::string trim(const std::string& s)
+{
+    size_t start = s.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) return {};
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return s.substr(start, end - start + 1);
+}
 
 // =====================================================================
 //  Identifier Validation
 // =====================================================================
 
-bool isValidIdentifier(const QString& str)
+bool isValidIdentifier(const std::string& str)
 {
-    if (str.isEmpty()) return false;
+    if (str.empty()) return false;
 
-    QChar first = str[0];
-    if (!first.isLetter() && first != '_') return false;
+    char first = str[0];
+    if (!std::isalpha(static_cast<unsigned char>(first)) && first != '_') return false;
 
-    for (const QChar& c : str) {
-        if (!c.isLetterOrNumber() && c != '_') {
+    for (char c : str) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
             return false;
         }
     }
@@ -32,28 +47,28 @@ bool isValidIdentifier(const QString& str)
     return true;
 }
 
-bool looksNumeric(const QString& str)
+bool looksNumeric(const std::string& str)
 {
-    if (str.isEmpty()) return false;
-    QChar first = str[0];
-    return first.isDigit() || first == '-' || first == '.';
+    if (str.empty()) return false;
+    char first = str[0];
+    return std::isdigit(static_cast<unsigned char>(first)) || first == '-' || first == '.';
 }
 
-bool isParenthesizedExpression(const QString& str)
+bool isParenthesizedExpression(const std::string& str)
 {
-    return str.length() >= 2 && str.startsWith('(') && str.endsWith(')');
+    return str.length() >= 2 && str.front() == '(' && str.back() == ')';
 }
 
 // =====================================================================
 //  Value Parsing
 // =====================================================================
 
-ParsedValue parseValue(const QString& str)
+ParsedValue parseValue(const std::string& str)
 {
     ParsedValue result;
-    QString expr = str.trimmed();
+    std::string expr = trim(str);
 
-    if (expr.isEmpty()) {
+    if (expr.empty()) {
         return result;
     }
 
@@ -61,11 +76,15 @@ ParsedValue parseValue(const QString& str)
 
     // If it starts with a digit, minus, or decimal point, try to parse as number
     if (looksNumeric(expr)) {
-        bool ok = false;
-        result.numericValue = expr.toDouble(&ok);
-        if (ok) {
-            result.valid = true;
-            result.isNumeric = true;
+        try {
+            size_t pos = 0;
+            result.numericValue = std::stod(expr, &pos);
+            if (pos == expr.size()) {
+                result.valid = true;
+                result.isNumeric = true;
+            }
+        } catch (...) {
+            // Not a valid number
         }
         return result;
     }
@@ -89,7 +108,7 @@ ParsedValue parseValue(const QString& str)
     return result;
 }
 
-bool parseValue(const QString& str, double& value, QString& expression)
+bool parseValue(const std::string& str, double& value, std::string& expression)
 {
     ParsedValue parsed = parseValue(str);
     if (!parsed.valid) {
@@ -105,13 +124,13 @@ bool parseValue(const QString& str, double& value, QString& expression)
 //  Coordinate Parsing
 // =====================================================================
 
-QStringList splitCoordinate(const QString& str)
+std::vector<std::string> splitCoordinate(const std::string& str)
 {
-    QStringList parts;
-    QString current;
+    std::vector<std::string> parts;
+    std::string current;
     int parenDepth = 0;
 
-    for (const QChar& c : str) {
+    for (char c : str) {
         if (c == '(') {
             parenDepth++;
             current += c;
@@ -119,25 +138,25 @@ QStringList splitCoordinate(const QString& str)
             parenDepth--;
             current += c;
         } else if (c == ',' && parenDepth == 0) {
-            parts.append(current.trimmed());
+            parts.push_back(trim(current));
             current.clear();
         } else {
             current += c;
         }
     }
 
-    if (!current.isEmpty()) {
-        parts.append(current.trimmed());
+    if (!current.empty()) {
+        parts.push_back(trim(current));
     }
 
     return parts;
 }
 
-ParsedCoordinate parseCoordinate(const QString& str)
+ParsedCoordinate parseCoordinate(const std::string& str)
 {
     ParsedCoordinate result;
 
-    QStringList parts = splitCoordinate(str);
+    std::vector<std::string> parts = splitCoordinate(str);
     if (parts.size() != 2) {
         return result;
     }
@@ -149,8 +168,8 @@ ParsedCoordinate parseCoordinate(const QString& str)
     return result;
 }
 
-bool parseCoordinate(const QString& str, double& x, double& y,
-                     QString* xExpr, QString* yExpr)
+bool parseCoordinate(const std::string& str, double& x, double& y,
+                     std::string* xExpr, std::string* yExpr)
 {
     ParsedCoordinate parsed = parseCoordinate(str);
     if (!parsed.valid) {
@@ -166,7 +185,7 @@ bool parseCoordinate(const QString& str, double& x, double& y,
     return true;
 }
 
-std::optional<QPointF> parsePoint(const QString& str)
+std::optional<Point2D> parsePoint(const std::string& str)
 {
     ParsedCoordinate parsed = parseCoordinate(str);
     if (!parsed.valid) {
@@ -175,7 +194,7 @@ std::optional<QPointF> parsePoint(const QString& str)
 
     // Only return a point if both values are numeric
     if (parsed.x.isNumeric && parsed.y.isNumeric) {
-        return QPointF(parsed.x.numericValue, parsed.y.numericValue);
+        return Point2D(parsed.x.numericValue, parsed.y.numericValue);
     }
 
     return std::nullopt;

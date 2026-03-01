@@ -5,6 +5,9 @@
 #include "formulafield.h"
 #include "formuladialog.h"
 
+#include <map>
+#include <string>
+
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
@@ -87,19 +90,27 @@ void FormulaField::setUnitSuffix(const QString& suffix)
 void FormulaField::setParameters(const QMap<QString, double>& params)
 {
     m_parameters = params;
-    m_value.evaluate(m_parameters);
+    std::map<std::string, double> stdParams;
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        stdParams[it.key().toStdString()] = it.value();
+    }
+    m_value.evaluate(stdParams);
     updateDisplay();
 }
 
 QString FormulaField::expression() const
 {
-    return m_value.expression();
+    return QString::fromStdString(m_value.expression());
 }
 
 void FormulaField::setExpression(const QString& expr)
 {
-    m_value.setExpression(expr);
-    m_value.evaluate(m_parameters);
+    m_value.setExpression(expr.toStdString());
+    std::map<std::string, double> stdParams;
+    for (auto it = m_parameters.constBegin(); it != m_parameters.constEnd(); ++it) {
+        stdParams[it.key().toStdString()] = it.value();
+    }
+    m_value.evaluate(stdParams);
     updateDisplay();
 }
 
@@ -129,13 +140,17 @@ void FormulaField::onFxButtonClicked()
     dlg.setPropertyName(m_propertyName);
     dlg.setUnitSuffix(m_unitSuffix);
     dlg.setParameters(m_parameters);
-    dlg.setExpression(m_value.expression());
+    dlg.setExpression(QString::fromStdString(m_value.expression()));
 
     if (dlg.exec() == QDialog::Accepted) {
         QString newExpr = dlg.expression();
-        if (newExpr != m_value.expression()) {
-            m_value.setExpression(newExpr);
-            m_value.evaluate(m_parameters);
+        if (newExpr != QString::fromStdString(m_value.expression())) {
+            m_value.setExpression(newExpr.toStdString());
+            std::map<std::string, double> stdParams;
+            for (auto it = m_parameters.constBegin(); it != m_parameters.constEnd(); ++it) {
+                stdParams[it.key().toStdString()] = it.value();
+            }
+            m_value.evaluate(stdParams);
             updateDisplay();
             emit expressionChanged(newExpr);
             if (m_value.isValid()) {
@@ -168,7 +183,7 @@ void FormulaField::updateDisplay()
         styleSheet = QStringLiteral("QLabel { color: #000; }");
     } else {
         // Formula or parameter - show expression (no units)
-        displayText = m_value.expression();
+        displayText = QString::fromStdString(m_value.expression());
 
         if (m_value.isValid()) {
             // Valid formula - show in blue with result tooltip
@@ -185,7 +200,7 @@ void FormulaField::updateDisplay()
         } else {
             // Invalid formula - show in red
             styleSheet = QStringLiteral("QLabel { color: #cc0000; }");
-            m_valueLabel->setToolTip(m_value.errorMessage());
+            m_valueLabel->setToolTip(QString::fromStdString(m_value.errorMessage()));
         }
     }
 

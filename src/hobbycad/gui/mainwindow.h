@@ -34,6 +34,7 @@ struct Entity;
 struct Constraint;
 }  // namespace sketch
 
+class ChangelogPanel;
 class CliPanel;
 class ProjectBrowserWidget;
 class SketchActionBar;
@@ -138,6 +139,9 @@ protected:
 
     /// Access the sketch action bar (Save/Cancel buttons)
     SketchActionBar* sketchActionBar() const;
+
+    /// Access the changelog (undo history) panel
+    ChangelogPanel* changelogPanel() const;
 
     /// Show or hide the sketch action bar
     void setSketchActionBarVisible(bool visible);
@@ -265,6 +269,7 @@ private:
     QAction* m_actionToggleFeatureTree = nullptr;
     QAction* m_actionToggleProperties = nullptr;
     QAction* m_actionToggleToolbar = nullptr;
+    QAction* m_actionToggleChangelog = nullptr;
     QAction* m_actionResetView = nullptr;
     QAction* m_actionRotateLeft = nullptr;
     QAction* m_actionRotateRight = nullptr;
@@ -284,9 +289,11 @@ private:
     QDockWidget* m_featureTreeDock = nullptr;
     QDockWidget* m_propertiesDock  = nullptr;
     QDockWidget* m_terminalDock    = nullptr;
+    QDockWidget* m_changelogDock   = nullptr;
     CliPanel*    m_cliPanel        = nullptr;
     QTreeWidget* m_propertiesTree  = nullptr;
     SketchActionBar* m_sketchActionBar = nullptr;
+    ChangelogPanel*  m_changelogPanel  = nullptr;
     ProjectBrowserWidget* m_projectBrowser = nullptr;  // In Project panel's Files tab
 
     // Feature tree container items

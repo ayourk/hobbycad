@@ -14,10 +14,11 @@
 #define HOBBYCAD_SKETCH_GROUP_H
 
 #include "../core.h"
+#include "../types.h"
 
-#include <QString>
-#include <QVector>
-#include <QSet>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -29,32 +30,32 @@ namespace sketch {
 /// A group of entities (can contain nested groups)
 struct HOBBYCAD_EXPORT Group {
     int id = 0;                        ///< Unique group ID
-    QString name;                      ///< Display name
-    QVector<int> entityIds;            ///< Direct entity members
-    QVector<int> constraintIds;        ///< Direct constraint members
-    QVector<int> childGroupIds;        ///< Nested group IDs
+    std::string name;                  ///< Display name
+    std::vector<int> entityIds;        ///< Direct entity members
+    std::vector<int> constraintIds;    ///< Direct constraint members
+    std::vector<int> childGroupIds;    ///< Nested group IDs
     int parentGroupId = -1;            ///< Parent group ID (-1 if top-level)
     bool locked = false;               ///< Prevent modification of members
     bool expanded = true;              ///< UI expansion state (for tree views)
 
     /// Check if this group directly contains an entity
     bool containsEntity(int entityId) const {
-        return entityIds.contains(entityId);
+        return hobbycad::contains(entityIds, entityId);
     }
 
     /// Check if this group directly contains a constraint
     bool containsConstraint(int constraintId) const {
-        return constraintIds.contains(constraintId);
+        return hobbycad::contains(constraintIds, constraintId);
     }
 
     /// Check if this group directly contains a child group
     bool containsGroup(int groupId) const {
-        return childGroupIds.contains(groupId);
+        return hobbycad::contains(childGroupIds, groupId);
     }
 
     /// Check if this group is empty (no entities, constraints, or child groups)
     bool isEmpty() const {
-        return entityIds.isEmpty() && constraintIds.isEmpty() && childGroupIds.isEmpty();
+        return entityIds.empty() && constraintIds.empty() && childGroupIds.empty();
     }
 };
 
@@ -68,7 +69,7 @@ public:
     GroupManager() = default;
 
     /// Create a new group and return its ID
-    int createGroup(const QString& name = QString());
+    int createGroup(const std::string& name = {});
 
     /// Delete a group by ID (entities are not deleted, just ungrouped)
     /// @param groupId Group to delete
@@ -93,16 +94,16 @@ public:
     const Group* groupById(int id) const;
 
     /// Get all groups
-    const QVector<Group>& groups() const { return m_groups; }
+    const std::vector<Group>& groups() const { return m_groups; }
 
     /// Get all top-level groups (no parent)
-    QVector<int> topLevelGroupIds() const;
+    std::vector<int> topLevelGroupIds() const;
 
     /// Get all entity IDs in a group (recursively includes nested groups)
-    QSet<int> allEntityIds(int groupId) const;
+    std::unordered_set<int> allEntityIds(int groupId) const;
 
     /// Get all groups that contain an entity (directly, not through nesting)
-    QVector<int> groupsContainingEntity(int entityId) const;
+    std::vector<int> groupsContainingEntity(int entityId) const;
 
     /// Check if adding childId as a child of parentId would create a cycle
     bool wouldCreateCycle(int childId, int parentId) const;
@@ -114,7 +115,7 @@ public:
     int nextGroupId() const { return m_nextId; }
 
 private:
-    QVector<Group> m_groups;
+    std::vector<Group> m_groups;
     int m_nextId = 1;
 
     /// Helper to check ancestry
@@ -129,7 +130,7 @@ private:
 HOBBYCAD_EXPORT int groupDepth(const GroupManager& manager, int groupId);
 
 /// Get the path from root to a group (list of group IDs)
-HOBBYCAD_EXPORT QVector<int> groupPath(const GroupManager& manager, int groupId);
+HOBBYCAD_EXPORT std::vector<int> groupPath(const GroupManager& manager, int groupId);
 
 /// Find the common ancestor of two groups (-1 if none)
 HOBBYCAD_EXPORT int commonAncestor(const GroupManager& manager, int groupId1, int groupId2);

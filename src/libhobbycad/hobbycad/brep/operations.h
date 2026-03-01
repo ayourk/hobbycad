@@ -22,8 +22,8 @@
 #include <gp_Ax1.hxx>
 #include <gp_Vec.hxx>
 
-#include <QVector>
-#include <QString>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace brep {
@@ -36,7 +36,7 @@ namespace brep {
 struct OperationResult {
     bool success = false;
     TopoDS_Shape shape;
-    QString errorMessage;
+    std::string errorMessage;
 };
 
 // =====================================================================
@@ -52,7 +52,7 @@ struct OperationResult {
 /// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult extrudeProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& entities,
     const gp_Dir& direction,
     double distance);
 
@@ -66,7 +66,7 @@ HOBBYCAD_EXPORT OperationResult extrudeProfile(
 /// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult extrudeProfileSymmetric(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& entities,
     const gp_Dir& direction,
     double distance,
     bool symmetric = true);
@@ -80,7 +80,7 @@ HOBBYCAD_EXPORT OperationResult extrudeProfileSymmetric(
 /// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult revolveProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& entities,
     const gp_Ax1& axis,
     double angleDegrees);
 
@@ -92,8 +92,8 @@ HOBBYCAD_EXPORT OperationResult revolveProfile(
 /// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult sweepProfile(
     const sketch::Profile& profile,
-    const QVector<sketch::Entity>& entities,
-    const QVector<sketch::Entity>& pathEntities);
+    const std::vector<sketch::Entity>& entities,
+    const std::vector<sketch::Entity>& pathEntities);
 
 /// Loft between multiple profiles
 /// @param profiles Profiles to loft between (in order)
@@ -102,8 +102,8 @@ HOBBYCAD_EXPORT OperationResult sweepProfile(
 /// @return Result with lofted shape
 /// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult loftProfiles(
-    const QVector<sketch::Profile>& profiles,
-    const QVector<sketch::Entity>& entities,
+    const std::vector<sketch::Profile>& profiles,
+    const std::vector<sketch::Entity>& entities,
     bool solid = true);
 
 // =====================================================================
@@ -150,7 +150,7 @@ HOBBYCAD_EXPORT OperationResult intersectShapes(
 HOBBYCAD_EXPORT OperationResult filletShape(
     const TopoDS_Shape& shape,
     double radius,
-    const QVector<int>& edgeIndices = {});
+    const std::vector<int>& edgeIndices = {});
 
 /// Apply chamfer to edges
 /// @param shape Shape to chamfer
@@ -161,7 +161,7 @@ HOBBYCAD_EXPORT OperationResult filletShape(
 HOBBYCAD_EXPORT OperationResult chamferShape(
     const TopoDS_Shape& shape,
     double distance,
-    const QVector<int>& edgeIndices = {});
+    const std::vector<int>& edgeIndices = {});
 
 /// Shell a solid (hollow it out)
 /// @param shape Solid to shell
@@ -172,7 +172,7 @@ HOBBYCAD_EXPORT OperationResult chamferShape(
 HOBBYCAD_EXPORT OperationResult shellShape(
     const TopoDS_Shape& shape,
     double thickness,
-    const QVector<int>& facesToRemove = {});
+    const std::vector<int>& facesToRemove = {});
 
 /// Offset a shape
 /// @param shape Shape to offset
@@ -215,7 +215,7 @@ HOBBYCAD_EXPORT gp_Pnt shapeCenterOfMass(const TopoDS_Shape& shape);
 /// Get all faces of a shape
 /// @param shape The shape
 /// @return Vector of faces
-HOBBYCAD_EXPORT QVector<TopoDS_Face> shapeFaces(const TopoDS_Shape& shape);
+HOBBYCAD_EXPORT std::vector<TopoDS_Face> shapeFaces(const TopoDS_Shape& shape);
 
 /// Count faces in a shape
 HOBBYCAD_EXPORT int faceCount(const TopoDS_Shape& shape);

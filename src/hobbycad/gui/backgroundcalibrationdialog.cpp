@@ -417,8 +417,10 @@ void BackgroundCalibrationDialog::onApplyCalibration()
     }
 
     // Convert sketch points to image pixel coordinates
-    QPointF imgPoint1 = sketch::sketchToImageCoords(m_background, m_point1);
-    QPointF imgPoint2 = sketch::sketchToImageCoords(m_background, m_point2);
+    Point2D p1{m_point1.x(), m_point1.y()};
+    Point2D p2{m_point2.x(), m_point2.y()};
+    Point2D imgPoint1 = sketch::sketchToImageCoords(m_background, p1);
+    Point2D imgPoint2 = sketch::sketchToImageCoords(m_background, p2);
 
     // Calibrate the background (scale)
     m_background = sketch::calibrateBackground(m_background, imgPoint1, imgPoint2, distanceMm);
@@ -426,7 +428,7 @@ void BackgroundCalibrationDialog::onApplyCalibration()
     // Apply rotation alignment if enabled
     if (m_enableAlignmentCheckBox->isChecked()) {
         // Calculate current angle of the reference line using library function
-        double lineAngle = sketch::calculateLineAngle(m_point1, m_point2);
+        double lineAngle = sketch::calculateLineAngle(p1, p2);
 
         // Get target angle
         double targetAngle = 0.0;
@@ -484,7 +486,9 @@ void BackgroundCalibrationDialog::updatePreview()
     double currentDistance = qSqrt(dx * dx + dy * dy);
 
     // Calculate angle of the line between points using library function
-    double lineAngle = sketch::calculateLineAngle(m_point1, m_point2);
+    Point2D pt1{m_point1.x(), m_point1.y()};
+    Point2D pt2{m_point2.x(), m_point2.y()};
+    double lineAngle = sketch::calculateLineAngle(pt1, pt2);
 
     // Normalize to 0-360 range for display using library function
     double displayAngle = sketch::normalizeAngle360(lineAngle);

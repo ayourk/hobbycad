@@ -27,6 +27,7 @@
 #include <QStackedWidget>
 
 class QSplitter;
+class QTreeWidgetItem;
 class QVBoxLayout;
 
 namespace hobbycad {
@@ -71,12 +72,15 @@ private slots:
     void onSketchToolSelected(SketchTool tool);
     void onSketchSelectionChanged(int entityId);
     void onSketchEntityCreated(int entityId);
+    void onSketchPropertyItemChanged(QTreeWidgetItem* item, int column);
+    void onConstraintSelectionChanged(int constraintId);
 
 private:
     void showDiagnosticDialog();
     void createTimeline();
     void initDefaultParameters();
     void showSketchEntityProperties(int entityId);
+    void showSketchConstraintProperties(int constraintId);
     void saveCurrentSketch();
     void discardCurrentSketch();
 

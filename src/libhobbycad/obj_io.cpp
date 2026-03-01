@@ -27,22 +27,23 @@
 #include <TDocStd_Document.hxx>
 #include <XCAFApp_Application.hxx>
 
-#include <QFile>
-#include <QFileInfo>
-#include <QTextStream>
-#include <QDir>
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 namespace hobbycad {
 namespace obj_io {
 
 // ---- Import functions ----
 
-ReadResult readObj(const QString& path)
+ReadResult readObj(const std::string& path)
 {
     ReadResult result;
 
-    if (!QFile::exists(path)) {
-        result.errorMessage = QStringLiteral("File not found: %1").arg(path);
+    if (!std::filesystem::exists(path)) {
+        result.errorMessage = "File not found: " + path;
         return result;
     }
 
@@ -56,10 +57,10 @@ ReadResult readObj(const QString& path)
         app->NewDocument("BinXCAF", doc);
 
         // Read the OBJ file
-        TCollection_AsciiString objPath(path.toUtf8().constData());
+        TCollection_AsciiString objPath(path.c_str());
 
         if (!reader.Perform(objPath, Message_ProgressRange())) {
-            result.errorMessage = QStringLiteral("Failed to read OBJ file");
+            result.errorMessage = "Failed to read OBJ file";
             app->Close(doc);
             return result;
         }
@@ -68,13 +69,13 @@ ReadResult readObj(const QString& path)
         TopoDS_Shape shape = reader.SingleShape();
 
         if (shape.IsNull()) {
-            result.errorMessage = QStringLiteral("No geometry found in OBJ file");
+            result.errorMessage = "No geometry found in OBJ file";
             app->Close(doc);
             return result;
         }
 
         result.shape = shape;
-        result.shapes.append(shape);
+        result.shapes.push_back(shape);
         result.objectCount = 1;
 
         // Count faces and vertices
@@ -92,16 +93,15 @@ ReadResult readObj(const QString& path)
         app->Close(doc);
 
     } catch (const Standard_Failure& e) {
-        result.errorMessage = QStringLiteral("OCCT exception: %1")
-            .arg(e.GetMessageString());
+        result.errorMessage = std::string("OCCT exception: ") + e.GetMessageString();
     } catch (...) {
-        result.errorMessage = QStringLiteral("Unknown exception during OBJ import");
+        result.errorMessage = "Unknown exception during OBJ import";
     }
 
     return result;
 }
 
-TopoDS_Shape readObjAsShape(const QString& path, QString* errorMsg)
+TopoDS_Shape readObjAsShape(const std::string& path, std::string* errorMsg)
 {
     ReadResult result = readObj(path);
 
@@ -112,7 +112,7 @@ TopoDS_Shape readObjAsShape(const QString& path, QString* errorMsg)
     return result.shape;
 }
 
-QList<TopoDS_Shape> readObjAsShapes(const QString& path, QString* errorMsg)
+std::vector<TopoDS_Shape> readObjAsShapes(const std::string& path, std::string* errorMsg)
 {
     ReadResult result = readObj(path);
 
@@ -126,14 +126,14 @@ QList<TopoDS_Shape> readObjAsShapes(const QString& path, QString* errorMsg)
 // ---- Export functions ----
 
 WriteResult writeObj(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
     const WriteOptions& options)
 {
     WriteResult result;
 
-    if (shapes.isEmpty()) {
-        result.errorMessage = QStringLiteral("No shapes to write");
+    if (shapes.empty()) {
+        result.errorMessage = "No shapes to write";
         return result;
     }
 
@@ -141,7 +141,7 @@ WriteResult writeObj(
     TopoDS_Shape shapeToExport;
 
     if (shapes.size() == 1) {
-        shapeToExport = shapes.first();
+        shapeToExport = shapes.front();
     } else {
         BRep_Builder builder;
         TopoDS_Compound compound;
@@ -157,7 +157,7 @@ WriteResult writeObj(
     }
 
     if (shapeToExport.IsNull()) {
-        result.errorMessage = QStringLiteral("No valid shapes to export");
+        result.errorMessage = "No valid shapes to export";
         return result;
     }
 
@@ -170,40 +170,39 @@ WriteResult writeObj(
             options.angularDeflection);
 
         if (!mesh.IsDone()) {
-            result.errorMessage = QStringLiteral("Failed to mesh shape");
+            result.errorMessage = "Failed to mesh shape";
             return result;
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during meshing");
+        result.errorMessage = "Exception during meshing";
         return result;
     }
 
     // Write OBJ file manually (OCCT's writer is complex to use)
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        result.errorMessage = QStringLiteral("Cannot open file for writing: %1").arg(path);
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        result.errorMessage = "Cannot open file for writing: " + path;
         return result;
     }
 
-    QTextStream out(&file);
-    out.setRealNumberPrecision(6);
-    out.setRealNumberNotation(QTextStream::FixedNotation);
+    file << std::fixed << std::setprecision(6);
 
     // Write header
-    QFileInfo fi(path);
-    QString objName = options.objectName.isEmpty() ? fi.baseName() : options.objectName;
-    out << "# OBJ file exported by HobbyCAD\n";
-    out << "# https://github.com/ayourk/hobbycad\n";
-    out << "\n";
+    namespace fs = std::filesystem;
+    fs::path filePath(path);
+    std::string objName = options.objectName.empty() ? filePath.stem().string() : options.objectName;
+    file << "# OBJ file exported by HobbyCAD\n";
+    file << "# https://github.com/ayourk/hobbycad\n";
+    file << "\n";
 
     // Write MTL reference if requested
-    QString mtlPath;
+    std::string mtlPath;
     if (options.writeMtl) {
-        mtlPath = fi.absolutePath() + "/" + fi.baseName() + ".mtl";
-        out << "mtllib " << fi.baseName() << ".mtl\n\n";
+        mtlPath = filePath.parent_path().string() + "/" + filePath.stem().string() + ".mtl";
+        file << "mtllib " << filePath.stem().string() << ".mtl\n\n";
     }
 
-    out << "o " << objName << "\n\n";
+    file << "o " << objName << "\n\n";
 
     // Collect all vertices, normals, and faces
     int globalVertexOffset = 0;
@@ -227,7 +226,7 @@ WriteResult writeObj(
             if (hasTransform) {
                 p.Transform(trsf);
             }
-            out << "v " << p.X() << " " << p.Y() << " " << p.Z() << "\n";
+            file << "v " << p.X() << " " << p.Y() << " " << p.Z() << "\n";
             result.vertexCount++;
         }
 
@@ -238,11 +237,11 @@ WriteResult writeObj(
                 if (hasTransform) {
                     n.Transform(trsf);
                 }
-                out << "vn " << n.X() << " " << n.Y() << " " << n.Z() << "\n";
+                file << "vn " << n.X() << " " << n.Y() << " " << n.Z() << "\n";
             }
         }
 
-        out << "\n";
+        file << "\n";
 
         // Write faces
         bool reversed = (face.Orientation() == TopAbs_REVERSED);
@@ -269,11 +268,11 @@ WriteResult writeObj(
                 if (reversed) {
                     std::swap(nn2, nn3);
                 }
-                out << "f " << n1 << "//" << nn1
-                    << " " << n2 << "//" << nn2
-                    << " " << n3 << "//" << nn3 << "\n";
+                file << "f " << n1 << "//" << nn1
+                     << " " << n2 << "//" << nn2
+                     << " " << n3 << "//" << nn3 << "\n";
             } else {
-                out << "f " << n1 << " " << n2 << " " << n3 << "\n";
+                file << "f " << n1 << " " << n2 << " " << n3 << "\n";
             }
             result.faceCount++;
         }
@@ -283,23 +282,22 @@ WriteResult writeObj(
             globalNormalOffset += tri->NbNodes();
         }
 
-        out << "\n";
+        file << "\n";
     }
 
     file.close();
 
     // Write MTL file if requested
-    if (options.writeMtl && !mtlPath.isEmpty()) {
-        QFile mtlFile(mtlPath);
-        if (mtlFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream mtlOut(&mtlFile);
-            mtlOut << "# MTL file exported by HobbyCAD\n\n";
-            mtlOut << "newmtl default\n";
-            mtlOut << "Ka 0.2 0.2 0.2\n";
-            mtlOut << "Kd 0.8 0.8 0.8\n";
-            mtlOut << "Ks 1.0 1.0 1.0\n";
-            mtlOut << "Ns 32.0\n";
-            mtlOut << "d 1.0\n";
+    if (options.writeMtl && !mtlPath.empty()) {
+        std::ofstream mtlFile(mtlPath);
+        if (mtlFile.is_open()) {
+            mtlFile << "# MTL file exported by HobbyCAD\n\n";
+            mtlFile << "newmtl default\n";
+            mtlFile << "Ka 0.2 0.2 0.2\n";
+            mtlFile << "Kd 0.8 0.8 0.8\n";
+            mtlFile << "Ks 1.0 1.0 1.0\n";
+            mtlFile << "Ns 32.0\n";
+            mtlFile << "d 1.0\n";
             mtlFile.close();
             result.mtlWritten = true;
         }
@@ -310,17 +308,17 @@ WriteResult writeObj(
 }
 
 WriteResult writeObj(
-    const QString& path,
+    const std::string& path,
     const TopoDS_Shape& shape,
     const WriteOptions& options)
 {
-    return writeObj(path, QList<TopoDS_Shape>{shape}, options);
+    return writeObj(path, std::vector<TopoDS_Shape>{shape}, options);
 }
 
 bool writeObj(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
-    QString* errorMsg)
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
+    std::string* errorMsg)
 {
     WriteResult result = writeObj(path, shapes, defaultOptions());
 
@@ -333,23 +331,24 @@ bool writeObj(
 
 // ---- Utility functions ----
 
-bool isObjFile(const QString& path)
+bool isObjFile(const std::string& path)
 {
-    QString lower = path.toLower();
-    return lower.endsWith(QLatin1String(".obj"));
+    std::string lower = path;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return lower.size() >= 4 && lower.substr(lower.size() - 4) == ".obj";
 }
 
-QStringList objExtensions()
+std::vector<std::string> objExtensions()
 {
     return {
-        QStringLiteral("obj"),
-        QStringLiteral("OBJ")
+        "obj",
+        "OBJ"
     };
 }
 
 WriteOptions defaultOptions()
 {
-    return WriteOptions{true, false, false, 0.1, 0.5, QString()};
+    return WriteOptions{true, false, false, 0.1, 0.5, {}};
 }
 
 WriteOptions highQualityOptions()

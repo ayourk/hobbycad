@@ -23,22 +23,23 @@
 #include <OSD_Path.hxx>
 #include <Message_ProgressRange.hxx>
 
-#include <QFile>
-#include <QFileInfo>
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 namespace hobbycad {
 namespace stl_io {
 
 WriteResult writeStl(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
     StlFormat format,
     const MeshQuality& quality)
 {
     WriteResult result;
 
-    if (shapes.isEmpty()) {
-        result.errorMessage = QStringLiteral("No shapes to write");
+    if (shapes.empty()) {
+        result.errorMessage = "No shapes to write";
         return result;
     }
 
@@ -46,7 +47,7 @@ WriteResult writeStl(
     TopoDS_Shape shapeToExport;
 
     if (shapes.size() == 1) {
-        shapeToExport = shapes.first();
+        shapeToExport = shapes.front();
     } else {
         BRep_Builder builder;
         TopoDS_Compound compound;
@@ -62,7 +63,7 @@ WriteResult writeStl(
     }
 
     if (shapeToExport.IsNull()) {
-        result.errorMessage = QStringLiteral("No valid shapes to export");
+        result.errorMessage = "No valid shapes to export";
         return result;
     }
 
@@ -75,11 +76,11 @@ WriteResult writeStl(
             quality.angularDeflection);
 
         if (!mesh.IsDone()) {
-            result.errorMessage = QStringLiteral("Failed to mesh shape");
+            result.errorMessage = "Failed to mesh shape";
             return result;
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during meshing");
+        result.errorMessage = "Exception during meshing";
         return result;
     }
 
@@ -93,12 +94,12 @@ WriteResult writeStl(
     writer.ASCIIMode() = (format == StlFormat::Ascii);
 
     try {
-        if (!writer.Write(shapeToExport, path.toUtf8().constData())) {
-            result.errorMessage = QStringLiteral("Failed to write STL file");
+        if (!writer.Write(shapeToExport, path.c_str())) {
+            result.errorMessage = "Failed to write STL file";
             return result;
         }
     } catch (...) {
-        result.errorMessage = QStringLiteral("Exception during STL export");
+        result.errorMessage = "Exception during STL export";
         return result;
     }
 
@@ -107,18 +108,18 @@ WriteResult writeStl(
 }
 
 WriteResult writeStl(
-    const QString& path,
+    const std::string& path,
     const TopoDS_Shape& shape,
     StlFormat format,
     const MeshQuality& quality)
 {
-    return writeStl(path, QList<TopoDS_Shape>{shape}, format, quality);
+    return writeStl(path, std::vector<TopoDS_Shape>{shape}, format, quality);
 }
 
 bool writeStl(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
-    QString* errorMsg)
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
+    std::string* errorMsg)
 {
     WriteResult result = writeStl(path, shapes, StlFormat::Binary, defaultQuality());
 
@@ -129,17 +130,18 @@ bool writeStl(
     return result.success;
 }
 
-bool isStlFile(const QString& path)
+bool isStlFile(const std::string& path)
 {
-    QString lower = path.toLower();
-    return lower.endsWith(QLatin1String(".stl"));
+    std::string lower = path;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return lower.size() >= 4 && lower.substr(lower.size() - 4) == ".stl";
 }
 
-QStringList stlExtensions()
+std::vector<std::string> stlExtensions()
 {
     return {
-        QStringLiteral("stl"),
-        QStringLiteral("STL")
+        "stl",
+        "STL"
     };
 }
 
@@ -160,29 +162,35 @@ MeshQuality fastQuality()
 
 // ---- Import functions ----
 
-StlFormat detectStlFormat(const QString& path)
+StlFormat detectStlFormat(const std::string& path)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
         return StlFormat::Binary;  // Default assumption
     }
 
-    // Read first 80 bytes (header) plus some content
-    QByteArray header = file.read(256);
+    // Read first 256 bytes (header + some content)
+    char header[256];
+    file.read(header, 256);
+    auto bytesRead = file.gcount();
     file.close();
 
-    if (header.size() < 6) {
+    if (bytesRead < 6) {
         return StlFormat::Binary;
     }
 
     // ASCII STL starts with "solid" (case insensitive)
     // But binary files might coincidentally have "solid" in header
     // So we also check for valid ASCII characters throughout
-    QByteArray lower = header.left(6).toLower();
-    if (lower.startsWith("solid ") || lower.startsWith("solid\n") || lower.startsWith("solid\r")) {
+    std::string first6(header, 6);
+    std::string lower6 = first6;
+    std::transform(lower6.begin(), lower6.end(), lower6.begin(), ::tolower);
+
+    if (lower6.substr(0, 6) == "solid " || lower6.substr(0, 6) == "solid\n" ||
+        lower6.substr(0, 6) == "solid\r") {
         // Check if rest of header contains only printable ASCII
         bool isAscii = true;
-        for (int i = 6; i < header.size() && isAscii; ++i) {
+        for (int i = 6; i < bytesRead && isAscii; ++i) {
             char c = header[i];
             if (c != '\n' && c != '\r' && c != '\t' && (c < 32 || c > 126)) {
                 isAscii = false;
@@ -196,12 +204,12 @@ StlFormat detectStlFormat(const QString& path)
     return StlFormat::Binary;
 }
 
-ReadResult readStl(const QString& path)
+ReadResult readStl(const std::string& path)
 {
     ReadResult result;
 
-    if (!QFile::exists(path)) {
-        result.errorMessage = QStringLiteral("File not found: %1").arg(path);
+    if (!std::filesystem::exists(path)) {
+        result.errorMessage = "File not found: " + path;
         return result;
     }
 
@@ -210,7 +218,7 @@ ReadResult readStl(const QString& path)
 
     // Read using RWStl
     try {
-        OSD_Path osdPath(path.toUtf8().constData());
+        OSD_Path osdPath(path.c_str());
         Handle(Poly_Triangulation) mesh;
 
         if (result.detectedFormat == StlFormat::Ascii) {
@@ -220,7 +228,7 @@ ReadResult readStl(const QString& path)
         }
 
         if (mesh.IsNull()) {
-            result.errorMessage = QStringLiteral("Failed to read STL mesh");
+            result.errorMessage = "Failed to read STL mesh";
             return result;
         }
 
@@ -238,16 +246,15 @@ ReadResult readStl(const QString& path)
         result.success = true;
 
     } catch (const Standard_Failure& e) {
-        result.errorMessage = QStringLiteral("OCCT exception: %1")
-            .arg(e.GetMessageString());
+        result.errorMessage = std::string("OCCT exception: ") + e.GetMessageString();
     } catch (...) {
-        result.errorMessage = QStringLiteral("Unknown exception during STL import");
+        result.errorMessage = "Unknown exception during STL import";
     }
 
     return result;
 }
 
-TopoDS_Shape readStlAsShape(const QString& path, QString* errorMsg)
+TopoDS_Shape readStlAsShape(const std::string& path, std::string* errorMsg)
 {
     ReadResult result = readStl(path);
 
@@ -258,7 +265,7 @@ TopoDS_Shape readStlAsShape(const QString& path, QString* errorMsg)
     return result.shape;
 }
 
-Handle(Poly_Triangulation) readStlAsMesh(const QString& path, QString* errorMsg)
+Handle(Poly_Triangulation) readStlAsMesh(const std::string& path, std::string* errorMsg)
 {
     ReadResult result = readStl(path);
 

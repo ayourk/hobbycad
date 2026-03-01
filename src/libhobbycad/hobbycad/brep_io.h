@@ -16,33 +16,33 @@
 #include "core.h"
 
 #include <TopoDS_Shape.hxx>
-#include <QString>
-#include <QList>
+
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace brep_io {
 
 /// Read a BREP file and return the shapes it contains.
 /// On failure, returns an empty list and sets errorMsg if non-null.
-HOBBYCAD_EXPORT QList<TopoDS_Shape> readBrep(
-    const QString& path,
-    QString* errorMsg = nullptr);
+HOBBYCAD_EXPORT std::vector<TopoDS_Shape> readBrep(
+    const std::string& path,
+    std::string* errorMsg = nullptr);
 
 /// Write shapes to a BREP file.
 /// Returns true on success.  Sets errorMsg on failure.
 HOBBYCAD_EXPORT bool writeBrep(
-    const QString& path,
-    const QList<TopoDS_Shape>& shapes,
-    QString* errorMsg = nullptr);
+    const std::string& path,
+    const std::vector<TopoDS_Shape>& shapes,
+    std::string* errorMsg = nullptr);
 
 /// Write a single shape to a BREP file.
 HOBBYCAD_EXPORT bool writeBrep(
-    const QString& path,
+    const std::string& path,
     const TopoDS_Shape& shape,
-    QString* errorMsg = nullptr);
+    std::string* errorMsg = nullptr);
 
 }  // namespace brep_io
 }  // namespace hobbycad
 
 #endif  // HOBBYCAD_BREP_IO_H
-

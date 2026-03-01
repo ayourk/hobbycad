@@ -14,13 +14,10 @@
 #define HOBBYCAD_GEOMETRY_TYPES_H
 
 #include "../core.h"
+#include "../types.h"
 
-#include <QPointF>
-#include <QLineF>
-#include <QRectF>
-#include <QVector>
-#include <QtMath>
-
+#include <vector>
+#include <cmath>
 #include <optional>
 
 namespace hobbycad {
@@ -45,7 +42,7 @@ struct LineLineIntersection {
     bool intersects = false;      ///< Whether lines intersect
     bool parallel = false;        ///< Whether lines are parallel
     bool coincident = false;      ///< Whether lines are coincident (overlapping)
-    QPointF point;                ///< Intersection point (if intersects)
+    Point2D point;                ///< Intersection point (if intersects)
     double t1 = 0.0;              ///< Parameter on first line [0,1] if within segment
     double t2 = 0.0;              ///< Parameter on second line [0,1] if within segment
     bool withinSegment1 = false;  ///< Whether intersection is within first segment
@@ -55,8 +52,8 @@ struct LineLineIntersection {
 /// Result of a line-circle intersection
 struct LineCircleIntersection {
     int count = 0;                ///< Number of intersections (0, 1, or 2)
-    QPointF point1;               ///< First intersection point
-    QPointF point2;               ///< Second intersection point
+    Point2D point1;               ///< First intersection point
+    Point2D point2;               ///< Second intersection point
     double t1 = 0.0;              ///< Parameter on line for first intersection
     double t2 = 0.0;              ///< Parameter on line for second intersection
     bool point1InSegment = false; ///< Whether first point is within line segment
@@ -68,15 +65,15 @@ struct CircleCircleIntersection {
     int count = 0;                ///< Number of intersections (0, 1, or 2)
     bool coincident = false;      ///< Whether circles are coincident
     bool internal = false;        ///< Whether one circle is inside the other
-    QPointF point1;               ///< First intersection point
-    QPointF point2;               ///< Second intersection point
+    Point2D point1;               ///< First intersection point
+    Point2D point2;               ///< Second intersection point
 };
 
 /// Result of a line-arc intersection
 struct LineArcIntersection {
     int count = 0;                ///< Number of intersections (0, 1, or 2)
-    QPointF point1;               ///< First intersection point
-    QPointF point2;               ///< Second intersection point
+    Point2D point1;               ///< First intersection point
+    Point2D point2;               ///< Second intersection point
     double t1 = 0.0;              ///< Parameter on line for first intersection [0,1]
     double t2 = 0.0;              ///< Parameter on line for second intersection [0,1]
     bool point1InSegment = false; ///< Whether first point is within line segment
@@ -91,7 +88,7 @@ struct LineArcIntersection {
 
 /// Arc defined by center, radius, and angles
 struct Arc {
-    QPointF center;
+    Point2D center;
     double radius = 0.0;
     double startAngle = 0.0;   ///< Start angle in degrees
     double sweepAngle = 360.0; ///< Sweep angle in degrees (positive = CCW)
@@ -100,13 +97,13 @@ struct Arc {
     bool containsAngle(double angle) const;
 
     /// Get the start point of the arc
-    QPointF startPoint() const;
+    Point2D startPoint() const;
 
     /// Get the end point of the arc
-    QPointF endPoint() const;
+    Point2D endPoint() const;
 
     /// Get point at parameter t (0 = start, 1 = end)
-    QPointF pointAt(double t) const;
+    Point2D pointAt(double t) const;
 };
 
 // =====================================================================
@@ -123,17 +120,22 @@ struct BoundingBox {
 
     BoundingBox() = default;
     BoundingBox(double x1, double y1, double x2, double y2);
+    explicit BoundingBox(const Rect2D& rect);
+    explicit BoundingBox(const Point2D& point);
+
+#if HOBBYCAD_HAS_QT
     explicit BoundingBox(const QRectF& rect);
     explicit BoundingBox(const QPointF& point);
+#endif
 
     /// Expand to include a point
-    void include(const QPointF& point);
+    void include(const Point2D& point);
 
     /// Expand to include another bounding box
     void include(const BoundingBox& other);
 
     /// Get center point
-    QPointF center() const;
+    Point2D center() const;
 
     /// Get width
     double width() const { return maxX - minX; }
@@ -141,11 +143,16 @@ struct BoundingBox {
     /// Get height
     double height() const { return maxY - minY; }
 
+    /// Convert to Rect2D
+    Rect2D toRect() const;
+
+#if HOBBYCAD_HAS_QT
     /// Convert to QRectF
-    QRectF toRect() const;
+    QRectF toQRect() const;
+#endif
 
     /// Check if point is inside (inclusive)
-    bool contains(const QPointF& point) const;
+    bool contains(const Point2D& point) const;
 
     /// Check if another box intersects
     bool intersects(const BoundingBox& other) const;
@@ -179,7 +186,7 @@ struct Transform2D {
     static Transform2D rotation(double angleDegrees);
 
     /// Rotation transform (angle in degrees, around center point)
-    static Transform2D rotation(double angleDegrees, const QPointF& center);
+    static Transform2D rotation(double angleDegrees, const Point2D& center);
 
     /// Scale transform (uniform, around origin)
     static Transform2D scale(double factor);
@@ -188,19 +195,19 @@ struct Transform2D {
     static Transform2D scale(double sx, double sy);
 
     /// Scale transform (around center point)
-    static Transform2D scale(double factor, const QPointF& center);
+    static Transform2D scale(double factor, const Point2D& center);
 
     /// Mirror transform (horizontal around X axis through center)
-    static Transform2D mirrorHorizontal(const QPointF& center);
+    static Transform2D mirrorHorizontal(const Point2D& center);
 
     /// Mirror transform (vertical around Y axis through center)
-    static Transform2D mirrorVertical(const QPointF& center);
+    static Transform2D mirrorVertical(const Point2D& center);
 
     /// Apply transform to a point
-    QPointF apply(const QPointF& point) const;
+    Point2D apply(const Point2D& point) const;
 
     /// Apply transform to multiple points
-    QVector<QPointF> apply(const QVector<QPointF>& points) const;
+    std::vector<Point2D> apply(const std::vector<Point2D>& points) const;
 
     /// Combine with another transform (this * other)
     Transform2D operator*(const Transform2D& other) const;

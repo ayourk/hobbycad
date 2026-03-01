@@ -10,26 +10,25 @@
 #include <TopoDS_Compound.hxx>
 #include <TopExp_Explorer.hxx>
 
-#include <QFile>
+#include <filesystem>
 
 namespace hobbycad {
 namespace brep_io {
 
-QList<TopoDS_Shape> readBrep(const QString& path, QString* errorMsg)
+std::vector<TopoDS_Shape> readBrep(const std::string& path, std::string* errorMsg)
 {
-    QList<TopoDS_Shape> result;
+    std::vector<TopoDS_Shape> result;
 
-    if (!QFile::exists(path)) {
-        if (errorMsg) *errorMsg = QStringLiteral("File not found: ") + path;
+    if (!std::filesystem::exists(path)) {
+        if (errorMsg) *errorMsg = "File not found: " + path;
         return result;
     }
 
     BRep_Builder builder;
     TopoDS_Shape shape;
 
-    std::string stdPath = path.toStdString();
-    if (!BRepTools::Read(shape, stdPath.c_str(), builder)) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to read BREP file: ") + path;
+    if (!BRepTools::Read(shape, path.c_str(), builder)) {
+        if (errorMsg) *errorMsg = "Failed to read BREP file: " + path;
         return result;
     }
 
@@ -37,37 +36,37 @@ QList<TopoDS_Shape> readBrep(const QString& path, QString* errorMsg)
     // Otherwise, return it as a single-element list.
     if (shape.ShapeType() == TopAbs_COMPOUND) {
         for (TopExp_Explorer exp(shape, TopAbs_SOLID); exp.More(); exp.Next()) {
-            result.append(exp.Current());
+            result.push_back(exp.Current());
         }
         // If no solids found, try shells and faces
-        if (result.isEmpty()) {
+        if (result.empty()) {
             for (TopExp_Explorer exp(shape, TopAbs_SHELL); exp.More(); exp.Next()) {
-                result.append(exp.Current());
+                result.push_back(exp.Current());
             }
         }
-        if (result.isEmpty()) {
+        if (result.empty()) {
             // Fall back to the compound itself
-            result.append(shape);
+            result.push_back(shape);
         }
     } else {
-        result.append(shape);
+        result.push_back(shape);
     }
 
     return result;
 }
 
-bool writeBrep(const QString& path, const QList<TopoDS_Shape>& shapes,
-               QString* errorMsg)
+bool writeBrep(const std::string& path, const std::vector<TopoDS_Shape>& shapes,
+               std::string* errorMsg)
 {
-    if (shapes.isEmpty()) {
-        if (errorMsg) *errorMsg = QStringLiteral("No shapes to write");
+    if (shapes.empty()) {
+        if (errorMsg) *errorMsg = "No shapes to write";
         return false;
     }
 
     TopoDS_Shape toWrite;
 
     if (shapes.size() == 1) {
-        toWrite = shapes.first();
+        toWrite = shapes.front();
     } else {
         // Multiple shapes: wrap in a compound
         BRep_Builder builder;
@@ -79,21 +78,19 @@ bool writeBrep(const QString& path, const QList<TopoDS_Shape>& shapes,
         toWrite = compound;
     }
 
-    std::string stdPath = path.toStdString();
-    if (!BRepTools::Write(toWrite, stdPath.c_str())) {
-        if (errorMsg) *errorMsg = QStringLiteral("Failed to write BREP file: ") + path;
+    if (!BRepTools::Write(toWrite, path.c_str())) {
+        if (errorMsg) *errorMsg = "Failed to write BREP file: " + path;
         return false;
     }
 
     return true;
 }
 
-bool writeBrep(const QString& path, const TopoDS_Shape& shape,
-               QString* errorMsg)
+bool writeBrep(const std::string& path, const TopoDS_Shape& shape,
+               std::string* errorMsg)
 {
-    return writeBrep(path, QList<TopoDS_Shape>{shape}, errorMsg);
+    return writeBrep(path, std::vector<TopoDS_Shape>{shape}, errorMsg);
 }
 
 }  // namespace brep_io
 }  // namespace hobbycad
-

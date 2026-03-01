@@ -10,7 +10,7 @@
 # ---- Dependencies ---------------------------------------------------
 
 find_package(OpenCASCADE REQUIRED)
-find_package(Qt6 6.2 REQUIRED COMPONENTS
+find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} REQUIRED COMPONENTS
     Core Gui Widgets OpenGL Svg)
 find_package(OpenGL REQUIRED)
 
@@ -40,6 +40,7 @@ set(APP_SOURCES
     gui/parametersdialog.cpp
     gui/sketchtoolbar.cpp
     gui/modeltoolbar.cpp
+    gui/changelogpanel.cpp
     gui/sketchcanvas.cpp
     gui/sketchsolver.cpp
     gui/sketchactionbar.cpp
@@ -93,6 +94,7 @@ set(APP_HEADERS
     gui/parametersdialog.h
     gui/sketchtoolbar.h
     gui/modeltoolbar.h
+    gui/changelogpanel.h
     gui/sketchcanvas.h
     gui/sketchsolver.h
     gui/sketchactionbar.h
@@ -184,6 +186,19 @@ if(Qt6LinguistTools_FOUND)
         TS_FILES ${TS_FILES}
         OPTIONS -no-obsolete
     )
+endif()
+
+# ---- Static Qt plugin imports (for vcpkg static builds) ----------------
+#
+# When Qt is built statically (vcpkg static triplets), plugins like
+# QWindowsIntegrationPlugin must be linked directly into the executable.
+# qt_finalize_target() handles this automatically — it discovers and
+# links all required plugins that the target depends on.
+# For shared Qt builds, this is a no-op.
+
+get_target_property(_qt_type Qt6::Core TYPE)
+if(_qt_type STREQUAL "STATIC_LIBRARY")
+    qt_finalize_target(hobbycad)
 endif()
 
 # ---- Install ---------------------------------------------------------

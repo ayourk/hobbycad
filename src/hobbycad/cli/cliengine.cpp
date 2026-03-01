@@ -654,7 +654,11 @@ QStringList CliEngine::completeArguments(const QStringList& tokens,
 
 CliResult CliEngine::execute(const QString& line)
 {
-    QStringList tokens = sketch::tokenizeLine(line);
+    std::vector<std::string> stdTokens = sketch::tokenizeLine(line.toStdString());
+    QStringList tokens;
+    tokens.reserve(static_cast<int>(stdTokens.size()));
+    for (const auto& t : stdTokens)
+        tokens.append(QString::fromStdString(t));
 
     if (tokens.isEmpty()) return {};
 
@@ -816,11 +820,11 @@ CliResult CliEngine::cmdOpen(const QStringList& args)
         }
     }
 
-    QString err;
-    auto shapes = brep_io::readBrep(path, &err);
-    if (shapes.isEmpty()) {
+    std::string err;
+    auto shapes = brep_io::readBrep(path.toStdString(), &err);
+    if (shapes.empty()) {
         r.exitCode = 1;
-        r.error = QStringLiteral("Error: ") + err;
+        r.error = QStringLiteral("Error: ") + QString::fromStdString(err);
         return r;
     }
 
@@ -847,7 +851,7 @@ CliResult CliEngine::cmdSave(const QStringList& args)
     if (suffix.isEmpty())
         path += QStringLiteral(".brep");
 
-    if (!doc.saveBrep(path)) {
+    if (!doc.saveBrep(path.toStdString())) {
         r.exitCode = 1;
         r.error = QStringLiteral("Error: could not save to ") + path;
         return r;
@@ -950,14 +954,14 @@ CliResult CliEngine::cmdConvert(const QStringList& args)
     }
 
     // Read input
-    QList<TopoDS_Shape> shapes;
-    QString err;
+    std::vector<TopoDS_Shape> shapes;
+    std::string err;
 
     if (inputIsBrep) {
-        shapes = brep_io::readBrep(inputPath, &err);
-        if (shapes.isEmpty() && !err.isEmpty()) {
+        shapes = brep_io::readBrep(inputPath.toStdString(), &err);
+        if (shapes.empty() && !err.empty()) {
             r.exitCode = 1;
-            r.error = QStringLiteral("Failed to read input: ") + err;
+            r.error = QStringLiteral("Failed to read input: ") + QString::fromStdString(err);
             return r;
         }
     } else if (inputIsProject) {
@@ -973,9 +977,9 @@ CliResult CliEngine::cmdConvert(const QStringList& args)
 
     // Write output
     if (outputIsBrep) {
-        if (!brep_io::writeBrep(outputPath, shapes, &err)) {
+        if (!brep_io::writeBrep(outputPath.toStdString(), shapes, &err)) {
             r.exitCode = 1;
-            r.error = QStringLiteral("Failed to write output: ") + err;
+            r.error = QStringLiteral("Failed to write output: ") + QString::fromStdString(err);
             return r;
         }
     } else if (outputIsProject) {
@@ -1481,13 +1485,24 @@ CliResult CliEngine::cmdDiscard()
 // Wrappers for library parsing functions (using local static for brevity)
 static bool parseValue(const QString& str, double& value, QString& expr)
 {
-    return sketch::parseValue(str, value, expr);
+    std::string stdExpr;
+    bool ok = sketch::parseValue(str.toStdString(), value, stdExpr);
+    if (ok) expr = QString::fromStdString(stdExpr);
+    return ok;
 }
 
 static bool parseCoord(const QString& str, double& x, double& y,
                        QString* xExpr = nullptr, QString* yExpr = nullptr)
 {
-    return sketch::parseCoordinate(str, x, y, xExpr, yExpr);
+    std::string stdXExpr, stdYExpr;
+    bool ok = sketch::parseCoordinate(str.toStdString(), x, y,
+                                       xExpr ? &stdXExpr : nullptr,
+                                       yExpr ? &stdYExpr : nullptr);
+    if (ok) {
+        if (xExpr) *xExpr = QString::fromStdString(stdXExpr);
+        if (yExpr) *yExpr = QString::fromStdString(stdYExpr);
+    }
+    return ok;
 }
 
 CliResult CliEngine::cmdSketchPoint(const QStringList& args)

@@ -50,15 +50,20 @@
   Continuous Integration
   -----------------------
 
-  The project CI (.github/workflows/windows-build.yml) runs two
-  parallel jobs:
+  The project CI uses separate workflows for each toolchain:
 
-    "HobbyCAD via MSYS"   MSYS2 UCRT64 / GCC / pacman packages.
-                           Matches the local setup from setup-env.ps1.
+    windows-build-msys2.yml       MSYS2 UCRT64 / GCC / pacman.
+                                  Matches the local setup from
+                                  setup-env.ps1 (dynamic build).
 
-    "HobbyCAD via MSVC"   Visual Studio / cl.exe / vcpkg manifest.
-                           Tests MSVC compatibility with pinned
-                           dependency versions from vcpkg.json.
+    windows-build-msvc.yml        MSVC x64 / vcpkg static build.
+    windows-build-msvc-arm64.yml  MSVC arm64 / vcpkg static build.
+                                  Uses custom static triplets to
+                                  produce self-contained .exe files
+                                  with no DLL dependencies.
+
+    windows-inno.yml              Inno Setup installer (static).
+    windows-msi.yml               WiX MSI installer (static).
 
   See docs/dev_environment_setup.txt Sections 13-19 for full
   Windows development details.

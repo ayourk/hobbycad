@@ -3,7 +3,9 @@
 // =====================================================================
 
 #include <hobbycad/sketch/undo.h>
-#include <QObject>
+
+#include <algorithm>
+#include <string>
 
 namespace hobbycad {
 namespace sketch {
@@ -12,91 +14,91 @@ namespace sketch {
 //  UndoCommand Static Factories
 // =====================================================================
 
-UndoCommand UndoCommand::addEntity(const Entity& entity, const QString& desc)
+UndoCommand UndoCommand::addEntity(const Entity& entity, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::AddEntity;
     cmd.entity = entity;
-    cmd.description = desc.isEmpty() ? QObject::tr("Add %1").arg(entityTypeDisplayName(entity.type)) : desc;
+    cmd.description = desc.empty() ? (std::string("Add ") + entityTypeName(entity.type)) : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::deleteEntity(const Entity& entity, const QString& desc)
+UndoCommand UndoCommand::deleteEntity(const Entity& entity, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::DeleteEntity;
     cmd.entity = entity;
-    cmd.description = desc.isEmpty() ? QObject::tr("Delete %1").arg(entityTypeDisplayName(entity.type)) : desc;
+    cmd.description = desc.empty() ? (std::string("Delete ") + entityTypeName(entity.type)) : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::modifyEntity(const Entity& before, const Entity& after, const QString& desc)
+UndoCommand UndoCommand::modifyEntity(const Entity& before, const Entity& after, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::ModifyEntity;
     cmd.previousEntity = before;
     cmd.entity = after;
-    cmd.description = desc.isEmpty() ? QObject::tr("Modify %1").arg(entityTypeDisplayName(after.type)) : desc;
+    cmd.description = desc.empty() ? (std::string("Modify ") + entityTypeName(after.type)) : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::addConstraint(const Constraint& constraint, const QString& desc)
+UndoCommand UndoCommand::addConstraint(const Constraint& constraint, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::AddConstraint;
     cmd.constraint = constraint;
-    cmd.description = desc.isEmpty() ? QObject::tr("Add Constraint") : desc;
+    cmd.description = desc.empty() ? std::string("Add Constraint") : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::deleteConstraint(const Constraint& constraint, const QString& desc)
+UndoCommand UndoCommand::deleteConstraint(const Constraint& constraint, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::DeleteConstraint;
     cmd.constraint = constraint;
-    cmd.description = desc.isEmpty() ? QObject::tr("Delete Constraint") : desc;
+    cmd.description = desc.empty() ? std::string("Delete Constraint") : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::modifyConstraint(const Constraint& before, const Constraint& after, const QString& desc)
+UndoCommand UndoCommand::modifyConstraint(const Constraint& before, const Constraint& after, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::ModifyConstraint;
     cmd.previousConstraint = before;
     cmd.constraint = after;
-    cmd.description = desc.isEmpty() ? QObject::tr("Modify Constraint") : desc;
+    cmd.description = desc.empty() ? std::string("Modify Constraint") : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::addGroup(const Group& group, const QString& desc)
+UndoCommand UndoCommand::addGroup(const Group& group, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::AddGroup;
     cmd.group = group;
-    cmd.description = desc.isEmpty() ? QObject::tr("Create Group") : desc;
+    cmd.description = desc.empty() ? std::string("Create Group") : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::deleteGroup(const Group& group, const QString& desc)
+UndoCommand UndoCommand::deleteGroup(const Group& group, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::DeleteGroup;
     cmd.group = group;
-    cmd.description = desc.isEmpty() ? QObject::tr("Delete Group") : desc;
+    cmd.description = desc.empty() ? std::string("Delete Group") : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::modifyGroup(const Group& before, const Group& after, const QString& desc)
+UndoCommand UndoCommand::modifyGroup(const Group& before, const Group& after, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::ModifyGroup;
     cmd.previousGroup = before;
     cmd.group = after;
-    cmd.description = desc.isEmpty() ? QObject::tr("Modify Group") : desc;
+    cmd.description = desc.empty() ? std::string("Modify Group") : desc;
     return cmd;
 }
 
-UndoCommand UndoCommand::compound(const QVector<UndoCommand>& commands, const QString& desc)
+UndoCommand UndoCommand::compound(const std::vector<UndoCommand>& commands, const std::string& desc)
 {
     UndoCommand cmd;
     cmd.type = CommandType::Compound;
@@ -129,22 +131,22 @@ UndoStack::UndoStack(int maxSize)
 void UndoStack::push(const UndoCommand& command)
 {
     if (m_recordingCompound) {
-        m_compoundCommands.append(command);
+        m_compoundCommands.push_back(command);
         return;
     }
 
-    m_undoStack.append(command);
+    m_undoStack.push_back(command);
     m_redoStack.clear();
     m_modified = true;
     enforceMaxSize();
 }
 
-void UndoStack::pushCompound(const QVector<UndoCommand>& commands, const QString& description)
+void UndoStack::pushCompound(const std::vector<UndoCommand>& commands, const std::string& description)
 {
-    if (commands.isEmpty()) return;
+    if (commands.empty()) return;
 
     if (commands.size() == 1) {
-        push(commands.first());
+        push(commands.front());
     } else {
         push(UndoCommand::compound(commands, description));
     }
@@ -152,78 +154,80 @@ void UndoStack::pushCompound(const QVector<UndoCommand>& commands, const QString
 
 UndoCommand UndoStack::undo()
 {
-    if (m_undoStack.isEmpty()) {
+    if (m_undoStack.empty()) {
         return UndoCommand();
     }
 
-    UndoCommand cmd = m_undoStack.takeLast();
-    m_redoStack.append(cmd);
+    UndoCommand cmd = m_undoStack.back();
+    m_undoStack.pop_back();
+    m_redoStack.push_back(cmd);
     m_modified = true;
     return cmd;
 }
 
 UndoCommand UndoStack::redo()
 {
-    if (m_redoStack.isEmpty()) {
+    if (m_redoStack.empty()) {
         return UndoCommand();
     }
 
-    UndoCommand cmd = m_redoStack.takeLast();
-    m_undoStack.append(cmd);
+    UndoCommand cmd = m_redoStack.back();
+    m_redoStack.pop_back();
+    m_undoStack.push_back(cmd);
     m_modified = true;
     return cmd;
 }
 
-QVector<UndoCommand> UndoStack::undoMultiple(int levels)
+std::vector<UndoCommand> UndoStack::undoMultiple(int levels)
 {
-    QVector<UndoCommand> result;
-    for (int i = 0; i < levels && !m_undoStack.isEmpty(); ++i) {
-        result.append(undo());
+    std::vector<UndoCommand> result;
+    for (int i = 0; i < levels && !m_undoStack.empty(); ++i) {
+        result.push_back(undo());
     }
     return result;
 }
 
-QVector<UndoCommand> UndoStack::redoMultiple(int levels)
+std::vector<UndoCommand> UndoStack::redoMultiple(int levels)
 {
-    QVector<UndoCommand> result;
-    for (int i = 0; i < levels && !m_redoStack.isEmpty(); ++i) {
-        result.append(redo());
+    std::vector<UndoCommand> result;
+    for (int i = 0; i < levels && !m_redoStack.empty(); ++i) {
+        result.push_back(redo());
     }
     return result;
 }
 
-QString UndoStack::undoDescription() const
+std::string UndoStack::undoDescription() const
 {
-    if (m_undoStack.isEmpty()) {
-        return QString();
+    if (m_undoStack.empty()) {
+        return std::string();
     }
-    return m_undoStack.last().description;
+    return m_undoStack.back().description;
 }
 
-QString UndoStack::redoDescription() const
+std::string UndoStack::redoDescription() const
 {
-    if (m_redoStack.isEmpty()) {
-        return QString();
+    if (m_redoStack.empty()) {
+        return std::string();
     }
-    return m_redoStack.last().description;
+    return m_redoStack.back().description;
 }
 
-QStringList UndoStack::undoDescriptions() const
+std::vector<std::string> UndoStack::undoDescriptions() const
 {
-    QStringList result;
+    std::vector<std::string> result;
     // Return in reverse order (most recent first)
-    for (int i = m_undoStack.size() - 1; i >= 0; --i) {
-        result.append(m_undoStack[i].description);
+    for (int i = static_cast<int>(m_undoStack.size()) - 1; i >= 0; --i) {
+        result.push_back(m_undoStack[i].description);
     }
     return result;
 }
 
-QStringList UndoStack::redoDescriptions() const
+std::vector<std::string> UndoStack::redoDescriptions() const
 {
-    QStringList result;
+    std::vector<std::string> result;
     // Return in reverse order (most recent first)
-    for (int i = m_redoStack.size() - 1; i >= 0; --i) {
-        result.append(m_redoStack[i].description);
+    for (int i = static_cast<int>(m_redoStack.size()) - 1; i >= 0; --i) {
+        result.push_back(m_redoStack[i].description);
     }
     return result;
 }
@@ -242,11 +246,11 @@ void UndoStack::clearRedo()
 
 void UndoStack::setMaxSize(int maxSize)
 {
-    m_maxSize = qMax(1, maxSize);
+    m_maxSize = std::max(1, maxSize);
     enforceMaxSize();
 }
 
-void UndoStack::beginCompound(const QString& description)
+void UndoStack::beginCompound(const std::string& description)
 {
     if (m_recordingCompound) {
         // Nested compound - just continue recording
@@ -263,7 +267,7 @@ void UndoStack::endCompound()
 
     m_recordingCompound = false;
 
-    if (!m_compoundCommands.isEmpty()) {
+    if (!m_compoundCommands.empty()) {
         pushCompound(m_compoundCommands, m_compoundDescription);
     }
 
@@ -273,8 +277,8 @@ void UndoStack::endCompound()
 
 void UndoStack::enforceMaxSize()
 {
-    while (m_undoStack.size() > m_maxSize) {
-        m_undoStack.removeFirst();
+    while (static_cast<int>(m_undoStack.size()) > m_maxSize) {
+        m_undoStack.erase(m_undoStack.begin());
     }
 }
 
@@ -299,21 +303,10 @@ const char* entityTypeName(EntityType type)
     return "Unknown";
 }
 
-QString entityTypeDisplayName(EntityType type)
+std::string entityTypeDisplayName(EntityType type)
 {
-    switch (type) {
-    case EntityType::Point:     return QObject::tr("Point");
-    case EntityType::Line:      return QObject::tr("Line");
-    case EntityType::Rectangle: return QObject::tr("Rectangle");
-    case EntityType::Circle:    return QObject::tr("Circle");
-    case EntityType::Arc:       return QObject::tr("Arc");
-    case EntityType::Spline:    return QObject::tr("Spline");
-    case EntityType::Polygon:   return QObject::tr("Polygon");
-    case EntityType::Slot:      return QObject::tr("Slot");
-    case EntityType::Ellipse:   return QObject::tr("Ellipse");
-    case EntityType::Text:      return QObject::tr("Text");
-    }
-    return QObject::tr("Unknown");
+    // Without Qt translation support, just return the plain name
+    return entityTypeName(type);
 }
 
 }  // namespace sketch

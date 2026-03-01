@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/libhobbycad_api.txt
-  Document Version : 0.0.6
-  Date             : 2026-02-20
+  Document Version : 0.0.7
+  Date             : 2026-02-25
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -76,6 +76,15 @@
        12.12 Background Images
        12.13 Snap Point Detection
    13. GUI Integration
+   14. Non-Qt Fallback Architecture
+       14.1  Overview
+       14.2  HOBBYCAD_HAS_QT Macro
+       14.3  JSON Serialization (nlohmann/json)
+       14.4  OpenGL Probing (EGL)
+       14.5  Base64 Utilities
+       14.6  Translation / i18n
+       14.7  Cross-Platform Considerations
+       14.8  Building Without Qt
 
 ================================================================================
   1. OVERVIEW
@@ -99,8 +108,10 @@
     ALTERNATIVE UI SUPPORT
     ----------------------
     All functions in libhobbycad are UI-agnostic and can be used to build
-    alternative user interfaces. The library has no dependencies on Qt Widgets
-    or any GUI framework - only Qt Core and Qt Gui (for QPointF, QPolygonF).
+    alternative user interfaces. The library has no dependencies on Qt or
+    any GUI framework. Core types (Point2D, Rect2D, Vec3) are defined in
+    hobbycad/types.h. When Qt 6.4.2+ is available, implicit conversion
+    operators provide seamless interop with QPointF, QRectF, and QVector3D.
 
     The geometry and sketch modules provide all the computational logic needed
     for a 2D sketching application:
@@ -119,6 +130,9 @@
     SketchCanvas converts between its UI types and library types.
 
     Header Files:
+      hobbycad/types.h                Core types (Point2D, Rect2D, Vec3, helpers)
+      hobbycad/qt_compat.h            Qt interop (toQt/fromQt conversions)
+      hobbycad/format.h               String formatting utilities
       hobbycad/core.h                 Library initialization and version
       hobbycad/document.h             Simple document model (single file)
       hobbycad/project.h              Full project model (.hcad format)
@@ -210,7 +224,7 @@
   3.1  File Path Management
   --------------------------
 
-    QString Document::filePath() const
+    std::string Document::filePath() const
         Returns the path to the file on disk, or empty if unsaved.
 
     bool Document::isNew() const
@@ -226,7 +240,7 @@
   3.2  Shape Management
   ----------------------
 
-    const QList<TopoDS_Shape>& Document::shapes() const
+    const std::vector<TopoDS_Shape>& Document::shapes() const
         Returns all shapes in the document.
 
     void Document::addShape(const TopoDS_Shape& shape)
@@ -243,11 +257,11 @@
   3.3  File I/O
   --------------
 
-    bool Document::loadBrep(const QString& path)
+    bool Document::loadBrep(const std::string& path)
         Load a BREP file. Replaces current shapes.
         Returns true on success.
 
-    bool Document::saveBrep(const QString& path = QString())
+    bool Document::saveBrep(const std::string& path = std::string())
         Save shapes to a BREP file.
         If path is empty, uses the current filePath().
         Returns true on success.
@@ -265,20 +279,20 @@
   4.1  Project Metadata
   ----------------------
 
-    QString Project::name() const
-    void Project::setName(const QString& name)
+    std::string Project::name() const
+    void Project::setName(const std::string& name)
         Project name (displayed in title bar, etc.)
 
-    QString Project::author() const
-    void Project::setAuthor(const QString& author)
+    std::string Project::author() const
+    void Project::setAuthor(const std::string& author)
         Author/creator of the project
 
-    QString Project::description() const
-    void Project::setDescription(const QString& desc)
+    std::string Project::description() const
+    void Project::setDescription(const std::string& desc)
         Project description
 
-    QString Project::units() const
-    void Project::setUnits(const QString& units)
+    std::string Project::units() const
+    void Project::setUnits(const std::string& units)
         Units system (default: "mm")
 
     QDateTime Project::created() const
@@ -291,7 +305,7 @@
   4.2  Project State
   -------------------
 
-    QString Project::projectPath() const
+    std::string Project::projectPath() const
         Directory path of the project (empty if unsaved)
 
     bool Project::isNew() const
@@ -307,13 +321,13 @@
   4.3  Geometry Management
   -------------------------
 
-    const QList<TopoDS_Shape>& Project::shapes() const
+    const std::vector<TopoDS_Shape>& Project::shapes() const
         Returns all 3D shapes in the project
 
     void Project::addShape(const TopoDS_Shape& shape)
         Add a shape to the project
 
-    void Project::setShapes(const QList<TopoDS_Shape>& shapes)
+    void Project::setShapes(const std::vector<TopoDS_Shape>& shapes)
         Replace all shapes
 
     void Project::clearShapes()
@@ -323,7 +337,7 @@
   4.4  Construction Planes
   -------------------------
 
-    const QVector<ConstructionPlaneData>& Project::constructionPlanes() const
+    const std::vector<ConstructionPlaneData>& Project::constructionPlanes() const
         Returns all construction planes
 
     void Project::addConstructionPlane(const ConstructionPlaneData& plane)
@@ -348,7 +362,7 @@
   4.5  Sketches
   --------------
 
-    const QVector<SketchData>& Project::sketches() const
+    const std::vector<SketchData>& Project::sketches() const
         Returns all sketches
 
     void Project::addSketch(const SketchData& sketch)
@@ -367,10 +381,10 @@
   4.6  Parameters
   ----------------
 
-    const QList<ParameterData>& Project::parameters() const
+    const std::vector<ParameterData>& Project::parameters() const
         Returns all parameters
 
-    void Project::setParameters(const QList<ParameterData>& params)
+    void Project::setParameters(const std::vector<ParameterData>& params)
         Replace all parameters
 
     void Project::addParameter(const ParameterData& param)
@@ -383,13 +397,13 @@
   4.7  Features
   --------------
 
-    const QVector<FeatureData>& Project::features() const
+    const std::vector<FeatureData>& Project::features() const
         Returns the feature tree
 
     void Project::addFeature(const FeatureData& feature)
         Add a feature to the tree
 
-    void Project::setFeatures(const QVector<FeatureData>& features)
+    void Project::setFeatures(const std::vector<FeatureData>& features)
         Replace the feature tree
 
     void Project::clearFeatures()
@@ -399,17 +413,17 @@
   4.8  File I/O
   --------------
 
-    bool Project::load(const QString& path, QString* errorMsg = nullptr)
+    bool Project::load(const std::string& path, std::string* errorMsg = nullptr)
         Load a project from a .hcad directory.
         Returns true on success.
         If errorMsg is non-null, sets it to error description on failure.
 
-    bool Project::save(const QString& path = QString(), QString* errorMsg = nullptr)
+    bool Project::save(const std::string& path = std::string(), std::string* errorMsg = nullptr)
         Save the project to a .hcad directory.
         If path is empty, uses the current projectPath().
         Returns true on success.
 
-    void Project::createNew(const QString& name = QString())
+    void Project::createNew(const std::string& name = std::string())
         Create a new empty project with optional name.
 
     void Project::close()
@@ -520,14 +534,14 @@
     struct SketchEntityData {
         int id = 0;                              // Unique entity ID
         SketchEntityType type;                   // Entity type
-        QVector<QPointF> points;                 // Control/definition points
+        std::vector<Point2D> points;                 // Control/definition points
         double radius = 0.0;                     // For circles, arcs, slots
         double startAngle = 0.0;                 // For arcs (degrees)
         double sweepAngle = 0.0;                 // For arcs (degrees)
         int sides = 6;                           // For polygons
         double majorRadius = 0.0;                // For ellipses
         double minorRadius = 0.0;                // For ellipses
-        QString text;                            // For text entities
+        std::string text;                            // For text entities
         bool constrained = false;                // Has active constraints
         bool isConstruction = false;             // Construction geometry flag
     };
@@ -535,24 +549,24 @@
     struct ConstraintData {
         int id = 0;                              // Unique constraint ID
         ConstraintType type;                     // Constraint type
-        QVector<int> entityIds;                  // IDs of entities involved
-        QVector<int> pointIndices;               // Point indices within entities
+        std::vector<int> entityIds;                  // IDs of entities involved
+        std::vector<int> pointIndices;               // Point indices within entities
         double value = 0.0;                      // Dimension value
         bool isDriving = true;                   // Driving vs reference
-        QPointF labelPosition;                   // Label position in sketch
+        Point2D labelPosition;                   // Label position in sketch
         bool labelVisible = true;                // Label visibility
         bool enabled = true;                     // Constraint active state
     };
 
     struct SketchData {
-        QString name;                            // Sketch name
+        std::string name;                            // Sketch name
         SketchPlane plane = SketchPlane::XY;     // Plane type
         int constructionPlaneId = -1;            // Construction plane reference
         double planeOffset = 0.0;                // Offset from origin
         PlaneRotationAxis rotationAxis;          // Rotation axis
         double rotationAngle = 0.0;              // Rotation angle
-        QVector<SketchEntityData> entities;      // All entities
-        QVector<ConstraintData> constraints;     // All constraints
+        std::vector<SketchEntityData> entities;      // All entities
+        std::vector<ConstraintData> constraints;     // All constraints
         double gridSpacing = 10.0;               // Grid spacing (mm)
     };
 
@@ -562,7 +576,7 @@
 
     struct ConstructionPlaneData {
         int id = 0;                              // Unique plane ID
-        QString name;                            // User-visible name
+        std::string name;                            // User-visible name
         ConstructionPlaneType type;              // How plane is defined
 
         // Base plane reference
@@ -599,11 +613,11 @@
   --------------------
 
     struct ParameterData {
-        QString name;             // Parameter name (e.g., "length")
-        QString expression;       // Expression string (e.g., "width * 2")
+        std::string name;             // Parameter name (e.g., "length")
+        std::string expression;       // Expression string (e.g., "width * 2")
         double value = 0.0;       // Evaluated numeric value
-        QString unit;             // Unit string (e.g., "mm")
-        QString comment;          // User comment
+        std::string unit;             // Unit string (e.g., "mm")
+        std::string comment;          // User comment
         bool isUserParam = true;  // User vs system parameter
     };
 
@@ -629,12 +643,12 @@
     struct FeatureData {
         int id = 0;               // Unique feature ID
         FeatureType type;         // Feature type
-        QString name;             // Feature name
+        std::string name;             // Feature name
         QJsonObject properties;   // Feature-specific properties
-        QVector<int> dependsOn;   // IDs of features this depends on
+        std::vector<int> dependsOn;   // IDs of features this depends on
         bool suppressed = false;  // Feature is suppressed (not computed)
         FeatureState state;       // Validation state (Normal/Warning/Error)
-        QString stateMessage;     // Human-readable error/warning message
+        std::string stateMessage;     // Human-readable error/warning message
     };
 
 ================================================================================
@@ -645,26 +659,26 @@
 
     Standalone BREP file read/write functions in the brep_io namespace.
 
-    QList<TopoDS_Shape> hobbycad::brep_io::readBrep(
-        const QString& path,
-        QString* errorMsg = nullptr)
+    std::vector<TopoDS_Shape> hobbycad::brep_io::readBrep(
+        const std::string& path,
+        std::string* errorMsg = nullptr)
 
         Read a BREP file and return the shapes it contains.
         On failure, returns an empty list.
         If errorMsg is non-null, sets it to error description.
 
     bool hobbycad::brep_io::writeBrep(
-        const QString& path,
-        const QList<TopoDS_Shape>& shapes,
-        QString* errorMsg = nullptr)
+        const std::string& path,
+        const std::vector<TopoDS_Shape>& shapes,
+        std::string* errorMsg = nullptr)
 
         Write multiple shapes to a BREP file.
         Returns true on success.
 
     bool hobbycad::brep_io::writeBrep(
-        const QString& path,
+        const std::string& path,
         const TopoDS_Shape& shape,
-        QString* errorMsg = nullptr)
+        std::string* errorMsg = nullptr)
 
         Write a single shape to a BREP file.
         Returns true on success.
@@ -673,10 +687,10 @@
 
         #include <hobbycad/brep_io.h>
 
-        QString error;
+        std::string error;
         auto shapes = hobbycad::brep_io::readBrep("model.brep", &error);
-        if (shapes.isEmpty() && !error.isEmpty()) {
-            qWarning() << "Failed to load:" << error;
+        if (shapes.empty() && !error.empty()) {
+            std::cerr << "Failed to load: " << error << "\n";
         }
 
 ================================================================================
@@ -695,13 +709,13 @@
 
     struct ReadResult {
         bool success;
-        QList<TopoDS_Shape> shapes;
-        QString errorMessage;
+        std::vector<TopoDS_Shape> shapes;
+        std::string errorMessage;
         int shapeCount;          // Number of shapes read
         int rootCount;           // Number of root entities
     };
 
-    ReadResult hobbycad::step_io::readStep(const QString& path)
+    ReadResult hobbycad::step_io::readStep(const std::string& path)
 
         Read a STEP file and return all shapes.
         Supports .step and .stp extensions.
@@ -721,19 +735,19 @@
 
     struct WriteResult {
         bool success;
-        QString errorMessage;
+        std::string errorMessage;
         int shapeCount;          // Number of shapes written
     };
 
     WriteResult hobbycad::step_io::writeStep(
-        const QString& path,
-        const QList<TopoDS_Shape>& shapes,
+        const std::string& path,
+        const std::vector<TopoDS_Shape>& shapes,
         StepVersion version = StepVersion::AP214)
 
         Write shapes to a STEP file.
 
     WriteResult hobbycad::step_io::writeStep(
-        const QString& path,
+        const std::string& path,
         const TopoDS_Shape& shape,
         StepVersion version = StepVersion::AP214)
 
@@ -741,15 +755,15 @@
 
     Utility functions:
 
-        bool isStepFile(const QString& path)
-        QStringList stepExtensions()
+        bool isStepFile(const std::string& path)
+        std::vector<std::string> stepExtensions()
 
     Example:
 
         auto shapes = document.shapes();
         auto result = step_io::writeStep("export.step", shapes);
         if (!result.success) {
-            qWarning() << result.errorMessage;
+            std::cerr << result.errorMessage << "\n";
         }
 
 
@@ -771,13 +785,13 @@
 
     struct WriteResult {
         bool success;
-        QString errorMessage;
+        std::string errorMessage;
         int triangleCount;
     };
 
     WriteResult hobbycad::stl_io::writeStl(
-        const QString& path,
-        const QList<TopoDS_Shape>& shapes,
+        const std::string& path,
+        const std::vector<TopoDS_Shape>& shapes,
         StlFormat format = StlFormat::Binary,
         const MeshQuality& quality = MeshQuality{})
 
@@ -791,8 +805,8 @@
 
     Utility functions:
 
-        bool isStlFile(const QString& path)
-        QStringList stlExtensions()
+        bool isStlFile(const std::string& path)
+        std::vector<std::string> stlExtensions()
 
     Example:
 
@@ -979,8 +993,8 @@
     const char* unitSuffix(LengthUnit unit)
         Returns the display suffix ("mm", "cm", "m", "in", "ft").
 
-    QString unitSuffixQ(LengthUnit unit)
-        Same as unitSuffix, but returns QString.
+    std::string unitSuffixStr(LengthUnit unit)
+        Same as unitSuffix, but returns std::string.
 
     double mmToUnit(double mm, LengthUnit toUnit)
         Converts a value from mm to the specified unit.
@@ -991,7 +1005,7 @@
     double convertLength(double value, LengthUnit from, LengthUnit to)
         Converts between any two units.
 
-    LengthUnit parseUnitSuffix(const QString& suffix)
+    LengthUnit parseUnitSuffix(const std::string& suffix)
         Parses a suffix string to get the unit enum.
         Returns Millimeters if not recognized.
 
@@ -1005,17 +1019,17 @@
         Returns display precision (4 for all units).
         Use for manual formatting without trailing zero trimming.
 
-    QString formatValue(double value)
+    std::string formatValue(double value)
         Formats a value for display with up to 4 decimal places.
         Trailing zeros are trimmed (e.g., "1.5000" → "1.5").
 
-    QString formatStorageValue(double value)
+    std::string formatStorageValue(double value)
         Formats a value for file storage with 15 decimal places.
 
-    QString formatValueWithUnit(double mm, LengthUnit unit)
+    std::string formatValueWithUnit(double mm, LengthUnit unit)
         Converts mm to unit and formats with suffix (e.g., "25.4 mm").
 
-    double parseValueWithUnit(QString input, LengthUnit defaultUnit)
+    double parseValueWithUnit(std::string input, LengthUnit defaultUnit)
         Parses "25.4 mm" or "1 in" strings back to mm.
         Returns value in mm; uses defaultUnit if no suffix present.
 
@@ -1061,7 +1075,7 @@
     double atan2Radians(double dy, double dx)
         Wrapper for std::atan2 (for API consistency).
 
-    QString formatAngle(double degrees)
+    std::string formatAngle(double degrees)
         Formats angle with degree symbol (e.g., "45°", "22.5°").
         Uses formatValue() for consistent trailing zero trimming.
 
@@ -1101,7 +1115,7 @@
 
     struct LineLineIntersection
         bool intersects           Whether lines intersect
-        QPointF point             Intersection point
+        Point2D point             Intersection point
         double t1, t2             Parameter values on each line [0,1]
         bool withinSegment1       True if intersection is within segment 1
         bool withinSegment2       True if intersection is within segment 2
@@ -1109,37 +1123,37 @@
 
     struct LineCircleIntersection
         int count                 Number of intersections (0, 1, or 2)
-        QPointF point1, point2    Intersection points
+        Point2D point1, point2    Intersection points
         double t1, t2             Parameters on line
         bool withinSegment1       point1 is within segment
         bool withinSegment2       point2 is within segment
 
     struct CircleCircleIntersection
         int count                 Number of intersections (0, 1, or 2)
-        QPointF point1, point2    Intersection points
+        Point2D point1, point2    Intersection points
         bool tangent              True if circles are tangent
 
     struct Arc
-        QPointF center            Center point
+        Point2D center            Center point
         double radius             Arc radius
         double startAngle         Start angle (degrees)
         double sweepAngle         Sweep angle (degrees, can be negative)
 
-        QPointF startPoint() const    Get arc start point
-        QPointF endPoint() const      Get arc end point
-        QPointF midPoint() const      Get arc midpoint
+        Point2D startPoint() const    Get arc start point
+        Point2D endPoint() const      Get arc end point
+        Point2D midPoint() const      Get arc midpoint
         bool containsAngle(double angle) const
 
     struct BoundingBox
         double minX, minY, maxX, maxY
         bool valid
 
-        void include(const QPointF& p)   Expand to include point
+        void include(const Point2D& p)   Expand to include point
         void include(const BoundingBox&) Expand to include another box
-        QPointF center() const
+        Point2D center() const
         double width() const
         double height() const
-        bool contains(const QPointF& p) const
+        bool contains(const Point2D& p) const
         bool intersects(const BoundingBox& other) const
 
     struct Transform2D
@@ -1148,11 +1162,11 @@
 
         static Transform2D identity()
         static Transform2D translation(double dx, double dy)
-        static Transform2D rotation(double angleDeg, const QPointF& center)
-        static Transform2D scale(double sx, double sy, const QPointF& center)
-        static Transform2D mirror(const QPointF& p1, const QPointF& p2)
+        static Transform2D rotation(double angleDeg, const Point2D& center)
+        static Transform2D scale(double sx, double sy, const Point2D& center)
+        static Transform2D mirror(const Point2D& p1, const Point2D& p2)
 
-        QPointF apply(const QPointF& p) const
+        Point2D apply(const Point2D& p) const
         Transform2D compose(const Transform2D& other) const
         Transform2D inverse() const
 
@@ -1175,9 +1189,9 @@
         CircleCircleIntersection arcArcIntersection(arc1, arc2)
 
     Closest Points:
-        QPointF closestPointOnLine(point, lineStart, lineEnd)
-        QPointF closestPointOnCircle(point, center, radius)
-        QPointF closestPointOnArc(point, arc)
+        Point2D closestPointOnLine(point, lineStart, lineEnd)
+        Point2D closestPointOnCircle(point, center, radius)
+        Point2D closestPointOnArc(point, arc)
 
     Distance Functions:
         double pointToLineDistance(point, lineStart, lineEnd)
@@ -1201,23 +1215,23 @@
         double cross(a, b)        Cross product (2D: scalar result)
         double length(v)          Vector length
         double lengthSquared(v)   Squared length (avoid sqrt)
-        QPointF normalize(v)      Unit vector
-        QPointF perpendicular(v)  CCW perpendicular
-        QPointF perpendicularCW(v) CW perpendicular
-        QPointF lerp(a, b, t)     Linear interpolation
+        Point2D normalize(v)      Unit vector
+        Point2D perpendicular(v)  CCW perpendicular
+        Point2D perpendicularCW(v) CW perpendicular
+        Point2D lerp(a, b, t)     Linear interpolation
 
     Angle Operations:
         double vectorAngle(v)     Angle of vector (degrees)
         double angleBetween(a, b) Unsigned angle between vectors
         double signedAngleBetween(a, b) Signed angle between vectors
-        QPointF rotatePoint(p, angleDeg) Rotate around origin
-        QPointF rotatePointAround(p, center, angleDeg) Rotate around center
+        Point2D rotatePoint(p, angleDeg) Rotate around origin
+        Point2D rotatePointAround(p, center, angleDeg) Rotate around center
 
     Line Operations:
         double lineLength(p1, p2)
-        QPointF lineMidpoint(p1, p2)
-        QPointF lineDirection(p1, p2)  Normalized direction
-        QPointF pointOnLine(p1, p2, t)  Point at parameter t
+        Point2D lineMidpoint(p1, p2)
+        Point2D lineDirection(p1, p2)  Normalized direction
+        Point2D pointOnLine(p1, p2, t)  Point at parameter t
         double projectPointOnLine(point, lineStart, lineEnd)  Returns t
         bool linesParallel(p1, p2, p3, p4, tolerance)
         bool linesPerpendicular(p1, p2, p3, p4, tolerance)
@@ -1226,14 +1240,14 @@
         std::optional<Arc> arcFromThreePoints(start, mid, end)
         Arc arcFromCenterAndEndpoints(center, start, end, sweepCCW)
         double arcLength(arc)
-        QVector<Arc> splitArc(arc, point)
+        std::vector<Arc> splitArc(arc, point)
 
     Polygon Operations:
         double polygonArea(polygon)       Signed area (CCW positive)
         bool polygonIsCCW(polygon)
-        QVector<QPointF> reversePolygon(polygon)
+        std::vector<Point2D> reversePolygon(polygon)
         bool pointInPolygon(point, polygon)
-        QPointF polygonCentroid(polygon)
+        Point2D polygonCentroid(polygon)
         BoundingBox polygonBounds(polygon)
 
     Rectangle Tests:
@@ -1249,17 +1263,17 @@
     Advanced computational geometry algorithms.
 
     Convex Hull:
-        QVector<QPointF> convexHull(points)
+        std::vector<Point2D> convexHull(points)
             Andrew's monotone chain algorithm, O(n log n)
         bool isConvex(polygon)
             Check if polygon is convex
 
     Polygon Simplification:
-        QVector<QPointF> simplifyPolyline(points, epsilon)
+        std::vector<Point2D> simplifyPolyline(points, epsilon)
             Ramer-Douglas-Peucker algorithm
-        QVector<QPointF> simplifyPolygon(polygon, epsilon)
+        std::vector<Point2D> simplifyPolygon(polygon, epsilon)
             Douglas-Peucker for closed shapes
-        QVector<QPointF> simplifyByArea(points, minArea)
+        std::vector<Point2D> simplifyByArea(points, minArea)
             Visvalingam-Whyatt (area-based)
 
     Bounding Shapes:
@@ -1281,42 +1295,42 @@
         BooleanResult polygonXOR(poly1, poly2)
 
     Polygon Offset:
-        QVector<QVector<QPointF>> offsetPolygon(polygon, distance, joinType, miterLimit)
+        std::vector<std::vector<Point2D>> offsetPolygon(polygon, distance, joinType, miterLimit)
             joinType: 0=miter, 1=round, 2=square
-        QVector<QVector<QPointF>> offsetPolyline(polyline, distance, endType, joinType)
+        std::vector<std::vector<Point2D>> offsetPolyline(polyline, distance, endType, joinType)
             endType: 0=butt, 1=round, 2=square
 
     Triangulation:
         struct Triangle { i0, i1, i2 }
         struct Edge { i0, i1 }
-        QVector<Triangle> triangulatePolygon(polygon)
+        std::vector<Triangle> triangulatePolygon(polygon)
             Ear clipping
-        QPair<QVector<QPointF>, QVector<Triangle>>
+        std::pair<std::vector<Point2D>, std::vector<Triangle>>
             triangulatePolygonWithHoles(outer, holes)
-        QVector<Triangle> delaunayTriangulation(points)
+        std::vector<Triangle> delaunayTriangulation(points)
             Bowyer-Watson algorithm
-        QVector<Triangle> constrainedDelaunay(points, constrainedEdges)
-        QVector<QVector<QPointF>> voronoiDiagram(points, bounds)
+        std::vector<Triangle> constrainedDelaunay(points, constrainedEdges)
+        std::vector<std::vector<Point2D>> voronoiDiagram(points, bounds)
 
     Point Set Analysis:
-        QPair<int, int> findDiameter(points)
+        std::pair<int, int> findDiameter(points)
             Farthest pair of points
-        QPair<int, int> findClosestPair(points)
+        std::pair<int, int> findClosestPair(points)
             Nearest pair, O(n log n)
         double hausdorffDistance(set1, set2)
 
     Curve Analysis:
-        QVector<double> polylineCurvature(points)
-        QVector<int> findCorners(points, angleThreshold)
-        QVector<QPointF> smoothPolyline(points, iterations)
+        std::vector<double> polylineCurvature(points)
+        std::vector<int> findCorners(points, angleThreshold)
+        std::vector<Point2D> smoothPolyline(points, iterations)
             Chaikin's algorithm
 
     Path Operations (CNC/Manufacturing):
         double pathLength(points)
-        QVector<QPointF> resamplePath(points, spacing)
-        QVector<QPointF> resamplePathByCount(points, numPoints)
-        QPointF pointAtArcLength(points, arcLength)
-        QPointF tangentAtArcLength(points, arcLength)
+        std::vector<Point2D> resamplePath(points, spacing)
+        std::vector<Point2D> resamplePathByCount(points, numPoints)
+        Point2D pointAtArcLength(points, arcLength)
+        Point2D tangentAtArcLength(points, arcLength)
 
 ================================================================================
   12. SKETCH MODULE
@@ -1352,19 +1366,19 @@
     struct Entity
         int id                    Unique entity ID
         EntityType type           Entity type
-        QVector<QPointF> points   Control/definition points
+        std::vector<Point2D> points   Control/definition points
         double radius             Circle/arc radius
         double startAngle         Arc start angle (degrees)
         double sweepAngle         Arc sweep angle (degrees)
         int sides                 Polygon side count
         double majorRadius        Ellipse semi-major axis
         double minorRadius        Ellipse semi-minor axis
-        QString text              Text content
+        std::string text              Text content
         bool isConstruction       Construction geometry flag
         bool constrained          Has constraints applied
 
         BoundingBox boundingBox() const
-        QVector<QPointF> endpoints() const
+        std::vector<Point2D> endpoints() const
         Entity transformed(const Transform2D& t) const
         void transform(const Transform2D& t)
 
@@ -1388,7 +1402,7 @@
 
     Utility Functions:
         bool entitiesConnected(e1, e2, tolerance)
-        QPointF entityCenter(entity)
+        Point2D entityCenter(entity)
         double entityLength(entity)
 
   12.2  Constraint Types (constraint.h)
@@ -1414,20 +1428,20 @@
     struct Constraint
         int id                    Unique constraint ID
         ConstraintType type       Constraint type
-        QVector<int> entityIds    Entities involved
-        QVector<int> pointIndices Point indices within entities
+        std::vector<int> entityIds    Entities involved
+        std::vector<int> pointIndices Point indices within entities
         double value              Dimensional value (mm or degrees)
         bool isDriving            Driving vs reference
-        QPointF labelPosition     Dimension label position
+        Point2D labelPosition     Dimension label position
         bool labelVisible         Show dimension text
         bool enabled              Constraint active
 
     Utility Functions:
-        QString constraintTypeName(type)
+        std::string constraintTypeName(type)
         bool isDimensionalConstraint(type)
         bool isGeometricConstraint(type)
-        QVector<ConstraintType> applicableConstraints(entityType)
-        QVector<ConstraintType> suggestConstraints(e1, e2)
+        std::vector<ConstraintType> applicableConstraints(entityType)
+        std::vector<ConstraintType> suggestConstraints(e1, e2)
         int requiredEntityCount(type)
 
   12.3  Sketch Operations (operations.h)
@@ -1435,8 +1449,8 @@
 
     Intersection Detection:
         struct Intersection { entityId1, entityId2, point, param1, param2 }
-        QVector<Intersection> findAllIntersections(entities)
-        QVector<Intersection> findIntersections(entity1, entity2)
+        std::vector<Intersection> findAllIntersections(entities)
+        std::vector<Intersection> findIntersections(entity1, entity2)
 
     Offset:
         struct OffsetResult { success, entity, errorMessage }
@@ -1463,7 +1477,7 @@
         SplitResult splitEntity(entityId, splitPoint, entities, nextId)
 
     Chain Detection:
-        QVector<int> findConnectedChain(startId, entities, tolerance)
+        std::vector<int> findConnectedChain(startId, entities, tolerance)
         bool isChainClosed(chain, entities, tolerance)
 
   12.4  Pattern Operations (patterns.h)
@@ -1482,7 +1496,7 @@
 
     Circular Pattern:
         struct CircPatternParams {
-            QPointF center           Rotation center
+            Point2D center           Rotation center
             int count                Total copies (including original)
             double totalAngle        Total angle span (degrees)
         }
@@ -1504,7 +1518,7 @@
 
     Mirror Pattern:
         struct MirrorPatternParams {
-            QPointF linePoint1, linePoint2  Mirror line
+            Point2D linePoint1, linePoint2  Mirror line
             bool deleteOriginal             Delete source entities
         }
         struct MirrorPatternResult { success, entities, errorMessage }
@@ -1517,9 +1531,9 @@
 
     struct Profile
         int id                    Profile ID
-        QVector<int> entityIds    Entities forming loop (in order)
-        QVector<bool> reversed    Entity traversal direction
-        QPolygonF polygon         Polygon approximation
+        std::vector<int> entityIds    Entities forming loop (in order)
+        std::vector<bool> reversed    Entity traversal direction
+        std::vector<Point2D> polygon         Polygon approximation
         double area               Signed area (CCW positive)
         bool isOuter              Outer vs inner (hole)
         BoundingBox bounds
@@ -1534,14 +1548,14 @@
         int polygonSegments       Arc discretization segments
 
     Detection Functions:
-        QVector<Profile> detectProfiles(entities, options)
-        QVector<Profile> detectProfilesWithHoles(entities, options)
+        std::vector<Profile> detectProfiles(entities, options)
+        std::vector<Profile> detectProfilesWithHoles(entities, options)
 
     Profile Utilities:
-        QPolygonF profileToPolygon(profile, entities, segments)
+        std::vector<Point2D> profileToPolygon(profile, entities, segments)
         double profileArea(profile, entities)
         bool profilesShareEdge(p1, p2)
-        QPointF profileCentroid(profile, entities)
+        Point2D profileCentroid(profile, entities)
         bool profileIsCCW(profile)
         Profile reverseProfile(profile)
 
@@ -1551,7 +1565,7 @@
         struct ConnectivityGraph { nodes, edges, adjacency }
 
         ConnectivityGraph buildConnectivityGraph(entities, tolerance)
-        QVector<QVector<int>> findCycles(graph, maxCycles)
+        std::vector<std::vector<int>> findCycles(graph, maxCycles)
 
   12.6  Constraint Solver (solver.h)
   ---------------------------------
@@ -1563,8 +1577,8 @@
     struct SolveResult
         bool success              True if solved successfully
         int dof                   Remaining degrees of freedom
-        QString errorMessage      Error description on failure
-        QVector<int> failedConstraintIds
+        std::string errorMessage      Error description on failure
+        std::vector<int> failedConstraintIds
         ResultCode resultCode     Detailed result code
 
         enum ResultCode {
@@ -1577,8 +1591,8 @@
 
     struct OverConstraintInfo
         bool wouldOverConstrain   Would adding constraint fail?
-        QVector<int> conflictingConstraintIds
-        QString reason            Human-readable explanation
+        std::vector<int> conflictingConstraintIds
+        std::string reason            Human-readable explanation
 
     class Solver
 
@@ -1599,9 +1613,9 @@
             True if libslvs is compiled in.
 
     Utility Functions:
-        QString solveResultName(ResultCode code)
+        std::string solveResultName(ResultCode code)
         bool constraintSupported(ConstraintType type)
-        QVector<ConstraintType> supportedConstraintTypes()
+        std::vector<ConstraintType> supportedConstraintTypes()
 
     Supported Constraint Types:
         Distance, Radius, Diameter, Angle, Horizontal, Vertical,
@@ -1610,15 +1624,15 @@
 
     Example Usage:
         Solver solver;
-        QVector<Entity> entities = { ... };
-        QVector<Constraint> constraints = { ... };
+        std::vector<Entity> entities = { ... };
+        std::vector<Constraint> constraints = { ... };
 
         SolveResult result = solver.solve(entities, constraints);
         if (result.success) {
             // entities have been modified to satisfy constraints
-            qDebug() << "DOF remaining:" << result.dof;
+            std::cout << "DOF remaining: " << result.dof << "\n";
         } else {
-            qWarning() << "Solve failed:" << result.errorMessage;
+            std::cerr << "Solve failed: " << result.errorMessage << "\n";
             for (int id : result.failedConstraintIds) {
                 // highlight failed constraints in UI
             }
@@ -1633,7 +1647,7 @@
     struct ParsedValue
         bool valid            True if parsing succeeded
         double numericValue   Numeric result (if isNumeric)
-        QString expression    Original or transformed expression
+        std::string expression    Original or transformed expression
         bool isNumeric        True if value is a plain number
         bool isParameter      True if value is a parameter name
         bool isExpression     True if value is an expression
@@ -1655,14 +1669,14 @@
         bool parseValue(str, &value, &expression)
             Overload that returns numeric value and expression separately.
 
-        QStringList splitCoordinate(str)
+        std::vector<std::string> splitCoordinate(str)
             Split "x,y" into components, handling parentheses.
 
         ParsedCoordinate parseCoordinate(str)
             Parse coordinate string like "10,20" or "$x,$y".
 
-        std::optional<QPointF> parsePoint(str)
-            Parse to QPointF if both components are numeric.
+        std::optional<Point2D> parsePoint(str)
+            Parse to Point2D if both components are numeric.
 
         bool isValidIdentifier(str)
             Check if string is valid parameter name.
@@ -1670,7 +1684,7 @@
     Example Usage:
         auto coord = sketch::parseCoordinate("10,20");
         if (coord.valid && coord.x.isNumeric && coord.y.isNumeric) {
-            QPointF point(coord.x.numericValue, coord.y.numericValue);
+            Point2D point(coord.x.numericValue, coord.y.numericValue);
         }
 
         auto value = sketch::parseValue("$radius*2");
@@ -1686,9 +1700,9 @@
 
     struct Group
         int id                    Unique group ID
-        QString name              Display name
-        QVector<int> entityIds    Direct entity members
-        QVector<int> childGroupIds Nested group IDs
+        std::string name              Display name
+        std::vector<int> entityIds    Direct entity members
+        std::vector<int> childGroupIds Nested group IDs
         int parentGroupId         Parent group ID (-1 if top-level)
         bool locked               Lock group for editing
         bool expanded             UI expansion state
@@ -1703,16 +1717,16 @@
                                       Nest a group (with cycle detection)
         void ungroupFromParent(groupId)
         Group* groupById(id)
-        QVector<int> topLevelGroupIds() const
+        std::vector<int> topLevelGroupIds() const
         QSet<int> allEntityIds(groupId) const
                                       All entities (including nested)
-        QVector<int> groupsContainingEntity(entityId) const
+        std::vector<int> groupsContainingEntity(entityId) const
         bool wouldCreateCycle(childId, parentId) const
         void clear()
 
     Utility Functions:
         int groupDepth(manager, groupId)
-        QVector<int> groupPath(manager, groupId)
+        std::vector<int> groupPath(manager, groupId)
         int commonAncestor(manager, groupId1, groupId2)
 
     Example Usage:
@@ -1743,14 +1757,14 @@
 
     struct UndoCommand
         CommandType type          Command type
-        QString description       Human-readable description
+        std::string description       Human-readable description
         Entity entity             Current/new entity state
         Entity previousEntity     Previous entity state (for modify)
         Constraint constraint     Current/new constraint state
         Constraint previousConstraint Previous constraint state
         Group group               Current/new group state
         Group previousGroup       Previous group state
-        QVector<UndoCommand> subCommands  Child commands (Compound)
+        std::vector<UndoCommand> subCommands  Child commands (Compound)
 
         Static factory methods:
             addEntity(entity, desc)
@@ -1777,12 +1791,12 @@
         int redoLevels() const
         UndoCommand undo()        Pop from undo, push to redo
         UndoCommand redo()        Pop from redo, push to undo
-        QVector<UndoCommand> undoMultiple(levels)
-        QVector<UndoCommand> redoMultiple(levels)
-        QString undoDescription() const
-        QString redoDescription() const
-        QStringList undoDescriptions() const
-        QStringList redoDescriptions() const
+        std::vector<UndoCommand> undoMultiple(levels)
+        std::vector<UndoCommand> redoMultiple(levels)
+        std::string undoDescription() const
+        std::string redoDescription() const
+        std::vector<std::string> undoDescriptions() const
+        std::vector<std::string> redoDescriptions() const
         void clear()
         void clearRedo()
         int maxSize() const
@@ -1803,7 +1817,7 @@
 
     Utility Functions:
         const char* entityTypeName(EntityType type)
-        QString entityTypeDisplayName(EntityType type)
+        std::string entityTypeDisplayName(EntityType type)
 
     Example Usage:
         UndoStack undoStack(50);  // Max 50 undo levels
@@ -1832,13 +1846,13 @@
     Hit Testing:
         struct HitTestResult { entityId, distance, closestPoint, pointIndex }
 
-        QVector<int> findEntitiesAtPoint(entities, point, tolerance)
+        std::vector<int> findEntitiesAtPoint(entities, point, tolerance)
             Find entities near a point, sorted by distance
         HitTestResult findNearestEntity(entities, point)
             Find single nearest entity
-        QVector<int> findEntitiesInRect(entities, rect, mustBeFullyInside)
+        std::vector<int> findEntitiesInRect(entities, rect, mustBeFullyInside)
             Selection rectangle query
-        QVector<QPair<int, int>> findControlPointsAtPoint(entities, point, tolerance)
+        std::vector<std::pair<int, int>> findControlPointsAtPoint(entities, point, tolerance)
             Find control points (returns entityId, pointIndex pairs)
 
     Sketch Validation:
@@ -1846,8 +1860,8 @@
 
         ValidationResult validateSketch(entities, constraints)
         bool isSketchFullyConstrained(entities, constraints)
-        QVector<int> findUnconstrainedEntities(entities, constraints)
-        QVector<int> findUnderconstrainedEntities(entities, constraints)
+        std::vector<int> findUnconstrainedEntities(entities, constraints)
+        std::vector<int> findUnderconstrainedEntities(entities, constraints)
 
     Sketch Analysis:
         double sketchArea(entities)         Total area of closed profiles
@@ -1857,14 +1871,14 @@
 
     Curve Utilities:
         double entityLength(entity)
-        QPointF pointAtParameter(entity, t)
+        Point2D pointAtParameter(entity, t)
         double parameterAtPoint(entity, point)
-        QPointF tangentAtParameter(entity, t)
-        QPointF normalAtParameter(entity, t)
+        Point2D tangentAtParameter(entity, t)
+        Point2D normalAtParameter(entity, t)
 
     Tessellation:
-        QVector<QPointF> tessellate(entity, tolerance)
-        QVector<QLineF> tessellateToLines(entities, tolerance)
+        std::vector<Point2D> tessellate(entity, tolerance)
+        std::vector<QLineF> tessellateToLines(entities, tolerance)
 
   12.11  Sketch Export/Import (export.h)
   --------------------------------------
@@ -1875,7 +1889,7 @@
             includeConstraints, includeDimensions, margin, scale
         }
 
-        QString sketchToSVG(entities, constraints, options)
+        std::string sketchToSVG(entities, constraints, options)
         bool exportSketchToSVG(entities, constraints, filePath, options)
 
     DXF Export:
@@ -1884,7 +1898,7 @@
             usePolylines
         }
 
-        QString sketchToDXF(entities, options)
+        std::string sketchToDXF(entities, options)
         bool exportSketchToDXF(entities, filePath, options)
 
     SVG Import:
@@ -1945,8 +1959,8 @@
         void calculateAspectRatio(originalWidth, originalHeight, targetWidth,
                                   &targetHeight, lockAspect)
         BackgroundImage calibrateBackground(background, point1, point2, realDistance)
-        QPointF sketchToImageCoords(background, sketchPoint)
-        QPointF imageToSketchCoords(background, imagePoint)
+        Point2D sketchToImageCoords(background, sketchPoint)
+        Point2D imageToSketchCoords(background, imagePoint)
 
     Alignment:
         double calculateLineAngle(point1, point2)
@@ -1957,17 +1971,17 @@
     Project Integration:
         BackgroundImage exportBackgroundToProject(background, projectDir, sketchName)
         bool isFileInProject(filePath, projectDir)
-        QString toRelativePath(absolutePath, projectDir)
-        QString toAbsolutePath(relativePath, projectDir)
+        std::string toRelativePath(absolutePath, projectDir)
+        std::string toAbsolutePath(relativePath, projectDir)
         BackgroundImage updateBackgroundFromFile(filePath, projectDir)
 
     Serialization:
-        QString backgroundToJson(background, includeImageData)
+        std::string backgroundToJson(background, includeImageData)
         BackgroundImage backgroundFromJson(json)
 
     Format Support:
-        QStringList supportedImageFormats()
-        QString imageFileFilter()
+        std::vector<std::string> supportedImageFormats()
+        std::string imageFileFilter()
         bool isImageFormatSupported(filePath)
 
   12.13  Snap Point Detection (snap.h)
@@ -1996,7 +2010,7 @@
     Snap Point:
 
         struct SnapPoint {
-            QPointF position;   // World-space position
+            Point2D position;   // World-space position
             SnapType type;      // Type of snap point
             int entityId;       // Source entity ID (-1 for origin/axis)
         };
@@ -2031,28 +2045,28 @@
 
     Snap Point Collection:
 
-        QVector<SnapPoint> collectSnapPoints(const Entity& entity)
+        std::vector<SnapPoint> collectSnapPoints(const Entity& entity)
             Collect all explicit snap points from a single entity.
             Returns endpoints, midpoints, centers, quadrants, etc.
             depending on entity type.  Does not include intersections
             or nearest-on-perimeter.
 
-        QVector<SnapPoint> collectAllSnapPoints(
-            const QVector<Entity>& entities,
+        std::vector<SnapPoint> collectAllSnapPoints(
+            const std::vector<Entity>& entities,
             int excludeEntityId = -1)
             Collect all snap points from all entities, plus entity-
             entity intersection points and axis-crossing points.
             Pass excludeEntityId to skip a specific entity (e.g.,
             the entity being dragged).
 
-        QVector<SnapPoint> collectIntersectionSnapPoints(
-            const QVector<Entity>& entities,
+        std::vector<SnapPoint> collectIntersectionSnapPoints(
+            const std::vector<Entity>& entities,
             int excludeEntityId = -1)
             Collect intersection points between all entity pairs
             plus axis-crossing points.
 
-        QVector<SnapPoint> collectAxisCrossingSnapPoints(
-            const QVector<Entity>& entities,
+        std::vector<SnapPoint> collectAxisCrossingSnapPoints(
+            const std::vector<Entity>& entities,
             int excludeEntityId = -1)
             Collect points where entities cross X axis (Y=0) or
             Y axis (X=0).  Handles Line, Rectangle, Parallelogram,
@@ -2061,8 +2075,8 @@
     Nearest on Perimeter:
 
         SnapPoint findNearestOnPerimeter(
-            const QVector<Entity>& entities,
-            const QPointF& point,
+            const std::vector<Entity>& entities,
+            const Point2D& point,
             double tolerance,
             int excludeEntityId = -1)
             Find the nearest point on any entity perimeter.
@@ -2073,8 +2087,8 @@
     Best Snap Evaluation:
 
         SnapResult findBestSnap(
-            const QVector<Entity>& entities,
-            const QPointF& worldPos,
+            const std::vector<Entity>& entities,
+            const Point2D& worldPos,
             double worldTolerance,
             int excludeEntityId = -1)
             Find the best snap point using weighted distance.
@@ -2084,7 +2098,7 @@
 
     Entity Intersection Utility:
 
-        QVector<QPointF> computeEntityIntersectionPoints(
+        std::vector<Point2D> computeEntityIntersectionPoints(
             const Entity& e1, const Entity& e2)
             Compute intersection points between two entities.
             Handles Line, Circle, Arc, Rectangle, Parallelogram,
@@ -2096,7 +2110,7 @@
         #include <hobbycad/sketch/snap.h>
 
         // Simple: find best snap near cursor
-        QVector<Entity> entities = getSketchEntities();
+        std::vector<Entity> entities = getSketchEntities();
         double tolerance = 10.0 / zoomLevel;  // pixels to world
 
         SnapResult result = sketch::findBestSnap(
@@ -2123,47 +2137,392 @@
   13. GUI INTEGRATION
 ================================================================================
 
-    The SketchCanvas uses a thin wrapper to convert between GUI types
-    (SketchEntity, SketchConstraint, SketchProfile) and library types
-    (sketch::Entity, sketch::Constraint, sketch::Profile).
+    The library uses Point2D, std::vector, and std::string in its public
+    API.  GUI code can use Point2D directly with QPainter and other Qt
+    drawing functions via implicit conversion operators (available when
+    Qt 6.4.2+ is detected at build time via HOBBYCAD_HAS_QT).
+
+    TYPE CONVERSION APPROACH
+    ------------------------
+    Point2D / Rect2D / Vec3:
+        Implicit conversions to/from QPointF, QRectF, QVector3D are
+        provided by the types themselves.  No explicit conversion code
+        is needed at the GUI boundary:
+
+            Point2D center = entity.center();
+            painter.drawEllipse(center, rx, ry);  // implicit QPointF
+
+    Containers (std::vector <-> QVector):
+        #include <hobbycad/qt_compat.h>
+
+        toQVector(stdVec)           std::vector<T> -> QVector<T>
+        fromQVector(qVec)           QVector<T> -> std::vector<T>
+        toQtPoints(stdVec)          std::vector<Point2D> -> QVector<QPointF>
+        fromQtPoints(qVec)          QVector<QPointF> -> std::vector<Point2D>
+
+    Strings (std::string <-> QString):
+        #include <hobbycad/qt_compat.h>
+
+        toQt(stdStr)                std::string -> QString
+        fromQt(qStr)                QString -> std::string
+
+    Legacy Conversion Functions:
+        The old toLibraryEntity/toGuiEntity wrappers (in sketchutils.h)
+        may still exist but the boundary is now much thinner thanks to
+        implicit conversions.  Most GUI code can use library types
+        directly without explicit conversion.
 
     See: src/hobbycad/gui/sketchutils.h
 
-    Conversion Functions:
-        sketch::Entity toLibraryEntity(const SketchEntity&)
-        SketchEntity toGuiEntity(const sketch::Entity&)
-        QVector<sketch::Entity> toLibraryEntities(const QVector<SketchEntity>&)
-        QVector<SketchEntity> toGuiEntities(const QVector<sketch::Entity>&)
-        SketchProfile toGuiProfile(const sketch::Profile&)
-        QVector<SketchProfile> toGuiProfiles(const QVector<sketch::Profile>&)
-        SketchCanvas::Intersection toGuiIntersection(const sketch::Intersection&)
-        QVector<SketchCanvas::Intersection> toGuiIntersections(...)
-
     Example Usage (in SketchCanvas):
 
-        // Profile detection using library
-        QVector<sketch::Entity> libEntities = toLibraryEntities(m_entities);
-        QVector<sketch::Profile> libProfiles =
-            sketch::detectProfilesWithHoles(libEntities);
-        return toGuiProfiles(libProfiles);
+        // Profile detection — library types used directly
+        auto profiles = sketch::detectProfilesWithHoles(m_entities);
 
-        // Pattern creation using library
-        QVector<sketch::Entity> source = toLibraryEntities(selectedEntities);
+        // Pattern creation — result entities used directly
         sketch::RectPatternResult result =
-            sketch::createRectangularPattern(source, params, idGenerator);
+            sketch::createRectangularPattern(source, params, idGen);
         for (const sketch::Entity& e : result.entities) {
-            m_entities.append(toGuiEntity(e));
+            m_entities.push_back(e);
         }
 
-        // Snap point evaluation using library
-        QVector<sketch::Entity> libEntities = toLibraryEntities(m_entities);
+        // Snap point evaluation
         double tolerance = m_entitySnapTolerance / m_zoom;
         int excludeId = m_isDraggingHandle ? m_selectedId : -1;
         sketch::SnapResult result = sketch::findBestSnap(
-            libEntities, world, tolerance, excludeId);
+            m_entities, world, tolerance, excludeId);
         if (result.found) {
             m_activeSnap = result.snap;   // Store for visual indicator
-            return result.snap.position;
+            return result.snap.position;  // implicit QPointF
         }
+
+        // Container conversion when Qt API requires QVector
+        QVector<QPointF> qtPoints = toQtPoints(entity.points);
+        painter.drawPolyline(qtPoints.data(), qtPoints.size());
+
+        // String conversion when Qt API requires QString
+        setWindowTitle(toQt(project.name()));
+
+================================================================================
+  14. NON-QT FALLBACK ARCHITECTURE
+================================================================================
+
+    libhobbycad is designed to build and function without Qt.  When Qt is
+    not available, the library provides equivalent functionality through
+    cross-platform alternatives:
+
+      - JSON serialization:  nlohmann/json (header-only, C++11)
+      - OpenGL probing:      EGL (optional; stub if unavailable)
+      - Base64 encoding:     hobbycad/base64.h (header-only utility)
+      - File I/O:            std::filesystem + std::fstream (C++17)
+
+    The existing Qt code paths remain untouched — all fallback code lives
+    in #else branches, selected at compile time.
+
+  14.1  HOBBYCAD_HAS_QT Macro
+  -----------------------------------------------------------------------
+
+    Defined in types.h (lines 23-35).  Evaluates to 1 when Qt 6.4.2+ is
+    detected at compile time, 0 otherwise.  All Qt-conditional code in
+    the library uses this single macro:
+
+        #if HOBBYCAD_HAS_QT
+        // Qt implementation
+        #else
+        // Non-Qt fallback
+        #endif
+
+    CMake detection (src/libhobbycad/CMakeLists.txt):
+
+        find_package(Qt6 6.4.2 QUIET COMPONENTS Core Gui OpenGL)
+        set(HOBBYCAD_LIB_HAS_QT ${Qt6_FOUND})
+
+    When Qt is found, the Qt6::Core target defines QT_CORE_LIB, which
+    triggers HOBBYCAD_HAS_QT=1 in types.h.  No explicit CMake define
+    is needed.
+
+  14.2  JSON Serialization (nlohmann/json)
+  -----------------------------------------------------------------------
+
+    DEPENDENCY:  nlohmann-json (header-only, found via CMake)
+    PACKAGE:     nlohmann-json3-dev (Ubuntu), nlohmann-json (vcpkg)
+    HEADER:      <nlohmann/json.hpp>
+
+    When Qt is available, the library uses QJsonDocument / QJsonObject /
+    QJsonArray for project serialization.  Without Qt, nlohmann/json
+    provides identical functionality with a nearly 1:1 API mapping.
+
+    FILES WITH DUAL IMPLEMENTATIONS:
+
+      project.cpp       Full project save/load (manifest, sketches,
+                         construction planes, parameters, features,
+                         foreign files).  Non-Qt path uses
+                         nlohmann::json + std::fstream with
+                         std::filesystem::path for cross-platform
+                         path handling.
+
+      parameters.cpp    ParameterEngine::toJson() / fromJson().
+                         Qt path returns QJsonObject; non-Qt path
+                         returns nlohmann::json.
+
+    API TRANSLATION TABLE:
+
+      Qt API                              nlohmann equivalent
+      ----------------------------------  ----------------------------------
+      QJsonObject obj;                    nlohmann::json obj;
+      obj["key"] = value;                 obj["key"] = value;
+      json["key"].toString().toStdString()  json.value("key", std::string{})
+      json["key"].toInt(default)          json.value("key", default)
+      json["key"].toDouble(default)       json.value("key", default)
+      json["key"].toBool(default)         json.value("key", default)
+      json["key"].toArray()               json["key"] (iterate directly)
+      json.contains("key")               json.contains("key")
+      QJsonArray arr; arr.append(x)       json arr = json::array();
+                                          arr.push_back(x)
+      QJsonDocument(obj).toJson(Indent)   obj.dump(4)
+      QJsonDocument::fromJson(bytes)      nlohmann::json::parse(stream)
+      QFile + readAll()                   std::ifstream + istreambuf_iter
+      QFile + write()                     std::ofstream << json.dump(4)
+
+    ERROR HANDLING:  nlohmann::json throws parse_error on invalid JSON.
+    All load functions wrap json::parse() in try/catch and convert to
+    error strings via the errorMsg parameter.
+
+    FeatureData::properties:
+      With Qt:     QJsonObject properties;
+      Without Qt:  nlohmann::json properties = nlohmann::json::object();
+      Both support bracket-access, iteration, and .empty() checks.
+
+  14.3  OpenGL Probing (EGL)
+  -----------------------------------------------------------------------
+
+    DEPENDENCY:  EGL (optional; libEGL-dev on Ubuntu, part of Mesa)
+    CMAKE:       find_package(OpenGL COMPONENTS EGL QUIET)
+    DEFINE:      HOBBYCAD_HAS_EGL=1 when found
+    HEADER:      hobbycad/opengl_info.h
+
+    The OpenGLInfo struct and probeOpenGL() function are always
+    available regardless of Qt.  Three implementation paths exist:
+
+      1. Qt path (HOBBYCAD_HAS_QT):
+         Uses QOpenGLContext + QOffscreenSurface.
+         Requires QApplication to exist before calling.
+
+      2. EGL path (HOBBYCAD_HAS_EGL, no Qt):
+         Creates a headless EGL pbuffer context.
+         No window system or application object required.
+         Works on Linux (Mesa, NVIDIA), and any platform with EGL.
+
+      3. Stub path (no Qt, no EGL):
+         Returns OpenGLInfo with contextCreated=false and
+         errorMessage="OpenGL probing not available (no Qt or EGL)".
+
+    The summary() method always returns std::string (not QString).
+    GUI code wraps with QString::fromStdString() as needed.
+
+    EGL PROBING SEQUENCE:
+      1. eglGetDisplay(EGL_DEFAULT_DISPLAY)
+      2. eglInitialize()
+      3. eglBindAPI(EGL_OPENGL_API)  — desktop GL, not GL ES
+      4. eglChooseConfig() with EGL_PBUFFER_BIT + EGL_OPENGL_BIT
+      5. eglCreatePbufferSurface() — 1x1 pixel
+      6. eglCreateContext() — try 3.3 Core, fallback to unconstrained
+      7. glGetString(GL_VERSION / GL_RENDERER / GL_VENDOR / GL_GLSL)
+      8. Parse major.minor from version string
+      9. Cleanup: destroy context, surface, terminate display
+
+  14.4  Base64 Utilities
+  -----------------------------------------------------------------------
+
+    HEADER:  hobbycad/base64.h  (header-only, no dependencies)
+
+    Provides Qt-free base64 encoding and decoding, replacing
+    QByteArray::toBase64() and QByteArray::fromBase64() for
+    embedded background image data in project serialization.
+
+    Functions:
+
+      std::string base64Encode(const uint8_t* data, size_t length);
+      std::string base64Encode(const std::vector<uint8_t>& data);
+      std::vector<uint8_t> base64Decode(const std::string& encoded);
+
+    Pure C++ (cstdint, string, vector).  No platform-specific code.
+
+  14.5  Translation / i18n
+  -----------------------------------------------------------------------
+
+    The library (libhobbycad) is intentionally translation-free.  All
+    user-visible strings use std::string, not tr().  This ensures the
+    library compiles and works identically with or without Qt.
+
+    Translation is a GUI-only concern:
+      - All tr() calls are in src/hobbycad/ (the application)
+      - Translation files (.ts) live in translations/
+      - CMake target: hobbycad_lupdate (Qt LinguistTools)
+      - Runtime loading via QTranslator in main.cpp
+
+    One placeholder exists in the library:
+
+      sketch/undo.h:  entityTypeDisplayName(EntityType)
+        Currently returns the plain English name (entityTypeName).
+        Documented as a future hook for tr() integration, but
+        not yet implemented.
+
+  14.6  Cross-Platform Considerations
+  -----------------------------------------------------------------------
+
+    All non-Qt fallback code is cross-platform:
+
+      nlohmann/json:      C++11 header-only, all platforms.
+      base64.h:           Pure C++ standard library, all platforms.
+      std::filesystem:    C++17, supported by GCC 8+, Clang 7+, MSVC 19.14+.
+      EGL:                Linux (Mesa, NVIDIA), Windows (ANGLE), macOS (limited).
+
+    PATH HANDLING:
+      The non-Qt file I/O code uses std::filesystem::path operators
+      (operator/) for all path construction, ensuring correct separators
+      on all platforms:
+
+        (fs::path(dir) / "features" / "parameters.json").string()
+
+      Relative paths stored in JSON (e.g., "sketches/sketch_001.json")
+      use forward slashes per JSON convention; fs::path handles
+      conversion when constructing absolute paths.
+
+    EGL AVAILABILITY:
+      - Linux:   Standard (libEGL-dev / libegl1-mesa-dev)
+      - Windows: Available via ANGLE (used by Chrome, Electron)
+      - macOS:   Limited; CGL is the native alternative
+
+      When EGL is not found, the stub fallback ensures the build
+      succeeds.  probeOpenGL() returns a meaningful error message
+      rather than failing silently.
+
+  14.7  Building Without Qt
+  -----------------------------------------------------------------------
+
+    To build only the core library (no GUI):
+
+      cmake -B build \
+            -DHOBBYCAD_BUILD_APP=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+
+    CMake will report:
+
+      -- libhobbycad: Qt not found — building with nlohmann/json fallback
+
+    REQUIRED DEPENDENCIES (without Qt):
+      - OpenCASCADE 7.9+
+      - nlohmann-json (header-only)
+      - libslvs (constraint solver)
+
+    OPTIONAL DEPENDENCIES (without Qt):
+      - EGL (for OpenGL probing; install libEGL-dev on Ubuntu)
+      - libstb-dev (for background image loading; sudo apt install libstb-dev)
+      - libwebp-dev (for WebP image support; sudo apt install libwebp-dev)
+
+    The resulting library supports:
+      - Full project save/load (.hcad directories)
+      - Parameter expression evaluation and JSON serialization
+      - OpenGL capability detection (with EGL) or stub data (without)
+      - Background image loading and manipulation (with stb_image)
+      - All geometry, sketch, BREP, and constraint solving features
+      - All file format I/O (BREP, STEP, STL, OBJ)
+
+    Features NOT available without Qt:
+      - Implicit type conversions to QPointF/QRectF/QVector3D
+      - Qt container conversions (qt_compat.h)
+
+  14.8  Background Image Support (stb_image + libwebp)
+  -----------------------------------------------------------------------
+
+    When Qt is not available, background image loading and manipulation
+    are provided by stb_image (a public-domain single-header library)
+    with optional WebP support from libwebp.
+
+    COMPILE-TIME MACROS:
+      - HOBBYCAD_HAS_STB_IMAGE  — defined to 1 when stb_image is found
+        by CMake.  Guards all stb-dependent code paths.
+      - HOBBYCAD_HAS_WEBP       — defined to 1 when libwebp is found
+        by pkg-config.  Enables WebP decoding as a fallback after
+        stb_image in loadImageFromMemory()/queryImageDimensionsFromMemory().
+
+    FILES:
+      - hobbycad/image_buffer.h  — ImageBuffer struct (RGBA8 pixel buffer)
+                                   and loading/manipulation function
+                                   declarations
+      - image_buffer.cpp         — stb_image-based implementation
+                                   (#define STB_IMAGE_IMPLEMENTATION),
+                                   with #if HOBBYCAD_HAS_WEBP fallback
+                                   using WebPDecodeRGBA()/WebPGetInfo()
+      - sketch/background.cpp    — Non-Qt #elif blocks using ImageBuffer
+
+    ImageBuffer TYPE:
+      A simple RGBA8 pixel buffer with direct channel accessors:
+
+        struct ImageBuffer {
+            std::vector<uint8_t> pixels;  // width * height * 4 bytes
+            int width, height;
+            bool isValid() const;
+            uint8_t red(x, y), green(x, y), blue(x, y), alpha(x, y);
+            void setPixel(x, y, r, g, b, a);
+            static uint8_t grayValue(r, g, b);  // ITU-R BT.601
+        };
+
+    SUPPORTED FORMATS:
+      stb_image: PNG, JPEG, BMP, GIF, TGA, PSD, HDR, PNM
+      libwebp:   WebP (optional, requires libwebp-dev)
+
+      Note: Qt's QImage also requires the qtimageformats plugin for
+      WebP.  This is listed in vcpkg.json and checked at CMake
+      configure time.  On Ubuntu: sudo apt install
+      qt6-image-formats-plugins
+
+    API COMPARISON (Qt vs stb_image path):
+
+      | Qt path                        | stb_image path                  |
+      |--------------------------------|---------------------------------|
+      | QImage getBackgroundQImage()   | ImageBuffer getBackgroundImage()|
+      | QImage applyBackgroundAdj()    | ImageBuffer applyBackgroundAdj()|
+      | QImageReader for dimensions    | queryImageDimensions()          |
+      | QImage::loadFromData()         | loadImageFromMemory()           |
+      | QImage::mirrored()             | flipHorizontal/flipVertical()   |
+
+    LOADING PIPELINE (non-Qt):
+      loadImageFromMemory(data, length):
+        1. Try stb_image (PNG/JPEG/BMP/GIF/TGA/PSD/HDR/PNM)
+        2. If stb fails and HOBBYCAD_HAS_WEBP: try WebPDecodeRGBA()
+        3. Return empty ImageBuffer if both fail
+
+      queryImageDimensionsFromMemory(data, length):
+        1. Try stbi_info_from_memory()
+        2. If stbi fails and HOBBYCAD_HAS_WEBP: try WebPGetInfo()
+
+    GRACEFUL DEGRADATION:
+      If stb_image is not installed (HOBBYCAD_HAS_STB_IMAGE=0):
+      - loadBackgroundImage() still works for file/embed operations
+        but cannot detect image dimensions (originalPixelWidth/Height
+        remain 0, default size used)
+      - getBackgroundImage() and applyBackgroundAdjustments() are not
+        available (declarations excluded from background.h)
+      - Serialization (backgroundToJson/backgroundFromJson) still works
+        via nlohmann/json + base64 encoding
+
+      If libwebp is not installed (HOBBYCAD_HAS_WEBP=0):
+      - WebP files will fail to decode (stb_image does not support WebP)
+      - All other formats continue to work normally
+      - "webp" will not appear in supportedImageFormats()
+
+    INSTALLING OPTIONAL DEPENDENCIES:
+      sudo apt install libstb-dev                  # stb_image (non-Qt)
+      sudo apt install libwebp-dev                 # WebP support (non-Qt)
+      sudo apt install qt6-image-formats-plugins   # WebP support (Qt)
+
+    WebP SUPPORT MATRIX:
+      | Build path      | WebP requires                           |
+      |-----------------|-----------------------------------------|
+      | Qt              | qtimageformats plugin (runtime, no link)|
+      | Non-Qt + libwebp| libwebp-dev (linked, HOBBYCAD_HAS_WEBP) |
+      | Non-Qt only     | Not available                           |
 
 ================================================================================

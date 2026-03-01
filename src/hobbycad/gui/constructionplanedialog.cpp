@@ -311,8 +311,8 @@ void ConstructionPlaneDialog::updateVisibility()
     case ConstructionPlaneType::OffsetFromPlane:
         m_optionsStack->setCurrentWidget(m_offsetPlanePage);
         // Disable if no planes available
-        m_offsetFromPlaneButton->setEnabled(!m_availablePlanes.isEmpty());
-        if (m_availablePlanes.isEmpty() && type == ConstructionPlaneType::OffsetFromPlane) {
+        m_offsetFromPlaneButton->setEnabled(!m_availablePlanes.empty());
+        if (m_availablePlanes.empty() && type == ConstructionPlaneType::OffsetFromPlane) {
             m_offsetFromOriginButton->setChecked(true);
         }
         break;
@@ -360,7 +360,7 @@ void ConstructionPlaneDialog::updatePreviewText()
         double offset = m_planeOffsetSpin->value();
 
         if (idx >= 0 && idx < m_availablePlanes.size()) {
-            QString refName = m_availablePlanes[idx].name;
+            QString refName = QString::fromStdString(m_availablePlanes[idx].name);
             text = tr("Plane offset %1 mm from \"%2\"")
                        .arg(offset, 0, 'g', 6)
                        .arg(refName);
@@ -430,7 +430,7 @@ void ConstructionPlaneDialog::updatePreviewText()
 void ConstructionPlaneDialog::setPlaneData(const ConstructionPlaneData& data)
 {
     m_planeId = data.id;
-    m_nameEdit->setText(data.name);
+    m_nameEdit->setText(QString::fromStdString(data.name));
 
     // Set type
     switch (data.type) {
@@ -483,9 +483,9 @@ ConstructionPlaneData ConstructionPlaneDialog::planeData() const
 {
     ConstructionPlaneData data;
     data.id = m_planeId;
-    data.name = m_nameEdit->text().trimmed();
-    if (data.name.isEmpty()) {
-        data.name = m_nameEdit->placeholderText();
+    data.name = m_nameEdit->text().trimmed().toStdString();
+    if (data.name.empty()) {
+        data.name = m_nameEdit->placeholderText().toStdString();
     }
 
     int typeId = m_typeGroup->checkedId();
@@ -528,19 +528,19 @@ ConstructionPlaneData ConstructionPlaneDialog::planeData() const
     return data;
 }
 
-void ConstructionPlaneDialog::setAvailablePlanes(const QVector<ConstructionPlaneData>& planes)
+void ConstructionPlaneDialog::setAvailablePlanes(const std::vector<ConstructionPlaneData>& planes)
 {
     m_availablePlanes = planes;
 
     // Update reference plane combo
     m_referencePlaneCombo->clear();
     for (const auto& plane : planes) {
-        m_referencePlaneCombo->addItem(plane.name, plane.id);
+        m_referencePlaneCombo->addItem(QString::fromStdString(plane.name), plane.id);
     }
 
     // Disable offset from plane option if no planes available
-    m_offsetFromPlaneButton->setEnabled(!planes.isEmpty());
-    if (planes.isEmpty() && m_offsetFromPlaneButton->isChecked()) {
+    m_offsetFromPlaneButton->setEnabled(!planes.empty());
+    if (planes.empty() && m_offsetFromPlaneButton->isChecked()) {
         m_offsetFromOriginButton->setChecked(true);
     }
 

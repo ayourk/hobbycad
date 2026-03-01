@@ -35,6 +35,8 @@
        6.5  GPG Commit Signing (Verified Commits)
     7. Include Order
     8. General C++ Style
+       8.1  Units and Measurements
+       8.2  Library Type Conventions
 
 ================================================================================
   1. PURPOSE
@@ -411,6 +413,9 @@
       libhobbycad/                 Core library (no GUI dependency)
         CMakeLists.txt
         hobbycad/                  Public headers (installed)
+          types.h
+          qt_compat.h
+          format.h
           core.h
           document.h
           brep_io.h
@@ -822,8 +827,8 @@
 
   Pointer style:       Type* name  (star with type, not name)
 
-    QString* ptr;         // yes
-    QString *ptr;         // no
+    Type* ptr;            // yes
+    Type *ptr;            // no
 
   Auto:                Use when the type is obvious from context
 
@@ -907,6 +912,65 @@
     formatAngle(degrees);                  // With degree symbol (e.g., "45°")
     formatStorageValue(value);             // For file I/O (15 decimal places)
     parseValueWithUnit(input, default);    // Parse user input to mm
+
+================================================================================
+  8.2 LIBRARY TYPE CONVENTIONS
+================================================================================
+
+  Library API Types
+  -----------------
+
+  The library (libhobbycad) uses Qt-free types in its public API:
+
+    Qt Type          Library Type         Header
+    ───────────      ──────────────       ─────────────────────
+    QPointF          Point2D              hobbycad/types.h
+    QRectF           Rect2D               hobbycad/types.h
+    QVector3D        Vec3                 hobbycad/types.h
+    QVector<T>       std::vector<T>       <vector>
+    QString          std::string          <string>
+    QPolygonF        std::vector<Point2D> hobbycad/types.h
+    qFuzzyCompare    fuzzyCompare         hobbycad/types.h
+    qFuzzyIsNull     fuzzyIsNull          hobbycad/types.h
+    qMin/qMax/qAbs   std::min/max/abs    <algorithm>/<cmath>
+    QString::number  formatDouble         hobbycad/format.h
+    QString::arg     format               hobbycad/format.h
+
+  Rules:
+    - Library headers (.h in src/libhobbycad/) must NOT include
+      Qt headers except behind #if HOBBYCAD_HAS_QT guards
+    - Library source files (.cpp) may use Qt behind guards for
+      I/O features (JSON, image loading, OpenGL probing)
+    - GUI code (src/hobbycad/) may use Qt types freely
+    - At the GUI/library boundary, Point2D/Rect2D/Vec3 convert
+      implicitly to/from QPointF/QRectF/QVector3D
+    - For containers: use toQVector()/fromQVector() from qt_compat.h
+    - For strings: use toQt()/fromQt() from qt_compat.h
+
+  Container Helpers
+  -----------------
+
+  The library provides Qt-style convenience functions for
+  std::vector in hobbycad/types.h:
+
+    hobbycad::contains(vec, value)    // like QVector::contains
+    hobbycad::indexOf(vec, value)     // like QVector::indexOf
+    hobbycad::removeOne(vec, value)   // like QVector::removeOne
+    hobbycad::removeAll(vec, value)   // like QVector::removeAll
+    hobbycad::removeAt(vec, index)    // like QVector::removeAt
+    hobbycad::valueAt(vec, index)     // like QVector::value(i, default)
+
+  HOBBYCAD_HAS_QT Macro
+  ----------------------
+
+  The macro HOBBYCAD_HAS_QT (defined in hobbycad/types.h) is set
+  to 1 when Qt 6.4.2+ is available, 0 otherwise.  Use it to guard
+  Qt-dependent code in library files:
+
+    #if HOBBYCAD_HAS_QT
+    #include <QJsonObject>
+    QJsonObject toJson() const;
+    #endif
 
 ================================================================================
   9. INTERNATIONALIZATION (i18n) AND TRANSLATION

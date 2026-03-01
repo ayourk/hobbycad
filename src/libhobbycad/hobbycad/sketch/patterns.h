@@ -13,9 +13,11 @@
 #define HOBBYCAD_SKETCH_PATTERNS_H
 
 #include "entity.h"
+#include "../types.h"
 
-#include <QVector>
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 namespace sketch {
@@ -36,8 +38,8 @@ struct RectPatternParams {
 /// Result of a rectangular pattern operation
 struct RectPatternResult {
     bool success = false;
-    QVector<Entity> entities;     ///< All pattern copies (not including originals)
-    QString errorMessage;
+    std::vector<Entity> entities;     ///< All pattern copies (not including originals)
+    std::string errorMessage;
 };
 
 /// Create a rectangular pattern of entities
@@ -45,7 +47,7 @@ struct RectPatternResult {
 /// @param params Pattern parameters
 /// @param nextId Function to get next entity ID
 HOBBYCAD_EXPORT RectPatternResult createRectangularPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const RectPatternParams& params,
     std::function<int()> nextId);
 
@@ -55,7 +57,7 @@ HOBBYCAD_EXPORT RectPatternResult createRectangularPattern(
 
 /// Parameters for circular pattern
 struct CircPatternParams {
-    QPointF center;           ///< Center point of rotation
+    Point2D center;           ///< Center point of rotation
     int count = 6;            ///< Total number of copies (including original)
     double totalAngle = 360.0;///< Total angle to distribute copies over (degrees)
     bool includeOriginal = true;  ///< Include original in result
@@ -64,8 +66,8 @@ struct CircPatternParams {
 /// Result of a circular pattern operation
 struct CircPatternResult {
     bool success = false;
-    QVector<Entity> entities;     ///< All pattern copies (not including originals)
-    QString errorMessage;
+    std::vector<Entity> entities;     ///< All pattern copies (not including originals)
+    std::string errorMessage;
 };
 
 /// Create a circular pattern of entities
@@ -73,7 +75,7 @@ struct CircPatternResult {
 /// @param params Pattern parameters
 /// @param nextId Function to get next entity ID
 HOBBYCAD_EXPORT CircPatternResult createCircularPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const CircPatternParams& params,
     std::function<int()> nextId);
 
@@ -92,13 +94,13 @@ struct LinearPatternParams {
 /// Result of a linear pattern operation
 struct LinearPatternResult {
     bool success = false;
-    QVector<Entity> entities;
-    QString errorMessage;
+    std::vector<Entity> entities;
+    std::string errorMessage;
 };
 
 /// Create a linear pattern of entities
 HOBBYCAD_EXPORT LinearPatternResult createLinearPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const LinearPatternParams& params,
     std::function<int()> nextId);
 
@@ -108,21 +110,21 @@ HOBBYCAD_EXPORT LinearPatternResult createLinearPattern(
 
 /// Parameters for mirror pattern
 struct MirrorPatternParams {
-    QPointF linePoint1;       ///< First point on mirror line
-    QPointF linePoint2;       ///< Second point on mirror line
+    Point2D linePoint1;       ///< First point on mirror line
+    Point2D linePoint2;       ///< Second point on mirror line
     bool keepOriginal = true; ///< Keep original entities
 };
 
 /// Result of a mirror pattern operation
 struct MirrorPatternResult {
     bool success = false;
-    QVector<Entity> entities;     ///< Mirrored copies
-    QString errorMessage;
+    std::vector<Entity> entities;     ///< Mirrored copies
+    std::string errorMessage;
 };
 
 /// Create mirrored copies of entities
 HOBBYCAD_EXPORT MirrorPatternResult createMirrorPattern(
-    const QVector<Entity>& sourceEntities,
+    const std::vector<Entity>& sourceEntities,
     const MirrorPatternParams& params,
     std::function<int()> nextId);
 
