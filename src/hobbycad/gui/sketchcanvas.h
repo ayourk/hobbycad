@@ -23,6 +23,7 @@
 #include "sketchtoolbar.h"
 
 #include <hobbycad/project.h>
+#include <hobbycad/geometry/utils.h>
 #include <hobbycad/sketch/background.h>
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/sketch/group.h>
@@ -338,8 +339,6 @@ public:
     /// Create circular pattern of selected entities
     void createCircularPattern();
 
-    /// Find a line connected to the given line at the corner nearest to clickPos
-    int findConnectedLineAtCorner(int lineId, const QPointF& clickPos) const;
 
     /// Get groups
     const QVector<SketchGroup>& groups() const { return m_groups; }
@@ -519,7 +518,8 @@ private:
 
     // Constraint helpers
     void createConstraint(ConstraintType type, double value, const QPointF& labelPos,
-                          bool skipOverConstrainCheck = false);
+                          bool skipOverConstrainCheck = false,
+                          bool startEditing = false);
     void createGeometricConstraint(ConstraintType type);  // For non-dimensional constraints
     void editConstraintValue(int constraintId);
     void finishConstraintCreation();
@@ -531,6 +531,22 @@ private:
     ConstraintType detectConstraintType(int entityId1, int entityId2) const;
     bool getConstraintEndpoints(const SketchConstraint& constraint, QPointF& p1, QPointF& p2) const;
     QString describeConstraint(int constraintId) const;  // Human-readable constraint description
+
+    // Constraint label position (shared by hitTest, inline edit overlay, etc.)
+    struct ConstraintLabelPosition {
+        QPointF textCenter;   // screen-space label center
+        QString prefix;       // "R", "Ø", or ""
+        bool found = false;
+    };
+    ConstraintLabelPosition computeConstraintLabelPosition(const SketchConstraint& c) const;
+
+    // Constraint search helpers
+    SketchConstraint* findDrivingConstraint(int entityId, ConstraintType type);
+    const SketchConstraint* findDrivingConstraint(int entityId, ConstraintType type) const;
+
+    // Constraint target setup helpers
+    void setConstraintTargetsForLine(int entityId, const QPointF& p1, const QPointF& p2);
+    void setConstraintTargetsForRadial(int entityId, const QPointF& center);
 
     // Sweep-angle construction line helpers
     void syncSweepAngleConstructionLines(const SketchEntity& arc);
@@ -646,6 +662,22 @@ private:
     void drawDimInputField(QPainter& painter, const QPointF& position,
                            int fieldIndex, double rotation = 0.0);
 
+    // Inline constraint value editing (replaces QInputDialog)
+    bool     m_inlineEditActive       = false;   ///< Currently editing a constraint label
+    int      m_inlineEditConstraintId = -1;      ///< Which constraint is being edited
+    QString  m_inlineEditBuffer;                 ///< Text typed so far
+    int      m_inlineEditCursorPos    = 0;       ///< Cursor position within buffer
+    bool     m_inlineEditSelectAll    = false;   ///< Entire text is selected
+    double   m_inlineEditOriginalValue = 0.0;    ///< For revert on Escape
+    bool     m_inlineEditIsAngle      = false;   ///< Angle vs length constraint
+    bool     m_inlineEditIsCreation   = false;   ///< True = just-created (Escape deletes)
+
+    void beginInlineConstraintEdit(int constraintId, bool isCreation);
+    void commitInlineConstraintEdit();
+    void cancelInlineConstraintEdit();
+    void drawInlineConstraintEdit(QPainter& painter, const QPointF& position,
+                                   const QString& prefix = QString());
+
     // Pan state
     bool m_isPanning = false;
     QPoint m_lastMousePos;
@@ -674,6 +706,10 @@ private:
     QVector<SketchConstraint> m_constraints;
     int m_nextConstraintId = 1;
     int m_selectedConstraintId = -1;
+
+    // D-key quick-add constraint type cycling (TAB to switch)
+    int m_dKeyTypeIndex = 0;              ///< Current index into available constraint types
+    QString m_dKeyTypeHint;               ///< Overlay hint text (e.g. "Radius", "Diameter")
 
     // Constraint creation state
     bool m_isCreatingConstraint = false;
@@ -719,25 +755,15 @@ private:
     /// entityId.  Returns true if a handle was hit.
     bool hitTestGroupHandle(const QPointF& worldPos, int& entityId, int& handleIdx) const;
 
-    // Tangent circle helpers
-    struct TangentCircle {
-        QPointF center;
-        double radius;
-        bool valid;
-    };
+    // Tangent circle helpers — use library result types directly
+    using TangentCircle = geometry::TangentCircleResult;
     TangentCircle calculate2TangentCircle(const SketchEntity& e1, const SketchEntity& e2,
                                           const QPointF& hint) const;
     TangentCircle calculate3TangentCircle(const SketchEntity& e1, const SketchEntity& e2,
                                           const SketchEntity& e3) const;
 
-    // Tangent arc helper
-    struct TangentArc {
-        QPointF center;
-        double radius;
-        double startAngle;
-        double sweepAngle;
-        bool valid;
-    };
+    // Tangent arc helper — uses library result type directly
+    using TangentArc = geometry::TangentArcResult;
     TangentArc calculateTangentArc(const SketchEntity& tangentEntity, const QPointF& tangentPoint,
                                    const QPointF& endPoint) const;
 

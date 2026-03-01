@@ -75,6 +75,9 @@ void SketchCanvas::setActiveTool(SketchTool tool)
             finishConstraintCreation();
         }
 
+        // Cancel any in-progress drawing when switching tools
+        m_isDrawing = false;
+
         // Clear tangent targets when switching tools
         m_tangentTargets.clear();
 
@@ -303,6 +306,10 @@ void SketchCanvas::clearSelection()
     // Clear fixed handle
     m_fixedHandleIndex = -1;
 
+    // Reset D-key constraint type cycling
+    m_dKeyTypeIndex = 0;
+    m_dKeyTypeHint.clear();
+
     emit selectionChanged(-1);
     update();
 }
@@ -452,6 +459,10 @@ void SketchCanvas::selectEntity(int entityId, bool addToSelection,
             }
         }
     }
+
+    // Reset D-key constraint type cycling on selection change
+    m_dKeyTypeIndex = 0;
+    m_dKeyTypeHint.clear();
 
     emit selectionChanged(m_selectedId);
     update();
@@ -1104,6 +1115,28 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
     case SketchPlane::Custom: planeLabel = QStringLiteral("Custom Plane"); break;
     }
     painter.drawText(10, 20, planeLabel);
+
+    // Draw D-key constraint type hint (shown after TAB cycling)
+    if (!m_dKeyTypeHint.isEmpty()) {
+        QFont hintFont = painter.font();
+        hintFont.setPointSize(11);
+        hintFont.setBold(true);
+        painter.setFont(hintFont);
+        QString hintText = tr("D: %1").arg(m_dKeyTypeHint);
+        QFontMetrics fm(hintFont);
+        int textWidth = fm.horizontalAdvance(hintText);
+        int x = (width() - textWidth) / 2;
+        int y = 30;
+        // Background pill
+        QRect bgRect(x - 6, y - fm.ascent() - 2, textWidth + 12, fm.height() + 4);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0, 0, 0, 160));
+        painter.drawRoundedRect(bgRect, 4, 4);
+        painter.setPen(QColor(255, 255, 100));
+        painter.drawText(x, y, hintText);
+        painter.setFont(font());  // Restore default
+        painter.setPen(Qt::darkGray);
+    }
 
     // Draw coordinates at cursor
     painter.drawText(10, height() - 10,
@@ -3829,6 +3862,16 @@ void SketchCanvas::drawConstraints(QPainter& painter)
         if (!constraint.enabled || !constraint.labelVisible) continue;
         drawConstraint(painter, constraint);
     }
+
+    // Draw inline constraint edit overlay
+    if (m_inlineEditActive) {
+        const SketchConstraint* ec = constraintById(m_inlineEditConstraintId);
+        if (ec && ec->enabled) {
+            auto pos = computeConstraintLabelPosition(*ec);
+            if (pos.found)
+                drawInlineConstraintEdit(painter, pos.textCenter, pos.prefix);
+        }
+    }
 }
 
 void SketchCanvas::drawConstraint(QPainter& painter, const SketchConstraint& constraint)
@@ -3959,17 +4002,19 @@ void SketchCanvas::drawDistanceConstraint(QPainter& painter, const SketchConstra
         painter.drawLine(d1 - perp * tickSize, d1 + perp * tickSize);
         painter.drawLine(d2 - perp * tickSize, d2 + perp * tickSize);
 
-        // Rotated text centred in the gap
-        painter.save();
-        painter.translate(dimMid);
-        painter.rotate(angleDeg);
+        // Rotated text centred in the gap (suppressed during inline edit)
+        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
+            painter.save();
+            painter.translate(dimMid);
+            painter.rotate(angleDeg);
 
-        QRectF textRect(-textWidth / 2.0 - 2,
-                        -textHeight / 2.0 - 1,
-                         textWidth + 4, textHeight + 2);
-        painter.fillRect(textRect, Qt::white);
-        painter.drawText(textRect, Qt::AlignCenter, text);
-        painter.restore();
+            QRectF textRect(-textWidth / 2.0 - 2,
+                            -textHeight / 2.0 - 1,
+                             textWidth + 4, textHeight + 2);
+            painter.fillRect(textRect, Qt::white);
+            painter.drawText(textRect, Qt::AlignCenter, text);
+            painter.restore();
+        }
     } else {
         // ---- COMPACT: inward arrows, text outside ------------------------
         // Two small filled arrowheads pointing inward (toward each other)
@@ -4002,18 +4047,20 @@ void SketchCanvas::drawDistanceConstraint(QPainter& painter, const SketchConstra
         QPointF leaderEnd = d2 + dir * leaderLen;
         painter.drawLine(d2, leaderEnd);
 
-        // Rotated text placed outside, past the leader
-        QPointF textPos = leaderEnd + dir * (textWidth / 2.0 + textGap);
-        painter.save();
-        painter.translate(textPos);
-        painter.rotate(angleDeg);
+        // Rotated text placed outside, past the leader (suppressed during inline edit)
+        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
+            QPointF textPos = leaderEnd + dir * (textWidth / 2.0 + textGap);
+            painter.save();
+            painter.translate(textPos);
+            painter.rotate(angleDeg);
 
-        QRectF textRect(-textWidth / 2.0 - 2,
-                        -textHeight / 2.0 - 1,
-                         textWidth + 4, textHeight + 2);
-        painter.fillRect(textRect, Qt::white);
-        painter.drawText(textRect, Qt::AlignCenter, text);
-        painter.restore();
+            QRectF textRect(-textWidth / 2.0 - 2,
+                            -textHeight / 2.0 - 1,
+                             textWidth + 4, textHeight + 2);
+            painter.fillRect(textRect, Qt::white);
+            painter.drawText(textRect, Qt::AlignCenter, text);
+            painter.restore();
+        }
     }
 }
 
@@ -4084,18 +4131,20 @@ void SketchCanvas::drawRadialConstraint(QPainter& painter, const SketchConstrain
         painter.drawLine((sc - perp * tickSize).toPoint(), (sc + perp * tickSize).toPoint());
         painter.drawLine((edgePt - perp * tickSize).toPoint(), (edgePt + perp * tickSize).toPoint());
 
-        // Rotated text centred in the gap
-        painter.save();
-        painter.translate(dimMid);
-        painter.rotate(angleDeg);
+        // Rotated text centred in the gap (suppressed during inline edit)
+        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
+            painter.save();
+            painter.translate(dimMid);
+            painter.rotate(angleDeg);
 
-        QRectF textRect(-textWidth / 2.0 - 2,
-                        -textHeight / 2.0 - 1,
-                         textWidth + 4, textHeight + 2);
-        painter.fillRect(textRect, Qt::white);
-        painter.setPen(QPen(painter.pen().color(), 1, Qt::SolidLine));
-        painter.drawText(textRect, Qt::AlignCenter, text);
-        painter.restore();
+            QRectF textRect(-textWidth / 2.0 - 2,
+                            -textHeight / 2.0 - 1,
+                             textWidth + 4, textHeight + 2);
+            painter.fillRect(textRect, Qt::white);
+            painter.setPen(QPen(painter.pen().color(), 1, Qt::SolidLine));
+            painter.drawText(textRect, Qt::AlignCenter, text);
+            painter.restore();
+        }
     } else {
         // ---- COMPACT: inward arrows, text outside circle -------------------
         double arrowLen = 8.0;
@@ -4131,19 +4180,21 @@ void SketchCanvas::drawRadialConstraint(QPainter& painter, const SketchConstrain
         QPointF leaderEnd = edgePt + dir * leaderLen;
         painter.drawLine(edgePt.toPoint(), leaderEnd.toPoint());
 
-        // Rotated text placed outside, past the leader
-        QPointF textPos = leaderEnd + dir * (textWidth / 2.0 + textGap);
-        painter.save();
-        painter.translate(textPos);
-        painter.rotate(angleDeg);
+        // Rotated text placed outside, past the leader (suppressed during inline edit)
+        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
+            QPointF textPos = leaderEnd + dir * (textWidth / 2.0 + textGap);
+            painter.save();
+            painter.translate(textPos);
+            painter.rotate(angleDeg);
 
-        QRectF textRect(-textWidth / 2.0 - 2,
-                        -textHeight / 2.0 - 1,
-                         textWidth + 4, textHeight + 2);
-        painter.fillRect(textRect, Qt::white);
-        painter.setPen(QPen(painter.pen().color(), 1, Qt::SolidLine));
-        painter.drawText(textRect, Qt::AlignCenter, text);
-        painter.restore();
+            QRectF textRect(-textWidth / 2.0 - 2,
+                            -textHeight / 2.0 - 1,
+                             textWidth + 4, textHeight + 2);
+            painter.fillRect(textRect, Qt::white);
+            painter.setPen(QPen(painter.pen().color(), 1, Qt::SolidLine));
+            painter.drawText(textRect, Qt::AlignCenter, text);
+            painter.restore();
+        }
     }
 }
 
@@ -4303,12 +4354,15 @@ void SketchCanvas::drawAngleConstraint(QPainter& painter, const SketchConstraint
     QFontMetricsF fm(painter.font());
     double textW = fm.horizontalAdvance(text);
     double textH = fm.height();
-    QRectF textRect(textCenter.x() - textW / 2.0 - 2,
-                    textCenter.y() - textH / 2.0 - 1,
-                    textW + 4, textH + 2);
+    // Suppress label text during inline edit
+    if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
+        QRectF textRect(textCenter.x() - textW / 2.0 - 2,
+                        textCenter.y() - textH / 2.0 - 1,
+                        textW + 4, textH + 2);
 
-    painter.fillRect(textRect, Qt::white);
-    painter.drawText(textRect, Qt::AlignCenter, text);
+        painter.fillRect(textRect, Qt::white);
+        painter.drawText(textRect, Qt::AlignCenter, text);
+    }
 }
 
 
@@ -4421,12 +4475,15 @@ void SketchCanvas::drawFixedAngleConstraint(QPainter& painter, const SketchConst
     QFontMetricsF fm(painter.font());
     double textW = fm.horizontalAdvance(text);
     double textH = fm.height();
-    QRectF textRect(textCenter.x() - textW / 2.0 - 2,
-                    textCenter.y() - textH / 2.0 - 1,
-                    textW + 4, textH + 2);
+    // Suppress label text during inline edit
+    if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
+        QRectF textRect(textCenter.x() - textW / 2.0 - 2,
+                        textCenter.y() - textH / 2.0 - 1,
+                        textW + 4, textH + 2);
 
-    painter.fillRect(textRect, Qt::white);
-    painter.drawText(textRect, Qt::AlignCenter, text);
+        painter.fillRect(textRect, Qt::white);
+        painter.drawText(textRect, Qt::AlignCenter, text);
+    }
 }
 
 void SketchCanvas::drawGeometricConstraint(QPainter& painter, const SketchConstraint& constraint)
@@ -4513,6 +4570,15 @@ void SketchCanvas::drawArrow(QPainter& painter, const QPointF& pos, const QPoint
 
 void SketchCanvas::mousePressEvent(QMouseEvent* event)
 {
+    // Click-away commits inline constraint edit
+    if (m_inlineEditActive) {
+        QPointF worldPos = screenToWorld(event->pos());
+        int hitCid = hitTestConstraintLabel(worldPos);
+        if (hitCid != m_inlineEditConstraintId) {
+            commitInlineConstraintEdit();
+        }
+    }
+
     QPointF worldPos = screenToWorld(event->pos());
     m_lastMousePos = event->pos();
 
@@ -5235,20 +5301,55 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
                 updateEntity(snapPoint(worldPos));
                 finishEntity();
             } else if (m_activeTool == SketchTool::Dimension && m_isCreatingConstraint) {
-                // Dimension tool: 3-click workflow
+                // Dimension tool click workflow:
+                //   - Single-entity types (line→distance, circle/arc→radius)
+                //     prompt immediately on first click.
+                //   - Two-entity types (angle between lines) use 3-click:
+                //     click entity 1, click entity 2, click label position.
                 if (m_constraintTargetEntities.size() < 2) {
-                    // First or second click: select entity
                     int hitId = hitTest(worldPos);
                     if (hitId >= 0) {
-                        m_constraintTargetEntities.append(hitId);
-
-                        // Find closest point on entity for constraint attachment
                         SketchEntity* entity = entityById(hitId);
+
+                        // Single-entity shortcut: line→distance, circle/arc→radius
+                        if (entity && m_constraintTargetEntities.isEmpty()) {
+                            bool handled = false;
+                            if (entity->type == SketchEntityType::Line && entity->points.size() == 2) {
+                                setConstraintTargetsForLine(hitId, entity->points[0], entity->points[1]);
+                                m_pendingConstraintType = ConstraintType::Distance;
+                                handled = true;
+                            } else if ((entity->type == SketchEntityType::Circle
+                                        || entity->type == SketchEntityType::Arc)
+                                       && !entity->points.empty()) {
+                                setConstraintTargetsForRadial(hitId, entity->points[0]);
+                                m_pendingConstraintType = ConstraintType::Radius;
+                                handled = true;
+                            }
+                            if (handled) {
+                                // Compute initial value from current geometry
+                                std::vector<const sketch::Entity*> targetEntities;
+                                for (int eid : m_constraintTargetEntities)
+                                    targetEntities.push_back(entityById(eid));
+                                double initialValue = sketch::calculateConstraintValue(
+                                    m_pendingConstraintType, targetEntities);
+
+                                QPointF labelPos = worldPos;
+                                createConstraint(m_pendingConstraintType, initialValue, labelPos,
+                                                 /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
+                                // Reset for next constraint
+                                m_constraintTargetEntities.clear();
+                                m_constraintTargetPoints.clear();
+                                update();
+                                return;
+                            }
+                        }
+
+                        // Two-entity workflow: accumulate targets
+                        m_constraintTargetEntities.append(hitId);
                         QPointF closestPoint = findClosestPointOnEntity(entity, worldPos);
                         m_constraintTargetPoints.append(closestPoint);
 
                         if (m_constraintTargetEntities.size() == 2) {
-                            // Auto-detect constraint type based on selected entities
                             m_pendingConstraintType = detectConstraintType(
                                 m_constraintTargetEntities[0],
                                 m_constraintTargetEntities[1]
@@ -5267,46 +5368,10 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
                     double initialValue = sketch::calculateConstraintValue(
                         m_pendingConstraintType, targetEntities);
 
-                    // Prompt user to edit value
-                    QString title, label;
-                    switch (m_pendingConstraintType) {
-                    case ConstraintType::Distance:
-                        title = tr("Dimension Value");
-                        label = tr("Distance (mm):");
-                        break;
-                    case ConstraintType::Radius:
-                        title = tr("Radius Dimension");
-                        label = tr("Radius (mm):");
-                        break;
-                    case ConstraintType::Angle:
-                        title = tr("Angle Dimension");
-                        label = tr("Angle (degrees):");
-                        break;
-                    case ConstraintType::FixedAngle:
-                        title = tr("Fixed Angle Dimension");
-                        label = tr("Angle from horizontal (degrees):");
-                        break;
-                    default:
-                        title = tr("Dimension Value");
-                        label = tr("Value:");
-                        break;
-                    }
-
-                    bool ok = false;
-                    double value = QInputDialog::getDouble(
-                        this,
-                        title,
-                        label,
-                        initialValue,      // default value
-                        0.0,               // minimum
-                        1000000.0,         // maximum
-                        2,                 // decimals
-                        &ok
-                    );
-
-                    if (ok) {
-                        createConstraint(m_pendingConstraintType, value, labelPos);
-                    }
+                    // Create the constraint with current geometry value and
+                    // start inline edit for the user to adjust
+                    createConstraint(m_pendingConstraintType, initialValue, labelPos,
+                                     /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
 
                     // Reset for next constraint
                     m_constraintTargetEntities.clear();
@@ -5448,7 +5513,8 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
                     const SketchEntity* entity = entityById(hitId);
                     if (entity && entity->type == SketchEntityType::Line) {
                         // Find connected line at closest endpoint
-                        int connectedId = findConnectedLineAtCorner(hitId, worldPos);
+                        int connectedId = sketch::findConnectedLineAtCorner(
+                            toLibraryEntity(*entity), toLibraryEntities(m_entities), worldPos);
                         if (connectedId >= 0) {
                             // Prompt for fillet radius
                             bool ok = false;
@@ -5482,7 +5548,8 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
                     const SketchEntity* entity = entityById(hitId);
                     if (entity && entity->type == SketchEntityType::Line) {
                         // Find connected line at closest endpoint
-                        int connectedId = findConnectedLineAtCorner(hitId, worldPos);
+                        int connectedId = sketch::findConnectedLineAtCorner(
+                            toLibraryEntity(*entity), toLibraryEntities(m_entities), worldPos);
                         if (connectedId >= 0) {
                             // Prompt for chamfer distance
                             bool ok = false;
@@ -5773,8 +5840,8 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
                     TangentArc rawTa = calculateTangentArc(*tangentEntity, tangentPoint, rawMouse);
                     if (rawTa.valid && rawTa.radius > 0.001) {
                         // Project the raw mouse onto the arc (point on circle at radius from center)
-                        QPointF toMouse = rawMouse - rawTa.center;
-                        double dist = std::sqrt(toMouse.x() * toMouse.x() + toMouse.y() * toMouse.y());
+                        Point2D toMouse = Point2D(rawMouse) - rawTa.center;
+                        double dist = std::sqrt(toMouse.x * toMouse.x + toMouse.y * toMouse.y);
                         if (dist > 0.001) {
                             m_currentMouseWorld = rawTa.center + toMouse * (rawTa.radius / dist);
                         }
@@ -6891,15 +6958,7 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
                     int fixedIdx = (m_dragHandleIndex == 0) ? 1 : 0;
 
                     // Find the Distance constraint (if any) for label tracking
-                    SketchConstraint* distConstraint = nullptr;
-                    for (SketchConstraint& c : m_constraints) {
-                        if (c.type == ConstraintType::Distance && c.isDriving && c.enabled) {
-                            for (int eid : c.entityIds) {
-                                if (eid == sel->id) { distConstraint = &c; break; }
-                            }
-                            if (distConstraint) break;
-                        }
-                    }
+                    SketchConstraint* distConstraint = findDrivingConstraint(sel->id, ConstraintType::Distance);
 
                     // Capture label's perpendicular offset from OLD orientation
                     double labelPerpOffset = 0.0;
@@ -6960,15 +7019,7 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
                     if (distConstraint) {
                         // Re-find distConstraint — pointer may be stale after
                         // m_constraints append/erase
-                        distConstraint = nullptr;
-                        for (SketchConstraint& c : m_constraints) {
-                            if (c.type == ConstraintType::Distance && c.isDriving && c.enabled) {
-                                for (int eid : c.entityIds) {
-                                    if (eid == sel->id) { distConstraint = &c; break; }
-                                }
-                                if (distConstraint) break;
-                            }
-                        }
+                        distConstraint = findDrivingConstraint(sel->id, ConstraintType::Distance);
                         if (distConstraint) {
                             QPointF newAlong = sel->points[1] - sel->points[0];
                             double newLen = std::sqrt(newAlong.x() * newAlong.x() + newAlong.y() * newAlong.y());
@@ -7910,6 +7961,111 @@ bool SketchCanvas::event(QEvent* event)
 
 void SketchCanvas::keyPressEvent(QKeyEvent* event)
 {
+    // ---- Inline constraint value editing (on existing constraint labels) ----
+    if (m_inlineEditActive) {
+        int key = event->key();
+
+        // Helper: replace entire buffer if selectAll, otherwise insert at cursor
+        auto replaceOrInsert = [&](QChar ch) {
+            if (m_inlineEditSelectAll) {
+                m_inlineEditBuffer = QString(ch);
+                m_inlineEditCursorPos = 1;
+                m_inlineEditSelectAll = false;
+            } else {
+                m_inlineEditBuffer.insert(m_inlineEditCursorPos, ch);
+                m_inlineEditCursorPos++;
+            }
+        };
+
+        // Printable characters valid in expressions
+        QString text = event->text();
+        if (!text.isEmpty()) {
+            QChar ch = text[0];
+            if (ch.isDigit() || ch.isLetter() || ch == QLatin1Char('_') ||
+                ch == QLatin1Char('.') || ch == QLatin1Char('-') || ch == QLatin1Char('+') ||
+                ch == QLatin1Char('*') || ch == QLatin1Char('/') || ch == QLatin1Char('^') ||
+                ch == QLatin1Char('(') || ch == QLatin1Char(')') || ch == QLatin1Char(',') ||
+                ch == QLatin1Char(' ') || ch == QLatin1Char('%') ||
+                ch == QChar(0x00B0) ||    // ° degree sign
+                ch == QLatin1Char('\'') || ch == QLatin1Char('"') ||
+                ch == QChar(0x2032) || ch == QChar(0x2033)) {
+                replaceOrInsert(ch);
+                update();
+                return;
+            }
+        }
+        if (key == Qt::Key_Backspace) {
+            if (m_inlineEditSelectAll) {
+                m_inlineEditBuffer.clear();
+                m_inlineEditCursorPos = 0;
+                m_inlineEditSelectAll = false;
+            } else if (m_inlineEditCursorPos > 0) {
+                m_inlineEditBuffer.remove(m_inlineEditCursorPos - 1, 1);
+                m_inlineEditCursorPos--;
+            }
+            update();
+            return;
+        }
+        if (key == Qt::Key_Delete) {
+            if (m_inlineEditSelectAll) {
+                m_inlineEditBuffer.clear();
+                m_inlineEditCursorPos = 0;
+                m_inlineEditSelectAll = false;
+            } else if (m_inlineEditCursorPos < m_inlineEditBuffer.length()) {
+                m_inlineEditBuffer.remove(m_inlineEditCursorPos, 1);
+            }
+            update();
+            return;
+        }
+        if (key == Qt::Key_Left) {
+            if (m_inlineEditSelectAll) {
+                m_inlineEditCursorPos = 0;
+                m_inlineEditSelectAll = false;
+            } else if (m_inlineEditCursorPos > 0) {
+                m_inlineEditCursorPos--;
+            }
+            update();
+            return;
+        }
+        if (key == Qt::Key_Right) {
+            if (m_inlineEditSelectAll) {
+                m_inlineEditSelectAll = false;
+            } else if (m_inlineEditCursorPos < m_inlineEditBuffer.length()) {
+                m_inlineEditCursorPos++;
+            }
+            update();
+            return;
+        }
+        if (key == Qt::Key_Home) {
+            m_inlineEditSelectAll = false;
+            m_inlineEditCursorPos = 0;
+            update();
+            return;
+        }
+        if (key == Qt::Key_End) {
+            m_inlineEditSelectAll = false;
+            m_inlineEditCursorPos = m_inlineEditBuffer.length();
+            update();
+            return;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            commitInlineConstraintEdit();
+            return;
+        }
+        if (key == Qt::Key_Escape) {
+            cancelInlineConstraintEdit();
+            return;
+        }
+        // Ctrl+A = select all
+        if (key == Qt::Key_A && (event->modifiers() & Qt::ControlModifier)) {
+            m_inlineEditSelectAll = true;
+            update();
+            return;
+        }
+        // Consume all other keys while inline edit is active
+        return;
+    }
+
     // ---- Inline dimension input routing (during entity creation) ----
     if (m_isDrawing && m_dimActiveIndex >= 0 && m_dimActiveIndex < m_dimStates.size()) {
         auto& state = m_dimStates[m_dimActiveIndex];
@@ -8318,117 +8474,100 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
     case Qt::Key_P:
         setActiveTool(SketchTool::Point);
         break;
-    case Qt::Key_D:
-        // If an entity is selected in Select mode, immediately add
-        // the appropriate constraint (Distance for lines, Radius for
-        // arcs/circles) instead of switching to the Dimension tool.
-        if (m_activeTool == SketchTool::Select && m_selectedId >= 0) {
+    case Qt::Key_Tab:
+        // Cycle constraint type for D-key quick-add
+        if (m_selectedId >= 0) {
             SketchEntity* sel = selectedEntity();
-            // --- Line → Distance constraint ---
-            if (sel && sel->type == SketchEntityType::Line && sel->points.size() == 2) {
-                bool alreadyConstrained = false;
-                for (const SketchConstraint& c : m_constraints) {
-                    if (c.type == ConstraintType::Distance && c.isDriving && c.enabled) {
-                        for (int eid : c.entityIds) {
-                            if (eid == sel->id) { alreadyConstrained = true; break; }
-                        }
-                        if (alreadyConstrained) break;
-                    }
+            if (sel) {
+                // Build list of available constraint types for this entity
+                QStringList typeNames;
+                if (sel->type == SketchEntityType::Line) {
+                    typeNames << tr("Distance");
+                } else if (sel->type == SketchEntityType::Circle
+                           || sel->type == SketchEntityType::Arc) {
+                    typeNames << tr("Radius") << tr("Diameter");
                 }
-                if (!alreadyConstrained) {
+                if (typeNames.size() > 1) {
+                    m_dKeyTypeIndex = (m_dKeyTypeIndex + 1) % typeNames.size();
+                    m_dKeyTypeHint = typeNames[m_dKeyTypeIndex];
+                    update();
+                }
+            }
+            event->accept();
+            return;
+        }
+        break;
+
+    case Qt::Key_D: {
+        // If an entity is selected, immediately add the appropriate
+        // constraint.  TAB cycles the type (e.g. Radius ↔ Diameter).
+        if (m_selectedId >= 0) {
+            SketchEntity* sel = selectedEntity();
+            if (!sel) break;
+
+            // --- Line → Distance ---
+            if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
+                if (!findDrivingConstraint(sel->id, ConstraintType::Distance)) {
                     double currentLen = QLineF(sel->points[0], sel->points[1]).length();
-                    bool ok = false;
-                    double value = QInputDialog::getDouble(
-                        this, tr("Add Length Constraint"),
-                        tr("Length (mm):"),
-                        currentLen, 0.001, 1000000.0, 3, &ok);
-                    if (ok) {
-                        m_constraintTargetEntities.clear();
-                        m_constraintTargetPoints.clear();
-                        m_constraintTargetEntities.append(sel->id);
-                        m_constraintTargetEntities.append(sel->id);
-                        m_constraintTargetPoints.append(sel->points[0]);
-                        m_constraintTargetPoints.append(sel->points[1]);
+                    setConstraintTargetsForLine(sel->id, sel->points[0], sel->points[1]);
 
-                        QPointF mid = (sel->points[0] + sel->points[1]) / 2.0;
-                        QPointF along = sel->points[1] - sel->points[0];
-                        double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
-                        QPointF perp = (len > 1e-6)
-                            ? QPointF(-along.y() / len, along.x() / len)
-                            : QPointF(0, -1);
-                        QPointF labelPos = mid + perp * 10.0;
+                    QPointF mid = (sel->points[0] + sel->points[1]) / 2.0;
+                    QPointF along = sel->points[1] - sel->points[0];
+                    double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
+                    QPointF perp = (len > 1e-6)
+                        ? QPointF(-along.y() / len, along.x() / len)
+                        : QPointF(0, -1);
+                    QPointF labelPos = mid + perp * 10.0;
 
-                        // Pin first endpoint so the solver resizes from
-                        // one end instead of shrinking/growing from center
-                        SketchConstraint pin;
-                        pin.id = -999;
-                        pin.type = ConstraintType::FixedPoint;
-                        pin.entityIds.push_back(sel->id);
-                        pin.pointIndices.push_back(0);
-                        pin.isDriving = true;
-                        pin.enabled = true;
-                        pin.satisfied = true;
-                        pin.labelVisible = false;
-                        m_constraints.append(pin);
+                    createConstraint(ConstraintType::Distance, currentLen, labelPos,
+                                     /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
 
-                        createConstraint(ConstraintType::Distance, value, labelPos);
-
-                        // Remove temporary pin
-                        m_constraints.erase(
-                            std::remove_if(m_constraints.begin(), m_constraints.end(),
-                                           [](const SketchConstraint& c) { return c.id == -999; }),
-                            m_constraints.end());
-                    }
+                    m_dKeyTypeIndex = 0;
+                    m_dKeyTypeHint.clear();
                     break;
                 }
             }
-            // --- Circle/Arc → Radius constraint ---
-            if (sel && (sel->type == SketchEntityType::Circle
-                        || sel->type == SketchEntityType::Arc)
+
+            // --- Circle/Arc → Radius or Diameter (TAB toggles) ---
+            if ((sel->type == SketchEntityType::Circle
+                 || sel->type == SketchEntityType::Arc)
                 && !sel->points.empty()) {
-                bool alreadyConstrained = false;
-                for (const SketchConstraint& c : m_constraints) {
-                    if ((c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter)
-                        && c.isDriving && c.enabled) {
-                        for (int eid : c.entityIds) {
-                            if (eid == sel->id) { alreadyConstrained = true; break; }
-                        }
-                        if (alreadyConstrained) break;
-                    }
-                }
-                if (!alreadyConstrained) {
-                    bool ok = false;
-                    double value = QInputDialog::getDouble(
-                        this, tr("Add Radius Constraint"),
-                        tr("Radius (mm):"),
-                        sel->radius, 0.001, 1000000.0, 3, &ok);
-                    if (ok) {
-                        m_constraintTargetEntities.clear();
-                        m_constraintTargetPoints.clear();
-                        m_constraintTargetEntities.append(sel->id);
-                        m_constraintTargetEntities.append(sel->id);
-                        m_constraintTargetPoints.append(sel->points[0]);
-                        m_constraintTargetPoints.append(sel->points[0]);
+                if (!findDrivingConstraint(sel->id, ConstraintType::Radius)
+                    && !findDrivingConstraint(sel->id, ConstraintType::Diameter)) {
+                    // Index 0 = Radius (default), 1 = Diameter
+                    ConstraintType ctype = (m_dKeyTypeIndex == 1)
+                        ? ConstraintType::Diameter
+                        : ConstraintType::Radius;
+                    bool isDiameter = (ctype == ConstraintType::Diameter);
 
-                        // Label position: offset from center toward first vertex
-                        QPointF labelPos = sel->points[0];
-                        if (sel->points.size() >= 2) {
-                            QPointF dir = sel->points[1] - sel->points[0];
-                            double dirLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            if (dirLen > 1e-6)
-                                labelPos = QPointF(sel->points[0]) + dir / dirLen * sel->radius;
-                        } else {
-                            labelPos = QPointF(sel->points[0]) + QPointF(sel->radius, 0);
-                        }
+                    double currentValue = isDiameter
+                        ? sel->radius * 2.0
+                        : sel->radius;
 
-                        createConstraint(ConstraintType::Radius, value, labelPos);
+                    setConstraintTargetsForRadial(sel->id, sel->points[0]);
+
+                    QPointF labelPos = sel->points[0];
+                    if (sel->points.size() >= 2) {
+                        QPointF dir = sel->points[1] - sel->points[0];
+                        double dirLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
+                        if (dirLen > 1e-6)
+                            labelPos = QPointF(sel->points[0]) + dir / dirLen * sel->radius;
+                    } else {
+                        labelPos = QPointF(sel->points[0]) + QPointF(sel->radius, 0);
                     }
+
+                    createConstraint(ctype, currentValue, labelPos,
+                                     /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
+
+                    m_dKeyTypeIndex = 0;
+                    m_dKeyTypeHint.clear();
                     break;
                 }
             }
         }
         setActiveTool(SketchTool::Dimension);
         break;
+    }
     case Qt::Key_G:
         setGridVisible(!m_showGrid);
         break;
@@ -10340,8 +10479,8 @@ void SketchCanvas::updateEntity(const QPointF& pos)
                             if (m_arcSlotFlipped) sign = -sign;
                             double endAngle = ta.startAngle + sign * std::abs(lockedSweep);
                             double endRad = qDegreesToRadians(endAngle);
-                            m_currentMouseWorld = ta.center + QPointF(ta.radius * qCos(endRad),
-                                                                       ta.radius * qSin(endRad));
+                            m_currentMouseWorld = ta.center + Point2D(ta.radius * qCos(endRad),
+                                                                        ta.radius * qSin(endRad));
                         }
                     }
                 }
@@ -10647,7 +10786,7 @@ void SketchCanvas::finishEntity()
                 if (tc.valid) {
                     m_pendingEntity.points.clear();
                     m_pendingEntity.points.push_back(tc.center);
-                    m_pendingEntity.points.push_back(QPointF(tc.center.x() + tc.radius, tc.center.y()));
+                    m_pendingEntity.points.push_back(Point2D(tc.center.x + tc.radius, tc.center.y));
                     m_pendingEntity.radius = tc.radius;
                     valid = true;
                 }
@@ -10667,7 +10806,7 @@ void SketchCanvas::finishEntity()
                 if (tc.valid) {
                     m_pendingEntity.points.clear();
                     m_pendingEntity.points.push_back(tc.center);
-                    m_pendingEntity.points.push_back(QPointF(tc.center.x() + tc.radius, tc.center.y()));
+                    m_pendingEntity.points.push_back(Point2D(tc.center.x + tc.radius, tc.center.y));
                     m_pendingEntity.radius = tc.radius;
                     valid = true;
                 }
@@ -10741,13 +10880,13 @@ void SketchCanvas::finishEntity()
                     // Start endpoint (from startAngle + radius)
                     double startRad = qDegreesToRadians(ta.startAngle);
                     double endRad = qDegreesToRadians(ta.startAngle + sweepAngle);
-                    m_pendingEntity.points.push_back(QPointF(
-                        ta.center.x() + ta.radius * qCos(startRad),
-                        ta.center.y() + ta.radius * qSin(startRad)));
+                    m_pendingEntity.points.push_back(Point2D(
+                        ta.center.x + ta.radius * qCos(startRad),
+                        ta.center.y + ta.radius * qSin(startRad)));
                     // End endpoint
-                    m_pendingEntity.points.push_back(QPointF(
-                        ta.center.x() + ta.radius * qCos(endRad),
-                        ta.center.y() + ta.radius * qSin(endRad)));
+                    m_pendingEntity.points.push_back(Point2D(
+                        ta.center.x + ta.radius * qCos(endRad),
+                        ta.center.y + ta.radius * qSin(endRad)));
                     m_pendingEntity.radius = ta.radius;
                     m_pendingEntity.startAngle = ta.startAngle;
                     m_pendingEntity.sweepAngle = sweepAngle;
@@ -11795,90 +11934,14 @@ void SketchCanvas::reestablishTangency(SketchEntity& arc)
     const SketchEntity* tEnt = entityById(arc.tangentEntityId);
     if (!tEnt) return;
 
-    // --- Project tangent point onto entity ---
-    QPointF tanPt(arc.points[1]);
-    if (tEnt->type == SketchEntityType::Line
-            && tEnt->points.size() >= 2) {
-        tanPt = geometry::closestPointOnLine(
-            arc.points[1], tEnt->points[0], tEnt->points[1]);
-    } else if (tEnt->type == SketchEntityType::Rectangle
-               && tEnt->points.size() >= 2) {
-        QPointF corners[4];
-        if (tEnt->points.size() >= 4) {
-            for (int i = 0; i < 4; ++i)
-                corners[i] = tEnt->points[i];
-        } else {
-            corners[0] = tEnt->points[0];
-            corners[1] = QPointF(tEnt->points[1].x, tEnt->points[0].y);
-            corners[2] = tEnt->points[1];
-            corners[3] = QPointF(tEnt->points[0].x, tEnt->points[1].y);
-        }
-        double minD = std::numeric_limits<double>::max();
-        for (int i = 0; i < 4; ++i) {
-            QPointF p = geometry::closestPointOnLine(
-                QPointF(arc.points[1]),
-                corners[i], corners[(i + 1) % 4]);
-            double d = QLineF(QPointF(arc.points[1]), p).length();
-            if (d < minD) { minD = d; tanPt = p; }
-        }
+    auto result = sketch::reestablishTangency(
+        toLibraryEntity(arc), toLibraryEntity(*tEnt));
+
+    if (result.success) {
+        arc.points = result.arc.points;
+        arc.startAngle = result.arc.startAngle;
+        // radius and sweepAngle preserved by library
     }
-
-    // --- Edge direction at tangent point ---
-    QPointF edgeDir(1, 0);
-    if (tEnt->type == SketchEntityType::Line
-            && tEnt->points.size() >= 2) {
-        edgeDir = QPointF(tEnt->points[1]) - QPointF(tEnt->points[0]);
-    } else if (tEnt->type == SketchEntityType::Rectangle
-               && tEnt->points.size() >= 2) {
-        QPointF corners[4];
-        if (tEnt->points.size() >= 4) {
-            for (int i = 0; i < 4; ++i)
-                corners[i] = tEnt->points[i];
-        } else {
-            corners[0] = tEnt->points[0];
-            corners[1] = QPointF(tEnt->points[1].x, tEnt->points[0].y);
-            corners[2] = tEnt->points[1];
-            corners[3] = QPointF(tEnt->points[0].x, tEnt->points[1].y);
-        }
-        double minD = std::numeric_limits<double>::max();
-        for (int i = 0; i < 4; ++i) {
-            QPointF p = geometry::closestPointOnLine(
-                tanPt, corners[i], corners[(i + 1) % 4]);
-            double d = QLineF(tanPt, p).length();
-            if (d < minD) {
-                minD = d;
-                edgeDir = corners[(i + 1) % 4] - corners[i];
-            }
-        }
-    }
-
-    double edgeLen = std::sqrt(
-        edgeDir.x() * edgeDir.x() + edgeDir.y() * edgeDir.y());
-    if (edgeLen < 1e-6) return;
-
-    QPointF normal(-edgeDir.y() / edgeLen, edgeDir.x() / edgeLen);
-    // Orient normal toward current center side
-    QPointF off = QPointF(arc.points[0]) - tanPt;
-    if (off.x() * normal.x() + off.y() * normal.y() < 0)
-        normal = -normal;
-
-    double radius = arc.radius;
-    QPointF newCenter = tanPt + normal * radius;
-
-    double newStartAngle = std::atan2(
-        tanPt.y() - newCenter.y(),
-        tanPt.x() - newCenter.x()) * 180.0 / M_PI;
-
-    double sweepAngle = arc.sweepAngle;
-    double endRad = qDegreesToRadians(newStartAngle + sweepAngle);
-
-    arc.points[0] = newCenter;
-    arc.points[1] = tanPt;
-    arc.points[2] = QPointF(
-        newCenter.x() + radius * qCos(endRad),
-        newCenter.y() + radius * qSin(endRad));
-    arc.startAngle = newStartAngle;
-    // radius and sweepAngle preserved
 }
 
 void SketchCanvas::ensureTextRotationHandle(SketchEntity& entity)
@@ -11942,126 +12005,77 @@ bool SketchCanvas::matchesBinding(const QString& actionId, QKeyEvent* event) con
 SketchCanvas::TangentCircle SketchCanvas::calculate2TangentCircle(
     const SketchEntity& e1, const SketchEntity& e2, const QPointF& hint) const
 {
-    TangentCircle result;
-    result.valid = false;
-
-    // Handle line-line tangency using library function
     if (e1.type == SketchEntityType::Line && e2.type == SketchEntityType::Line &&
         e1.points.size() >= 2 && e2.points.size() >= 2) {
 
-        // Calculate distance from hint to intersection for radius estimation
         auto lineIntersect = geometry::infiniteLineIntersection(
             e1.points[0], e1.points[1], e2.points[0], e2.points[1]);
-        if (!lineIntersect.intersects) return result;
+        if (!lineIntersect.intersects) return {};
 
         double radius = geometry::length(hint - lineIntersect.point);
-
-        auto libResult = geometry::circleTangentToTwoLines(
+        return geometry::circleTangentToTwoLines(
             e1.points[0], e1.points[1],
             e2.points[0], e2.points[1],
             radius, hint);
-
-        result.valid = libResult.valid;
-        result.center = libResult.center;
-        result.radius = libResult.radius;
     }
-
-    return result;
+    return {};
 }
 
 SketchCanvas::TangentCircle SketchCanvas::calculate3TangentCircle(
     const SketchEntity& e1, const SketchEntity& e2, const SketchEntity& e3) const
 {
-    TangentCircle result;
-    result.valid = false;
-
-    // Handle 3 lines using library function (incircle)
     if (e1.type == SketchEntityType::Line && e2.type == SketchEntityType::Line &&
         e3.type == SketchEntityType::Line && e1.points.size() >= 2 &&
         e2.points.size() >= 2 && e3.points.size() >= 2) {
 
-        auto libResult = geometry::circleTangentToThreeLines(
+        return geometry::circleTangentToThreeLines(
             e1.points[0], e1.points[1],
             e2.points[0], e2.points[1],
             e3.points[0], e3.points[1]);
-
-        result.valid = libResult.valid;
-        result.center = libResult.center;
-        result.radius = libResult.radius;
     }
-
-    return result;
+    return {};
 }
 
 SketchCanvas::TangentArc SketchCanvas::calculateTangentArc(
     const SketchEntity& tangentEntity, const QPointF& tangentPoint, const QPointF& endPoint) const
 {
-    TangentArc result;
-    result.valid = false;
-
-    // Handle line tangency using library function
+    // Handle line tangency
     if (tangentEntity.type == SketchEntityType::Line && tangentEntity.points.size() >= 2) {
-        auto libResult = geometry::arcTangentToLine(
+        return geometry::arcTangentToLine(
             tangentEntity.points[0], tangentEntity.points[1],
             tangentPoint, endPoint);
-
-        result.valid = libResult.valid;
-        result.center = libResult.center;
-        result.radius = libResult.radius;
-        result.startAngle = libResult.startAngle;
-        result.sweepAngle = libResult.sweepAngle;
     }
-    // Handle rectangle - find closest edge to tangent point
-    else if (tangentEntity.type == SketchEntityType::Rectangle && tangentEntity.points.size() >= 2) {
-        // Get rectangle corners
-        QPointF p1 = tangentEntity.points[0];
-        QPointF p2 = tangentEntity.points[1];
 
-        // Calculate all 4 corners
+    // Handle rectangle — find closest edge to tangent point
+    if (tangentEntity.type == SketchEntityType::Rectangle && tangentEntity.points.size() >= 2) {
         QPointF corners[4];
         if (tangentEntity.points.size() >= 4) {
-            // Rotated rectangle with 4 corners stored
-            for (int i = 0; i < 4; ++i) {
+            for (int i = 0; i < 4; ++i)
                 corners[i] = tangentEntity.points[i];
-            }
         } else {
-            // Axis-aligned rectangle: 2 opposite corners
-            corners[0] = p1;
-            corners[1] = QPointF(p2.x(), p1.y());
-            corners[2] = p2;
-            corners[3] = QPointF(p1.x(), p2.y());
+            corners[0] = tangentEntity.points[0];
+            corners[1] = QPointF(tangentEntity.points[1].x, tangentEntity.points[0].y);
+            corners[2] = tangentEntity.points[1];
+            corners[3] = QPointF(tangentEntity.points[0].x, tangentEntity.points[1].y);
         }
 
-        // Find which edge is closest to the tangent point
         double minDist = std::numeric_limits<double>::max();
         QPointF closestEdgeStart, closestEdgeEnd;
-
         for (int i = 0; i < 4; ++i) {
-            QPointF edgeStart = corners[i];
-            QPointF edgeEnd = corners[(i + 1) % 4];
-
-            // Calculate distance from tangent point to this edge
-            double dist = geometry::pointToLineDistance(tangentPoint, edgeStart, edgeEnd);
+            double dist = geometry::pointToLineDistance(tangentPoint, corners[i], corners[(i + 1) % 4]);
             if (dist < minDist) {
                 minDist = dist;
-                closestEdgeStart = edgeStart;
-                closestEdgeEnd = edgeEnd;
+                closestEdgeStart = corners[i];
+                closestEdgeEnd = corners[(i + 1) % 4];
             }
         }
 
-        // Use the closest edge as the tangent line
-        auto libResult = geometry::arcTangentToLine(
+        return geometry::arcTangentToLine(
             closestEdgeStart, closestEdgeEnd,
             tangentPoint, endPoint);
-
-        result.valid = libResult.valid;
-        result.center = libResult.center;
-        result.radius = libResult.radius;
-        result.startAngle = libResult.startAngle;
-        result.sweepAngle = libResult.sweepAngle;
     }
 
-    return result;
+    return {};
 }
 
 // ---- Constraint Helper Functions ----
@@ -12075,7 +12089,7 @@ void SketchCanvas::finishConstraintCreation()
 }
 
 void SketchCanvas::createConstraint(ConstraintType type, double value, const QPointF& labelPos,
-                                     bool skipOverConstrainCheck)
+                                     bool skipOverConstrainCheck, bool startEditing)
 {
     SketchConstraint constraint;
     constraint.id = m_nextConstraintId++;
@@ -12158,6 +12172,11 @@ void SketchCanvas::createConstraint(ConstraintType type, double value, const QPo
     }
 
     emit constraintCreated(constraint.id);
+
+    // Optionally enter inline edit mode immediately
+    if (startEditing && constraint.isDriving)
+        beginInlineConstraintEdit(constraint.id, /*isCreation=*/true);
+
     update();
 }
 
@@ -12224,111 +12243,52 @@ int SketchCanvas::hitTestConstraintLabel(const QPointF& worldPos) const
     for (const SketchConstraint& c : m_constraints) {
         if (!c.enabled || !c.labelVisible) continue;
 
-        QPointF textCenter;  // in screen coordinates
-
-        if (c.type == ConstraintType::Distance) {
-            // Replicate the position logic from drawDistanceConstraint()
-            QPointF p1, p2;
-            if (!getConstraintEndpoints(c, p1, p2)) continue;
-
-            QPointF sp1 = worldToScreen(p1).toPointF();
-            QPointF sp2 = worldToScreen(p2).toPointF();
-            QPointF labelCenterPt = worldToScreen(c.labelPosition).toPointF();
-
-            QPointF along = sp2 - sp1;
-            double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
-            if (len < 1.0) continue;
-
-            QPointF dir = along / len;
-            QPointF perp(-dir.y(), dir.x());
-
-            QPointF labelDelta = labelCenterPt - sp1;
-            double offset = labelDelta.x() * perp.x() + labelDelta.y() * perp.y();
-
-            QPointF d1 = sp1 + perp * offset;
-            QPointF d2 = sp2 + perp * offset;
-
-            // Check if text is in compact (outside) mode — same logic as draw
-            QString text = QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
-            if (!c.isDriving) text = QStringLiteral("(") + text + QStringLiteral(")");
-            QFontMetricsF fm(font());
-            double textWidth = fm.horizontalAdvance(text);
-            double halfText = textWidth / 2.0 + 3.0;
-            bool textFits = (halfText * 2.0 < len);
-
-            if (textFits) {
-                textCenter = (d1 + d2) / 2.0;
-            } else {
-                // Compact mode: text is outside past d2
-                double leaderLen = 12.0;
-                double textGap = 4.0;
-                QPointF leaderEnd = d2 + dir * leaderLen;
-                textCenter = leaderEnd + dir * (textWidth / 2.0 + textGap);
-            }
-        } else if (c.type == ConstraintType::Angle || c.type == ConstraintType::FixedAngle) {
-            // Angle constraints: replicate the position logic from
-            // drawAngleConstraint() which computes text position
-            // dynamically in screen space, NOT from labelPosition.
-            if (c.entityIds.size() < 2) continue;
+        // Extra geometry hit-tests for angle arcs and radial dimension lines
+        // (these hit-test the drawn geometry, not just the label text)
+        if (c.type == ConstraintType::Angle && c.entityIds.size() >= 2) {
             const SketchEntity* ae1 = entityById(c.entityIds[0]);
             const SketchEntity* ae2 = entityById(c.entityIds[1]);
-            if (!ae1 || !ae2
-                    || ae1->type != SketchEntityType::Line
-                    || ae2->type != SketchEntityType::Line
-                    || ae1->points.size() < 2 || ae2->points.size() < 2)
-                continue;
-
-            QPointF intersection;
-            if (c.hasAnchorPoint()) {
-                intersection = c.anchorPoint;
-            } else {
-                QLineF l1(ae1->points[0], ae1->points[1]);
-                QLineF l2(ae2->points[0], ae2->points[1]);
-                if (l1.intersects(l2, &intersection) == QLineF::NoIntersection)
-                    intersection = c.labelPosition;
-            }
-            QPointF originScr = worldToScreen(intersection).toPointF();
-
-            QPointF s1a = worldToScreen(ae1->points[0]).toPointF();
-            QPointF s1b = worldToScreen(ae1->points[1]).toPointF();
-            QPointF s2a = worldToScreen(ae2->points[0]).toPointF();
-            QPointF s2b = worldToScreen(ae2->points[1]).toPointF();
-            QPointF dir1 = s1b - s1a;
-            QPointF dir2 = s2b - s2a;
-            if (QLineF(originScr, s1a).length() > QLineF(originScr, s1b).length())
-                dir1 = s1a - s1b;
-            if (QLineF(originScr, s2a).length() > QLineF(originScr, s2b).length())
-                dir2 = s2a - s2b;
-
-            double a1 = std::atan2(-dir1.y(), dir1.x());
-            double a2 = std::atan2(-dir2.y(), dir2.x());
-            double sweep = a2 - a1;
-            while (sweep > M_PI)  sweep -= 2.0 * M_PI;
-            while (sweep < -M_PI) sweep += 2.0 * M_PI;
-            if (c.supplementary) {
-                if (sweep > 0) sweep -= 2.0 * M_PI;
-                else sweep += 2.0 * M_PI;
-            }
-
-            double midAngle = a1 + sweep / 2.0;
-            double textRadius = 35.0 + 14.0;  // arcRadius + offset
-            textCenter = QPointF(originScr.x() + textRadius * std::cos(midAngle),
-                                 originScr.y() - textRadius * std::sin(midAngle));
-
-            // Also hit-test the arc curve itself (not just the text).
-            // The arc is drawn at arcRadius=35 px from originScr, sweeping
-            // from a1 to a1+sweep.  If the click is near that arc, it's a hit.
-            {
+            if (ae1 && ae2
+                    && ae1->type == SketchEntityType::Line
+                    && ae2->type == SketchEntityType::Line
+                    && ae1->points.size() >= 2 && ae2->points.size() >= 2) {
+                QPointF intersection;
+                if (c.hasAnchorPoint()) {
+                    intersection = c.anchorPoint;
+                } else {
+                    QLineF l1(ae1->points[0], ae1->points[1]);
+                    QLineF l2(ae2->points[0], ae2->points[1]);
+                    if (l1.intersects(l2, &intersection) == QLineF::NoIntersection)
+                        intersection = c.labelPosition;
+                }
+                QPointF originScr = worldToScreen(intersection).toPointF();
+                QPointF s1a = worldToScreen(ae1->points[0]).toPointF();
+                QPointF s1b = worldToScreen(ae1->points[1]).toPointF();
+                QPointF s2a = worldToScreen(ae2->points[0]).toPointF();
+                QPointF s2b = worldToScreen(ae2->points[1]).toPointF();
+                QPointF dir1 = s1b - s1a;
+                QPointF dir2 = s2b - s2a;
+                if (QLineF(originScr, s1a).length() > QLineF(originScr, s1b).length())
+                    dir1 = s1a - s1b;
+                if (QLineF(originScr, s2a).length() > QLineF(originScr, s2b).length())
+                    dir2 = s2a - s2b;
+                double a1 = std::atan2(-dir1.y(), dir1.x());
+                double a2 = std::atan2(-dir2.y(), dir2.x());
+                double sweep = a2 - a1;
+                while (sweep > M_PI)  sweep -= 2.0 * M_PI;
+                while (sweep < -M_PI) sweep += 2.0 * M_PI;
+                if (c.supplementary) {
+                    if (sweep > 0) sweep -= 2.0 * M_PI;
+                    else sweep += 2.0 * M_PI;
+                }
+                // Hit-test the arc curve (arcRadius=35 px)
                 double arcRadius = 35.0;
-                double arcTol = 8.0;  // pixels tolerance for arc line
+                double arcTol = 8.0;
                 QPointF delta = screenPos - originScr;
                 double clickDist = std::sqrt(delta.x() * delta.x() + delta.y() * delta.y());
                 if (std::abs(clickDist - arcRadius) < arcTol) {
-                    // Check if the click angle falls within the sweep range
                     double clickAngle = std::atan2(-delta.y(), delta.x());
-                    // Normalize clickAngle relative to a1
                     double relAngle = clickAngle - a1;
-                    // Normalize to same sign as sweep
                     if (sweep > 0) {
                         while (relAngle < 0)        relAngle += 2.0 * M_PI;
                         while (relAngle > 2.0*M_PI) relAngle -= 2.0 * M_PI;
@@ -12342,79 +12302,37 @@ int SketchCanvas::hitTestConstraintLabel(const QPointF& worldPos) const
                     }
                 }
             }
-
-            // Apply label collision nudge offset
-            auto nudgeIt = m_labelNudgeOffsets.find(c.id);
-            if (nudgeIt != m_labelNudgeOffsets.end())
-                textCenter += *nudgeIt;
-        } else if (c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter) {
-            // Radius/Diameter constraints: replicate the position logic
-            // from drawRadialConstraint() which computes text position
-            // dynamically in screen space using center, radius, and
-            // labelPosition direction — NOT labelPosition directly.
-            if (c.entityIds.empty()) continue;
+        } else if ((c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter)
+                   && !c.entityIds.empty()) {
             const SketchEntity* re = entityById(c.entityIds[0]);
-            if (!re || (re->type != SketchEntityType::Circle && re->type != SketchEntityType::Arc))
-                continue;
-            if (re->points.empty()) continue;
-
-            QPointF sc = worldToScreen(re->points[0]).toPointF();
-            QPointF labelPt = worldToScreen(c.labelPosition).toPointF();
-            double radiusPx = re->radius * m_zoom;
-
-            QPointF along = labelPt - sc;
-            double alongLen = std::sqrt(along.x() * along.x() + along.y() * along.y());
-            if (alongLen < 1e-6) continue;
-
-            QPointF dir = along / alongLen;
-            QPointF perp(-dir.y(), dir.x());
-            QPointF edgePt = sc + dir * radiusPx;
-
-            // Hit-test the dimension line from center to edge (and leader
-            // line in compact mode).  Compute perpendicular distance from
-            // click to the line segment sc→edgePt.
-            {
-                double lineTol = 8.0;  // pixels
-                QPointF v = screenPos - sc;
-                double proj = v.x() * dir.x() + v.y() * dir.y();
-                double perpDist = std::abs(v.x() * perp.x() + v.y() * perp.y());
-                double segLen = QLineF(sc, edgePt).length();
-                if (perpDist < lineTol && proj >= -lineTol && proj <= segLen + lineTol)
-                    return c.id;
+            if (re && (re->type == SketchEntityType::Circle || re->type == SketchEntityType::Arc)
+                && !re->points.empty()) {
+                QPointF sc = worldToScreen(re->points[0]).toPointF();
+                QPointF labelPt = worldToScreen(c.labelPosition).toPointF();
+                double radiusPx = re->radius * m_zoom;
+                QPointF along = labelPt - sc;
+                double alongLen = std::sqrt(along.x() * along.x() + along.y() * along.y());
+                if (alongLen >= 1e-6) {
+                    QPointF dir = along / alongLen;
+                    QPointF perp(-dir.y(), dir.x());
+                    QPointF edgePt = sc + dir * radiusPx;
+                    // Hit-test the dimension line from center to edge
+                    double lineTol = 8.0;
+                    QPointF v = screenPos - sc;
+                    double proj = v.x() * dir.x() + v.y() * dir.y();
+                    double perpDist = std::abs(v.x() * perp.x() + v.y() * perp.y());
+                    double segLen = QLineF(sc, edgePt).length();
+                    if (perpDist < lineTol && proj >= -lineTol && proj <= segLen + lineTol)
+                        return c.id;
+                }
             }
-
-            QPointF dimMid = (sc + edgePt) / 2.0;
-
-            // Apply label collision nudge offset
-            auto nudgeItR = m_labelNudgeOffsets.find(c.id);
-            if (nudgeItR != m_labelNudgeOffsets.end())
-                dimMid += *nudgeItR;
-
-            // Check if text fits inside (same logic as drawRadialConstraint)
-            QString prefix = (c.type == ConstraintType::Radius) ? QStringLiteral("R") : QStringLiteral("Ø");
-            QString rtext = prefix + QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
-            if (!c.isDriving) rtext = QStringLiteral("(") + rtext + QStringLiteral(")");
-            QFontMetricsF fmR(font());
-            double rtextWidth = fmR.horizontalAdvance(rtext);
-            double rhalfText = rtextWidth / 2.0 + 3.0;
-            bool rtextFits = (rhalfText * 2.0 < radiusPx);
-
-            if (rtextFits) {
-                textCenter = dimMid;
-            } else {
-                // Compact mode: text is outside past edge
-                double leaderLen = 12.0;
-                double textGap = 4.0;
-                QPointF leaderEnd = edgePt + dir * leaderLen;
-                textCenter = leaderEnd + dir * (rtextWidth / 2.0 + textGap);
-            }
-        } else {
-            // For geometric constraints, the text is drawn at or near labelPosition.
-            textCenter = worldToScreen(c.labelPosition).toPointF();
         }
 
-        // Check distance from click to rendered text centre
-        double dist = QLineF(textCenter, screenPos).length();
+        // Hit-test the label text position
+        auto pos = computeConstraintLabelPosition(c);
+        if (!pos.found) continue;
+
+        double dist = QLineF(pos.textCenter, screenPos).length();
         if (dist < tolerance)
             return c.id;
     }
@@ -12427,219 +12345,8 @@ void SketchCanvas::editConstraintValue(int constraintId)
     SketchConstraint* constraint = constraintById(constraintId);
     if (!constraint || !constraint->isDriving) return;
 
-    QString title, label;
-    switch (constraint->type) {
-    case ConstraintType::Distance:
-        title = tr("Edit Distance");
-        label = tr("Distance (mm):");
-        break;
-    case ConstraintType::Radius:
-        title = tr("Edit Radius");
-        label = tr("Radius (mm):");
-        break;
-    case ConstraintType::Diameter:
-        title = tr("Edit Diameter");
-        label = tr("Diameter (mm):");
-        break;
-    case ConstraintType::Angle: {
-        // Check if this is a sweep-angle constraint
-        bool isSweep = false;
-        for (const auto& g : m_groups) {
-            if (isSweepAngleGroup(g.id) && g.containsConstraint(constraintId)) {
-                isSweep = true;
-                break;
-            }
-        }
-        if (isSweep) {
-            title = tr("Edit Sweep Angle");
-            label = tr("Sweep angle (degrees):");
-        } else {
-            title = tr("Edit Angle");
-            label = tr("Angle (degrees):");
-        }
-        break;
-    }
-    case ConstraintType::FixedAngle:
-        title = tr("Edit Fixed Angle");
-        label = tr("Angle from horizontal (degrees):");
-        break;
-    default:
-        return;
-    }
-
-    bool ok = false;
-    // Sweep-angle constraints allow negative values (direction)
-    bool isSweepAngleConstraint = false;
-    for (const auto& g : m_groups) {
-        if (isSweepAngleGroup(g.id) && g.containsConstraint(constraintId)) {
-            isSweepAngleConstraint = true;
-            break;
-        }
-    }
-    double minVal = isSweepAngleConstraint ? -360.0 : 0.0;
-    double newValue = QInputDialog::getDouble(
-        this, title, label,
-        constraint->value,  // current value
-        minVal, 1000000.0, 2, &ok
-    );
-
-    if (ok && !qFuzzyCompare(newValue, constraint->value)) {
-        // Capture before-state for undo
-        const SketchConstraint oldConstraint = *constraint;
-
-        constraint->value = newValue;
-
-        // Sweep-angle Angle constraint — apply directly to arc geometry
-        if (constraint->type == ConstraintType::Angle) {
-            for (const auto& g : m_groups) {
-                if (isSweepAngleGroup(g.id) && g.containsConstraint(constraintId)) {
-                    // Find the arc entity in the group
-                    int arcId = -1;
-                    for (int eid : g.entityIds) {
-                        const SketchEntity* e = entityById(eid);
-                        if (e && e->type == SketchEntityType::Arc) { arcId = eid; break; }
-                    }
-                    if (arcId >= 0) {
-                        SketchEntity* arc = entityById(arcId);
-                        if (arc && arc->type == SketchEntityType::Arc
-                                && arc->points.size() >= 3) {
-                            const SketchEntity oldArc = *arc;
-                            // Preserve sweep direction sign
-                            double newSweep = (arc->sweepAngle >= 0) ? newValue : -newValue;
-                            arc->sweepAngle = newSweep;
-                            // Recompute endpoint from center + radius + new sweep
-                            double endRad = qDegreesToRadians(arc->startAngle + newSweep);
-                            arc->points[2] = {
-                                arc->points[0].x + arc->radius * std::cos(endRad),
-                                arc->points[0].y + arc->radius * std::sin(endRad)};
-                            reestablishTangency(*arc);
-                            syncSweepAngleConstructionLines(*arc);
-                            constraint->supplementary = (std::abs(newSweep) > 180.0);
-                            constraint->anchorPoint = arc->points[0];
-
-                            std::vector<sketch::UndoCommand> subs;
-                            subs.push_back(sketch::UndoCommand::modifyConstraint(
-                                oldConstraint, *constraint));
-                            subs.push_back(sketch::UndoCommand::modifyEntity(
-                                oldArc, *arc));
-                            pushUndoCommand(sketch::UndoCommand::compound(
-                                subs, "Edit Sweep Angle"));
-                        }
-                    }
-                    emit constraintModified(constraintId);
-                    update();
-                    return;
-                }
-            }
-        }
-
-        // Radius/Diameter on a tangent arc — apply directly because the
-        // solver treats arcs as circles and cannot update arc endpoints.
-        if ((constraint->type == ConstraintType::Radius
-             || constraint->type == ConstraintType::Diameter)
-            && !constraint->entityIds.empty()) {
-            SketchEntity* ent = entityById(constraint->entityIds[0]);
-            if (ent && ent->type == SketchEntityType::Arc
-                && ent->points.size() >= 3) {
-                const SketchEntity oldEntity = *ent;
-                double newRadius = (constraint->type == ConstraintType::Diameter)
-                                   ? newValue / 2.0 : newValue;
-                ent->radius = newRadius;
-                reestablishTangency(*ent);
-                syncSweepAngleConstructionLines(*ent);
-                for (const auto& g : m_groups) {
-                    if (isSweepAngleGroup(g.id) && g.containsEntity(ent->id)) {
-                        for (int cid : g.constraintIds) {
-                            SketchConstraint* ac = constraintById(cid);
-                            if (ac && ac->type == ConstraintType::Angle)
-                                ac->anchorPoint = ent->points[0];
-                        }
-                    }
-                }
-
-                std::string desc = (constraint->type == ConstraintType::Radius)
-                                   ? "Edit Radius" : "Edit Diameter";
-                std::vector<sketch::UndoCommand> subs;
-                subs.push_back(sketch::UndoCommand::modifyConstraint(
-                    oldConstraint, *constraint));
-                subs.push_back(sketch::UndoCommand::modifyEntity(
-                    oldEntity, *ent));
-                pushUndoCommand(sketch::UndoCommand::compound(subs, desc));
-
-                emit constraintModified(constraintId);
-                update();
-                return;
-            }
-        }
-
-        // --- Use solver with temporary pin ---
-        // Pin endpoints so the solver adjusts geometry from a fixed
-        // anchor instead of sliding everything symmetrically.
-        int pinsAdded = 0;
-        if (constraint->type == ConstraintType::Distance
-            && !constraint->entityIds.empty()) {
-            const SketchEntity* entity = entityById(constraint->entityIds[0]);
-            if (entity && entity->type == SketchEntityType::Line
-                && entity->points.size() == 2) {
-                SketchConstraint pin;
-                pin.id = -999;
-                pin.type = ConstraintType::FixedPoint;
-                pin.entityIds.push_back(entity->id);
-                pin.pointIndices.push_back(0);
-                pin.isDriving = true;
-                pin.enabled = true;
-                pin.satisfied = true;
-                pin.labelVisible = false;
-                m_constraints.append(pin);
-                pinsAdded = 1;
-            }
-        } else if (constraint->type == ConstraintType::Angle
-                   && !constraint->entityIds.empty()) {
-            const SketchEntity* e1 = entityById(constraint->entityIds[0]);
-            if (e1 && e1->type == SketchEntityType::Line
-                && e1->points.size() == 2) {
-                for (int pi = 0; pi < 2; ++pi) {
-                    SketchConstraint pin;
-                    pin.id = -999 - pi;
-                    pin.type = ConstraintType::FixedPoint;
-                    pin.entityIds.push_back(e1->id);
-                    pin.pointIndices.push_back(pi);
-                    pin.isDriving = true;
-                    pin.enabled = true;
-                    pin.satisfied = true;
-                    pin.labelVisible = false;
-                    m_constraints.append(pin);
-                }
-                pinsAdded = 2;
-            }
-        }
-
-        solveConstraints();
-
-        if (pinsAdded > 0) {
-            m_constraints.erase(
-                std::remove_if(m_constraints.begin(), m_constraints.end(),
-                               [](const SketchConstraint& c) { return c.id <= -999; }),
-                m_constraints.end());
-        }
-
-        // Push undo for the constraint value change (solver path)
-        constraint = constraintById(constraintId);
-        if (constraint) {
-            std::string desc;
-            switch (constraint->type) {
-            case ConstraintType::Distance:  desc = "Edit Distance"; break;
-            case ConstraintType::Angle:     desc = "Edit Angle"; break;
-            case ConstraintType::FixedAngle:desc = "Edit Fixed Angle"; break;
-            default:                        desc = "Edit Constraint"; break;
-            }
-            pushUndoCommand(sketch::UndoCommand::modifyConstraint(
-                oldConstraint, *constraint, desc));
-        }
-
-        emit constraintModified(constraintId);
-        update();
-    }
+    // Delegate to inline constraint editing instead of modal dialog
+    beginInlineConstraintEdit(constraintId, /*isCreation=*/false);
 }
 
 void SketchCanvas::setConstraintValue(int constraintId, double newValue)
@@ -13021,6 +12728,236 @@ bool SketchCanvas::getConstraintEndpoints(const SketchConstraint& constraint, QP
     return ok;
 }
 
+// ---- Constraint label position (shared by hitTest, inline edit overlay) ----
+
+SketchCanvas::ConstraintLabelPosition
+SketchCanvas::computeConstraintLabelPosition(const SketchConstraint& c) const
+{
+    ConstraintLabelPosition result;
+
+    if (c.type == ConstraintType::Distance) {
+        QPointF p1, p2;
+        if (!getConstraintEndpoints(c, p1, p2)) return result;
+
+        QPointF sp1 = worldToScreen(p1).toPointF();
+        QPointF sp2 = worldToScreen(p2).toPointF();
+        QPointF labelCenterPt = worldToScreen(c.labelPosition).toPointF();
+
+        QPointF along = sp2 - sp1;
+        double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
+        if (len < 1.0) return result;
+
+        QPointF dir = along / len;
+        QPointF perp(-dir.y(), dir.x());
+
+        QPointF labelDelta = labelCenterPt - sp1;
+        double offset = labelDelta.x() * perp.x() + labelDelta.y() * perp.y();
+
+        QPointF d1 = sp1 + perp * offset;
+        QPointF d2 = sp2 + perp * offset;
+
+        // Check if text fits inside (compact mode check)
+        QString text = QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
+        if (!c.isDriving) text = QStringLiteral("(") + text + QStringLiteral(")");
+        QFontMetricsF fm(font());
+        double textWidth = fm.horizontalAdvance(text);
+        double halfText = textWidth / 2.0 + 3.0;
+        bool textFits = (halfText * 2.0 < len);
+
+        if (textFits) {
+            result.textCenter = (d1 + d2) / 2.0;
+        } else {
+            // Compact mode: text is outside past d2
+            double leaderLen = 12.0;
+            double textGap = 4.0;
+            QPointF leaderEnd = d2 + dir * leaderLen;
+            result.textCenter = leaderEnd + dir * (textWidth / 2.0 + textGap);
+        }
+        result.found = true;
+
+    } else if (c.type == ConstraintType::Angle) {
+        if (c.entityIds.size() < 2) return result;
+        const SketchEntity* ae1 = entityById(c.entityIds[0]);
+        const SketchEntity* ae2 = entityById(c.entityIds[1]);
+        if (!ae1 || !ae2
+                || ae1->type != SketchEntityType::Line
+                || ae2->type != SketchEntityType::Line
+                || ae1->points.size() < 2 || ae2->points.size() < 2)
+            return result;
+
+        QPointF intersection;
+        if (c.hasAnchorPoint()) {
+            intersection = c.anchorPoint;
+        } else {
+            QLineF l1(ae1->points[0], ae1->points[1]);
+            QLineF l2(ae2->points[0], ae2->points[1]);
+            if (l1.intersects(l2, &intersection) == QLineF::NoIntersection)
+                intersection = c.labelPosition;
+        }
+        QPointF originScr = worldToScreen(intersection).toPointF();
+
+        QPointF s1a = worldToScreen(ae1->points[0]).toPointF();
+        QPointF s1b = worldToScreen(ae1->points[1]).toPointF();
+        QPointF s2a = worldToScreen(ae2->points[0]).toPointF();
+        QPointF s2b = worldToScreen(ae2->points[1]).toPointF();
+        QPointF dir1 = s1b - s1a;
+        QPointF dir2 = s2b - s2a;
+        if (QLineF(originScr, s1a).length() > QLineF(originScr, s1b).length())
+            dir1 = s1a - s1b;
+        if (QLineF(originScr, s2a).length() > QLineF(originScr, s2b).length())
+            dir2 = s2a - s2b;
+
+        double a1 = std::atan2(-dir1.y(), dir1.x());
+        double a2 = std::atan2(-dir2.y(), dir2.x());
+        double sweep = a2 - a1;
+        while (sweep > M_PI)  sweep -= 2.0 * M_PI;
+        while (sweep < -M_PI) sweep += 2.0 * M_PI;
+        if (c.supplementary) {
+            if (sweep > 0) sweep -= 2.0 * M_PI;
+            else sweep += 2.0 * M_PI;
+        }
+
+        double midAngle = a1 + sweep / 2.0;
+        double textRadius = 35.0 + 14.0;
+        result.textCenter = QPointF(originScr.x() + textRadius * std::cos(midAngle),
+                                    originScr.y() - textRadius * std::sin(midAngle));
+
+        auto nudgeIt = m_labelNudgeOffsets.find(c.id);
+        if (nudgeIt != m_labelNudgeOffsets.end())
+            result.textCenter += *nudgeIt;
+        result.found = true;
+
+    } else if (c.type == ConstraintType::FixedAngle) {
+        // Single-entity fixed angle (angle from horizontal)
+        if (c.entityIds.empty()) return result;
+        const SketchEntity* e = entityById(c.entityIds[0]);
+        if (!e || e->type != SketchEntityType::Line || e->points.size() < 2)
+            return result;
+
+        QPointF anchor = c.hasAnchorPoint() ? c.anchorPoint : e->points[0];
+        QPointF originScr = worldToScreen(anchor).toPointF();
+
+        QPointF sa = worldToScreen(e->points[0]).toPointF();
+        QPointF sb = worldToScreen(e->points[1]).toPointF();
+        QPointF dir = sb - sa;
+        if (QLineF(originScr, sa).length() > QLineF(originScr, sb).length())
+            dir = sa - sb;
+
+        double aLine = std::atan2(-dir.y(), dir.x());
+        double sweep = aLine;  // sweep from horizontal (0) to line angle
+        while (sweep > M_PI)  sweep -= 2.0 * M_PI;
+        while (sweep < -M_PI) sweep += 2.0 * M_PI;
+
+        double midAngle = sweep / 2.0;
+        double textRadius = 35.0 + 14.0;
+        result.textCenter = QPointF(originScr.x() + textRadius * std::cos(midAngle),
+                                    originScr.y() - textRadius * std::sin(midAngle));
+
+        auto nudgeIt = m_labelNudgeOffsets.find(c.id);
+        if (nudgeIt != m_labelNudgeOffsets.end())
+            result.textCenter += *nudgeIt;
+        result.found = true;
+
+    } else if (c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter) {
+        result.prefix = (c.type == ConstraintType::Radius)
+            ? QStringLiteral("R") : QStringLiteral("Ø");
+        if (c.entityIds.empty()) return result;
+        const SketchEntity* re = entityById(c.entityIds[0]);
+        if (!re || (re->type != SketchEntityType::Circle && re->type != SketchEntityType::Arc))
+            return result;
+        if (re->points.empty()) return result;
+
+        QPointF sc = worldToScreen(re->points[0]).toPointF();
+        QPointF labelPt = worldToScreen(c.labelPosition).toPointF();
+        double radiusPx = re->radius * m_zoom;
+
+        QPointF along = labelPt - sc;
+        double alongLen = std::sqrt(along.x() * along.x() + along.y() * along.y());
+        if (alongLen < 1e-6) return result;
+
+        QPointF dir = along / alongLen;
+        QPointF edgePt = sc + dir * radiusPx;
+        QPointF dimMid = (sc + edgePt) / 2.0;
+
+        auto nudgeItR = m_labelNudgeOffsets.find(c.id);
+        if (nudgeItR != m_labelNudgeOffsets.end())
+            dimMid += *nudgeItR;
+
+        // Check if text fits inside (compact mode check)
+        QString rtext = result.prefix + QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
+        if (!c.isDriving) rtext = QStringLiteral("(") + rtext + QStringLiteral(")");
+        QFontMetricsF fmR(font());
+        double rtextWidth = fmR.horizontalAdvance(rtext);
+        double rhalfText = rtextWidth / 2.0 + 3.0;
+        bool rtextFits = (rhalfText * 2.0 < radiusPx);
+
+        if (rtextFits) {
+            result.textCenter = dimMid;
+        } else {
+            double leaderLen = 12.0;
+            double textGap = 4.0;
+            QPointF leaderEnd = edgePt + dir * leaderLen;
+            result.textCenter = leaderEnd + dir * (rtextWidth / 2.0 + textGap);
+        }
+        result.found = true;
+
+    } else {
+        // Geometric constraints — use raw label position
+        result.textCenter = worldToScreen(c.labelPosition).toPointF();
+        result.found = true;
+    }
+
+    return result;
+}
+
+// ---- Constraint search helper ----
+
+SketchConstraint* SketchCanvas::findDrivingConstraint(int entityId, ConstraintType type)
+{
+    for (SketchConstraint& c : m_constraints) {
+        if (c.type == type && c.isDriving && c.enabled) {
+            for (int eid : c.entityIds) {
+                if (eid == entityId) return &c;
+            }
+        }
+    }
+    return nullptr;
+}
+
+const SketchConstraint* SketchCanvas::findDrivingConstraint(int entityId, ConstraintType type) const
+{
+    for (const SketchConstraint& c : m_constraints) {
+        if (c.type == type && c.isDriving && c.enabled) {
+            for (int eid : c.entityIds) {
+                if (eid == entityId) return &c;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// ---- Constraint target setup helpers ----
+
+void SketchCanvas::setConstraintTargetsForLine(int entityId, const QPointF& p1, const QPointF& p2)
+{
+    m_constraintTargetEntities.clear();
+    m_constraintTargetPoints.clear();
+    m_constraintTargetEntities.append(entityId);
+    m_constraintTargetEntities.append(entityId);
+    m_constraintTargetPoints.append(p1);
+    m_constraintTargetPoints.append(p2);
+}
+
+void SketchCanvas::setConstraintTargetsForRadial(int entityId, const QPointF& center)
+{
+    m_constraintTargetEntities.clear();
+    m_constraintTargetPoints.clear();
+    m_constraintTargetEntities.append(entityId);
+    m_constraintTargetEntities.append(entityId);
+    m_constraintTargetPoints.append(center);
+    m_constraintTargetPoints.append(center);
+}
+
 // ---- Geometric Constraint Application ----
 
 void SketchCanvas::createGeometricConstraint(ConstraintType type)
@@ -13260,90 +13197,18 @@ bool SketchCanvas::extendEntityTo(int entityId, const QPointF& clickPoint)
     SketchEntity* entity = entityById(entityId);
     if (!entity) return false;
 
-    if (entity->type != SketchEntityType::Line) {
-        return false;  // Only lines for now
-    }
-
-    if (entity->points.size() < 2) return false;
-
-    QLineF line(entity->points[0], entity->points[1]);
-
-    // Determine which end to extend based on click position
-    double distToStart = QLineF(clickPoint, entity->points[0]).length();
-    double distToEnd = QLineF(clickPoint, entity->points[1]).length();
-    bool extendStart = distToStart < distToEnd;
-
-    // Find nearest intersection point in the extension direction
-    QPointF bestIntersection;
-    double bestDist = std::numeric_limits<double>::max();
-
+    // Build boundary list, excluding self and construction entities
+    std::vector<sketch::Entity> boundaries;
     for (const SketchEntity& other : m_entities) {
         if (other.id == entityId || other.isConstruction) continue;
-
-        if (other.type == SketchEntityType::Line && other.points.size() >= 2) {
-            auto result = geometry::infiniteLineIntersection(
-                entity->points[0], entity->points[1],
-                other.points[0], other.points[1]);
-            if (result.intersects) {
-                // Check if intersection is in the extension direction
-                bool validExtension = extendStart ? (result.t1 < 0) : (result.t1 > 1);
-                if (validExtension && result.t2 >= 0 && result.t2 <= 1) {
-                    double dist = QLineF(extendStart ? entity->points[0] : entity->points[1],
-                                         result.point).length();
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        bestIntersection = result.point;
-                    }
-                }
-            }
-        }
-        else if ((other.type == SketchEntityType::Circle || other.type == SketchEntityType::Arc) &&
-                 !other.points.empty()) {
-            // Extend line to circle/arc - use infinite line intersection
-            auto result = geometry::infiniteLineCircleIntersection(
-                entity->points[0], entity->points[1],
-                other.points[0], other.radius);
-
-            auto checkAndAddIntersection = [&](const QPointF& point, double t) {
-                // Check if point is on arc (or full circle)
-                bool onArc = true;
-                if (other.type == SketchEntityType::Arc) {
-                    geometry::Arc arc;
-                    arc.center = other.points[0];
-                    arc.radius = other.radius;
-                    arc.startAngle = other.startAngle;
-                    arc.sweepAngle = other.sweepAngle;
-                    onArc = arc.containsAngle(geometry::vectorAngle(point - other.points[0]));
-                }
-                if (onArc) {
-                    // Check if in extension direction using the t parameter
-                    bool validExtension = extendStart ? (t < 0) : (t > 1);
-                    if (validExtension) {
-                        double dist = QLineF(extendStart ? entity->points[0] : entity->points[1],
-                                             point).length();
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestIntersection = point;
-                        }
-                    }
-                }
-            };
-
-            if (result.count >= 1) {
-                checkAndAddIntersection(result.point1, result.t1);
-            }
-            if (result.count >= 2) {
-                checkAndAddIntersection(result.point2, result.t2);
-            }
-        }
+        boundaries.push_back(toLibraryEntity(other));
     }
 
-    if (bestDist < std::numeric_limits<double>::max()) {
-        if (extendStart) {
-            entity->points[0] = bestIntersection;
-        } else {
-            entity->points[1] = bestIntersection;
-        }
+    auto result = sketch::extendEntity(
+        toLibraryEntity(*entity), boundaries, /*extendEnd=*/-1, clickPoint);
+
+    if (result.success) {
+        entity->points = result.entity.points;
         m_profilesCacheDirty = true;
         emit entityModified(entityId);
         update();
@@ -13530,95 +13395,33 @@ int SketchCanvas::rejoinCollinearSegments()
 {
     if (m_selectedIds.size() < 2) return -1;
 
-    // --- Validate: all selected must be lines ---
-    QVector<SketchEntity*> lines;
+    // Collect selected entities for library validation
+    std::vector<sketch::Entity> selectedEntities;
     for (int id : m_selectedIds) {
-        SketchEntity* e = entityById(id);
-        if (!e || e->type != SketchEntityType::Line || e->points.size() < 2) {
+        const SketchEntity* e = entityById(id);
+        if (!e) {
             QMessageBox::warning(this, tr("Rejoin"),
-                tr("All selected entities must be line segments."));
+                tr("Selected entity not found."));
             return -1;
         }
-        lines.append(e);
+        selectedEntities.push_back(toLibraryEntity(*e));
     }
 
-    // --- Validate: all collinear (same direction, within tolerance) ---
-    // Use the direction of the first line as reference
-    QPointF refDir = lines[0]->points[1] - lines[0]->points[0];
-    double refLen = std::sqrt(refDir.x() * refDir.x() + refDir.y() * refDir.y());
-    if (refLen < 1e-9) {
+    auto rejoin = sketch::validateCollinearRejoin(selectedEntities);
+    if (!rejoin.success) {
         QMessageBox::warning(this, tr("Rejoin"),
-            tr("Selected line has zero length."));
+            tr(rejoin.errorMessage.c_str()));
         return -1;
     }
-    refDir /= refLen;
 
-    const double angleTol = 0.001;  // radians (~0.06 degrees)
-    for (int i = 1; i < lines.size(); ++i) {
-        QPointF d = lines[i]->points[1] - lines[i]->points[0];
-        double len = std::sqrt(d.x() * d.x() + d.y() * d.y());
-        if (len < 1e-9) continue;
-        d /= len;
-        // Cross product magnitude gives sin(angle)
-        double cross = std::abs(refDir.x() * d.y() - refDir.y() * d.x());
-        if (cross > angleTol) {
-            QMessageBox::warning(this, tr("Rejoin"),
-                tr("Selected lines are not collinear."));
-            return -1;
-        }
-    }
-
-    // --- Validate: segments form a contiguous chain ---
-    // Project all endpoints onto the reference line to get parameters
-    QPointF refP0 = lines[0]->points[0];
-    struct Seg {
-        int id;
-        double t0, t1;
-        QPointF p0, p1;
-    };
-    QVector<Seg> segs;
-    for (auto* l : lines) {
-        QPointF d0 = QPointF(l->points[0]) - refP0;
-        QPointF d1 = QPointF(l->points[1]) - refP0;
-        double t0 = d0.x() * refDir.x() + d0.y() * refDir.y();
-        double t1 = d1.x() * refDir.x() + d1.y() * refDir.y();
-        // Normalise so t0 < t1
-        if (t0 > t1) {
-            std::swap(t0, t1);
-            segs.append({l->id, t0, t1, l->points[1], l->points[0]});
-        } else {
-            segs.append({l->id, t0, t1, l->points[0], l->points[1]});
-        }
-    }
-
-    // Sort by parameter
-    std::sort(segs.begin(), segs.end(),
-              [](const Seg& a, const Seg& b) { return a.t0 < b.t0; });
-
-    // Check contiguity: each segment's start must match previous segment's end
+    // Check junction points for attached entities (GUI-specific connectivity check)
     const double endpointTol = 1e-4;
-    for (int i = 1; i < segs.size(); ++i) {
-        if (std::abs(segs[i].t0 - segs[i - 1].t1) > endpointTol) {
-            QMessageBox::warning(this, tr("Rejoin"),
-                tr("Selected lines do not form a contiguous chain.\n"
-                   "There is a gap between segments."));
-            return -1;
-        }
-    }
-
-    // --- Validate: no other entities attach at interior junction points ---
-    // Collect the interior junction points (between consecutive segments)
-    QVector<QPointF> junctions;
-    for (int i = 0; i < segs.size() - 1; ++i) {
-        junctions.append(segs[i].p1);
-    }
-
-    for (const QPointF& jp : junctions) {
+    for (const auto& jp : rejoin.junctionPoints) {
         for (const auto& e : m_entities) {
-            if (m_selectedIds.contains(e.id)) continue;  // skip selected
-            for (const QPointF& ep : e.points) {
-                double dx = ep.x() - jp.x();
-                double dy = ep.y() - jp.y();
+            if (m_selectedIds.contains(e.id)) continue;
+            for (const auto& ep : e.points) {
+                double dx = ep.x - jp.x;
+                double dy = ep.y - jp.y;
                 if (dx * dx + dy * dy < endpointTol * endpointTol) {
                     QMessageBox::warning(this, tr("Rejoin"),
                         tr("Another entity is attached at an interior junction point.\n"
@@ -13630,9 +13433,7 @@ int SketchCanvas::rejoinCollinearSegments()
     }
 
     // --- Perform the rejoin ---
-    QPointF mergedP0 = segs.first().p0;
-    QPointF mergedP1 = segs.last().p1;
-    bool isConstruction = lines[0]->isConstruction;
+    bool isConstruction = entityById(*m_selectedIds.begin())->isConstruction;
 
     // Remove all the old segments
     QSet<int> removeIds = m_selectedIds;
@@ -13648,7 +13449,6 @@ int SketchCanvas::rejoinCollinearSegments()
         std::remove_if(m_constraints.begin(), m_constraints.end(),
                        [&removeIds](const SketchConstraint& c) {
                            if (c.type != ConstraintType::Coincident) return false;
-                           // Remove if ALL referenced entities were in the selection
                            for (int eid : c.entityIds) {
                                if (!removeIds.contains(eid)) return false;
                            }
@@ -13661,7 +13461,7 @@ int SketchCanvas::rejoinCollinearSegments()
     SketchEntity merged;
     merged.id = newId;
     merged.type = SketchEntityType::Line;
-    merged.points = {mergedP0, mergedP1};
+    merged.points = {rejoin.mergedStart, rejoin.mergedEnd};
     merged.isConstruction = isConstruction;
     m_entities.append(merged);
 
@@ -13751,34 +13551,6 @@ void SketchCanvas::drawProfiles(QPainter& painter) const
 //  Offset, Fillet, Chamfer, Pattern Tools
 // =====================================================================
 
-int SketchCanvas::findConnectedLineAtCorner(int lineId, const QPointF& clickPos) const
-{
-    const SketchEntity* line = entityById(lineId);
-    if (!line || line->type != SketchEntityType::Line || line->points.size() < 2)
-        return -1;
-
-    // Find which endpoint is closer to click position
-    double dist0 = QLineF(line->points[0], clickPos).length();
-    double dist1 = QLineF(line->points[1], clickPos).length();
-    QPointF cornerPoint = (dist0 < dist1) ? line->points[0] : line->points[1];
-
-    // Find another line that shares this endpoint
-    const double tolerance = 0.5;  // Connection tolerance in world units
-
-    for (const SketchEntity& entity : m_entities) {
-        if (entity.id == lineId) continue;
-        if (entity.type != SketchEntityType::Line) continue;
-        if (entity.points.size() < 2) continue;
-
-        // Check if either endpoint matches
-        if (QLineF(entity.points[0], cornerPoint).length() < tolerance ||
-            QLineF(entity.points[1], cornerPoint).length() < tolerance) {
-            return entity.id;
-        }
-    }
-
-    return -1;
-}
 
 void SketchCanvas::offsetEntity(int entityId, double distance, const QPointF& clickPos)
 {
@@ -14620,6 +14392,207 @@ void SketchCanvas::redo()
     // Notify properties panel so it refreshes to match the restored state
     emit entityModified(cmd.entity.id);
     update();
+}
+
+// ---- Inline constraint value editing ----------------------------------------
+
+void SketchCanvas::beginInlineConstraintEdit(int constraintId, bool isCreation)
+{
+    // If already editing, commit current edit first
+    if (m_inlineEditActive)
+        commitInlineConstraintEdit();
+
+    const SketchConstraint* c = constraintById(constraintId);
+    if (!c) return;
+
+    m_inlineEditActive = true;
+    m_inlineEditConstraintId = constraintId;
+    m_inlineEditIsCreation = isCreation;
+    m_inlineEditOriginalValue = c->value;
+    m_inlineEditIsAngle = (c->type == ConstraintType::Angle
+                           || c->type == ConstraintType::FixedAngle);
+
+    // Pre-fill buffer with formatted current value
+    if (m_inlineEditIsAngle) {
+        m_inlineEditBuffer = QString::fromStdString(hobbycad::formatValue(c->value));
+    } else {
+        m_inlineEditBuffer = QString::fromStdString(
+            hobbycad::formatValue(hobbycad::mmToUnit(c->value, m_displayUnit)));
+    }
+    m_inlineEditCursorPos = m_inlineEditBuffer.length();
+    m_inlineEditSelectAll = true;
+
+    // Select this constraint
+    m_selectedConstraintId = constraintId;
+
+    update();
+}
+
+void SketchCanvas::commitInlineConstraintEdit()
+{
+    if (!m_inlineEditActive) return;
+
+    double newValue = m_inlineEditOriginalValue;  // Default: keep original
+
+    if (m_inlineEditSelectAll) {
+        // User pressed Enter without typing — keep the original value
+        // (the constraint was already created with this value)
+    } else if (!m_inlineEditBuffer.isEmpty()) {
+        // Parse the buffer
+        std::string exprStdStr = m_inlineEditBuffer.toStdString();
+        double parsed = 0.0;
+        bool valid = false;
+
+        if (m_inlineEditIsAngle) {
+            double dmsResult;
+            if (hobbycad::parseDMS(exprStdStr, dmsResult)) {
+                parsed = dmsResult;
+                valid = true;
+            } else if (m_paramEngine) {
+                double exprResult;
+                if (m_paramEngine->evaluateExpression(exprStdStr, exprResult)) {
+                    parsed = exprResult;
+                    valid = true;
+                }
+            }
+            if (!valid) {
+                bool ok;
+                parsed = m_inlineEditBuffer.toDouble(&ok);
+                valid = ok;
+            }
+            // Angles can be negative for sweep angles, but not zero
+            if (valid && qFuzzyIsNull(parsed)) valid = false;
+        } else {
+            if (m_paramEngine) {
+                double exprResult;
+                if (m_paramEngine->evaluateExpression(exprStdStr, exprResult, m_displayUnit)) {
+                    parsed = hobbycad::unitToMm(exprResult, m_displayUnit);
+                    valid = true;
+                }
+            }
+            if (!valid) {
+                parsed = hobbycad::parseValueWithUnit(exprStdStr, m_displayUnit);
+                valid = (parsed > 0.0);
+            }
+            // Lengths must be positive
+            if (valid && parsed <= 0.0) valid = false;
+        }
+
+        if (valid) {
+            newValue = parsed;
+        }
+    }
+
+    // Apply if different from original
+    if (!qFuzzyCompare(newValue, m_inlineEditOriginalValue)) {
+        setConstraintValue(m_inlineEditConstraintId, newValue);
+    }
+
+    // Reset state
+    m_inlineEditActive = false;
+    m_inlineEditConstraintId = -1;
+    m_inlineEditBuffer.clear();
+    m_inlineEditCursorPos = 0;
+    m_inlineEditSelectAll = false;
+    m_inlineEditIsCreation = false;
+
+    update();
+}
+
+void SketchCanvas::cancelInlineConstraintEdit()
+{
+    if (!m_inlineEditActive) return;
+
+    if (m_inlineEditIsCreation) {
+        // Delete the just-created constraint
+        int cid = m_inlineEditConstraintId;
+        m_constraints.erase(
+            std::remove_if(m_constraints.begin(), m_constraints.end(),
+                           [cid](const SketchConstraint& c) { return c.id == cid; }),
+            m_constraints.end());
+        solveConstraints();
+    }
+    // For editing existing: value was never changed from original (we only apply on commit)
+
+    // Reset state
+    m_inlineEditActive = false;
+    m_inlineEditConstraintId = -1;
+    m_inlineEditBuffer.clear();
+    m_inlineEditCursorPos = 0;
+    m_inlineEditSelectAll = false;
+    m_inlineEditIsCreation = false;
+
+    update();
+}
+
+void SketchCanvas::drawInlineConstraintEdit(QPainter& painter, const QPointF& position,
+                                             const QString& prefix)
+{
+    painter.save();
+
+    QFont font = painter.font();
+    font.setPointSize(9);
+    painter.setFont(font);
+    QFontMetricsF fm(font);
+
+    QString displayText;
+    QColor bgColor;
+    QColor textColor;
+    QColor borderColor;
+
+    if (m_inlineEditSelectAll) {
+        // Show formatted value with blue selection highlight
+        const SketchConstraint* c = constraintById(m_inlineEditConstraintId);
+        double val = c ? c->value : m_inlineEditOriginalValue;
+        if (m_inlineEditIsAngle) {
+            displayText = QString::fromStdString(hobbycad::formatValue(val));
+        } else {
+            displayText = QString::fromStdString(
+                hobbycad::formatValue(hobbycad::mmToUnit(val, m_displayUnit)));
+        }
+        bgColor = QColor(51, 153, 255);      // selection blue
+        textColor = Qt::white;
+        borderColor = QColor(30, 100, 200);
+    } else if (!m_inlineEditBuffer.isEmpty()) {
+        // Typing mode: yellow with cursor
+        int safePos = qBound(0, m_inlineEditCursorPos, m_inlineEditBuffer.length());
+        displayText = m_inlineEditBuffer;
+        displayText.insert(safePos, QStringLiteral("\u2502"));
+        bgColor = QColor(255, 235, 160);
+        textColor = Qt::black;
+        borderColor = QColor(210, 170, 50);
+    } else {
+        // Empty buffer (shouldn't normally happen)
+        displayText = QStringLiteral("0");
+        bgColor = Qt::white;
+        textColor = Qt::black;
+        borderColor = QColor(100, 100, 100);
+    }
+
+    if (!prefix.isEmpty()) {
+        displayText = prefix + displayText;
+    }
+
+    QRectF textBounds = fm.boundingRect(displayText);
+
+    painter.translate(position);
+
+    QRectF labelRect(-textBounds.width() / 2.0 - 5,
+                     -textBounds.height() / 2.0 - 2,
+                     textBounds.width() + 10,
+                     textBounds.height() + 4);
+    painter.fillRect(labelRect, bgColor);
+
+    if (borderColor.isValid()) {
+        painter.setPen(QPen(borderColor, 1));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(labelRect);
+    }
+
+    painter.setPen(textColor);
+    painter.drawText(labelRect, Qt::AlignCenter, displayText);
+
+    painter.restore();
 }
 
 }  // namespace hobbycad

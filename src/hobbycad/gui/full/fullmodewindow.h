@@ -9,12 +9,16 @@
 #include "gui/modeltoolbar.h"
 #include "gui/parametersdialog.h"
 #include "gui/sketchcanvas.h"
+#include "gui/timelinewidget.h"
 #include "gui/full/aissketchplane.h"
+
+#include <hobbycad/sketch/profiles.h>
 
 #include <AIS_Shape.hxx>
 #include <TopoDS_Shape.hxx>
 
 #include <QList>
+#include <optional>
 
 class QLabel;
 class QStackedWidget;
@@ -22,10 +26,6 @@ class QTreeWidgetItem;
 
 namespace hobbycad {
 
-class ModelToolbar;
-class SketchCanvas;
-class SketchToolbar;
-class TimelineWidget;
 class ViewportWidget;
 
 /// A completed sketch with its 3D representation
@@ -49,18 +49,9 @@ public:
     explicit FullModeWindow(const OpenGLInfo& glInfo,
                             QWidget* parent = nullptr);
 
-    /// Get document parameters (for formula fields)
-    QMap<QString, double> parameterValues() const;
-
-    /// Check if currently in sketch mode
-    bool isSketchMode() const { return m_inSketchMode; }
-
 public slots:
-    /// Enter sketch editing mode
-    void enterSketchMode(SketchPlane plane = SketchPlane::XY);
-
-    /// Exit sketch editing mode
-    void exitSketchMode();
+    void enterSketchMode(SketchPlane plane = SketchPlane::XY) override;
+    void exitSketchMode() override;
 
 protected:
     void onDocumentLoaded() override;
@@ -72,16 +63,9 @@ protected:
         QVector<sketch::Constraint>& outConstraints) const override;
 
 private slots:
-    void showParametersDialog();
-    void onParametersChanged(const QList<Parameter>& params);
-    void onCreateSketchClicked();
     void onNewConstructionPlane();
     void onConstructionPlaneSelected(int planeId);
-    void onSketchToolSelected(SketchTool tool);
-    void onSketchSelectionChanged(int entityId);
-    void onSketchEntityCreated(int entityId);
     void onSketchEntityModified(int entityId);
-    void onSketchPropertyItemChanged(QTreeWidgetItem* item, int column);
 
     // Timeline context menu handlers
     void onEditFeature(int index);
@@ -99,15 +83,18 @@ private slots:
     void performRevolve();
 
 private:
+    // Overrides from MainWindow
+    void onSketchDeselected() override;
+    void populateSketchFeatureProperties(QTreeWidgetItem* parent,
+                                          int timelineIndex,
+                                          const QString& units) override;
+    void onCreateSketchClicked() override;
+    void saveCurrentSketch() override;
+    void discardCurrentSketch() override;
+
     void createTimeline();
     void displayShapes();
-    void showFeatureProperties(int index);
-    void initDefaultParameters();
-    void showSketchEntityProperties(int entityId);
-    void showSketchConstraintProperties(int constraintId);
     void showSketchProperties();
-    void saveCurrentSketch();
-    void discardCurrentSketch();
     Handle(AIS_Shape) createSketchWireframe(const CompletedSketch& sketch);
 
     // Sketch plane visualization
@@ -133,27 +120,28 @@ private:
     int sketchIndexFromTimelineIndex(int timelineIndex) const;
     int timelineIndexFromSketchIndex(int sketchIndex) const;
 
-    // Toolbar stack (normal vs sketch mode)
-    QStackedWidget*  m_toolbarStack  = nullptr;
-    ModelToolbar*    m_toolbar       = nullptr;
-    SketchToolbar*   m_sketchToolbar = nullptr;
+    /// Validate that a timeline index is in bounds and not the Origin.
+    /// Returns the feature type on success, or std::nullopt (with status message).
+    std::optional<TimelineFeature> validateFeatureAction(
+        int index, const QString& actionVerb) const;
 
-    // Viewport stack (3D viewport vs sketch canvas)
-    QStackedWidget*  m_viewportStack = nullptr;
+    /// Retrieve a selected sketch's profiles for 3D operations (extrude/revolve).
+    /// Returns std::nullopt with appropriate error messages on failure.
+    struct SketchProfilesResult {
+        const CompletedSketch* sketch = nullptr;
+        std::vector<sketch::Entity> libEntities;
+        std::vector<sketch::Profile> profiles;
+    };
+    std::optional<SketchProfilesResult> getSelectedSketchProfiles(
+        const QString& operationName);
+
     ViewportWidget*  m_viewport      = nullptr;
-    SketchCanvas*    m_sketchCanvas  = nullptr;
-
-    TimelineWidget*  m_timeline  = nullptr;
     QLabel*          m_axisLabel = nullptr;
-
-    bool             m_inSketchMode = false;
-    QList<Parameter> m_parameters;  ///< Document parameters
 
     // Completed sketches
     QVector<CompletedSketch> m_completedSketches;
     int m_currentSketchIndex = -1;  ///< Index of sketch being edited (-1 if new)
     int m_pendingSketchTimelineIdx = -1;  ///< Timeline index of sketch being created
-    double m_pendingSketchOffset = 0.0;  ///< Offset for sketch being created
     PlaneRotationAxis m_pendingRotationAxis = PlaneRotationAxis::X;
     double m_pendingRotationAngle = 0.0;
 

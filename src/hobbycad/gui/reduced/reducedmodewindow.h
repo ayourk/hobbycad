@@ -33,11 +33,7 @@ class QVBoxLayout;
 namespace hobbycad {
 
 class CliPanel;
-class ModelToolbar;
 class ReducedViewport;
-class SketchCanvas;
-class SketchToolbar;
-class TimelineWidget;
 
 class ReducedModeWindow : public MainWindow {
     Q_OBJECT
@@ -46,18 +42,9 @@ public:
     explicit ReducedModeWindow(const OpenGLInfo& glInfo,
                                QWidget* parent = nullptr);
 
-    /// Get document parameters (for formula fields)
-    QMap<QString, double> parameterValues() const;
-
-    /// Check if currently in sketch mode
-    bool isSketchMode() const { return m_inSketchMode; }
-
 public slots:
-    /// Enter sketch editing mode
-    void enterSketchMode(SketchPlane plane = SketchPlane::XY);
-
-    /// Exit sketch editing mode
-    void exitSketchMode();
+    void enterSketchMode(SketchPlane plane = SketchPlane::XY) override;
+    void exitSketchMode() override;
 
 protected:
     void applyPreferences() override;
@@ -65,46 +52,24 @@ protected:
 private slots:
     void onViewportClicked();
     void onTerminalToggled(bool visible);
-    void showParametersDialog();
-    void onParametersChanged(const QList<Parameter>& params);
-    void showFeatureProperties(int index);
-    void onCreateSketchClicked();
-    void onSketchToolSelected(SketchTool tool);
-    void onSketchSelectionChanged(int entityId);
-    void onSketchEntityCreated(int entityId);
-    void onSketchPropertyItemChanged(QTreeWidgetItem* item, int column);
     void onConstraintSelectionChanged(int constraintId);
 
 private:
+    // Overrides from MainWindow
+    void onCreateSketchClicked() override;
+    void saveCurrentSketch() override;
+    void discardCurrentSketch() override;
+
     void showDiagnosticDialog();
     void createTimeline();
-    void initDefaultParameters();
-    void showSketchEntityProperties(int entityId);
-    void showSketchConstraintProperties(int constraintId);
-    void saveCurrentSketch();
-    void discardCurrentSketch();
 
     // Main container layout
     QVBoxLayout*     m_mainLayout      = nullptr;
 
-    // Toolbar stack (normal vs sketch mode)
-    QStackedWidget*  m_toolbarStack    = nullptr;
-    ModelToolbar*    m_toolbar         = nullptr;
-    SketchToolbar*   m_sketchToolbar   = nullptr;
-
-    // Viewport stack (reduced viewport vs sketch canvas)
-    QStackedWidget*  m_viewportStack   = nullptr;
     QSplitter*       m_splitter        = nullptr;
     ReducedViewport* m_viewport        = nullptr;
     CliPanel*        m_centralCli      = nullptr;
-    SketchCanvas*    m_sketchCanvas    = nullptr;
-
-    TimelineWidget*  m_timeline        = nullptr;
     bool             m_suppressDialog  = false;
-    bool             m_inSketchMode    = false;
-    double           m_pendingSketchOffset = 0.0;  ///< Offset for sketch being created
-
-    QList<Parameter> m_parameters;  ///< Document parameters
 };
 
 }  // namespace hobbycad

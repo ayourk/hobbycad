@@ -21,12 +21,15 @@
 #include <hobbycad/units.h>
 
 #include <QMainWindow>
+#include "parametersdialog.h"
+#include "sketchcanvas.h"
 
 class QAction;
 class QLabel;
 class QDockWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
+class QStackedWidget;
 
 namespace hobbycad {
 namespace sketch {
@@ -38,6 +41,9 @@ class ChangelogPanel;
 class CliPanel;
 class ProjectBrowserWidget;
 class SketchActionBar;
+class ModelToolbar;
+class SketchToolbar;
+class TimelineWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -56,6 +62,19 @@ public:
     /// Access the embedded CLI panel (may be nullptr if not created).
     CliPanel* cliPanel() const;
 
+    /// Check if currently in sketch mode
+    bool isSketchMode() const { return m_inSketchMode; }
+
+    /// Get document parameters (for formula fields)
+    QMap<QString, double> parameterValues() const;
+
+public slots:
+    /// Enter sketch editing mode (override for mode-specific setup).
+    virtual void enterSketchMode(SketchPlane plane = SketchPlane::XY);
+
+    /// Exit sketch editing mode (override for mode-specific teardown).
+    virtual void exitSketchMode();
+
 protected:
     /// Called by subclasses after setting the central widget.
     void finalizeLayout();
@@ -71,6 +90,43 @@ protected:
 
     /// Override to provide the active sketch canvas (for sketch export).
     virtual class SketchCanvas* activeSketchCanvas() const { return nullptr; }
+
+    /// Initialize shared sketch signal/slot connections.
+    /// Call from subclass constructor after creating widgets.
+    void initSketchConnections();
+
+    // Sketch mode shared methods
+    void initDefaultParameters();
+    void showParametersDialog();
+    void onParametersChanged(const QList<Parameter>& params);
+    void onSketchToolSelected(SketchTool tool);
+    void onSketchSelectionChanged(int entityId);
+    void onSketchEntityCreated(int entityId);
+    void showSketchEntityProperties(int entityId);
+    void showSketchConstraintProperties(int constraintId);
+    void showFeatureProperties(int index);
+    void onSketchPropertyItemChanged(QTreeWidgetItem* item, int column);
+
+    /// Override to handle sketch deselection (entity deselected, no constraint selected).
+    virtual void onSketchDeselected();
+
+    /// Override to populate sketch feature properties with real data.
+    virtual void populateSketchFeatureProperties(QTreeWidgetItem* parent,
+                                                  int timelineIndex,
+                                                  const QString& units);
+
+    /// Override to create sketch in timeline and handle save logic.
+    virtual void onCreateSketchClicked();
+
+    /// Override to save the current sketch.
+    virtual void saveCurrentSketch();
+
+    /// Override to discard the current sketch.
+    virtual void discardCurrentSketch();
+
+    // Static parse helpers for property editing
+    static double parseScalar(const QString& text);
+    static bool parsePoint(const QString& text, double& x, double& y);
 
     /// Override to provide sketch entities for export when no active canvas.
     /// Used when a completed sketch is selected in the 3D view.
@@ -215,6 +271,17 @@ protected:
 
     // Objects tree (protected for subclass access)
     QTreeWidget* m_objectsTree = nullptr;
+
+    // Sketch mode infrastructure (shared by Full and Reduced modes)
+    QStackedWidget*  m_toolbarStack      = nullptr;
+    ModelToolbar*    m_toolbar           = nullptr;
+    SketchToolbar*   m_sketchToolbar     = nullptr;
+    QStackedWidget*  m_viewportStack     = nullptr;
+    SketchCanvas*    m_sketchCanvas      = nullptr;
+    TimelineWidget*  m_timeline          = nullptr;
+    bool             m_inSketchMode      = false;
+    QList<Parameter> m_parameters;
+    double           m_pendingSketchOffset = 0.0;
 
 private slots:
     void onFileNew();

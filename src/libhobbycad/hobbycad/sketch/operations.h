@@ -254,6 +254,66 @@ HOBBYCAD_EXPORT int findConnectedLineAtCorner(
     const Point2D& cornerHint,
     double tolerance = geometry::POINT_TOLERANCE);
 
+// =====================================================================
+//  Tangency Maintenance
+// =====================================================================
+
+/// Result of reestablishing tangency
+struct ReestablishTangencyResult {
+    bool success = false;
+    Entity arc;               ///< The updated arc entity
+    std::string errorMessage;
+};
+
+/// Reestablish tangency of an arc to a parent entity.
+///
+/// When an arc is tangent to a line or rectangle edge and its radius
+/// or the parent entity has moved, this function repositions the arc's
+/// center so that tangency is maintained.  The arc's radius and sweep
+/// angle are preserved; only its center, start angle, and endpoint
+/// positions are updated.
+///
+/// @param arc The arc entity (must have 3 points: center, tangentPoint, endPoint)
+/// @param parentEntity The entity the arc is tangent to (Line or Rectangle)
+/// @return Updated arc entity, or failure if types are incompatible
+HOBBYCAD_EXPORT ReestablishTangencyResult reestablishTangency(
+    const Entity& arc,
+    const Entity& parentEntity);
+
+// =====================================================================
+//  Collinear Segment Rejoining
+// =====================================================================
+
+/// Result of validating and computing a rejoin of collinear segments
+struct RejoinResult {
+    bool success = false;
+    Point2D mergedStart;                    ///< Start point of merged line
+    Point2D mergedEnd;                      ///< End point of merged line
+    std::vector<int> removedIds;            ///< IDs of entities to be removed
+    std::vector<Point2D> junctionPoints;    ///< Interior junction points (for connectivity check)
+    std::string errorMessage;
+};
+
+/// Validate and compute the merge of collinear line segments.
+///
+/// Checks that all provided entities are lines, are collinear (within
+/// angular tolerance), and form a contiguous chain.  If valid, returns
+/// the merged line endpoints and the junction points where segments met.
+///
+/// The caller is responsible for:
+///  - Checking whether other entities attach at junction points
+///  - Actually removing old entities and creating the merged line
+///  - Updating constraints and selection state
+///
+/// @param entities The line entities to rejoin (must be at least 2)
+/// @param angleTolerance Angular tolerance in radians for collinearity (default ~0.06°)
+/// @param endpointTolerance Distance tolerance for endpoint matching
+/// @return Merge result with endpoints and junction points
+HOBBYCAD_EXPORT RejoinResult validateCollinearRejoin(
+    const std::vector<Entity>& entities,
+    double angleTolerance = 0.001,
+    double endpointTolerance = 1e-4);
+
 }  // namespace sketch
 }  // namespace hobbycad
 
