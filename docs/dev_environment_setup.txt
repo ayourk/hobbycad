@@ -1915,7 +1915,7 @@
   GitHub:         https://github.com/Open-Cascade-SAS/OCCT
   Releases:       https://github.com/Open-Cascade-SAS/OCCT/releases
 
-  Pinned version: 7.9.2 (via vcpkg overlay port in vcpkg-overlay-ports/).
+  Pinned version: 7.9.2 (via hobbycad-vcpkg registry).
   In manifest mode, the vcpkg.json "overrides" section pins this
   automatically.
 

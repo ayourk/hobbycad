@@ -1,4 +1,4 @@
-# vcpkg-toolchains/arm64-windows.cmake
+# vcpkg-custom-triplets/arm64-windows.cmake
 #
 # Toolchain file for ARM64 Windows cross-compilation from x64 host.
 # Only sets linker flags - let vcpkg handle compiler detection.
