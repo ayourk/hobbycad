@@ -15,10 +15,22 @@ vcpkg_from_github(
     HEAD_REF master
 )
 
+# macOS framework paths - OCCT uses non-standard CMake variable names
+# that don't work with vcpkg's toolchain. Explicitly set them.
+set(MACOS_OPTIONS "")
+if(VCPKG_TARGET_IS_OSX)
+    list(APPEND MACOS_OPTIONS
+        "-DAppkit_LIB=-framework AppKit"
+        "-DIOKit_LIB=-framework IOKit"
+        "-DOpenGlLibs_LIB=-framework OpenGL"
+    )
+endif()
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DBUILD_LIBRARY_TYPE=Static
+        ${MACOS_OPTIONS}
         -DBUILD_MODULE_ApplicationFramework=ON
         -DBUILD_MODULE_DataExchange=ON
         -DBUILD_MODULE_Draw=OFF

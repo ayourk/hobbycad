@@ -9,9 +9,14 @@
   "dependencies": [
     "opencascade",
     {
+      "name": "freetype",
+      "default-features": false,
+      "features": ["brotli", "bzip2", "zlib"]
+    },
+    {
       "name": "qtbase",
       "default-features": false,
-      "features": ["widgets", "opengl", "gui"]
+      "features": ["widgets", "opengl", "gui", "freetype", "thread"]
     },
     "qtsvg",
     "qtimageformats",
