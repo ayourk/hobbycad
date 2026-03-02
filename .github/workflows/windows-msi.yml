@@ -122,7 +122,6 @@ jobs:
             "install",
             "--triplet", "${{ matrix.triplet }}",
             "--overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets",
-            "--overlay-ports=${{ github.workspace }}/vcpkg-overlay-ports",
             "--x-install-root=vcpkg_installed",
             "--clean-buildtrees-after-build"
           )
@@ -138,8 +137,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
             -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
-            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed `
-            -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}\vcpkg-overlay-ports
+            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
