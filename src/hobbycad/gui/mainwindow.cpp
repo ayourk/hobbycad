@@ -2785,6 +2785,7 @@ void MainWindow::onSketchPropertyItemChanged(QTreeWidgetItem* item, int column)
 
     QString text = item->text(1);
     bool changed = false;
+    int editedPointIndex = -1;  // Track which point was edited (for FixedPoint during solve)
 
     if (propertyName.startsWith(QStringLiteral("point"))) {
         int idx = propertyName.mid(5).toInt();
@@ -2792,6 +2793,7 @@ void MainWindow::onSketchPropertyItemChanged(QTreeWidgetItem* item, int column)
             double x, y;
             if (parsePoint(text, x, y)) {
                 entity->points[idx] = {x, y};
+                editedPointIndex = idx;
                 changed = true;
             }
         }
@@ -2963,7 +2965,13 @@ void MainWindow::onSketchPropertyItemChanged(QTreeWidgetItem* item, int column)
             oldEntity, *entity,
             "Edit " + propertyName.toStdString()));
 
-        m_sketchCanvas->notifyEntityChanged(entityId);
+        // Use FixedPoint constraint during solve if editing a specific point,
+        // so the edited point stays exactly where placed and other geometry adjusts
+        if (editedPointIndex >= 0) {
+            m_sketchCanvas->notifyEntityPointChanged(entityId, editedPointIndex);
+        } else {
+            m_sketchCanvas->notifyEntityChanged(entityId);
+        }
         QTimer::singleShot(0, this, [this, entityId]() {
             if (QTreeWidget* pt = propertiesTree()) pt->blockSignals(true);
             showSketchEntityProperties(entityId);

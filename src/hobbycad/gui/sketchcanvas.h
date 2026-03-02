@@ -242,6 +242,11 @@ public:
     /// Re-solves constraints, re-establishes tangency if needed, emits entityModified, and repaints.
     void notifyEntityChanged(int entityId);
 
+    /// Notify that a specific point on an entity was modified.
+    /// Adds a temporary FixedPoint constraint during solving so the edited point
+    /// stays exactly where the user placed it, and other geometry adjusts instead.
+    void notifyEntityPointChanged(int entityId, int pointIndex);
+
     /// Re-establish tangency for a tangent arc by re-projecting the tangent
     /// point onto the parent entity and repositioning the center.
     /// Preserves the arc's current radius and sweep angle.

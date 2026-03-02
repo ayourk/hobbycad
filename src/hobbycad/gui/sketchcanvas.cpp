@@ -8211,8 +8211,7 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
                         }
                     }
                 }
-                bool valid = m_dimFields[m_dimActiveIndex].isAngle ? (val != 0.0) : (val > 0.0);
-                if (valid) {
+                if (m_dimFields[m_dimActiveIndex].isAngle || val > 0.0) {
                     state.locked = true;
                     state.lockedValue = val;
                     state.inputBuffer.clear();
@@ -10100,11 +10099,87 @@ void SketchCanvas::updateEntity(const QPointF& pos)
     switch (m_activeTool) {
     case SketchTool::Line: {
         QPointF endpoint = pos;
+        QPointF start = m_pendingEntity.points[0];
+
         // Apply locked dimensions if any
         double lockedLen = getLockedDim(0);   // field 0 = Length
         double lockedAng = getLockedDim(1);   // field 1 = Angle
+
+        // For tangent lines with locked angle, move the tangent point along the circle/arc
+        if (m_lineMode == LineMode::Tangent && !m_tangentTargets.isEmpty() && lockedAng != -1.0) {
+            SketchEntity* entity = entityById(m_tangentTargets[0]);
+            if (entity && (entity->type == SketchEntityType::Circle ||
+                          entity->type == SketchEntityType::Arc)) {
+                QPointF center = entity->points[0];
+                double radius = entity->radius;
+
+                // Tangent angle θ means radius angle is θ ± 90°
+                // Choose the direction based on which side of center the mouse is
+                double angRad = qDegreesToRadians(lockedAng);
+                double radiusAng1 = angRad + M_PI / 2.0;
+                double radiusAng2 = angRad - M_PI / 2.0;
+
+                // Calculate both possible tangent points
+                QPointF tp1 = center + QPointF(radius * std::cos(radiusAng1), radius * std::sin(radiusAng1));
+                QPointF tp2 = center + QPointF(radius * std::cos(radiusAng2), radius * std::sin(radiusAng2));
+
+                // Choose the tangent point that puts the endpoint on the correct side
+                // (the side where the mouse is pointing)
+                QPointF dir1 = QPointF(std::cos(angRad), std::sin(angRad));
+                double dot1 = (pos.x() - tp1.x()) * dir1.x() + (pos.y() - tp1.y()) * dir1.y();
+                double dot2 = (pos.x() - tp2.x()) * dir1.x() + (pos.y() - tp2.y()) * dir1.y();
+
+                // Use the tangent point where the mouse is in the positive direction
+                start = (dot1 > dot2) ? tp1 : tp2;
+
+                // For arcs, verify the point is on the arc (within sweep)
+                if (entity->type == SketchEntityType::Arc) {
+                    double startAng = entity->startAngle;
+                    double sweepAng = entity->sweepAngle;
+                    double pointAng = std::atan2(start.y() - center.y(), start.x() - center.x()) * 180.0 / M_PI;
+
+                    // Normalize angles
+                    auto normalizeAngle = [](double a) {
+                        while (a < 0) a += 360;
+                        while (a >= 360) a -= 360;
+                        return a;
+                    };
+                    pointAng = normalizeAngle(pointAng);
+                    double arcStart = normalizeAngle(startAng);
+                    double arcEnd = normalizeAngle(startAng + sweepAng);
+
+                    // Check if point is on the arc
+                    bool onArc;
+                    if (sweepAng >= 0) {
+                        if (arcEnd >= arcStart) {
+                            onArc = (pointAng >= arcStart && pointAng <= arcEnd);
+                        } else {
+                            onArc = (pointAng >= arcStart || pointAng <= arcEnd);
+                        }
+                    } else {
+                        if (arcEnd <= arcStart) {
+                            onArc = (pointAng <= arcStart && pointAng >= arcEnd);
+                        } else {
+                            onArc = (pointAng <= arcStart || pointAng >= arcEnd);
+                        }
+                    }
+
+                    if (!onArc) {
+                        // Try the other tangent point
+                        start = (dot1 > dot2) ? tp2 : tp1;
+                    }
+                }
+
+                // Update the pending entity's start point
+                m_pendingEntity.points[0] = start;
+                // Also update preview points for visual feedback
+                if (!m_previewPoints.isEmpty()) {
+                    m_previewPoints[0] = start;
+                }
+            }
+        }
+
         if (lockedLen > 0 || lockedAng != -1.0) {
-            QPointF start = m_pendingEntity.points[0];
             QPointF dir = pos - start;
             double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
             double mouseAng = std::atan2(dir.y(), dir.x());
@@ -11829,6 +11904,56 @@ void SketchCanvas::notifyEntityChanged(int entityId)
         if (gid >= 0) {
             syncSweepAngleConstructionLines(*ent);
             // Update the Angle constraint value + anchorPoint
+            for (const auto& g : m_groups) {
+                if (g.id == gid) {
+                    for (int cid : g.constraintIds) {
+                        SketchConstraint* c = constraintById(cid);
+                        if (c && c->type == ConstraintType::Angle) {
+                            c->value = std::abs(ent->sweepAngle);
+                            c->supplementary = (std::abs(ent->sweepAngle) > 180.0);
+                            c->anchorPoint = ent->points[0];
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    emit entityModified(entityId);
+    update();
+}
+
+void SketchCanvas::notifyEntityPointChanged(int entityId, int pointIndex)
+{
+    // Add a temporary FixedPoint constraint so the solver keeps this point
+    // exactly where the user placed it, while adjusting other geometry.
+    SketchConstraint tempFixed;
+    tempFixed.id = m_nextConstraintId++;
+    tempFixed.type = ConstraintType::FixedPoint;
+    tempFixed.entityIds.push_back(entityId);
+    tempFixed.pointIndices.push_back(pointIndex);
+    tempFixed.enabled = true;
+    tempFixed.isDriving = true;
+    tempFixed.satisfied = true;
+
+    m_constraints.append(tempFixed);
+    solveConstraints();
+    m_constraints.removeLast();  // Remove the temporary constraint
+
+    // Re-establish tangency for tangent arcs after solver
+    SketchEntity* ent = entityById(entityId);
+    if (ent && ent->type == SketchEntityType::Arc
+            && ent->tangentEntityId >= 0
+            && ent->points.size() >= 3) {
+        reestablishTangency(*ent);
+    }
+
+    // Sync sweep-angle construction lines and constraint value with arc geometry
+    if (ent && ent->type == SketchEntityType::Arc) {
+        int gid = findSweepAngleGroupForArc(entityId);
+        if (gid >= 0) {
+            syncSweepAngleConstructionLines(*ent);
             for (const auto& g : m_groups) {
                 if (g.id == gid) {
                     for (int cid : g.constraintIds) {
