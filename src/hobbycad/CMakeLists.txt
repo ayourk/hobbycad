@@ -10,6 +10,12 @@
 # ---- Dependencies ---------------------------------------------------
 
 find_package(OpenCASCADE REQUIRED)
+
+# PNG must be found before Qt on Windows with vcpkg static builds.
+# vcpkg's freetype cmake wrapper references PNG::PNG without calling
+# find_dependency(PNG), causing "unknown target" errors.
+find_package(PNG QUIET)
+
 find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} REQUIRED COMPONENTS
     Core Gui Widgets OpenGL Svg)
 find_package(OpenGL REQUIRED)
