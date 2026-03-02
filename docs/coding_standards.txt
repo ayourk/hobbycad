@@ -403,12 +403,11 @@
       hobbycad_en.ts               English (reference/default)
       hobbycad_pirate.ts           Pirate English (fun language)
 
-    vcpkg-custom-triplets/         vcpkg triplets and toolchains
+    vcpkg-custom-triplets/         vcpkg triplets
       arm64-osx-static.cmake       macOS ARM64 static triplet
       arm64-windows-static-md.cmake Windows ARM64 static triplet
       x64-osx-static.cmake         macOS x64 static triplet
       x64-windows-static-md.cmake  Windows x64 static triplet
-      arm64-windows.cmake          ARM64 Windows toolchain
 
     src/
       libhobbycad/                 Core library (no GUI dependency)
