@@ -255,6 +255,33 @@ The remaining 65 debug files have 1 mention each (inherited system context only)
 
 To search: `grep -rli "keyword" ~/.claude/debug/`
 
+## Webhook Events Dashboard
+
+A local webhook receiver and dashboard runs at `http://localhost/claude/webhooks/`
+
+**Location:** `/var/www/html/claude/webhooks/`
+- `index.php` — Webhook receiver and status dashboard
+- `data/` — JSON event files (gh_*.json for GitHub, lp_*.json for Launchpad)
+
+**Features:**
+- Receives GitHub workflow_run, push, check_run events
+- Receives Launchpad PPA build status notifications
+- Auto-refreshing status page (30 second interval)
+- Color-coded status (green=success, red=fail, yellow=building)
+- Shows last 50 events sorted by timestamp
+
+**Checking CI status:**
+```bash
+# View dashboard in browser
+xdg-open http://localhost/claude/webhooks/
+
+# Check recent events via CLI
+ls -lt /var/www/html/claude/webhooks/data/*.json | head -10
+
+# View specific event
+cat /var/www/html/claude/webhooks/data/gh_YYYYMMDD_HHMMSS_workflow_run.json | jq '.summary'
+```
+
 ## Preferences
 
 - Keep responses concise and action-oriented
