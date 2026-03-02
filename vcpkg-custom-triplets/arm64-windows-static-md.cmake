@@ -8,7 +8,7 @@ set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 
 # Chainload toolchain for ARM64 cross-compilation
-set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../vcpkg-toolchains/arm64-windows.cmake")
+set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/arm64-windows.cmake")
 
 # Disable PNG support in freetype to work around vcpkg cmake wrapper bug
 # (PNG::PNG used without find_dependency, breaks Qt builds)

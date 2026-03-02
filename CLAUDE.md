@@ -27,9 +27,9 @@ HobbyCAD/                    ayourk/hobbycad (main project)
 │       └── format.h         String formatting (replaces QString::number)
 ├── docs/                    Plain text documentation
 ├── tools/linux/             Linux build/setup scripts
-├── tools/windows/           Windows build/setup scripts  
+├── tools/windows/           Windows build/setup scripts
 ├── tools/macos/             macOS build/setup scripts
-├── vcpkg-overlay-ports/     OCCT overlay port for MSVC builds
+├── vcpkg-custom-triplets/   vcpkg triplets and toolchains
 ├── .github/workflows/       CI: linux-build, windows-build, macos-build
 ├── CMakeLists.txt           Top-level CMake
 ├── CMakePresets.json        Build presets (linux-debug, linux-release, etc.)
