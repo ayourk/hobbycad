@@ -63,6 +63,9 @@ jobs:
       - name: Setup vcpkg
         run: |
           git clone --depth 1 https://github.com/microsoft/vcpkg.git ~/vcpkg
+          cd ~/vcpkg
+          # Fetch the baseline tag required by vcpkg-configuration.json
+          git fetch --depth 1 origin tag 2026.01.16
           ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           echo "VCPKG_ROOT=$HOME/vcpkg" >> $GITHUB_ENV
           echo "$HOME/vcpkg" >> $GITHUB_PATH

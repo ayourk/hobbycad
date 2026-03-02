@@ -91,6 +91,10 @@ jobs:
               git clone --depth 1 https://github.com/microsoft/vcpkg.git C:\vcpkg
               & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
           }
+          # Fetch the baseline tag required by vcpkg-configuration.json
+          Push-Location C:\vcpkg
+          git fetch --depth 1 origin tag 2026.01.16
+          Pop-Location
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
           echo "C:\vcpkg" >> $env:GITHUB_PATH
 
