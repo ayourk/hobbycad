@@ -90,21 +90,12 @@ jobs:
 
       - name: Setup vcpkg
         run: |
-          # Use the pre-installed vcpkg on the runner, or clone fresh
-          if (Test-Path "C:\vcpkg\vcpkg.exe") {
-              Write-Host "Using pre-installed vcpkg at C:\vcpkg"
-          } elseif (Test-Path "C:\vcpkg") {
-              Write-Host "Bootstrapping existing C:\vcpkg..."
-              & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          } else {
-              Write-Host "Cloning vcpkg..."
-              git clone --depth 1 https://github.com/microsoft/vcpkg.git C:\vcpkg
-              & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          # Clone the exact baseline version to ensure version overrides work
+          if (Test-Path "C:\vcpkg") {
+              Remove-Item -Recurse -Force C:\vcpkg
           }
-          # Fetch the baseline tag required by vcpkg-configuration.json
-          Push-Location C:\vcpkg
-          git fetch --depth 1 origin tag 2026.01.16
-          Pop-Location
+          git clone --branch 2026.01.16 https://github.com/microsoft/vcpkg.git C:\vcpkg
+          & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
           echo "C:\vcpkg" >> $env:GITHUB_PATH
 
