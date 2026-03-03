@@ -138,7 +138,11 @@ set(APP_RESOURCES
 
 # ---- Executable ------------------------------------------------------
 
-add_executable(hobbycad ${APP_SOURCES} ${APP_HEADERS} ${APP_RESOURCES})
+if(APPLE)
+    add_executable(hobbycad MACOSX_BUNDLE ${APP_SOURCES} ${APP_HEADERS} ${APP_RESOURCES})
+else()
+    add_executable(hobbycad ${APP_SOURCES} ${APP_HEADERS} ${APP_RESOURCES})
+endif()
 
 target_include_directories(hobbycad PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -175,6 +179,20 @@ target_compile_definitions(hobbycad PRIVATE
     HOBBYCAD_OCCT_VERSION="${OpenCASCADE_VERSION}"
 )
 
+# ---- macOS App Bundle ------------------------------------------------
+
+if(APPLE)
+    # Get version from top-level project
+    set_target_properties(hobbycad PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME "HobbyCAD"
+        MACOSX_BUNDLE_EXECUTABLE_NAME "hobbycad"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.hobbycad.HobbyCAD"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/macos/Info.plist.in"
+    )
+endif()
+
 # ---- Translation (lupdate) -------------------------------------------
 #
 #  Generates the .ts translation file from source tr() calls.
@@ -209,7 +227,11 @@ endif()
 
 # ---- Install ---------------------------------------------------------
 
-install(TARGETS hobbycad RUNTIME DESTINATION bin)
+if(APPLE)
+    install(TARGETS hobbycad BUNDLE DESTINATION .)
+else()
+    install(TARGETS hobbycad RUNTIME DESTINATION bin)
+endif()
 
 install(FILES
     ${CMAKE_SOURCE_DIR}/resources/hobbycad.desktop
@@ -224,4 +246,12 @@ generate_icons(
     OUTPUT ${CMAKE_BINARY_DIR}/icons
     NAME   hobbycad
 )
+
+# Copy .icns into macOS app bundle Resources
+if(APPLE AND ICON_ICNS_FILE)
+    set_source_files_properties(${ICON_ICNS_FILE} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    target_sources(hobbycad PRIVATE ${ICON_ICNS_FILE})
+endif()
 
