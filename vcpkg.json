@@ -13,13 +13,8 @@
       "default-features": false,
       "features": ["bzip2", "zlib"]
     },
-    {
-      "name": "qtbase",
-      "default-features": false,
-      "features": ["widgets", "opengl", "gui"]
-    },
+    "qtbase",
     "qtsvg",
-    "qtimageformats",
     "opengl",
     "libzip",
     "libpng",
@@ -36,8 +31,7 @@
   "overrides": [
     { "name": "opencascade", "version": "7.9.2" },
     { "name": "qtbase",      "version": "6.4.2" },
-    { "name": "qtsvg",            "version": "6.4.2" },
-    { "name": "qtimageformats",  "version": "6.4.2" },
+    { "name": "qtsvg",       "version": "6.4.2" },
     { "name": "libzip",      "version": "1.7.3" },
     { "name": "libgit2",     "version": "1.8.0" }
   ]
