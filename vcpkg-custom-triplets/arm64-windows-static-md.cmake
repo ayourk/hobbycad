@@ -9,8 +9,7 @@ set(VCPKG_LIBRARY_LINKAGE static)
 
 # ARM64 cross-compilation linker flags
 # Without these, the linker defaults to x64 even when compiling for ARM64
+# VCPKG_LINKER_FLAGS affects exe/shared linker, CMAKE_STATIC_LINKER_FLAGS affects lib.exe
 set(VCPKG_LINKER_FLAGS "/MACHINE:ARM64")
+set(VCPKG_CMAKE_CONFIGURE_OPTIONS "-DCMAKE_STATIC_LINKER_FLAGS=/MACHINE:ARM64")
 
-# Disable PNG support in freetype to work around vcpkg cmake wrapper bug
-# (PNG::PNG used without find_dependency, breaks Qt builds)
-set(VCPKG_CMAKE_CONFIGURE_OPTIONS_freetype "-DFT_DISABLE_PNG=ON")
