@@ -116,6 +116,14 @@ jobs:
         with:
           arch: ${{ matrix.msvc_arch }}
 
+      - name: Clear vcpkg registry cache
+        run: |
+          $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
+          if (Test-Path $cachePath) {
+            Remove-Item -Recurse -Force $cachePath
+            Write-Host "Cleared vcpkg registry cache"
+          }
+
       - name: Install dependencies via vcpkg
         run: |
           $args = @(

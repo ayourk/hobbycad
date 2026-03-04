@@ -64,6 +64,9 @@ jobs:
           echo "VCPKG_ROOT=$HOME/vcpkg" >> $GITHUB_ENV
           echo "$HOME/vcpkg" >> $GITHUB_PATH
 
+      - name: Clear vcpkg registry cache
+        run: rm -rf ~/.cache/vcpkg/registries
+
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet x64-osx-static \
