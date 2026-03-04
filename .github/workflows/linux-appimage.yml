@@ -24,14 +24,6 @@ on:
       - 'AUTHORS'
       - 'LICENSE'
       - '*.md'
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - 'README.md'
-      - 'AUTHORS'
-      - 'LICENSE'
-      - '*.md'
   workflow_dispatch:
 
 env:

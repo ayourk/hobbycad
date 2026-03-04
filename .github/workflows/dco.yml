@@ -13,10 +13,6 @@
 name: DCO
 
 on:
-  pull_request:
-    branches: [ main ]
-
-jobs:
   dco-check:
     name: Verify Signed-off-by
     runs-on: ubuntu-latest
