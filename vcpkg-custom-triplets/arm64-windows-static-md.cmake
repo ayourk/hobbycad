@@ -6,6 +6,7 @@
 set(VCPKG_TARGET_ARCHITECTURE arm64)
 set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
+set(VCPKG_BUILD_TYPE release)
 
 # ARM64 cross-compilation linker flags
 # Without these, the linker defaults to x64 even when compiling for ARM64
