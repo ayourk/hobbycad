@@ -94,6 +94,14 @@ jobs:
         with:
           arch: x64
 
+      - name: Clear vcpkg registry cache
+        run: |
+          $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
+          if (Test-Path $cachePath) {
+            Remove-Item -Recurse -Force $cachePath
+            Write-Host "Cleared vcpkg registry cache"
+          }
+
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet x64-windows-static-md `
