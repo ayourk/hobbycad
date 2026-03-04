@@ -12,6 +12,9 @@ set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_OSX_ARCHITECTURES arm64)
 set(VCPKG_OSX_DEPLOYMENT_TARGET "11.0")
 
+# Build only release to avoid Qt CMake global scope issues with Threads::Threads
+set(VCPKG_BUILD_TYPE release)
+
 # Disable PNG support in freetype to work around vcpkg cmake wrapper bug
 # (PNG::PNG used without find_dependency, breaks Qt builds)
 set(VCPKG_CMAKE_CONFIGURE_OPTIONS_freetype "-DFT_DISABLE_PNG=ON")
