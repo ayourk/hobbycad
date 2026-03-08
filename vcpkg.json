@@ -29,7 +29,7 @@
   ],
   "$overrides-note": "Pinned versions — see docs/dev_environment_setup.txt §6.4",
   "overrides": [
-    { "name": "opencascade", "version": "7.9.2", "port-version": 3 },
+    { "name": "opencascade", "version": "7.9.2", "port-version": 4 },
     { "name": "qtbase",      "version": "6.4.2", "port-version": 20 },
     { "name": "qtsvg",       "version": "6.4.2", "port-version": 1 },
     { "name": "libzip",      "version": "1.7.3" },
