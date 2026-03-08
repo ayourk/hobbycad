@@ -9,7 +9,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/ayourk/hobbycad-vcpkg",
-      "baseline": "971d99122d35f856dc824a4f3e31d55725be7b6b",
+      "baseline": "7bf30eb99c32abc42f976fcd005ef83c28f79ece",
       "packages": ["freetype", "lib3mf", "libslvs", "meshfix", "opencascade", "openmesh", "qtbase", "qtsvg"]
     }
   ]
