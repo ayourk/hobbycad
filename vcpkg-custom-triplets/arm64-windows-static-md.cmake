@@ -8,6 +8,10 @@ set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_BUILD_TYPE release)
 
+# Explicitly set Windows as the target system for cross-compilation
+set(VCPKG_CMAKE_SYSTEM_NAME Windows)
+set(VCPKG_CMAKE_SYSTEM_PROCESSOR ARM64)
+
 # ARM64 cross-compilation linker flags for dynamic libraries and executables
 set(VCPKG_LINKER_FLAGS "/MACHINE:ARM64")
 
