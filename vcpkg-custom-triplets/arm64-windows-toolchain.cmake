@@ -7,11 +7,6 @@
 # vcpkg's default Windows toolchain is already loaded. We only need to add our
 # additional flags here.
 
-# Mark as cross-compiling
-set(CMAKE_CROSSCOMPILING TRUE)
-set(CMAKE_SYSTEM_NAME Windows)
-set(CMAKE_SYSTEM_PROCESSOR ARM64)
-
 # Force static linker (lib.exe) to target ARM64
 # Without this, lib.exe defaults to x64 when cross-compiling on an x64 host
 string(APPEND CMAKE_STATIC_LINKER_FLAGS_INIT " /MACHINE:ARM64 ")
