@@ -128,6 +128,13 @@ jobs:
             Write-Host "Cleared vcpkg registry cache"
           }
 
+      - name: Set ARM64 static linker flags
+        if: matrix.arch == 'arm64'
+        run: |
+          # lib.exe reads _LINK_ for additional options
+          # Without /MACHINE:ARM64, lib.exe defaults to x64 when cross-compiling
+          echo "_LINK_=/MACHINE:ARM64" >> $env:GITHUB_ENV
+
       - name: Install dependencies via vcpkg
         run: |
           $args = @(

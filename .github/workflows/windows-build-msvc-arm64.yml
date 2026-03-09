@@ -96,6 +96,12 @@ jobs:
         with:
           arch: amd64_arm64
 
+      - name: Restore VCPKG_ROOT
+        run: |
+          # ilammy/msvc-dev-cmd overwrites VCPKG_ROOT to VS's bundled vcpkg
+          # Reset it to our cloned vcpkg at C:\vcpkg
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+
       - name: Clear vcpkg registry cache
         run: |
           $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
@@ -103,6 +109,12 @@ jobs:
             Remove-Item -Recurse -Force $cachePath
             Write-Host "Cleared vcpkg registry cache"
           }
+
+      - name: Set ARM64 static linker flags
+        run: |
+          # lib.exe reads _LINK_ for additional options
+          # Without /MACHINE:ARM64, lib.exe defaults to x64 when cross-compiling
+          echo "_LINK_=/MACHINE:ARM64" >> $env:GITHUB_ENV
 
       - name: Install dependencies via vcpkg
         run: |
