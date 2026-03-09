@@ -5,9 +5,10 @@
 #
 # This toolchain is chainloaded via VCPKG_CHAINLOAD_TOOLCHAIN_FILE.
 
-# Only set linker flags if we're not in vcpkg's compiler detection phase
-# Detection creates a minimal test project that fails with extra flags
-if(NOT VCPKG_DETECTING_COMPILER)
+# Skip linker flags during vcpkg's compiler detection phase
+# Detection runs in buildtrees/detect_compiler/ directory
+string(FIND "${CMAKE_CURRENT_BINARY_DIR}" "detect_compiler" _detect_pos)
+if(_detect_pos EQUAL -1)
     # Force static linker (lib.exe) to target ARM64
     set(CMAKE_STATIC_LINKER_FLAGS "/MACHINE:ARM64" CACHE STRING "" FORCE)
     set(CMAKE_STATIC_LINKER_FLAGS_RELEASE "/MACHINE:ARM64" CACHE STRING "" FORCE)
