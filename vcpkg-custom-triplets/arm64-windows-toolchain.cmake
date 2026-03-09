@@ -5,32 +5,26 @@
 #
 # This toolchain is chainloaded via VCPKG_CHAINLOAD_TOOLCHAIN_FILE.
 
+# Debug: print paths to understand what's happening
+message(STATUS "ARM64 toolchain: CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}")
+message(STATUS "ARM64 toolchain: CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}")
+
 # Skip linker flags during vcpkg's compiler detection phase
-# Try multiple paths that might contain "detect_compiler"
 set(_in_detection FALSE)
-if(DEFINED CMAKE_SOURCE_DIR)
-    string(FIND "${CMAKE_SOURCE_DIR}" "detect_compiler" _pos)
-    if(NOT _pos EQUAL -1)
-        set(_in_detection TRUE)
-    endif()
+if(CMAKE_SOURCE_DIR MATCHES "detect_compiler")
+    set(_in_detection TRUE)
 endif()
-if(DEFINED CMAKE_BINARY_DIR)
-    string(FIND "${CMAKE_BINARY_DIR}" "detect_compiler" _pos)
-    if(NOT _pos EQUAL -1)
-        set(_in_detection TRUE)
-    endif()
-endif()
-if(DEFINED VCPKG_ROOT_DIR)
-    # During detection, source is inside vcpkg's scripts/detect_compiler
-    string(FIND "${CMAKE_SOURCE_DIR}" "${VCPKG_ROOT_DIR}/scripts" _pos)
-    if(NOT _pos EQUAL -1)
-        set(_in_detection TRUE)
-    endif()
+if(CMAKE_BINARY_DIR MATCHES "detect_compiler")
+    set(_in_detection TRUE)
 endif()
 
+message(STATUS "ARM64 toolchain: _in_detection=${_in_detection}")
+
 if(NOT _in_detection)
-    # Force static linker (lib.exe) to target ARM64
+    message(STATUS "ARM64 toolchain: Setting /MACHINE:ARM64 flags")
     set(CMAKE_STATIC_LINKER_FLAGS "/MACHINE:ARM64" CACHE STRING "" FORCE)
     set(CMAKE_STATIC_LINKER_FLAGS_RELEASE "/MACHINE:ARM64" CACHE STRING "" FORCE)
     set(CMAKE_STATIC_LINKER_FLAGS_DEBUG "/MACHINE:ARM64" CACHE STRING "" FORCE)
+else()
+    message(STATUS "ARM64 toolchain: Skipping flags (in detection)")
 endif()
