@@ -1,12 +1,7 @@
 # .github/workflows/windows-build-msvc-arm64.yml
 #
-# Build HobbyCAD on Windows arm64 using MSVC with vcpkg manifest
-# mode.  Cross-compiles from x64 host to arm64 target.
-#
-# This workflow runs on its own runner to maximise available disk
-# space.  vcpkg must compile most packages from source for arm64
-# (no pre-built binaries), so builds are slower and use more disk
-# than the x64 MSVC workflow.
+# Build HobbyCAD on Windows arm64 using MSVC with vcpkg manifest mode.
+# Builds natively on ARM64 runner (no cross-compilation).
 
 name: Windows Build (MSVC arm64)
 
@@ -29,7 +24,7 @@ jobs:
 
   msvc-arm64:
     name: HobbyCAD via MSVC (arm64)
-    runs-on: windows-latest
+    runs-on: windows-11-arm
 
     env:
       BUILD_TYPE: Release
@@ -43,8 +38,6 @@ jobs:
       - name: Free disk space
         shell: pwsh
         run: |
-          # Aggressively remove pre-installed components — arm64 vcpkg builds
-          # compile everything from source and need maximum available disk.
           $dirs = @(
             "C:\Android",
             "C:\Program Files\dotnet\sdk",
@@ -52,17 +45,7 @@ jobs:
             "C:\Program Files\LLVM",
             "C:\Program Files (x86)\Microsoft SDKs\Azure",
             "C:\Program Files\MongoDB",
-            "C:\Program Files\PostgreSQL",
-            "C:\Program Files (x86)\Google",
-            "C:\Program Files\Google",
-            "C:\Program Files (x86)\Windows Kits\10\Testing",
-            "C:\Program Files\Microsoft SQL Server",
-            "C:\Program Files (x86)\Microsoft SQL Server",
-            "C:\hostedtoolcache",
-            "C:\SeleniumWebDrivers",
-            "C:\Strawberry",
-            "C:\ghcup",
-            "C:\Modules"
+            "C:\Program Files\PostgreSQL"
           )
           foreach ($d in $dirs) {
             if (Test-Path $d) {
@@ -70,7 +53,6 @@ jobs:
               Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
             }
           }
-          # Show available space
           Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
 
       - name: Export GitHub Actions cache variables
@@ -82,7 +64,6 @@ jobs:
 
       - name: Setup vcpkg
         run: |
-          # Clone the exact baseline version to ensure version overrides work
           if (Test-Path "C:\vcpkg") {
               Remove-Item -Recurse -Force C:\vcpkg
           }
@@ -94,12 +75,10 @@ jobs:
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_arm64
+          arch: arm64
 
       - name: Restore VCPKG_ROOT
         run: |
-          # ilammy/msvc-dev-cmd overwrites VCPKG_ROOT to VS's bundled vcpkg
-          # Reset it to our cloned vcpkg at C:\vcpkg
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
       - name: Clear vcpkg registry cache
@@ -110,15 +89,9 @@ jobs:
             Write-Host "Cleared vcpkg registry cache"
           }
 
-      - name: Set ARM64 static linker flags
-        run: |
-          # lib.exe reads _LINK_ for additional options
-          # Without /MACHINE:ARM64, lib.exe defaults to x64 when cross-compiling
-          echo "_LINK_=/MACHINE:ARM64" >> $env:GITHUB_ENV
-
       - name: Install dependencies via vcpkg
         run: |
-          vcpkg install --triplet arm64-windows-static-md --host-triplet=x64-windows `
+          vcpkg install --triplet arm64-windows-static-md `
             --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
             --x-install-root=vcpkg_installed `
             --clean-buildtrees-after-build
@@ -141,8 +114,6 @@ jobs:
           $installDir = "build\install"
           cmake --install build --prefix $installDir
 
-          # Static build — all dependencies linked into the executable.
-          # No DLLs or Qt plugins to copy.
           $exe = "$installDir\bin\hobbycad.exe"
           if (-not (Test-Path $exe)) {
               Write-Error "hobbycad.exe not found at $exe"
