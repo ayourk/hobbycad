@@ -67,6 +67,9 @@ option(HOBBYCAD_BUILD_APP
 
 set(HOBBYCAD_MIN_QT_VERSION "6.4.2")
 
+# Qt6's cmake config references Threads::Threads, so find it first
+find_package(Threads REQUIRED)
+
 if(HOBBYCAD_BUILD_APP)
     find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} QUIET COMPONENTS Core)
     if(NOT Qt6_FOUND)
