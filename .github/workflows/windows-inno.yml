@@ -2,14 +2,14 @@
 #
 # Build HobbyCAD installer using Inno Setup.
 #
-# Creates user-friendly .exe installers:
+# Creates a unified installer that:
+#   - Contains both x64 and arm64 binaries
+#   - Automatically installs the correct binary for the system
 #   - Start menu shortcuts
 #   - Optional desktop shortcut
 #   - File association for .hcad files
 #   - Add/Remove Programs entry
 #   - Clean uninstaller
-#
-# Both x64 and arm64 architectures are supported.
 
 name: Windows Installer
 
@@ -31,38 +31,16 @@ env:
 jobs:
 
   # ================================================================
-  #  Inno Setup Installer
+  #  Build x64 binary
   # ================================================================
-  #
-  #  Builds .exe installers using Inno Setup.
-  #  Uses MSVC build output as the source.
 
-  inno:
-    name: HobbyCAD Installer (${{ matrix.arch }})
+  build-x64:
+    name: Build (x64)
     runs-on: windows-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            triplet: x64-windows-static-md
-            msvc_arch: x64
-            inno_arch: x64
-            artifact_name: hobbycad-windows-x64-setup
-            continue_on_error: false
-          - arch: arm64
-            triplet: arm64-windows-static-md
-            msvc_arch: amd64_arm64
-            inno_arch: arm64
-            artifact_name: hobbycad-windows-arm64-setup
-            continue_on_error: true
-
-    continue-on-error: ${{ matrix.continue_on_error }}
 
     env:
       BUILD_TYPE: Release
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     steps:
@@ -72,7 +50,6 @@ jobs:
       - name: Free disk space
         shell: pwsh
         run: |
-          # Remove large pre-installed components to free disk for vcpkg builds
           $dirs = @(
             "C:\Android",
             "C:\Program Files\dotnet\sdk",
@@ -88,7 +65,6 @@ jobs:
               Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
             }
           }
-          # Show available space
           Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
 
       - name: Export GitHub Actions cache variables
@@ -100,7 +76,6 @@ jobs:
 
       - name: Setup vcpkg
         run: |
-          # Clone the exact baseline version to ensure version overrides work
           if (Test-Path "C:\vcpkg") {
               Remove-Item -Recurse -Force C:\vcpkg
           }
@@ -112,12 +87,10 @@ jobs:
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: ${{ matrix.msvc_arch }}
+          arch: x64
 
       - name: Restore VCPKG_ROOT
         run: |
-          # ilammy/msvc-dev-cmd overwrites VCPKG_ROOT to VS's bundled vcpkg
-          # Reset it to our cloned vcpkg at C:\vcpkg
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
       - name: Clear vcpkg registry cache
@@ -128,52 +101,189 @@ jobs:
             Write-Host "Cleared vcpkg registry cache"
           }
 
-      - name: Set ARM64 static linker flags
-        if: matrix.arch == 'arm64'
-        run: |
-          # lib.exe reads _LINK_ for additional options
-          # Without /MACHINE:ARM64, lib.exe defaults to x64 when cross-compiling
-          echo "_LINK_=/MACHINE:ARM64" >> $env:GITHUB_ENV
-
       - name: Install dependencies via vcpkg
         run: |
-          $args = @(
-            "install",
-            "--triplet", "${{ matrix.triplet }}",
-            "--overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets",
-            "--x-install-root=vcpkg_installed",
-            "--clean-buildtrees-after-build"
-          )
-          if ("${{ matrix.arch }}" -eq "arm64") {
-            $args += "--host-triplet=x64-windows"
-          }
-          & vcpkg @args
+          vcpkg install --triplet x64-windows-static-md `
+            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
+            --x-install-root=vcpkg_installed `
+            --clean-buildtrees-after-build
 
       - name: Configure CMake
         run: |
           cmake -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
-            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
             -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
             -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }}
 
-      - name: Prepare installation files
+      - name: Prepare files
         shell: pwsh
         run: |
-          cmake --install build --prefix staging
-
-          # Static build — single executable, no DLLs or plugins to copy
-          $exe = "staging\bin\hobbycad.exe"
+          cmake --install build --prefix staging-x64
+          $exe = "staging-x64\bin\hobbycad.exe"
           if (-not (Test-Path $exe)) {
               Write-Error "hobbycad.exe not found"
               exit 1
           }
-          Write-Host "Static build produced: $exe"
+          Write-Host "x64 build: $exe"
           Write-Host "Size: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
+
+      - name: Download VC++ Redistributable
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "staging-x64/vc_redist.x64.exe"
+          Write-Host "Downloaded VC++ Redistributable x64"
+
+      - name: Upload x64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-x64-binary
+          path: staging-x64/
+          retention-days: 1
+
+  # ================================================================
+  #  Build arm64 binary (native on ARM64 runner)
+  # ================================================================
+
+  build-arm64:
+    name: Build (arm64)
+    runs-on: windows-11-arm
+
+    env:
+      BUILD_TYPE: Release
+      VCPKG_DEFAULT_TRIPLET: arm64-windows-static-md
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        shell: pwsh
+        run: |
+          $dirs = @(
+            "C:\Android",
+            "C:\Program Files\dotnet\sdk",
+            "C:\Program Files\dotnet\shared",
+            "C:\Program Files\LLVM",
+            "C:\Program Files (x86)\Microsoft SDKs\Azure",
+            "C:\Program Files\MongoDB",
+            "C:\Program Files\PostgreSQL"
+          )
+          foreach ($d in $dirs) {
+            if (Test-Path $d) {
+              Write-Host "Removing $d ..."
+              Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
+            }
+          }
+          Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
+
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Setup vcpkg
+        run: |
+          if (Test-Path "C:\vcpkg") {
+              Remove-Item -Recurse -Force C:\vcpkg
+          }
+          git clone --branch 2026.01.16 https://github.com/microsoft/vcpkg.git C:\vcpkg
+          & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "C:\vcpkg" >> $env:GITHUB_PATH
+
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Restore VCPKG_ROOT
+        run: |
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+
+      - name: Clear vcpkg registry cache
+        run: |
+          $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
+          if (Test-Path $cachePath) {
+            Remove-Item -Recurse -Force $cachePath
+            Write-Host "Cleared vcpkg registry cache"
+          }
+
+      - name: Install dependencies via vcpkg
+        run: |
+          vcpkg install --triplet arm64-windows-static-md `
+            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
+            --x-install-root=vcpkg_installed `
+            --clean-buildtrees-after-build
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
+            -DVCPKG_TARGET_TRIPLET=arm64-windows-static-md `
+            -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
+            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Prepare files
+        shell: pwsh
+        run: |
+          cmake --install build --prefix staging-arm64
+          $exe = "staging-arm64\bin\hobbycad.exe"
+          if (-not (Test-Path $exe)) {
+              Write-Error "hobbycad.exe not found"
+              exit 1
+          }
+          Write-Host "arm64 build: $exe"
+          Write-Host "Size: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
+
+      - name: Download VC++ Redistributable
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.arm64.exe" -OutFile "staging-arm64/vc_redist.arm64.exe"
+          Write-Host "Downloaded VC++ Redistributable arm64"
+
+      - name: Upload arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: hobbycad-arm64-binary
+          path: staging-arm64/
+          retention-days: 1
+
+  # ================================================================
+  #  Create unified installer
+  # ================================================================
+
+  installer:
+    name: Create Installer
+    runs-on: windows-latest
+    needs: [build-x64, build-arm64]
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v4
+
+      - name: Download x64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: hobbycad-x64-binary
+          path: staging-x64
+
+      - name: Download arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: hobbycad-arm64-binary
+          path: staging-arm64
 
       - name: Get version
         id: version
@@ -188,20 +298,10 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          $arch = "${{ matrix.arch }}"
-
-          # Determine ArchitecturesAllowed and ArchitecturesInstallIn64BitMode
-          if ($arch -eq "arm64") {
-              $archAllowed = "arm64"
-              $arch64BitMode = "arm64"
-          } else {
-              $archAllowed = "x64"
-              $arch64BitMode = "x64"
-          }
 
           @"
           ; HobbyCAD Inno Setup Script
-          ; Generated by GitHub Actions
+          ; Unified installer with x64 and arm64 support
 
           #define MyAppName "HobbyCAD"
           #define MyAppVersion "$version"
@@ -222,12 +322,13 @@ jobs:
           AllowNoIcons=yes
           LicenseFile=LICENSE
           OutputDir=.
-          OutputBaseFilename=HobbyCAD-{#MyAppVersion}-$arch-Setup
+          OutputBaseFilename=HobbyCAD-{#MyAppVersion}-Setup
           Compression=lzma2/ultra64
           SolidCompression=yes
           WizardStyle=modern
-          ArchitecturesAllowed=$archAllowed
-          ArchitecturesInstallIn64BitMode=$arch64BitMode
+          ; Support both x64 and arm64
+          ArchitecturesAllowed=x64compatible arm64
+          ArchitecturesInstallIn64BitMode=x64compatible arm64
           UninstallDisplayIcon={app}\bin\{#MyAppExeName}
           PrivilegesRequired=lowest
           PrivilegesRequiredOverridesAllowed=dialog
@@ -239,10 +340,15 @@ jobs:
           Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
           [Files]
-          Source: "staging\bin\{#MyAppExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion
-          ; Static build — no DLLs or plugin directories needed
-          ; Include any additional resources
-          Source: "staging\share\*"; DestDir: "{app}\share"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists('staging\share')
+          ; Install x64 binary and VC++ runtime on x64 systems
+          Source: "staging-x64\bin\{#MyAppExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion; Check: not IsARM64
+          Source: "staging-x64\share\*"; DestDir: "{app}\share"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Check: not IsARM64
+          Source: "staging-x64\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not IsARM64
+
+          ; Install arm64 binary and VC++ runtime on arm64 systems
+          Source: "staging-arm64\bin\{#MyAppExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion; Check: IsARM64
+          Source: "staging-arm64\share\*"; DestDir: "{app}\share"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Check: IsARM64
+          Source: "staging-arm64\vc_redist.arm64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: IsARM64
 
           [Icons]
           Name: "{group}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"
@@ -250,19 +356,22 @@ jobs:
           Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; Tasks: desktopicon
 
           [Registry]
-          ; File association for .hcad files
           Root: HKA; Subkey: "Software\Classes\.hcad"; ValueType: string; ValueName: ""; ValueData: "HobbyCAD.Project"; Flags: uninsdeletevalue
           Root: HKA; Subkey: "Software\Classes\HobbyCAD.Project"; ValueType: string; ValueName: ""; ValueData: "HobbyCAD Project"; Flags: uninsdeletekey
           Root: HKA; Subkey: "Software\Classes\HobbyCAD.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\bin\{#MyAppExeName},0"
           Root: HKA; Subkey: "Software\Classes\HobbyCAD.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\bin\{#MyAppExeName}"" ""%1"""
 
           [Run]
+          ; Install VC++ Redistributable (required for MSVC runtime)
+          Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/quiet /norestart"; StatusMsg: "Installing Visual C++ Runtime..."; Flags: waituntilterminated; Check: not IsARM64
+          Filename: "{tmp}\vc_redist.arm64.exe"; Parameters: "/quiet /norestart"; StatusMsg: "Installing Visual C++ Runtime..."; Flags: waituntilterminated; Check: IsARM64
+          ; Launch application
           Filename: "{app}\bin\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
           [Code]
-          function DirExists(Path: String): Boolean;
+          function IsARM64: Boolean;
           begin
-            Result := DirExists(ExpandConstant(Path));
+            Result := IsARM64Compatible;
           end;
           "@ | Out-File -FilePath "hobbycad.iss" -Encoding UTF8
 
@@ -273,7 +382,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: hobbycad-windows-setup
           path: "*-Setup.exe"
           retention-days: 14
           if-no-files-found: error
