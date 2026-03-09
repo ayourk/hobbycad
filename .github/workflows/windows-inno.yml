@@ -50,11 +50,15 @@ jobs:
             msvc_arch: x64
             inno_arch: x64
             artifact_name: hobbycad-windows-x64-setup
+            continue_on_error: false
           - arch: arm64
             triplet: arm64-windows-static-md
             msvc_arch: amd64_arm64
             inno_arch: arm64
             artifact_name: hobbycad-windows-arm64-setup
+            continue_on_error: true
+
+    continue-on-error: ${{ matrix.continue_on_error }}
 
     env:
       BUILD_TYPE: Release
@@ -110,6 +114,12 @@ jobs:
         with:
           arch: ${{ matrix.msvc_arch }}
 
+      - name: Restore VCPKG_ROOT
+        run: |
+          # ilammy/msvc-dev-cmd overwrites VCPKG_ROOT to VS's bundled vcpkg
+          # Reset it to our cloned vcpkg at C:\vcpkg
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+
       - name: Clear vcpkg registry cache
         run: |
           $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
@@ -117,21 +127,6 @@ jobs:
             Remove-Item -Recurse -Force $cachePath
             Write-Host "Cleared vcpkg registry cache"
           }
-
-      - name: Debug compiler setup
-        if: matrix.arch == 'arm64'
-        run: |
-          Write-Host "=== Checking ARM64 cross-compiler ==="
-          $clPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\Hostx64\ARM64\cl.exe"
-          if (Test-Path $clPath) {
-            Write-Host "ARM64 compiler found: $clPath"
-          } else {
-            Write-Host "ARM64 compiler NOT found at expected path"
-            Write-Host "Searching for ARM64 cl.exe..."
-            Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "cl.exe" | ForEach-Object { $_.FullName }
-          }
-          Write-Host "=== PATH contains ARM64? ==="
-          $env:PATH -split ';' | Where-Object { $_ -match 'ARM64' }
 
       - name: Install dependencies via vcpkg
         run: |
