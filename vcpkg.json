@@ -33,6 +33,6 @@
     { "name": "qtbase",      "version": "6.4.2", "port-version": 24 },
     { "name": "qtsvg",       "version": "6.4.2", "port-version": 1 },
     { "name": "libzip",      "version": "1.7.3" },
-    { "name": "libgit2",     "version": "1.8.0" }
+    { "name": "libgit2",     "version": "1.9.2", "port-version": 1 }
   ]
 }
