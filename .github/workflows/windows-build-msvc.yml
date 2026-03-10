@@ -76,7 +76,7 @@ jobs:
           if (Test-Path "C:\vcpkg") {
               Remove-Item -Recurse -Force C:\vcpkg
           }
-          git clone --branch 2026.01.16 https://github.com/microsoft/vcpkg.git C:\vcpkg
+          git clone --branch 2026.02.27 https://github.com/microsoft/vcpkg.git C:\vcpkg
           & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
           echo "C:\vcpkg" >> $env:GITHUB_PATH

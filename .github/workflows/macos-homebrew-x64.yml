@@ -55,7 +55,7 @@ jobs:
           # Install dependencies from tap (keg-only, pinned versions)
           brew install ayourk/hobbycad/opencascade@7.9.2
           brew install ayourk/hobbycad/libzip@1.7.3
-          brew install ayourk/hobbycad/libgit2@1.7.2
+          brew install ayourk/hobbycad/libgit2@1.9.2
           brew install ayourk/hobbycad/libslvs
           brew install ayourk/hobbycad/lib3mf
           brew install ayourk/hobbycad/openmesh
@@ -68,7 +68,7 @@ jobs:
         run: |
           OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)
           LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
-          LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.7.2)
+          LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.9.2)
           SLVS_PFX=$(brew --prefix ayourk/hobbycad/libslvs)
           L3MF_PFX=$(brew --prefix ayourk/hobbycad/lib3mf)
           OMSH_PFX=$(brew --prefix ayourk/hobbycad/openmesh)

@@ -30,7 +30,7 @@ modules:
         url: https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_2.tar.gz
         sha256: 3cd080d3fc33ba0c6c157e110afe3e015859524c4694dbb09812ec9d61595639
 
-  # libgit2
+  # libgit2 1.9.2 (security release)
   - name: libgit2
     buildsystem: cmake-ninja
     config-opts:
@@ -39,8 +39,8 @@ modules:
       - -DBUILD_CLI=OFF
     sources:
       - type: archive
-        url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.7.2.tar.gz
-        sha256: de384e29d7efc9330c6cdb126ebf88342b5025d920dcb7c645defad85195ea7f
+        url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.9.2.tar.gz
+        sha256: 6a3d9722f97e79f5983072fab4df5a76abfc330a69e3cfe4dc2e57859cecace8
 
   # libslvs (SolveSpace constraint solver library)
   - name: libslvs
@@ -113,6 +113,17 @@ modules:
       - type: shell
         commands:
           - patch -p1 < debian-patches/patches/0001-build-shared-library.patch
+
+  # nlohmann_json (header-only JSON library)
+  - name: nlohmann-json
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DJSON_BuildTests=OFF
+    sources:
+      - type: archive
+        url: https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+        sha256: 0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
 
   # HobbyCAD
   - name: hobbycad

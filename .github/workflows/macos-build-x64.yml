@@ -51,7 +51,7 @@ jobs:
 
       - name: Setup vcpkg
         run: |
-          git clone --branch 2026.01.16 https://github.com/microsoft/vcpkg.git ~/vcpkg
+          git clone --branch 2026.02.27 https://github.com/microsoft/vcpkg.git ~/vcpkg
           ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           echo "VCPKG_ROOT=$HOME/vcpkg" >> $GITHUB_ENV
           echo "$HOME/vcpkg" >> $GITHUB_PATH

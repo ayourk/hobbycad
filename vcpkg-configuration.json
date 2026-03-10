@@ -3,7 +3,7 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg-configuration.schema.json",
   "default-registry": {
     "kind": "builtin",
-    "baseline": "2026.01.16"
+    "baseline": "2026.02.27"
   },
   "registries": [
     {
