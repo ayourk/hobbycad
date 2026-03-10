@@ -98,12 +98,11 @@ jobs:
 
           # Create wrapper script
           $wrapperScript = "${{ github.workspace }}\lib-arm64.cmd"
-          @"
-@echo off
-"$realLib" /MACHINE:ARM64 %*
-"@ | Out-File -FilePath $wrapperScript -Encoding ASCII
+          $content = "@echo off`r`n`"$realLib`" /MACHINE:ARM64 %*"
+          [System.IO.File]::WriteAllText($wrapperScript, $content)
 
           Write-Host "Created lib wrapper at: $wrapperScript"
+          Get-Content $wrapperScript
 
           # Export path for use in triplet
           echo "LIB_ARM64_WRAPPER=$wrapperScript" >> $env:GITHUB_ENV
