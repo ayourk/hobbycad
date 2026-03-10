@@ -183,7 +183,7 @@ jobs:
                   </File>
                   <ProgId Id="HobbyCAD.Project" Description="HobbyCAD Project">
                     <Extension Id="hcad" ContentType="application/x-hobbycad">
-                      <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument="`"%1`"" />
+                      <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument="&quot;%1&quot;" />
                     </Extension>
                   </ProgId>
                 </Component>
@@ -364,7 +364,7 @@ jobs:
                   </File>
                   <ProgId Id="HobbyCAD.Project" Description="HobbyCAD Project">
                     <Extension Id="hcad" ContentType="application/x-hobbycad">
-                      <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument="`"%1`"" />
+                      <Verb Id="open" Command="Open" TargetFile="HobbyCADExe" Argument="&quot;%1&quot;" />
                     </Extension>
                   </ProgId>
                 </Component>
