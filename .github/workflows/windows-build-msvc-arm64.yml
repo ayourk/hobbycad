@@ -96,21 +96,10 @@ jobs:
           $realLib = (Get-Command lib.exe).Source
           Write-Host "Real lib.exe: $realLib"
 
-          # Create wrapper script that strips /MACHINE: args and adds /MACHINE:ARM64 at the END
+          # Create simple wrapper that appends /MACHINE:ARM64 at the end (last one wins)
           $wrapperScript = "${{ github.workspace }}\lib-arm64.cmd"
-          $lines = @(
-            '@echo off',
-            'setlocal enabledelayedexpansion',
-            'set ARGS=',
-            'for %%a in (%*) do (',
-            '    echo %%a | findstr /i /c:"/MACHINE:" >nul',
-            '    if errorlevel 1 (',
-            '        set ARGS=!ARGS! %%a',
-            '    )',
-            ')',
-            "`"$realLib`" !ARGS! /MACHINE:ARM64"
-          )
-          $lines -join "`r`n" | Set-Content -Path $wrapperScript -Encoding ASCII
+          $content = "@`"$realLib`" %* /MACHINE:ARM64"
+          Set-Content -Path $wrapperScript -Value $content -Encoding ASCII
 
           Write-Host "Created lib wrapper at: $wrapperScript"
           Get-Content $wrapperScript
