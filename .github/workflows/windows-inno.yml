@@ -371,7 +371,7 @@ jobs:
           [Code]
           function IsARM64: Boolean;
           begin
-            Result := IsARM64Compatible;
+            Result := IsArm64;
           end;
           "@ | Out-File -FilePath "hobbycad.iss" -Encoding UTF8
 
