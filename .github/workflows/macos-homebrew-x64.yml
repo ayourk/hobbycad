@@ -7,7 +7,7 @@
 # available.  Keeping it in its own workflow prevents cancellation
 # of the arm64 build when the runner is unavailable.
 
-name: macOS Homebrew x64
+name: macOS Homebrew x64 ($$$)
 
 on:
   push:

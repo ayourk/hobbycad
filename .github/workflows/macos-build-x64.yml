@@ -7,7 +7,7 @@
 # (macos-13-large) is a paid runner that may not always be available.
 # Keeping it in its own workflow prevents cancellation of arm64 builds.
 
-name: macOS Build x64
+name: macOS Build x64 ($$$)
 
 on:
   push:
