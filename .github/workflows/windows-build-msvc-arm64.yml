@@ -30,6 +30,8 @@ jobs:
       BUILD_TYPE: Release
       VCPKG_DEFAULT_TRIPLET: arm64-windows-static-md
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      # Force lib.exe to target ARM64 (it defaults to x64 even on ARM64 hosts)
+      CMAKE_STATIC_LINKER_FLAGS: "/MACHINE:ARM64"
 
     steps:
       - name: Checkout HobbyCAD
