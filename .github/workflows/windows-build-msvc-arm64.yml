@@ -89,24 +89,6 @@ jobs:
             Write-Host "Cleared vcpkg registry cache"
           }
 
-      - name: Create lib.exe wrapper for ARM64
-        shell: pwsh
-        run: |
-          # Find the real lib.exe path
-          $realLib = (Get-Command lib.exe).Source
-          Write-Host "Real lib.exe: $realLib"
-
-          # Create simple wrapper that appends /MACHINE:ARM64 at the end (last one wins)
-          $wrapperScript = "${{ github.workspace }}\lib-arm64.cmd"
-          $content = "@`"$realLib`" %* /MACHINE:ARM64"
-          Set-Content -Path $wrapperScript -Value $content -Encoding ASCII
-
-          Write-Host "Created lib wrapper at: $wrapperScript"
-          Get-Content $wrapperScript
-
-          # Export path for use in triplet
-          echo "LIB_ARM64_WRAPPER=$wrapperScript" >> $env:GITHUB_ENV
-
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet arm64-windows-static-md `
