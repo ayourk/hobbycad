@@ -6,7 +6,7 @@
 //  primitives (arcs, lines, filled triangles) in screen-space.
 //
 //  Uses Graphic3d_TMF_2d transform persistence so geometry is truly
-//  camera-fixed — it does not rotate when the scene rotates.
+//  camera-fixed: it does not rotate when the scene rotates.
 //
 //  All 2D coordinates use screen conventions:
 //    x = horizontal (positive = right)
@@ -121,10 +121,10 @@ protected:
 
     void Compute(const Handle(PrsMgr_PresentationManager)& thePM,
                  const Handle(Prs3d_Presentation)& thePrs,
-                 const Standard_Integer theMode) override;
+                 const int theMode) override;
 
     void ComputeSelection(const Handle(SelectMgr_Selection)& theSel,
-                          const Standard_Integer theMode) override;
+                          const int theMode) override;
 
 private:
     void clearPrimitives();
@@ -132,35 +132,35 @@ private:
     void renderSensitives(const Handle(SelectMgr_Selection)& theSel);
 
     struct ArcCmd {
-        double cx, cy, radius;
-        double startRad, sweepRad;
+        double cx = 0.0, cy = 0.0, radius = 0.0;
+        double startRad = 0.0, sweepRad = 0.0;
         Quantity_Color color;
-        double lineWidth;
-        int segments;
+        double lineWidth = 0.0;
+        int segments = 0;
     };
 
     struct LineCmd {
-        double x1, y1, x2, y2;
+        double x1 = 0.0, y1 = 0.0, x2 = 0.0, y2 = 0.0;
         Quantity_Color color;
-        double lineWidth;
+        double lineWidth = 0.0;
     };
 
     struct TriCmd {
-        double x1, y1, x2, y2, x3, y3;
+        double x1 = 0.0, y1 = 0.0, x2 = 0.0, y2 = 0.0, x3 = 0.0, y3 = 0.0;
         Quantity_Color color;
     };
 
     struct CircleCmd {
-        double cx, cy, radius;
+        double cx = 0.0, cy = 0.0, radius = 0.0;
         Quantity_Color color;
-        int segments;
+        int segments = 0;
     };
 
     struct TextCmd {
-        double x, y;
+        double x = 0.0, y = 0.0;
         std::string text;
         Quantity_Color color;
-        double height;
+        double height = 0.0;
         std::string font;
     };
 

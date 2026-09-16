@@ -55,6 +55,29 @@ public:
     /// Add a separator (horizontal line).
     void addSeparator();
 
+    /// Re-set the text and tooltip of an item already added.
+    ///
+    /// Needed because the owning toolbar has to re-apply every string when
+    /// the language changes, and a dropdown item is otherwise write-once:
+    /// addButton() is the only way text gets in, and calling it again would
+    /// add a second row rather than relabel the first.
+    ///
+    /// Does nothing for an index that does not exist, so a caller sweeping a
+    /// table longer than the dropdown does not have to guard each call.
+    void setButtonText(int index, const QString& text,
+                       const QString& toolTip = QString());
+
+    /// Re-set the text of one submenu variant, identified by its variantId.
+    ///
+    /// Separate from setButtonText() because variants live in a QMenu rather
+    /// than on the row, and because relabelling the *currently selected*
+    /// variant also has to update the button caption derived from it.
+    void setVariantText(int index, int variantId, const QString& text);
+
+    /// The part of a variant name shown on the button: "Arc Slot (Radius)"
+    /// becomes "Arc Slot". Handles the fullwidth bracket CJK translations use.
+    static QString variantCategory(const QString& variantName);
+
     /// Set the icon size for buttons.
     void setIconSize(int size);
 

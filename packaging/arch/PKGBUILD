@@ -1,0 +1,59 @@
+# Maintainer: Aaron Yourk <ayourk@gmail.com>
+# =====================================================================
+#  packaging/arch/PKGBUILD — HobbyCAD package for Arch Linux
+#  SPDX-License-Identifier: GPL-3.0-only
+#  Part of HobbyCAD (ayourk/hobbycad)
+# =====================================================================
+#
+#  Used by .github/workflows/linux-arch.yml, which copies this file to
+#  pkgbuild/ at the repository root (build() works one level up, in the
+#  checkout) and sets pkgver from CMakeLists.txt. depends and makedepends
+#  are the job's only list of build dependencies: scripts/ci/
+#  install-build-deps.sh installs them before the versions.json pins of
+#  OpenCASCADE, libslvs, nlohmann-json and libwebp are built statically
+#  from source, which is why those four are not listed.
+# =====================================================================
+pkgname=hobbycad
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="Parametric 3D CAD Application"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ayourk/hobbycad"
+license=('GPL-3.0-only')
+depends=(
+  'qt6-base'
+  'qt6-svg'
+)
+makedepends=(
+  'cmake'
+  'ninja'
+  'pkgconf'
+  'qt6-tools'
+  'qt6-imageformats'
+  'mesa'
+  'glu'
+  'libxkbcommon'
+  'libpng'
+  'libjpeg-turbo'
+  'freetype2'
+  'fontconfig'
+  'libx11'
+  'libxmu'
+  'libxi'
+  'libxext'
+)
+source=()
+
+build() {
+  cd "$startdir/.."
+  cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DPKG_CONFIG_ARGN=--static
+  cmake --build build
+}
+
+package() {
+  cd "$startdir/.."
+  DESTDIR="$pkgdir" cmake --install build
+}

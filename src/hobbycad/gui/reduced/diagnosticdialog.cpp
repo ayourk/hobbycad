@@ -21,7 +21,7 @@ DiagnosticDialog::DiagnosticDialog(const OpenGLInfo& glInfo,
     : QDialog(parent)
 {
     setObjectName(QStringLiteral("DiagnosticDialog"));
-    setWindowTitle(tr("OpenGL Diagnostic — Reduced Mode"));
+    setWindowTitle(tr("OpenGL Diagnostic (Reduced Mode)"));
     setMinimumWidth(520);
 
     auto* layout = new QVBoxLayout(this);

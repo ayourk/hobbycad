@@ -22,6 +22,7 @@
 #include <QGroupBox>
 #include <QMessageBox>
 #include <QImageReader>
+#include <QSignalBlocker>
 
 namespace hobbycad {
 
@@ -158,8 +159,21 @@ void BackgroundImageDialog::loadImage(const QString& filePath)
         return;
     }
 
-    // Load background using library function
-    m_background = sketch::loadBackgroundImage(filePath.toStdString(), m_embedCheckBox->isChecked());
+    m_sourcePath = filePath;
+
+    // Default the embed choice the way updateBackgroundFromFile() would:
+    // inside the project, reference it; outside, embed it. The user can
+    // still override, but the default must not quietly differ from what
+    // the rest of the app does with the same file.
+    const bool insideProject =
+        !m_projectDir.isEmpty() &&
+        sketch::isFileInProject(filePath.toStdString(), m_projectDir.toStdString());
+    {
+        const QSignalBlocker block(m_embedCheckBox);
+        m_embedCheckBox->setChecked(!insideProject);
+    }
+
+    applyStorageChoice();
 
     if (!m_background.enabled) {
         QMessageBox::warning(this, tr("Load Failed"),
@@ -167,14 +181,35 @@ void BackgroundImageDialog::loadImage(const QString& filePath)
         return;
     }
 
-    // Apply current opacity setting
-    m_background.setOpacityPercent(m_opacitySlider->value());
-
-    // Update UI
-    m_filePathEdit->setText(filePath);
+    // Update UI. Show the stored path, not the chosen one: a project-relative
+    // path is what gets written to the file, so it is what the user should
+    // see, and seeing it is how they notice the image is portable.
+    m_filePathEdit->setText(QString::fromStdString(m_background.filePath));
     m_imageSizeLabel->setText(tr("%1 x %2 pixels").arg(m_previewImage.width()).arg(m_previewImage.height()));
 
     updatePreview();
+}
+
+void BackgroundImageDialog::applyStorageChoice()
+{
+    if (m_sourcePath.isEmpty()) return;
+
+    const std::string src = m_sourcePath.toStdString();
+    const bool embed = m_embedCheckBox->isChecked();
+
+    m_background = sketch::loadBackgroundImage(src, embed);
+    if (!m_background.enabled) return;
+
+    // Referencing a file that lives inside the project: store the relative
+    // form so the project survives being moved or handed to someone else.
+    // An absolute path here is the defect this branch exists to prevent.
+    if (!embed && !m_projectDir.isEmpty() &&
+        sketch::isFileInProject(src, m_projectDir.toStdString())) {
+        m_background.filePath =
+            sketch::toRelativePath(src, m_projectDir.toStdString());
+    }
+
+    m_background.setOpacityPercent(m_opacitySlider->value());
 }
 
 void BackgroundImageDialog::onOpacityChanged(int percent)
@@ -183,14 +218,16 @@ void BackgroundImageDialog::onOpacityChanged(int percent)
     updatePreview();
 }
 
-void BackgroundImageDialog::onEmbedChanged(bool embed)
+void BackgroundImageDialog::onEmbedChanged(bool /*embed*/)
 {
-    if (!m_background.filePath.empty()) {
-        // Reload with new embed setting
-        std::string filePath = m_background.filePath;
-        m_background = sketch::loadBackgroundImage(filePath, embed);
-        m_background.setOpacityPercent(m_opacitySlider->value());
-    }
+    // Reload from the path the user CHOSE, not from m_background.filePath;
+    // that may already hold the project-relative form, which cannot be opened
+    // without the project directory. Reloading from it silently produced an
+    // empty image the moment relative storage was introduced.
+    if (m_sourcePath.isEmpty()) return;
+
+    applyStorageChoice();
+    m_filePathEdit->setText(QString::fromStdString(m_background.filePath));
 }
 
 void BackgroundImageDialog::updatePreview()
@@ -224,6 +261,14 @@ void BackgroundImageDialog::setBackgroundImage(const sketch::BackgroundImage& bg
     m_background = bg;
 
     if (bg.enabled) {
+        // Seed the source path so toggling embed has something to reload
+        // from. A stored path may be project-relative, so resolve it back
+        // to absolute first.
+        m_sourcePath = m_projectDir.isEmpty()
+            ? QString::fromStdString(bg.filePath)
+            : QString::fromStdString(
+                  sketch::toAbsolutePath(bg.filePath, m_projectDir.toStdString()));
+
         m_filePathEdit->setText(QString::fromStdString(bg.filePath));
         m_opacitySlider->setValue(bg.opacityPercent());
         m_opacitySpinBox->setValue(bg.opacityPercent());

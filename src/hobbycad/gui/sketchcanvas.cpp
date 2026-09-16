@@ -3,20 +3,49 @@
 // =====================================================================
 
 #include "sketchcanvas.h"
+#include "screenmath.h"
+#include <hobbycad/units.h>
+#include <cstdio>
+
+#include <set>
+#include "constraintglyphs.h"
+
+#include "tools/arctoolhandler.h"
+#include "tools/circletoolhandler.h"
+#include "tools/constrainttoolhandler.h"
+#include "tools/dimensiontoolhandler.h"
+#include "tools/texttoolhandler.h"
+#include "tools/polygontoolhandler.h"
+#include "tools/rectangletoolhandler.h"
+#include "tools/optoolhandlers.h"
+#include "tools/simpletoolhandlers.h"
+#include "tools/slottoolhandler.h"
+#include "tools/splinetoolhandler.h"
+#include "tools/ellipsetoolhandler.h"
+#include "tools/pointtoolhandler.h"
+#include "tools/linetoolhandler.h"
+#include "tools/drawconstrainhandlers.h"
+#include "tools/sketchtoolhandler.h"
 #include "bindingsdialog.h"
 #include "sketchsolver.h"
 #include "sketchutils.h"
 
 #include <hobbycad/parameters.h>
 #include <hobbycad/sketch/decomposition.h>
+#include <hobbycad/sketch/slotpath.h>
 #include <hobbycad/sketch/export.h>
 #include <hobbycad/sketch/profiles.h>
+#include <hobbycad/sketch/queries.h>
+#include <hobbycad/sketch/handles.h>
 #include <hobbycad/sketch/patterns.h>
 #include <hobbycad/sketch/operations.h>
 #include <hobbycad/geometry/utils.h>
+#include <hobbycad/sketch/bezier.h>
+#include <hobbycad/sketch/align.h>
 #include <hobbycad/geometry/intersections.h>
 
 #include <QApplication>
+#include <QEvent>
 #include <QContextMenuEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -25,27 +54,111 @@
 #include <QWheelEvent>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QVBoxLayout>
+
+#include "colorpicker.h"
 #include <QMessageBox>
+#include <QCursor>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFileInfo>
 #include <QMenu>
-#include <QQueue>
 #include <QtMath>
 
 #include <algorithm>
 
 namespace hobbycad {
 
+namespace {
+// --- On-canvas chrome geometry (all device pixels) --------------------------
+// Cursor-trailing tool hint: the arrow cursor's hotspot is its top-left point
+// and it extends down by roughly the theme cursor size, so the hint drops below
+// that lower tip. kDefaultCursorSizePx is the X default used when XCURSOR_SIZE
+// is unset; kCursorHintGapPx is the clearance between the cursor's lower edge
+// and the hint's first line.
+constexpr int kDefaultCursorSizePx = 24;
+constexpr int kCursorHintGapPx     = 16;
+
+// 2D scale bar layout. The px LENGTH thresholds are shared with the 3D bar in
+// units.h (kScaleBar*Px); these are the 2D-only placement offsets.
+constexpr int kScaleBarBottomMargin = 26;   // baseline above the widget bottom
+constexpr int kScaleBarInset        = 10;   // left inset of the bar
+constexpr int kScaleBarTickPx       = 6;    // end-tick height (above the line)
+
+// Midpoint grips.
+constexpr double kMidpointHitTolPx   = 8.0; // hover pick tolerance
+constexpr int    kMidpointDotRadiusPx = 4;  // selected white dot radius
+
+// On-canvas pick tolerances and layout offsets, in SCREEN PIXELS (each call
+// site divides by m_zoom to reach world units). Co-located so pick
+// sensitivity is tunable in one place; values are the historical per-site
+// literals, left as-is (a maintainer may choose to unify them later).
+constexpr double kPointPickTolPx       = 7.0;  // hitTestAnyPoint: any point
+constexpr double kBezierLegPickTolPx   = 6.0;  // hitTestAnyPoint: bezier leg
+constexpr double kProximityCoincTolPx  = 8.0;  // auto-coincidence proximity
+constexpr double kDrawSnapSearchPx     = 10.0; // drawing-time snap search
+constexpr double kEntityPickTolPx      = 5.0;  // hitTestEntity: curve/segment
+constexpr double kHandlePickTolPx      = 6.0;  // hitTestHandle
+constexpr double kGroupHandlePickTolPx = 6.0;  // hitTestGroupHandle
+constexpr double kHitPadPx             = 6.0;  // bounds/selection hit padding
+constexpr double kMinRubberBandPx      = 2.0;  // ignore sub-pixel drag rects
+constexpr double kAngleLabelOffsetPx   = 30.0; // angle-dimension label offset
+constexpr double kRadiusLabelOffsetPx  = 15.0; // radius/diameter label offset
+constexpr double kBgHandleSizePx       = 10.0; // background-image resize handle
+constexpr double kDrawDragThresholdPx  = 5.0;  // drawing: motion that counts as a drag
+
+// Position-match epsilon shared by the snap/weld coincidence paths: two points
+// closer than this (world units) are treated as the same placed point.
+constexpr double kSnapWeldEps = 1e-6;
+}  // namespace
+
 SketchCanvas::SketchCanvas(QWidget* parent)
     : QWidget(parent)
+    , m_constraintRenderer(*this)
+    , m_snapEngine(*this)
+    , m_entityRenderer(*this)
 {
+    // One handler per tool; the canvas dispatches to the active one.
+    m_toolHandlers.push_back(std::make_unique<LineToolHandler>());
+    // Draw-then-constrain variants. Point and Spline have none on purpose:
+    // neither offers a typed dimension or an angle snap, so a variant would
+    // differ in nothing. Every other tool falls back to its handler above.
+    m_drawConstrainHandlers.push_back(std::make_unique<LineDrawConstrainHandler>());
+    m_drawConstrainHandlers.push_back(std::make_unique<RectangleDrawConstrainHandler>());
+    m_drawConstrainHandlers.push_back(std::make_unique<SlotDrawConstrainHandler>());
+    m_drawConstrainHandlers.push_back(std::make_unique<CircleDrawConstrainHandler>());
+    m_drawConstrainHandlers.push_back(std::make_unique<ArcDrawConstrainHandler>());
+    m_drawConstrainHandlers.push_back(std::make_unique<PolygonDrawConstrainHandler>());
+    m_drawConstrainHandlers.push_back(std::make_unique<EllipseDrawConstrainHandler>());
+    m_toolHandlers.push_back(std::make_unique<ArcToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<PointToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<CircleToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<EllipseToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<RectangleToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<PolygonToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<SlotToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<SplineToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<ConstraintToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<DimensionToolHandler>());
+    m_toolHandlers.push_back(std::make_unique<TextToolHandler>());
+    for (auto& h : makeSimpleToolHandlers()) {
+        m_toolHandlers.push_back(std::move(h));
+    }
+    for (auto& h : makeOperationToolHandlers()) {
+        m_toolHandlers.push_back(std::move(h));
+    }
+
     setObjectName(QStringLiteral("SketchCanvas"));
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
 
-    // Light gray background
+    // Background and all sketch colors come from the active theme.
     setAutoFillBackground(true);
-    QPalette pal = palette();
-    pal.setColor(QPalette::Window, QColor(240, 240, 240));
-    setPalette(pal);
+    applyTheme();
 
     // Initial zoom: 5 pixels per unit (so 10mm = 50 pixels)
     m_zoom = 5.0;
@@ -53,8 +166,25 @@ SketchCanvas::SketchCanvas(QWidget* parent)
     // Expression evaluator for formula input in dimension fields
     m_paramEngine = new ParameterEngine();
 
+    // Dimension input subsystem (fields, typing, on-canvas render).
+    m_dimInput.setHost(this);
+    m_dimInput.setParameterEngine(m_paramEngine);
+    m_dimInput.setDisplayUnit(m_displayUnit);
+
+    // Cursor-trailing tool hints: on unless the user turned them off. Read once
+    // here; MainWindow::applyPreferences pushes live changes via the setter.
+    m_showCursorHints = QSettings()
+        .value(QStringLiteral("preferences/showCursorHints"), true).toBool();
+
     // Load key bindings from settings
     loadKeyBindings();
+}
+
+void SketchCanvas::setShowCursorHints(bool show)
+{
+    if (m_showCursorHints == show) return;
+    m_showCursorHints = show;
+    update();
 }
 
 SketchCanvas::~SketchCanvas()
@@ -69,6 +199,8 @@ void SketchCanvas::setActiveTool(SketchTool tool)
         if (m_isDrawing) {
             cancelEntity();
         }
+        cancelTransformPick();
+        clearTransformPreview();
 
         // Cancel any in-progress constraint creation
         if (m_isCreatingConstraint) {
@@ -86,6 +218,15 @@ void SketchCanvas::setActiveTool(SketchTool tool)
             m_enteredGroupId = -1;
 
         m_activeTool = tool;
+        m_toolConstraintType = -1;   // a manual tool switch leaves per-type mode
+
+        // "Select, then choose the constraint tool": if geometry is already
+        // selected when the Constraint tool is picked, apply the inferred
+        // constraint to it now instead of waiting for fresh clicks.
+        if (tool == SketchTool::Constraint
+            && (m_selectedPoints.size() >= 2 || selectionCount() >= 2)) {
+            applyInferredConstraint();
+        }
 
         // Initialize constraint creation state for Dimension tool
         if (tool == SketchTool::Dimension) {
@@ -132,6 +273,11 @@ void SketchCanvas::setActiveTool(SketchTool tool)
         }
         update();
     }
+
+    // Announce the tool's first-stage hint immediately, before any click.
+    // initDimFields() only runs on stage transitions, so without this the
+    // status bar would stay silent until the user had already clicked.
+    emit toolHintChanged(currentToolHint());
 }
 
 void SketchCanvas::setCreationMode(CreationMode mode)
@@ -142,83 +288,27 @@ void SketchCanvas::setCreationMode(CreationMode mode)
 
     int modeValue = static_cast<int>(mode);
 
-    // Clear any in-progress state when switching modes
-    m_tangentTargets.clear();
+    // Switching mode mid-entity normally cancels it, because the points
+    // already placed were placed to mean something the new mode may read
+    // differently. A tool that knows the switch is harmless says so.
+    bool keepDrawing = false;
     if (m_isDrawing) {
-        cancelEntity();
+        if (SketchToolHandler* h = activeHandler()) {
+            keepDrawing = h->canSwitchModeWhileDrawing(*this, modeValue);
+        }
+    }
+    if (!keepDrawing) {
+        m_tangentTargets.clear();
+        if (m_isDrawing) {
+            cancelEntity();
+        }
     }
 
-    // Check based on active tool to interpret the mode correctly
-    switch (m_activeTool) {
-    case SketchTool::Line:
-        // Line modes: 0=TwoPoint, 1=Horizontal, 2=Vertical, 3=Tangent, 4=Construction
-        switch (modeValue) {
-        case 0: m_lineMode = LineMode::TwoPoint; break;
-        case 1: m_lineMode = LineMode::Horizontal; break;
-        case 2: m_lineMode = LineMode::Vertical; break;
-        case 3: m_lineMode = LineMode::Tangent; break;
-        case 4: m_lineMode = LineMode::Construction; break;
-        default: m_lineMode = LineMode::TwoPoint; break;
-        }
-        break;
-
-    case SketchTool::Arc:
-        // Arc modes: 0=ThreePoint, 1=CenterStartEnd, 2=StartEndRadius, 3=Tangent
-        // Note: Tangent arc validation is done in FullModeWindow before this is called
-        switch (modeValue) {
-        case 0: m_arcMode = ArcMode::ThreePoint; break;
-        case 1: m_arcMode = ArcMode::CenterStartEnd; break;
-        case 2: m_arcMode = ArcMode::StartEndRadius; break;
-        case 3: m_arcMode = ArcMode::Tangent; break;
-        default: m_arcMode = ArcMode::ThreePoint; break;
-        }
-        break;
-
-    case SketchTool::Rectangle:
-        // Rectangle modes: 0=Corner, 1=Center, 2=ThreePoint, 3=Parallelogram
-        switch (modeValue) {
-        case 0: m_rectMode = RectMode::Corner; break;
-        case 1: m_rectMode = RectMode::Center; break;
-        case 2: m_rectMode = RectMode::ThreePoint; break;
-        case 3: m_rectMode = RectMode::Parallelogram; break;
-        default: m_rectMode = RectMode::Corner; break;
-        }
-        break;
-
-    case SketchTool::Circle:
-        // Circle modes: 0=CenterRadius, 1=TwoPoint (diameter), 2=ThreePoint
-        switch (modeValue) {
-        case 0: m_circleMode = CircleMode::CenterRadius; break;
-        case 1: m_circleMode = CircleMode::TwoPoint; break;
-        case 2: m_circleMode = CircleMode::ThreePoint; break;
-        default: m_circleMode = CircleMode::CenterRadius; break;
-        }
-        break;
-
-    case SketchTool::Polygon:
-        // Polygon modes: 0=Inscribed, 1=Circumscribed, 2=Freeform
-        switch (modeValue) {
-        case 0: m_polygonMode = PolygonMode::Inscribed; break;
-        case 1: m_polygonMode = PolygonMode::Circumscribed; break;
-        case 2: m_polygonMode = PolygonMode::Freeform; break;
-        default: m_polygonMode = PolygonMode::Inscribed; break;
-        }
-        break;
-
-    case SketchTool::Slot:
-        // Slot modes: 0=CenterToCenter, 1=Overall, 2=ArcRadius, 3=ArcEnds
-        switch (modeValue) {
-        case 0: m_slotMode = SlotMode::CenterToCenter; break;
-        case 1: m_slotMode = SlotMode::Overall; break;
-        case 2: m_slotMode = SlotMode::ArcRadius; break;
-        case 3: m_slotMode = SlotMode::ArcEnds; break;
-        default: m_slotMode = SlotMode::CenterToCenter; break;
-        }
-        break;
-
-    default:
-        // Other tools don't need special mode handling
-        break;
+    // Each tool maps its creation sub-modes in its own handler's
+    // applyCreationMode(); a tool with no sub-modes simply declines. There is
+    // no legacy per-tool switch any more.
+    if (SketchToolHandler* h = activeHandler()) {
+        h->applyCreationMode(*this, modeValue);
     }
 }
 
@@ -226,6 +316,55 @@ void SketchCanvas::setSketchPlane(SketchPlane plane)
 {
     m_plane = plane;
     update();
+}
+
+bool SketchCanvas::isEntityLocked(int entityId) const
+{
+    const SketchEntity* e = entityById(entityId);
+    if (!e || e->groupId < 0) return false;
+    std::vector<sketch::Group> gs;
+    gs.reserve(m_groups.size());
+    for (const SketchGroup& g : m_groups)
+        gs.push_back(static_cast<const sketch::Group&>(g));
+    return sketch::isGroupChainLocked(e->groupId, gs);
+}
+
+bool SketchCanvas::applyPointEdit(int entityId, int pointIndex, const Point3& p)
+{
+    SketchEntity* entity = entityById(entityId);
+    if (!entity || pointIndex < 0 || pointIndex >= entity->points.size())
+        return false;
+    if (isEntityLocked(entityId)) {
+        emit toolHintChanged(
+            tr("This entity is in a locked group; unlock the group to edit it."));
+        return false;
+    }
+    const SketchEntity oldEntity = *entity;
+    entity->points[pointIndex] = p;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(
+        oldEntity, *entity, "Edit coordinate"));
+    // Keep the edited point fixed where placed while the rest re-solves.
+    notifyEntityPointChanged(entityId, pointIndex);
+    return true;
+}
+
+void SketchCanvas::setSketchMode(bool threeD)
+{
+    if (m_is3D == threeD) return;
+    m_is3D = threeD;
+    update();
+    emit sketchModeChanged(m_is3D);
+    // Re-emit the current selection so the properties panel relabels its
+    // coordinate fields and reveals/hides the off-plane one immediately.
+    emit selectionChanged(m_selectedId);
+}
+
+void SketchCanvas::setFlipView(bool flipped)
+{
+    if (m_flipView == flipped) return;
+    m_flipView = flipped;
+    update();
+    emit flipViewChanged(m_flipView);
 }
 
 void SketchCanvas::setGridVisible(bool visible)
@@ -248,6 +387,7 @@ void SketchCanvas::setSnapToGrid(bool snap)
 void SketchCanvas::setDisplayUnit(LengthUnit unit)
 {
     m_displayUnit = unit;
+    m_dimInput.setDisplayUnit(unit);
     update();
 }
 
@@ -261,10 +401,7 @@ SketchEntity* SketchCanvas::selectedEntity()
 
 const SketchEntity* SketchCanvas::selectedEntity() const
 {
-    for (const auto& e : m_entities) {
-        if (e.id == m_selectedId) return &e;
-    }
-    return nullptr;
+    return entityById(m_selectedId);
 }
 
 QVector<SketchEntity*> SketchCanvas::selectedEntities()
@@ -291,11 +428,17 @@ QVector<const SketchEntity*> SketchCanvas::selectedEntities() const
 
 void SketchCanvas::clearSelection()
 {
+    ++m_selectionRevision;
     for (auto& e : m_entities) {
         e.selected = false;
     }
     m_selectedId = -1;
-    m_selectedIds.clear();
+    m_selectedPoints.clear();
+    m_selectedMidpointEntity = -1;
+    m_hoverMidpointEntity = -1;
+    m_hoverSlotEntity = -1;
+    m_selectedSlotAnchor = { -1, -1 };
+    selectClear();
 
     // Also clear constraint selection
     for (auto& c : m_constraints) {
@@ -323,7 +466,7 @@ void SketchCanvas::clearSelection()
 // cohesive unit.
 void SketchCanvas::expandSelectionToGroups()
 {
-    // When inside a group, don't expand — we want individual selection
+    // When inside a group, don't expand: we want individual selection
     if (m_enteredGroupId >= 0)
         return;
 
@@ -343,8 +486,11 @@ void SketchCanvas::expandSelectionToGroups()
         if (!entity.selected && entity.groupId >= 0 &&
             touchedGroups.contains(entity.groupId)) {
             entity.selected = true;
-            m_selectedIds.insert(entity.id);
-            m_selectedId = entity.id;
+            selectAdd(entity.id);
+            // Keep the clicked entity as the primary selection (the panel shows
+            // the primary's properties); adopt a sibling only when there is no
+            // primary yet.
+            if (m_selectedId < 0) m_selectedId = entity.id;
         }
     }
 }
@@ -354,6 +500,7 @@ void SketchCanvas::expandSelectionToGroups()
 // -----------------------------------------------------------------------
 void SketchCanvas::enterGroup(int groupId)
 {
+    ++m_selectionRevision;
     // Verify the group exists
     bool found = false;
     for (const SketchGroup& g : m_groups) {
@@ -363,13 +510,14 @@ void SketchCanvas::enterGroup(int groupId)
 
     m_enteredGroupId = groupId;
 
-    // Clear current selection — user will click individual members next
+    // Clear current selection; user will click individual members next
     clearSelection();
     update();
 }
 
 void SketchCanvas::leaveGroup()
 {
+    ++m_selectionRevision;
     if (m_enteredGroupId < 0) return;
 
     int prevGroup = m_enteredGroupId;
@@ -379,7 +527,7 @@ void SketchCanvas::leaveGroup()
     for (auto& entity : m_entities) {
         if (entity.groupId == prevGroup) {
             entity.selected = true;
-            m_selectedIds.insert(entity.id);
+            selectAdd(entity.id);
             m_selectedId = entity.id;
         }
     }
@@ -388,15 +536,570 @@ void SketchCanvas::leaveGroup()
     update();
 }
 
+void SketchCanvas::setConstraintToolType(int type)
+{
+    clearSelection();
+    setActiveTool(SketchTool::Constraint);   // resets m_toolConstraintType to -1
+    m_toolConstraintType = type;             // then arm the chosen type
+    update();
+}
+
+bool SketchCanvas::hitTestAnyPoint(const QPointF& worldPos, int& entityId, int& pointIndex) const
+{
+    const double tol = kPointPickTolPx / m_zoom;
+    double best = tol;
+    bool found = false;
+    for (const auto& e : m_entities) {
+        // Only points that are meaningful constraint targets: real endpoints /
+        // centers. Text and dimension entities are skipped.
+        if (e.type == SketchEntityType::Text || e.type == SketchEntityType::Dimension) continue;
+        for (int i = 0; i < e.points.size(); ++i) {
+            const double d = QLineF(QPointF(e.points[i]), worldPos).length();
+            if (d < best) { best = d; entityId = e.id; pointIndex = i; found = true; }
+        }
+    }
+    return found;
+}
+
+bool SketchCanvas::hitTestBezierLeg(const QPointF& worldPos, int& entityId,
+                                    int& i0, int& i1) const
+{
+    const double tol = kBezierLegPickTolPx / m_zoom;
+    double best = tol;
+    bool found = false;
+    const SketchEntity* primary = selectedEntity();
+    for (const auto& e : m_entities) {
+        if (e.type != SketchEntityType::Spline || !e.splineBezier) continue;
+        bool showing = (primary && primary->id == e.id);
+        if (!showing)
+            for (const auto& pr : m_selectedPoints) if (pr.first == e.id) { showing = true; break; }
+        if (!showing) continue;
+        const int n = static_cast<int>(e.points.size());
+        for (int i = 0; i + 1 < n; ++i) {
+            const QPointF a(e.points[i]), b(e.points[i + 1]);
+            const QPointF proj = geometry::closestPointOnSegment(worldPos, a, b);
+            const double d = QLineF(proj, worldPos).length();
+            if (d < best) { best = d; entityId = e.id; i0 = i; i1 = i + 1; found = true; }
+        }
+    }
+    return found;
+}
+
+void SketchCanvas::selectPoint(int entityId, int pointIndex, bool addToSelection, bool toggle)
+{
+    ++m_selectionRevision;
+    const QPair<int,int> pt(entityId, pointIndex);
+    if (!addToSelection && !toggle) {
+        // Plain click: replace everything with just this point.
+        clearSelection();
+        m_selectedPoints.clear();
+        m_selectedPoints.append(pt);
+    } else if (toggle) {
+        const int idx = m_selectedPoints.indexOf(pt);
+        if (idx >= 0) m_selectedPoints.remove(idx);
+        else          m_selectedPoints.append(pt);
+    } else {  // add-only (Shift)
+        if (!m_selectedPoints.contains(pt)) m_selectedPoints.append(pt);
+    }
+    emit selectionChanged(m_selectedId);
+    update();
+}
+
+bool SketchCanvas::selectedBezierAnchor(int& splineId, int& anchorIdx) const
+{
+    if (m_selectedPoints.size() != 1) return false;
+    const auto sp = m_selectedPoints[0];
+    const SketchEntity* e = entityById(sp.first);
+    if (!e || e->type != SketchEntityType::Spline || !e->splineBezier) return false;
+    if (sp.second < 0 || sp.second >= static_cast<int>(e->points.size())) return false;
+    if (sp.second % 3 != 0) return false;
+    splineId = sp.first; anchorIdx = sp.second;
+    return true;
+}
+
+bool SketchCanvas::bezierAnchorProps(int splineId, int a, double& angleDeg,
+                                     double& inLen, double& outLen, double& weight,
+                                     bool& rational) const
+{
+    const SketchEntity* e = entityById(splineId);
+    sketch::BezierAnchorInfo info;
+    if (!e || !sketch::bezierAnchorInfo(*e, a, info)) return false;
+    angleDeg = info.angleDeg; inLen = info.inLen; outLen = info.outLen;
+    weight = info.weight; rational = info.rational;
+    return true;
+}
+
+// The Bezier edits below are the library's (sketch/bezier.h); the canvas
+// owns the entity lookup, the undo record, selection and the redraw.
+void SketchCanvas::setBezierAnchorAngle(int splineId, int a, double angleDeg)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return;
+    const SketchEntity oldE = *e;
+    if (!sketch::setBezierAnchorAngle(*e, a, angleDeg)) return;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    solveConstraints(); update();
+}
+
+void SketchCanvas::setBezierAnchorHandleLen(int splineId, int a, bool outHandle, double len)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return;
+    const SketchEntity oldE = *e;
+    if (!sketch::setBezierAnchorHandleLength(*e, a, outHandle, len)) return;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    solveConstraints(); update();
+}
+
+void SketchCanvas::setBezierAnchorWeight(int splineId, int a, double weight)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return;
+    const SketchEntity oldE = *e;
+    if (!sketch::setBezierAnchorWeight(*e, a, weight)) return;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    solveConstraints(); update();
+}
+
+// Constraints naming this spline's control points follow an insertion or a
+// removal; the rule is the library's, the container is the canvas's.
+static void remapSplineConstraints(QVector<SketchConstraint>& cons, int splineId, int lo, int count)
+{
+    for (auto it = cons.begin(); it != cons.end();) {
+        if (sketch::remapSplinePointIndices(*it, splineId, lo, count)) it = cons.erase(it);
+        else ++it;
+    }
+}
+
+bool SketchCanvas::deleteBezierAnchor(int splineId, int a)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return false;
+    const SketchEntity oldE = *e;
+    const int lo = sketch::deleteBezierAnchor(*e, a);
+    if (lo < 0) return false;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    remapSplineConstraints(m_constraints, splineId, lo, 3);
+    m_selectedPoints.clear();
+    m_profilesCacheDirty = true;
+    solveConstraints(); update();
+    return true;
+}
+
+bool SketchCanvas::insertBezierFitPoint(int splineId, const QPointF& worldPos)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return false;
+    const SketchEntity oldE = *e;
+    const int at = sketch::insertBezierFitPoint(*e, worldPos);
+    if (at < 0) return false;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    remapSplineConstraints(m_constraints, splineId, at, -3);
+    m_profilesCacheDirty = true;
+    solveConstraints(); update();
+    return true;
+}
+
+bool SketchCanvas::selectedBezierLeg(int& splineId, int& i0, int& i1) const
+{
+    if (m_selectedPoints.size() != 2) return false;
+    const auto a = m_selectedPoints[0];
+    const auto b = m_selectedPoints[1];
+    if (a.first != b.first) return false;
+    const SketchEntity* e = entityById(a.first);
+    if (!e || e->type != SketchEntityType::Spline || !e->splineBezier) return false;
+    int lo = a.second, hi = b.second;
+    if (lo > hi) std::swap(lo, hi);
+    if (hi - lo != 1) return false;
+    if (lo < 0 || hi >= static_cast<int>(e->points.size())) return false;
+    splineId = a.first; i0 = lo; i1 = hi;
+    return true;
+}
+
+void SketchCanvas::setBezierLegLength(int splineId, int i0, int i1, double len)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return;
+    const SketchEntity oldE = *e;
+    if (!sketch::setBezierLegLength(*e, i0, i1, len)) return;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    solveConstraints(); update();
+}
+
+void SketchCanvas::toggleBezierClosed(int splineId)
+{
+    SketchEntity* e = entityById(splineId);
+    if (!e) return;
+    const SketchEntity oldE = *e;
+    if (!sketch::toggleBezierClosed(*e)) return;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
+    m_profilesCacheDirty = true;
+    solveConstraints(); update();
+}
+
+bool SketchCanvas::dimensionSelectedLinesAngle()
+{
+    const std::vector<int> ids = selectedEntityList();
+    if (ids.size() != 2) {
+        showStatus(tr("Select two lines to dimension the angle between them."));
+        return false;
+    }
+    const SketchEntity* la = entityById(ids[0]);
+    const SketchEntity* lb = entityById(ids[1]);
+    sketch::AngleDimension dim;
+    const auto problem = (la && lb) ? sketch::angleDimensionBetweenLines(*la, *lb, dim)
+                                    : sketch::AngleDimensionProblem::NotTwoLines;
+    switch (problem) {
+    case sketch::AngleDimensionProblem::NotTwoLines:
+        showStatus(tr("The angle dimension needs two line segments."));
+        return false;
+    case sketch::AngleDimensionProblem::Degenerate:
+        return false;
+    case sketch::AngleDimensionProblem::Parallel:
+        showStatus(tr("These lines are parallel; there is no angle to dimension."));
+        return false;
+    case sketch::AngleDimensionProblem::None:
+        break;
+    }
+    const double value = dim.value;
+    const bool supp = dim.supplementary;
+    QPointF labelPos = QPointF(dim.vertex) + QPointF(0, -12);
+    if (dim.hasBisector)
+        labelPos = QPointF(dim.vertex) + QPointF(dim.bisector) * (kAngleLabelOffsetPx / m_zoom);
+    m_constraintTargetEntities.clear(); m_constraintTargetPoints.clear();
+    m_constraintTargetEntities.append(ids[0]);
+    m_constraintTargetEntities.append(ids[1]);
+    createConstraint(ConstraintType::Angle, value, labelPos,
+                     false, true, true, supp);
+    m_constraintTargetEntities.clear();
+    return true;
+}
+
+void SketchCanvas::setAngleSideFromLabel(SketchConstraint* c)
+{
+    if (!c || c->type != ConstraintType::Angle || c->entityIds.size() < 2) return;
+    const SketchEntity* e1 = entityById(c->entityIds[0]);
+    const SketchEntity* e2 = entityById(c->entityIds[1]);
+    if (!e1 || !e2 || e1->type != SketchEntityType::Line || e2->type != SketchEntityType::Line
+        || e1->points.size() < 2 || e2->points.size() < 2) return;
+    QPointF vertex;
+    if (c->hasAnchorPoint()) vertex = c->anchorPoint;
+    else {
+        QLineF l1(e1->points[0], e1->points[1]), l2(e2->points[0], e2->points[1]);
+        if (l1.intersects(l2, &vertex) == QLineF::NoIntersection) vertex = c->labelPosition;
+    }
+    double value = 0.0;
+    bool supplementary = false;
+    if (!sketch::angleFromLabelSide(*e1, *e2, vertex, c->labelPosition, value, supplementary)) return;
+    c->value = value;
+    c->supplementary = supplementary;
+}
+
+void SketchCanvas::createProximityCoincidences(int newEntityId)
+{
+    const double tol = kProximityCoincTolPx / m_zoom;
+    const std::vector<sketch::EndpointPair> welds = sketch::proximityWelds(
+        toLibraryEntities(m_entities), toLibraryConstraints(m_constraints), newEntityId, tol);
+    std::vector<sketch::UndoCommand> subs;
+    for (const sketch::EndpointPair& w : welds) {
+        subs.push_back(makeConstraint(ConstraintType::Coincident,
+                                      { w.entityA, w.entityB }, { w.pointA, w.pointB }));
+    }
+    if (!subs.empty())
+        pushUndoCommand(sketch::UndoCommand::compound(subs, "Weld corners"));
+}
+
+void SketchCanvas::pruneOrphanedConstraints()
+{
+    auto exists = [&](int id) {
+        if (id == sketch::kSketchOriginEntity) return true;   // origin sentinel
+        for (const auto& e : m_entities) if (e.id == id) return true;
+        return false;
+    };
+    const int before = m_constraints.size();
+    m_constraints.erase(
+        std::remove_if(m_constraints.begin(), m_constraints.end(),
+            [&](const SketchConstraint& c) {
+                for (int id : c.entityIds) if (!exists(id)) return true;
+                return false;
+            }),
+        m_constraints.end());
+    if (m_constraints.size() != before) {
+        // Drop those ids from any group's constraint list too.
+        for (SketchGroup& g : m_groups) {
+            g.constraintIds.erase(
+                std::remove_if(g.constraintIds.begin(), g.constraintIds.end(),
+                    [this](int cid) {
+                        return std::none_of(m_constraints.begin(), m_constraints.end(),
+                            [cid](const SketchConstraint& c){ return c.id == cid; });
+                    }),
+                g.constraintIds.end());
+        }
+    }
+}
+
+int SketchCanvas::nearestCircleOrArc(const QPointF& worldPos) const
+{
+    return sketch::nearestCircleOrArc(toLibraryEntities(m_entities), worldPos);
+}
+
+int SketchCanvas::hitTestTangentContact(const QPointF& worldPos) const
+{
+    // The red dot drawn by drawOffSegmentTangents() sits on a circle's
+    // perimeter where a line ALREADY tangent to it (a Tangent constraint)
+    // would touch if the too-short segment were extended. It is a live paint
+    // marker, not an entity, so a plain hitTest never returns it. Clicking it
+    // selects the underlying circle, so the user can then pick a line endpoint
+    // and apply Coincident to pin the endpoint onto the circle (Aaron).
+    const QPointF clickScr(worldToScreen(worldPos));
+    const double tolPx = 8.0;
+    for (const SketchConstraint& c : m_constraints) {
+        if (!c.enabled || c.type != ConstraintType::Tangent
+            || c.entityIds.size() < 2) continue;
+        const SketchEntity* e1 = entityById(c.entityIds[0]);
+        const SketchEntity* e2 = entityById(c.entityIds[1]);
+        if (!e1 || !e2) continue;
+        const SketchEntity* line =
+            (e1->type == SketchEntityType::Line) ? e1
+          : (e2->type == SketchEntityType::Line) ? e2 : nullptr;
+        const SketchEntity* circle =
+            (e1->type == SketchEntityType::Circle) ? e1
+          : (e2->type == SketchEntityType::Circle) ? e2 : nullptr;
+        if (!line || !circle) continue;
+        auto pt = sketch::offSegmentTangentPoint(*line, *circle);
+        if (!pt) continue;
+        const QPointF scr(worldToScreen(QPointF(pt->x, pt->y)));
+        if (QLineF(clickScr, scr).length() <= tolPx)
+            return circle->id;
+    }
+    return -1;
+}
+
+bool SketchCanvas::entityMidpoint(const SketchEntity& e, QPointF& out) const
+{
+    if ((e.type == SketchEntityType::Line && e.points.size() >= 2) ||
+        (e.type == SketchEntityType::Arc && e.points.size() >= 3)) {
+        out = sketch::pointAtParameter(e, 0.5);
+        return true;
+    }
+    return false;
+}
+
+int SketchCanvas::hitTestMidpoint(const QPointF& worldPos) const
+{
+    const QPointF clickScr(worldToScreen(worldPos));
+    const double tolPx = kMidpointHitTolPx;
+    int best = -1; double bestD = tolPx;
+    for (const SketchEntity& e : m_entities) {
+        QPointF mid;
+        if (!entityMidpoint(e, mid)) continue;
+        const QPointF scr(worldToScreen(mid));
+        const double d = QLineF(clickScr, scr).length();
+        if (d <= bestD) { bestD = d; best = e.id; }
+    }
+    return best;
+}
+
+void SketchCanvas::solveHandleDragStabilized(int dragEntityId, int dragPointIndex,
+                                             const QPointF& dragPos)
+{
+    const std::vector<std::pair<int, int>> dragged{{dragEntityId, dragPointIndex}};
+    // Only stabilize points the SOLVER registers a handle for, so we never weight
+    // or FixedPoint-pin a point it cannot resolve (that logged
+    // "FixedPoint ...: failed to resolve point handle, skipping"). Circles
+    // register only their center; decomposed/derived entities register none of
+    // their own points.
+    auto registersPoint = [](SketchEntityType t, int i) -> bool {
+        switch (t) {
+        case SketchEntityType::Line:   return i == 0 || i == 1;
+        case SketchEntityType::Arc:    return i >= 0 && i <= 2;
+        case SketchEntityType::Circle: return i == 0;   // center only
+        case SketchEntityType::Point:  return i == 0;
+        case SketchEntityType::Spline: return true;     // control points
+        default:                       return false;
+        }
+    };
+    // Do NOT stabilize points that belong to the SAME group as the dragged
+    // entity: a decomposed shape (slot, sweep) carries its own internal
+    // constraints (tangent, coincident, equal), so its other points must move
+    // as those require; hard-fixing them all pins the shape and makes the
+    // tangent unsatisfiable (DOF 0, "inconsistent"), which is the drag that
+    // moved then snapped back. Loose geometry (groupId < 0, e.g. a single
+    // tangent arc) is still stabilized, preserving the original anti-collapse
+    // fix. (Aaron)
+    const SketchEntity* dragEnt = entityById(dragEntityId);
+    const int dragGroup = dragEnt ? dragEnt->groupId : -1;
+    auto sameGroup = [&](const SketchEntity& e) {
+        return dragGroup >= 0 && e.groupId == dragGroup;
+    };
+#if defined(SLVS_HAS_DRAG_WEIGHTS)
+    // Per-param drag weights: hold the far points stiff (they yield only as the
+    // constraints require) while the grabbed handle moves.
+    std::vector<std::pair<int, int>> farPts;
+    for (const auto& e : m_entities) {
+        if (e.id == dragEntityId) continue;   // the grabbed entity reshapes freely
+        if (sameGroup(e)) continue;           // same decomposed shape: let its constraints govern
+        for (int i = 0; i < static_cast<int>(e.points.size()); ++i) {
+            if (!registersPoint(e.type, i)) continue;
+            if (QLineF(QPointF(e.points[i]), dragPos).length() < geometry::kDegenerateLen) continue;
+            farPts.push_back({e.id, i});
+        }
+    }
+    // Opening a full circle: also weight the arc's OWN end left at the cut
+    // (normally skipped as the dragged entity) so it resists drifting.
+    if (m_openingFullArc && dragEnt && dragEnt->type == SketchEntityType::Arc) {
+        farPts.push_back({ dragEntityId, (m_openArcDraggedIndex == 1) ? 2 : 1 });
+    }
+    m_dragWeightPoints = farPts;
+    m_dragWeightStiffness = 400.0;
+    solveConstraintsDragging(dragged);
+#else
+    // No per-param weights compiled in here (the slvs macro is not visible in
+    // this TU): temporarily HARD-FIX the far, non-welded points so the grabbed
+    // handle moves and the rest stays put; an under-constrained tangent arc
+    // then CANNOT be pulled to a collapsed radius. Removed the instant the solve
+    // returns, so the persisted sketch DOF is never changed. Mirrors the
+    // body-drag stabilization. (Aaron)
+    std::vector<int> tempIds;
+    for (const auto& e : m_entities) {
+        if (e.id == dragEntityId) continue;
+        if (sameGroup(e)) continue;           // same decomposed shape: let its constraints govern
+        for (int i = 0; i < static_cast<int>(e.points.size()); ++i) {
+            if (!registersPoint(e.type, i)) continue;
+            if (QLineF(QPointF(e.points[i]), dragPos).length() < geometry::kDegenerateLen) continue;
+            appendTempFixedPoint(e.id, i, tempIds);
+        }
+    }
+    // Opening a full circle: also pin the arc's OWN end left at the cut.
+    if (m_openingFullArc && dragEnt && dragEnt->type == SketchEntityType::Arc) {
+        SketchConstraint fx;
+        fx.id = -1000000 - static_cast<int>(tempIds.size());
+        fx.type = ConstraintType::FixedPoint;
+        fx.entityIds = { dragEntityId };
+        fx.pointIndices = { (m_openArcDraggedIndex == 1) ? 2 : 1 };
+        fx.isDriving = true; fx.enabled = true; fx.satisfied = true;
+        m_constraints.append(fx);
+        tempIds.push_back(fx.id);
+    }
+    solveConstraintsDragging(dragged);
+    if (!tempIds.empty())
+        m_constraints.erase(
+            std::remove_if(m_constraints.begin(), m_constraints.end(),
+                [](const SketchConstraint& c) { return c.id <= -1000000; }),
+            m_constraints.end());
+#endif
+}
+
+FILE* SketchCanvas::debugLogFile()
+{
+    // A permanent diagnostic facility, but OFF unless the environment asks for
+    // it, so an installed build never writes stray files into the user's
+    // working directory. Resolution, in order (evaluated once):
+    //   HOBBYCAD_DEBUG_LOG=<path>  explicit log file (also enables logging)
+    //   HOBBYCAD_DEBUG=1           enable at a default path: build/DEBUG.log
+    //                              when launched from a dev tree (a writable
+    //                              ./build exists, the project convention),
+    //                              otherwise <cache>/HobbyCAD/debug.log
+    //   neither set                disabled -> nullptr, every dbgLog() a no-op
+    // build-dev.sh exports HOBBYCAD_DEBUG=1 so dev runs log to build/DEBUG.log
+    // exactly as before, with no filesystem side effect in production.
+    static FILE* f = []() -> FILE* {
+        QString path = qEnvironmentVariable("HOBBYCAD_DEBUG_LOG");
+        if (path.isEmpty()) {
+            if (qEnvironmentVariableIntValue("HOBBYCAD_DEBUG") <= 0)
+                return nullptr;
+            if (QFileInfo(QStringLiteral("build")).isDir()) {
+                path = QStringLiteral("build/DEBUG.log");
+            } else {
+                const QString dir = QStandardPaths::writableLocation(
+                    QStandardPaths::CacheLocation);
+                if (dir.isEmpty()) return nullptr;
+                QDir().mkpath(dir);
+                path = dir + QStringLiteral("/debug.log");
+            }
+        }
+        FILE* fp = std::fopen(path.toLocal8Bit().constData(), "w");
+        if (fp)
+            std::fprintf(stderr, "HobbyCAD: debug log -> %s\n",
+                         path.toLocal8Bit().constData());
+        return fp;
+    }();
+    return f;
+}
+
+void SketchCanvas::dbgLog(const char* where)
+{
+    FILE* f = debugLogFile();
+    if (!f) return;
+    auto typeName = [](SketchEntityType t) -> const char* {
+        switch (t) {
+        case SketchEntityType::Point:         return "Point";
+        case SketchEntityType::Line:          return "Line";
+        case SketchEntityType::Rectangle:     return "Rectangle";
+        case SketchEntityType::Parallelogram: return "Parallelogram";
+        case SketchEntityType::Circle:        return "Circle";
+        case SketchEntityType::Arc:           return "Arc";
+        case SketchEntityType::Spline:        return "Spline";
+        case SketchEntityType::Polygon:       return "Polygon";
+        case SketchEntityType::Slot:          return "Slot";
+        case SketchEntityType::Ellipse:       return "Ellipse";
+        case SketchEntityType::Text:          return "Text";
+        default:                              return "Entity";
+        }
+    };
+    auto roleName = [](const SketchEntity& e, int i) -> const char* {
+        switch (e.type) {
+        case SketchEntityType::Line:    return i == 0 ? "start" : "end";
+        case SketchEntityType::Arc:     return i == 0 ? "center" : (i == 1 ? "start" : "end");
+        case SketchEntityType::Circle:  return i == 0 ? "center" : "quad";
+        case SketchEntityType::Ellipse: return i == 0 ? "center" : (i == 1 ? "major" : "minor");
+        case SketchEntityType::Polygon: return i == 0 ? "center" : "radius";
+        case SketchEntityType::Rectangle:
+        case SketchEntityType::Parallelogram: return "corner";
+        case SketchEntityType::Slot:    return i < 2 ? "axis-end" : "extent";
+        case SketchEntityType::Spline:
+            if (e.splineBezier) return (i % 3 == 0) ? "anchor" : "handle";
+            return "fit-pt";
+        default:                        return "pt";
+        }
+    };
+    std::fprintf(f, "== %s ==\n", where);
+    for (const auto& e : m_entities) {
+        std::fprintf(f, "  %s id=%d%s:\n", typeName(e.type), e.id,
+                     e.isConstruction ? " (construction)" : "");
+        for (int i = 0; i < static_cast<int>(e.points.size()); ++i) {
+            // Sketch points are 2D in the plane; z is the plane-local 0.
+            std::fprintf(f, "    [%d] %-8s x=%.4f y=%.4f z=%.4f\n",
+                         i, roleName(e, i), e.points[i].x, e.points[i].y, 0.0);
+        }
+        if (e.type == SketchEntityType::Arc || e.type == SketchEntityType::Circle) {
+            const double rr = (e.points.size() >= 2)
+                ? geometry::lineLength(e.points[0], e.points[1])
+                : e.radius;
+            std::fprintf(f, "    radius=%.4f (field=%.4f) start=%.2f sweep=%.2f\n",
+                         rr, e.radius, e.startAngle, e.sweepAngle);
+        }
+    }
+    int nTangent = 0;
+    for (const auto& c : m_constraints)
+        if (c.type == ConstraintType::Tangent) ++nTangent;
+    std::fprintf(f, "  constraints=%d (tangent=%d) freePtsValid=%d nFree=%zu dragWeightPts=%zu\n\n",
+                 static_cast<int>(m_constraints.size()), nTangent,
+                 static_cast<int>(m_freePointsValid), m_freePoints.size(),
+                 m_dragWeightPoints.size());
+    std::fflush(f);
+}
+
 void SketchCanvas::selectEntity(int entityId, bool addToSelection,
                                 bool individualOnly)
 {
+    ++m_selectionRevision;
     if (!addToSelection) {
         // Clear existing selection
         for (auto& e : m_entities) {
             e.selected = false;
         }
-        m_selectedIds.clear();
+        selectClear();
 
         // Clear constraint selection
         for (auto& c : m_constraints) {
@@ -425,7 +1128,7 @@ void SketchCanvas::selectEntity(int entityId, bool addToSelection,
             // leaveGroup() selects the whole group and emits; clear that
             // so we can do a fresh selection of the clicked entity below
             for (auto& e : m_entities) e.selected = false;
-            m_selectedIds.clear();
+            selectClear();
             m_selectedId = -1;
         }
 
@@ -433,15 +1136,15 @@ void SketchCanvas::selectEntity(int entityId, bool addToSelection,
         bool isIndividual = individualOnly || (m_enteredGroupId >= 0);
 
         if (addToSelection && entity->selected) {
-            // Ctrl+click on already selected entity — deselect it and
+            // Ctrl+click on already selected entity: deselect it and
             // its group siblings (unless individual mode).
             entity->selected = false;
-            m_selectedIds.remove(entityId);
+            selectRemove(entityId);
             if (!isIndividual && entity->groupId >= 0) {
                 for (auto& e : m_entities) {
                     if (e.groupId == entity->groupId) {
                         e.selected = false;
-                        m_selectedIds.remove(e.id);
+                        selectRemove(e.id);
                     }
                 }
             }
@@ -451,7 +1154,7 @@ void SketchCanvas::selectEntity(int entityId, bool addToSelection,
             }
         } else {
             entity->selected = true;
-            m_selectedIds.insert(entityId);
+            selectAdd(entityId);
             m_selectedId = entityId;  // Primary selection is the last clicked
             // Expand to group siblings unless in individual mode
             if (!isIndividual) {
@@ -470,12 +1173,13 @@ void SketchCanvas::selectEntity(int entityId, bool addToSelection,
 
 void SketchCanvas::selectEntitiesInRect(const QRectF& rect, bool crossing, bool addToSelection)
 {
+    ++m_selectionRevision;
     if (!addToSelection) {
         // Clear existing selection
         for (auto& e : m_entities) {
             e.selected = false;
         }
-        m_selectedIds.clear();
+        selectClear();
         m_selectedId = -1;
 
         // Clear constraint selection
@@ -499,7 +1203,7 @@ void SketchCanvas::selectEntitiesInRect(const QRectF& rect, bool crossing, bool 
 
         if (shouldSelect) {
             entity.selected = true;
-            m_selectedIds.insert(entity.id);
+            selectAdd(entity.id);
             m_selectedId = entity.id;
         }
     }
@@ -521,44 +1225,11 @@ void SketchCanvas::selectConnectedChain(int startEntityId)
     // Clear selection and start fresh with the clicked entity
     clearSelection();
 
-    // BFS to find all connected entities
-    QSet<int> visited;
-    QQueue<int> queue;
-    queue.enqueue(startEntityId);
-
-    while (!queue.isEmpty()) {
-        int currentId = queue.dequeue();
-        if (visited.contains(currentId)) continue;
-        visited.insert(currentId);
-
-        const SketchEntity* current = entityById(currentId);
-        if (!current) continue;
-
-        // Get endpoints of current entity
-        QVector<QPointF> currentEndpoints = getEntityEndpointsVec(*current);
-        if (currentEndpoints.isEmpty()) continue;
-
-        // Find entities that share an endpoint
-        for (const auto& other : m_entities) {
-            if (other.id == currentId || visited.contains(other.id)) continue;
-
-            QVector<QPointF> otherEndpoints = getEntityEndpointsVec(other);
-
-            // Check if any endpoints coincide
-            for (const QPointF& ep1 : currentEndpoints) {
-                for (const QPointF& ep2 : otherEndpoints) {
-                    if (QLineF(ep1, ep2).length() < 0.01) {
-                        // Connected!
-                        queue.enqueue(other.id);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // Select all visited entities
-    for (int id : visited) {
+    // Entities joined end to end (points and rectangle corners included).
+    constexpr double kChainJoinTol = 0.01;
+    for (int id : sketch::findConnectedChain(startEntityId,
+                                             toLibraryEntities(m_entities),
+                                             kChainJoinTol)) {
         selectEntity(id, true);
     }
 }
@@ -600,51 +1271,8 @@ QString SketchCanvas::describeConstraint(int constraintId) const
     const SketchConstraint* c = constraintById(constraintId);
     if (!c) return QString();
 
-    QString typeName;
-    switch (c->type) {
-    case ConstraintType::Distance:
-        typeName = tr("Distance");
-        break;
-    case ConstraintType::Radius:
-        typeName = tr("Radius");
-        break;
-    case ConstraintType::Diameter:
-        typeName = tr("Diameter");
-        break;
-    case ConstraintType::Angle:
-        typeName = tr("Angle");
-        break;
-    case ConstraintType::FixedAngle:
-        typeName = tr("Fixed Angle");
-        break;
-    case ConstraintType::Horizontal:
-        typeName = tr("Horizontal");
-        break;
-    case ConstraintType::Vertical:
-        typeName = tr("Vertical");
-        break;
-    case ConstraintType::Parallel:
-        typeName = tr("Parallel");
-        break;
-    case ConstraintType::Perpendicular:
-        typeName = tr("Perpendicular");
-        break;
-    case ConstraintType::Coincident:
-        typeName = tr("Coincident");
-        break;
-    case ConstraintType::Tangent:
-        typeName = tr("Tangent");
-        break;
-    case ConstraintType::Equal:
-        typeName = tr("Equal");
-        break;
-    case ConstraintType::Midpoint:
-        typeName = tr("Midpoint");
-        break;
-    case ConstraintType::Symmetric:
-        typeName = tr("Symmetric");
-        break;
-    }
+    // Library names for every type; translation stays with this caller.
+    QString typeName = tr(sketch::constraintTypeName(c->type));
 
     // For dimensional constraints, include the value
     QString description = typeName;
@@ -672,30 +1300,7 @@ QString SketchCanvas::describeConstraint(int constraintId) const
         for (int entityId : c->entityIds) {
             const SketchEntity* entity = entityById(entityId);
             if (entity) {
-                QString entityType;
-                switch (entity->type) {
-                case SketchEntityType::Point:
-                    entityType = tr("Point");
-                    break;
-                case SketchEntityType::Line:
-                    entityType = tr("Line");
-                    break;
-                case SketchEntityType::Circle:
-                    entityType = tr("Circle");
-                    break;
-                case SketchEntityType::Arc:
-                    entityType = tr("Arc");
-                    break;
-                case SketchEntityType::Rectangle:
-                    entityType = tr("Rectangle");
-                    break;
-                case SketchEntityType::Spline:
-                    entityType = tr("Spline");
-                    break;
-                default:
-                    entityType = tr("Entity");
-                    break;
-                }
+                const QString entityType = tr(sketch::entityTypeName(entity->type));
                 entityNames.append(entityType + QString(" %1").arg(entityId));
             }
         }
@@ -743,6 +1348,40 @@ void SketchCanvas::setEntities(const QVector<SketchEntity>& entities)
     update();
 }
 
+void SketchCanvas::setSketchContents(const QVector<SketchEntity>& entities,
+                                     const QVector<SketchConstraint>& constraints,
+                                     const QVector<SketchGroup>& groups)
+{
+    m_entities = entities;
+    m_constraints = constraints;
+    m_groups = groups;
+    m_enteredGroupId = -1;
+    m_selectedId = -1;
+    m_selectedConstraintId = -1;
+
+    // Re-seed every id counter past the highest restored id, or newly
+    // created objects would collide with the ones just loaded.
+    int maxEntityId = 0;
+    for (const SketchEntity& e : entities)
+        if (e.id > maxEntityId) maxEntityId = e.id;
+    m_nextId = maxEntityId + 1;
+
+    int maxConstraintId = 0;
+    for (const SketchConstraint& c : constraints)
+        if (c.id > maxConstraintId) maxConstraintId = c.id;
+    m_nextConstraintId = maxConstraintId + 1;
+
+    int maxGroupId = 0;
+    for (const SketchGroup& g : groups)
+        if (g.id > maxGroupId) maxGroupId = g.id;
+    m_nextGroupId = maxGroupId + 1;
+
+    m_profilesCacheDirty = true;
+    solveConstraints();
+    emit selectionChanged(-1);
+    update();
+}
+
 void SketchCanvas::resetView()
 {
     m_viewCenter = {0, 0};
@@ -757,34 +1396,16 @@ void SketchCanvas::zoomToFit()
         return;
     }
 
-    // Calculate bounding box
-    double minX = std::numeric_limits<double>::max();
-    double maxX = std::numeric_limits<double>::lowest();
-    double minY = std::numeric_limits<double>::max();
-    double maxY = std::numeric_limits<double>::lowest();
-
-    for (const auto& e : m_entities) {
-        for (const auto& p : e.points) {
-            minX = qMin(minX, p.x);
-            maxX = qMax(maxX, p.x);
-            minY = qMin(minY, p.y);
-            maxY = qMax(maxY, p.y);
-        }
-        // Account for circles
-        if (e.type == SketchEntityType::Circle) {
-            if (!e.points.empty()) {
-                minX = qMin(minX, e.points[0].x - e.radius);
-                maxX = qMax(maxX, e.points[0].x + e.radius);
-                minY = qMin(minY, e.points[0].y - e.radius);
-                maxY = qMax(maxY, e.points[0].y + e.radius);
-            }
-        }
-    }
-
-    if (minX > maxX) {
+    // Bounding box of every entity's full extent (arcs, ellipses, slots and
+    // splines included), from the library's per-entity boxes.
+    hobbycad::geometry::BoundingBox bounds;
+    for (const auto& e : m_entities) bounds.include(e.boundingBox());
+    if (!bounds.valid) {
         resetView();
         return;
     }
+    const double minX = bounds.minX, maxX = bounds.maxX;
+    const double minY = bounds.minY, maxY = bounds.maxY;
 
     // Add margin
     double margin = 20.0;
@@ -806,8 +1427,7 @@ void SketchCanvas::setViewRotation(double degrees)
 {
     m_viewRotation = degrees;
     // Normalize to [-180, 180]
-    while (m_viewRotation > 180.0) m_viewRotation -= 360.0;
-    while (m_viewRotation < -180.0) m_viewRotation += 360.0;
+    m_viewRotation = hobbycad::geometry::wrapSweepDeg(m_viewRotation);
     update();
 }
 
@@ -838,6 +1458,7 @@ QPointF SketchCanvas::screenToWorld(const QPoint& screen) const
     double sinR = qSin(rad);
     double rx = sx * cosR - sy * sinR;
     double ry = sx * sinR + sy * cosR;
+    if (m_flipView) rx = -rx;  // invert the heads/tails u mirror
 
     // Scale and translate to world
     double x = rx / m_zoom + m_viewCenter.x();
@@ -850,6 +1471,7 @@ QPoint SketchCanvas::worldToScreen(const QPointF& world) const
     // Translate to view center and scale
     double wx = (world.x() - m_viewCenter.x()) * m_zoom;
     double wy = (world.y() - m_viewCenter.y()) * m_zoom;
+    if (m_flipView) wx = -wx;  // heads/tails: mirror u left<->right
 
     // Apply rotation
     double rad = qDegreesToRadians(m_viewRotation);
@@ -869,6 +1491,7 @@ QPointF SketchCanvas::worldToScreenF(const QPointF& world) const
     // Same as worldToScreen but returns floating-point for sub-pixel precision
     double wx = (world.x() - m_viewCenter.x()) * m_zoom;
     double wy = (world.y() - m_viewCenter.y()) * m_zoom;
+    if (m_flipView) wx = -wx;  // heads/tails: mirror u left<->right
 
     double rad = qDegreesToRadians(m_viewRotation);
     double cosR = qCos(rad);
@@ -883,60 +1506,269 @@ QPointF SketchCanvas::worldToScreenF(const QPointF& world) const
 // Exact geometric points get high weight so they aren't eclipsed by
 // nearby perimeter/axis snaps.  The effective distance used for
 // comparison is:  rawDistance / weight.
-QPointF SketchCanvas::snapPoint(const QPointF& world) const
+
+
+
+// Pre-click preview dot for entity creation tools (before the first click),
+// at the snapped or tangent-projected cursor position.
+void SketchCanvas::drawToolPreviewDot(QPainter& painter)
 {
-    // Clear any previous snap (const cast needed for mutable snap state)
-    auto* self = const_cast<SketchCanvas*>(this);
-    self->m_activeSnap.reset();
+    // Get current cursor position
+    QPoint cursorPos = mapFromGlobal(QCursor::pos());
+    if (rect().contains(cursorPos)) {
+        QPointF cursorWorld = screenToWorld(cursorPos);
 
-    if (m_snapToEntities) {
-        double tolerance = m_entitySnapTolerance / m_zoom;  // Convert pixels to world units
-        int excludeId = m_isDraggingHandle ? m_selectedId : -1;
+        // For tangent arc, project onto entity
+        if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent && m_tangentTargets.isEmpty()) {
+            int hitId = const_cast<SketchCanvas*>(this)->hitTest(cursorWorld);
+            if (hitId >= 0) {
+                const SketchEntity* hoverEntity = nullptr;
+                for (const auto& e : m_entities) {
+                    if (e.id == hitId) {
+                        hoverEntity = &e;
+                        break;
+                    }
+                }
+                if (hoverEntity && (hoverEntity->type == SketchEntityType::Line ||
+                                    hoverEntity->type == SketchEntityType::Rectangle)) {
+                    QPointF projectedPoint = cursorWorld;
+                    bool altHeld = QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier;
 
-        // Delegate to the library for all snap evaluation
-        std::vector<sketch::Entity> libEntities = toLibraryEntities(m_entities);
-        sketch::SnapResult result = sketch::findBestSnap(
-            libEntities, world, tolerance, excludeId);
+                    if (hoverEntity->type == SketchEntityType::Line && hoverEntity->points.size() >= 2) {
+                        QPointF p1 = hoverEntity->points[0];
+                        QPointF p2 = hoverEntity->points[1];
+                        projectedPoint = geometry::closestPointOnLine(cursorWorld, p1, p2);
+                        if (!altHeld) {
+                            QPointF midpoint = (p1 + p2) / 2.0;
+                            double snapDist = kDrawSnapSearchPx / m_zoom;
+                            if (QLineF(projectedPoint, p1).length() < snapDist) {
+                                projectedPoint = p1;
+                            } else if (QLineF(projectedPoint, p2).length() < snapDist) {
+                                projectedPoint = p2;
+                            } else if (QLineF(projectedPoint, midpoint).length() < snapDist) {
+                                projectedPoint = midpoint;
+                            }
+                        }
+                    }
+                    cursorWorld = projectedPoint;
+                }
+            }
+        } else {
+            // For other tools, apply snapping
+            cursorWorld = m_snapEngine.snapPoint(cursorWorld);
+        }
 
-        if (result.found) {
-            self->m_activeSnap = result.snap;
-            return result.snap.position;
+        // Draw the preview dot
+        QPoint screenPoint = worldToScreen(cursorWorld);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0, 120, 215));
+        painter.drawEllipse(screenPoint, 5, 5);
+    }
+}
+
+    // Tell the constraint renderer which glyphs the chips must dodge (the pivot
+    // star and the snap indicator: hard) and where the drawing is (soft), so
+    // chips fan into empty canvas without hiding it. [Aaron glyph placement rule]
+void SketchCanvas::updateConstraintRendererLayoutRects()
+{
+    QVector<QRect> reserved;
+    if (m_snapEngine.hasActiveSnap()
+        && (m_isDrawing || m_isDraggingHandle
+            || m_transformPick != TransformPick::None || m_transformPivotDragging)) {
+        const auto& spos = m_snapEngine.activeSnap().value().position;
+        const QPoint c = worldToScreen(QPointF(spos.x, spos.y));
+        reserved.append(QRect(c.x() - 9, c.y() - 9, 18, 18));
+    }
+    if (m_transformGlyphVisible && !m_selectedIds.isEmpty()) {
+        const int k = m_transformGlyphArc ? kTransformPivotRotatePx
+                                          : kTransformPivotGlyphPx;
+        const QPoint c = worldToScreen(m_transformPivot);
+        reserved.append(QRect(c.x() - k / 2, c.y() - k / 2, k, k));
+    }
+    m_constraintRenderer.setReservedGlyphRects(reserved);
+
+    QVector<QRect> geom;
+    for (const auto& e : m_entities) {
+        if (e.points.empty()) continue;
+        double minx = 1e18, miny = 1e18, maxx = -1e18, maxy = -1e18;
+        for (const auto& p : e.points) {
+            minx = std::min(minx, p.x); maxx = std::max(maxx, p.x);
+            miny = std::min(miny, p.y); maxy = std::max(maxy, p.y);
+        }
+        const QPoint a = worldToScreen(QPointF(minx, miny));
+        const QPoint b = worldToScreen(QPointF(maxx, maxy));
+        geom.append(QRect(QPoint(std::min(a.x(), b.x()), std::min(a.y(), b.y())),
+                          QPoint(std::max(a.x(), b.x()), std::max(a.y(), b.y()))));
+    }
+    m_constraintRenderer.setGeometryRects(geom);
+}
+
+// Selection handles for a whole selected group: one handle per unique corner
+// across every member (the FixedPoint pivot in red), plus the group badge.
+void SketchCanvas::drawGroupSelectionHandles(QPainter& painter, const SketchEntity& sel)
+{
+    // Collect unique points across all group entities and
+    // identify which one is the FixedPoint (pivot) handle.
+    QVector<QPointF> uniquePts;
+    QPointF pivotPt;
+    bool hasPivot = false;
+    const double eps2 = geometry::kCoincidentTol;
+
+    // Find the FixedPoint anchor position
+    for (const auto& c : m_constraints) {
+        if (c.type != ConstraintType::FixedPoint || !c.enabled
+            || c.entityIds.empty())
+            continue;
+        const SketchEntity* fpEnt = entityById(c.entityIds[0]);
+        if (!fpEnt || fpEnt->groupId != sel.groupId) continue;
+        int pi = hobbycad::valueAt(c.pointIndices, 0, 0);
+        if (pi < fpEnt->points.size()) {
+            pivotPt = fpEnt->points[pi];
+            hasPivot = true;
+            break;
         }
     }
 
-    // If no entity snap, try grid snap
-    if (m_snapToGrid) {
-        double snappedX = qRound(world.x() / m_gridSpacing) * m_gridSpacing;
-        double snappedY = qRound(world.y() / m_gridSpacing) * m_gridSpacing;
-        return {snappedX, snappedY};
+    for (const auto& e : m_entities) {
+        if (e.groupId != sel.groupId) continue;
+        for (const QPointF& pt : e.points) {
+            bool dup = false;
+            for (const QPointF& u : uniquePts) {
+                double dx = pt.x() - u.x();
+                double dy = pt.y() - u.y();
+                if (dx * dx + dy * dy < eps2) { dup = true; break; }
+            }
+            if (!dup) uniquePts.append(pt);
+        }
     }
 
-    return world;
+    for (const QPointF& pt : uniquePts) {
+        QPoint p = worldToScreen(pt);
+        bool isPivot = false;
+        if (hasPivot) {
+            double dx = pt.x() - pivotPt.x();
+            double dy = pt.y() - pivotPt.y();
+            isPivot = (dx * dx + dy * dy < eps2);
+        }
+        if (isPivot) {
+            painter.setPen(QPen(QColor(200, 40, 40), 1));
+            painter.setBrush(QColor(255, 180, 180));
+        } else {
+            painter.setPen(QPen(QColor(0, 120, 215), 1));
+            painter.setBrush(Qt::white);
+        }
+        painter.drawRect(p.x() - 4, p.y() - 4, 8, 8);
+    }
+
+    // "You clicked a member of a group." The handles above already
+    // show the group's extent, but nothing says WHY handles appeared
+    // on entities the user never clicked; this does. It fires only
+    // outside the group (m_enteredGroupId < 0) because once you have
+    // entered one, individual members are exactly what you expect to
+    // be selecting.
+    if (!uniquePts.isEmpty()) {
+        QRect box;
+        for (const QPointF& pt : uniquePts) {
+            const QRect p1(worldToScreen(pt), QSize(1, 1));
+            box = box.isNull() ? p1 : box.united(p1);
+        }
+        // 32, not the badge row's 20. Measured on a size ladder:
+        // below about 30 the corner brackets stop reading as
+        // brackets and the interior fills in. It can afford the
+        // room: it is one indicator for a whole selection, not
+        // one chip per constraint competing for a slot.
+        const int kBadge = 32;
+        // Placed outside the group's bounding box, up and to the
+        // left, so it never lands on one of the handles just drawn.
+        // Clamped so a group running off the top-left corner does
+        // not push its own indicator out of the viewport.
+        QRect ggRect(qMax(2, box.left() - kBadge - 6),
+                     qMax(2, box.top() - kBadge - 6),
+                     kBadge, kBadge);
+        // Cross-renderer declutter: the group badge is drawn after the
+        // constraint chips, so it can see their placed rects and step
+        // clear of them (nudging further up-left, away from the group).
+        // [Aaron glyph rule 2026-09-09: no glyph overlaps another]
+        {
+            const QVector<QRect>& chips =
+                m_constraintRenderer.placedGlyphRects();
+            auto clashes = [&](const QRect& r) {
+                for (const QRect& g : chips)
+                    if (r.intersects(g)) return true;
+                return false;
+            };
+            for (int tries = 0; tries < 8 && clashes(ggRect); ++tries) {
+                if (ggRect.top() > kBadge + 4)
+                    ggRect.translate(0, -(kBadge + 4));   // step upward
+                else
+                    ggRect.translate(-(kBadge + 4), 0);   // then leftward
+                if (ggRect.left() < 2) { ggRect.moveLeft(2); break; }
+            }
+        }
+        const int bx = ggRect.left();
+        const int by = ggRect.top();
+
+        painter.save();
+        QPen groupPen(QColor(0, 120, 215), 1.2);
+        groupPen.setCapStyle(Qt::RoundCap);
+        groupPen.setJoinStyle(Qt::MiterJoin);
+        painter.setPen(groupPen);
+        painter.setBrush(Qt::NoBrush);
+        hobbycad::drawGroupGlyph(painter,
+                                 QRectF(bx, by, kBadge, kBadge));
+        painter.restore();
+        m_groupGlyphRect = QRect(bx, by, kBadge, kBadge);
+        m_groupGlyphGroupId = sel.groupId;   // clickable: selects the group
+    }
 }
 
-
-QPointF SketchCanvas::snapToAngle(const QPointF& origin, const QPointF& target) const
+// D-key constraint type hint (shown after TAB cycling).
+void SketchCanvas::drawDKeyHint(QPainter& painter)
 {
-    // Snap to nearest 45-degree increment (0, 45, 90, 135, 180, 225, 270, 315)
-    auto* self = const_cast<SketchCanvas*>(this);
+    QFont hintFont = painter.font();
+    hintFont.setPointSize(11);
+    hintFont.setBold(true);
+    painter.setFont(hintFont);
+    QString hintText = tr("D: %1").arg(m_dKeyTypeHint);
+    QFontMetrics fm(hintFont);
+    int textWidth = fm.horizontalAdvance(hintText);
+    int x = (width() - textWidth) / 2;
+    int y = 30;
+    // Background pill
+    QRect bgRect(x - 6, y - fm.ascent() - 2, textWidth + 12, fm.height() + 4);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 160));
+    painter.drawRoundedRect(bgRect, 4, 4);
+    painter.setPen(QColor(255, 255, 100));
+    painter.drawText(x, y, hintText);
+    painter.setFont(font());  // Restore default
+    painter.setPen(Qt::darkGray);
+}
 
-    double distance = QLineF(origin, target).length();
-    if (distance < 0.001) {
-        self->m_angleSnapActive = false;
-        return target;
+// Window selection rectangle: blue solid (window), green dashed (crossing).
+void SketchCanvas::drawWindowSelectionRect(QPainter& painter)
+{
+    QRectF selRect = QRectF(m_windowSelectStart, m_windowSelectEnd).normalized();
+    QPointF screenTopLeft = worldToScreen(selRect.topLeft());
+    QPointF screenBottomRight = worldToScreen(selRect.bottomRight());
+    QRectF screenRect = QRectF(screenTopLeft, screenBottomRight).normalized();
+
+    // Different colors for window vs crossing selection
+    if (m_windowSelectCrossing) {
+        // Crossing (right-to-left): green, dashed
+        painter.setPen(QPen(QColor(0, 180, 0), 1, Qt::DashLine));
+        painter.setBrush(QColor(0, 180, 0, 30));
+    } else {
+        // Window (left-to-right): blue, solid
+        painter.setPen(QPen(QColor(0, 120, 215), 1, Qt::SolidLine));
+        painter.setBrush(QColor(0, 120, 215, 30));
     }
-
-    double snappedAngle;
-    QPointF result = geometry::snapToAngleIncrementWithAngle(origin, target, 45.0, snappedAngle);
-
-    self->m_angleSnapActive = true;
-    self->m_snappedAngle = snappedAngle;
-
-    return result;
+    painter.drawRect(screenRect);
 }
 
 void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
 {
+    m_groupGlyphGroupId = -1;   // recomputed below if a group indicator is drawn
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
@@ -960,76 +1792,76 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
 
     // Draw entities
     for (const auto& e : m_entities) {
-        drawEntity(painter, e);
+        // Sketch Palette filters: skip construction / projected geometry when
+        // hidden. The selected entity always draws, so a hidden item can still
+        // be seen while it is being worked on.
+        if (!e.selected) {
+            if (!m_showConstruction && e.isConstruction) continue;
+            if (!m_showProjected && e.projectionSourceId >= 0) continue;
+        }
+        m_entityRenderer.drawEntity(painter, e);
+    }
+
+    // Highlight individually selected points (endpoints picked for a
+    // point-to-point constraint): a filled square in the selection color.
+    if (!m_selectedPoints.isEmpty()) {
+        painter.setPen(QPen(m_theme.constraintSelected, 2));
+        painter.setBrush(m_theme.constraintSelected);
+        for (const auto& pr : m_selectedPoints) {
+            const SketchEntity* e = entityById(pr.first);
+            if (!e || pr.second < 0 || pr.second >= e->points.size()) continue;
+            const QPoint sp = worldToScreen(e->points[pr.second]);
+            painter.drawRect(sp.x() - 4, sp.y() - 4, 8, 8);
+        }
+        painter.setBrush(Qt::NoBrush);
     }
 
     // Draw preview of entity being created
     if (m_isDrawing) {
-        drawPreview(painter);
+        // While dragging off a line-chain point, preview the tangent arc the
+        // release will commit, in place of the straight rubber-band line.
+        if (!(m_lineChainPressActive && m_wasDragged && drawTangentArcPreview(painter))) {
+            drawPreview(painter);
+        }
+    }
+
+    // Dashed guides and glyphs for the alignment inferred for the current
+    // segment (horizontal/vertical/parallel/perpendicular).
+    if (m_isDrawing && m_snapEngine.hasActiveInferences()) {
+        m_snapEngine.drawInferenceGuides(painter);
     }
 
     // Draw pre-click preview dot for entity creation tools (before first click)
     if (!m_isDrawing && m_activeTool != SketchTool::Select) {
-        // Get current cursor position
-        QPoint cursorPos = mapFromGlobal(QCursor::pos());
-        if (rect().contains(cursorPos)) {
-            QPointF cursorWorld = screenToWorld(cursorPos);
-
-            // For tangent arc, project onto entity
-            if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent && m_tangentTargets.isEmpty()) {
-                int hitId = const_cast<SketchCanvas*>(this)->hitTest(cursorWorld);
-                if (hitId >= 0) {
-                    const SketchEntity* hoverEntity = nullptr;
-                    for (const auto& e : m_entities) {
-                        if (e.id == hitId) {
-                            hoverEntity = &e;
-                            break;
-                        }
-                    }
-                    if (hoverEntity && (hoverEntity->type == SketchEntityType::Line ||
-                                        hoverEntity->type == SketchEntityType::Rectangle)) {
-                        QPointF projectedPoint = cursorWorld;
-                        bool altHeld = QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier;
-
-                        if (hoverEntity->type == SketchEntityType::Line && hoverEntity->points.size() >= 2) {
-                            QPointF p1 = hoverEntity->points[0];
-                            QPointF p2 = hoverEntity->points[1];
-                            projectedPoint = geometry::closestPointOnLine(cursorWorld, p1, p2);
-                            if (!altHeld) {
-                                QPointF midpoint = (p1 + p2) / 2.0;
-                                double snapDist = 10.0 / m_zoom;
-                                if (QLineF(projectedPoint, p1).length() < snapDist) {
-                                    projectedPoint = p1;
-                                } else if (QLineF(projectedPoint, p2).length() < snapDist) {
-                                    projectedPoint = p2;
-                                } else if (QLineF(projectedPoint, midpoint).length() < snapDist) {
-                                    projectedPoint = midpoint;
-                                }
-                            }
-                        }
-                        cursorWorld = projectedPoint;
-                    }
-                }
-            } else {
-                // For other tools, apply snapping
-                cursorWorld = snapPoint(cursorWorld);
-            }
-
-            // Draw the preview dot
-            QPoint screenPoint = worldToScreen(cursorWorld);
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor(0, 120, 215));
-            painter.drawEllipse(screenPoint, 5, 5);
-        }
+        drawToolPreviewDot(painter);
     }
 
     // Draw active snap point indicator
-    if (m_activeSnap && (m_isDrawing || m_isDraggingHandle)) {
-        drawSnapIndicator(painter, m_activeSnap.value());
+    // Transform preview: the selection where it WOULD be, faded.
+    if (!m_transformPreview.isEmpty()) {
+        painter.save();
+        painter.setOpacity(0.4);
+        for (const auto& ghost : m_transformPreview) m_entityRenderer.drawEntity(painter, ghost);
+        painter.restore();
+    }
+    if (m_snapEngine.hasActiveSnap() && (m_isDrawing || m_isDraggingHandle || m_transformPick != TransformPick::None || m_transformPivotDragging)) {
+        m_snapEngine.drawSnapIndicator(painter, m_snapEngine.activeSnap().value());
+    }
+    if (m_transformGlyphVisible && !m_selectedIds.isEmpty()) {
+        ensureTransformStateCurrent();
+        if (m_transformPick == TransformPick::FreeMove) drawFreeMoveHandles(painter);
+        drawTransformPivot(painter);
     }
 
+    updateConstraintRendererLayoutRects();
+
     // Draw constraints (dimensions)
-    drawConstraints(painter);
+    m_constraintRenderer.drawConstraints(painter);
+    m_entityRenderer.drawCurvatureComb(painter);
+    m_entityRenderer.drawUnconstrainedPoints(painter);
+    drawMidpointGrips(painter);
+    drawSlotAnchorGrips(painter);
+    drawOffSegmentTangents(painter);
 
     // Draw selection handles
     if (auto* sel = selectedEntity()) {
@@ -1037,67 +1869,27 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
         // selected, draw handles for all unique corner points across every
         // entity in the group (e.g. 4 corners of a decomposed rectangle).
         if (sel->groupId >= 0 && m_enteredGroupId < 0) {
-            // Collect unique points across all group entities and
-            // identify which one is the FixedPoint (pivot) handle.
-            QVector<QPointF> uniquePts;
-            QPointF pivotPt;
-            bool hasPivot = false;
-            const double eps2 = 1e-4;
-
-            // Find the FixedPoint anchor position
-            for (const auto& c : m_constraints) {
-                if (c.type != ConstraintType::FixedPoint || !c.enabled
-                    || c.entityIds.empty())
-                    continue;
-                const SketchEntity* fpEnt = entityById(c.entityIds[0]);
-                if (!fpEnt || fpEnt->groupId != sel->groupId) continue;
-                int pi = hobbycad::valueAt(c.pointIndices, 0, 0);
-                if (pi < fpEnt->points.size()) {
-                    pivotPt = fpEnt->points[pi];
-                    hasPivot = true;
-                    break;
-                }
-            }
-
-            for (const auto& e : m_entities) {
-                if (e.groupId != sel->groupId) continue;
-                for (const QPointF& pt : e.points) {
-                    bool dup = false;
-                    for (const QPointF& u : uniquePts) {
-                        double dx = pt.x() - u.x();
-                        double dy = pt.y() - u.y();
-                        if (dx * dx + dy * dy < eps2) { dup = true; break; }
-                    }
-                    if (!dup) uniquePts.append(pt);
-                }
-            }
-
-            for (const QPointF& pt : uniquePts) {
-                QPoint p = worldToScreen(pt);
-                bool isPivot = false;
-                if (hasPivot) {
-                    double dx = pt.x() - pivotPt.x();
-                    double dy = pt.y() - pivotPt.y();
-                    isPivot = (dx * dx + dy * dy < eps2);
-                }
-                if (isPivot) {
-                    painter.setPen(QPen(QColor(200, 40, 40), 1));
-                    painter.setBrush(QColor(255, 180, 180));
-                } else {
-                    painter.setPen(QPen(QColor(0, 120, 215), 1));
-                    painter.setBrush(Qt::white);
-                }
-                painter.drawRect(p.x() - 4, p.y() - 4, 8, 8);
-            }
+            drawGroupSelectionHandles(painter, *sel);
         } else {
-            drawSelectionHandles(painter, *sel);
+            m_entityRenderer.drawSelectionHandles(painter, *sel);
         }
+    }
+
+    // Bezier splines with a selected CONTROL POINT (not the primary selection)
+    // still show their control polygon + handles (highlighted inside).
+    const SketchEntity* primarySel = selectedEntity();
+    for (const auto& e : m_entities) {
+        if (e.type != SketchEntityType::Spline || !e.splineBezier) continue;
+        if (primarySel && e.id == primarySel->id) continue;
+        bool hasSelPt = false;
+        for (const auto& pr : m_selectedPoints) if (pr.first == e.id) { hasSelPt = true; break; }
+        if (hasSelPt) m_entityRenderer.drawSelectionHandles(painter, e);
     }
 
     // Draw snap constraint guides during modifier+drag
     // Show when: Shift held for snap, or Ctrl held with axis constraint
     if (m_isDraggingHandle && (m_shiftWasPressed || (m_ctrlWasPressed && m_snapAxis != SnapAxis::None))) {
-        drawSnapGuides(painter);
+        m_snapEngine.drawSnapGuides(painter);
     }
 
     // Draw background manipulation handles when in edit mode
@@ -1118,24 +1910,7 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
 
     // Draw D-key constraint type hint (shown after TAB cycling)
     if (!m_dKeyTypeHint.isEmpty()) {
-        QFont hintFont = painter.font();
-        hintFont.setPointSize(11);
-        hintFont.setBold(true);
-        painter.setFont(hintFont);
-        QString hintText = tr("D: %1").arg(m_dKeyTypeHint);
-        QFontMetrics fm(hintFont);
-        int textWidth = fm.horizontalAdvance(hintText);
-        int x = (width() - textWidth) / 2;
-        int y = 30;
-        // Background pill
-        QRect bgRect(x - 6, y - fm.ascent() - 2, textWidth + 12, fm.height() + 4);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(0, 0, 0, 160));
-        painter.drawRoundedRect(bgRect, 4, 4);
-        painter.setPen(QColor(255, 255, 100));
-        painter.drawText(x, y, hintText);
-        painter.setFont(font());  // Restore default
-        painter.setPen(Qt::darkGray);
+        drawDKeyHint(painter);
     }
 
     // Draw coordinates at cursor
@@ -1144,6 +1919,188 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
                          .arg(m_currentMouseWorld.x(), 0, 'f', 2)
                          .arg(m_currentMouseWorld.y(), 0, 'f', 2));
 
+    drawCursorHint(painter);
+
+    drawScaleBar(painter);
+
+    drawEnteredGroupBox(painter);
+
+    // Draw window selection rectangle
+    if (m_isWindowSelecting) {
+        drawWindowSelectionRect(painter);
+    }
+}
+
+void SketchCanvas::drawGrid(QPainter& painter)
+{
+    // Calculate visible area in world coordinates
+    QPointF topLeft = screenToWorld(QPoint(0, 0));
+    QPointF bottomRight = screenToWorld(QPoint(width(), height()));
+
+    // Adjust for Y-flip
+    double minY = qMin(topLeft.y(), bottomRight.y());
+    double maxY = qMax(topLeft.y(), bottomRight.y());
+    double minX = qMin(topLeft.x(), bottomRight.x());
+    double maxX = qMax(topLeft.x(), bottomRight.x());
+
+    // Determine grid spacing based on zoom level
+    double spacing = m_gridSpacing;
+    while (spacing * m_zoom < 10) spacing *= 5;  // Don't draw grid too dense
+    while (spacing * m_zoom > 100) spacing /= 5; // Don't draw grid too sparse
+
+    // Light grid lines
+    painter.setPen(QPen(m_theme.grid, 1));
+
+    // Vertical lines
+    double startX = qFloor(minX / spacing) * spacing;
+    for (double x = startX; x <= maxX; x += spacing) {
+        QPoint p1 = worldToScreen({x, minY});
+        QPoint p2 = worldToScreen({x, maxY});
+        painter.drawLine(p1, p2);
+    }
+
+    // Horizontal lines
+    double startY = qFloor(minY / spacing) * spacing;
+    for (double y = startY; y <= maxY; y += spacing) {
+        QPoint p1 = worldToScreen({minX, y});
+        QPoint p2 = worldToScreen({maxX, y});
+        painter.drawLine(p1, p2);
+    }
+}
+
+void SketchCanvas::drawMidpointGrips(QPainter& painter)
+{
+    // Midpoint grips: a hover marker (only while hovering, select mode) and a
+    // white dot for a selected midpoint (like an unconstrained end). (Aaron)
+    {
+        auto midOf = [&](int id, QPointF& out) -> bool {
+            const SketchEntity* e = entityById(id);
+            return e && entityMidpoint(*e, out);
+        };
+        QPointF mp;
+        if (m_selectedMidpointEntity >= 0 && midOf(m_selectedMidpointEntity, mp)) {
+            const QPoint sp = worldToScreen(mp);
+            painter.save();
+            painter.setPen(QPen(m_theme.pointDotPen, 1));
+            painter.setBrush(m_theme.pointDotFill);
+            painter.drawEllipse(QPointF(sp), kMidpointDotRadiusPx, kMidpointDotRadiusPx);
+            painter.restore();
+        }
+        if (m_hoverMidpointEntity >= 0
+            && m_hoverMidpointEntity != m_selectedMidpointEntity
+            && midOf(m_hoverMidpointEntity, mp)) {
+            const QPoint sp = worldToScreen(mp);
+            painter.save();
+            painter.setPen(QPen(m_theme.pointDotPen, 1));
+            painter.setBrush(m_theme.pointDotFill);
+            QPolygonF tri;                          // Fusion-style midpoint triangle
+            tri << QPointF(sp.x(),     sp.y() - 5)
+                << QPointF(sp.x() - 5, sp.y() + 4)
+                << QPointF(sp.x() + 5, sp.y() + 4);
+            painter.drawPolygon(tri);
+            painter.restore();
+        }
+    }
+}
+
+void SketchCanvas::drawSlotAnchorGrips(QPainter& painter)
+{
+    // Reveal a slot's anchor points while hovering it (select mode), each drawn
+    // with its own snap-type icon via the shared snap indicator, so a cap
+    // center is a circle, a line-end a square, a side midpoint a triangle, not a
+    // uniform triangle (Aaron). A clicked anchor persists as a white dot.
+    if (m_hoverSlotEntity >= 0) {
+        if (const SketchEntity* slot = entityById(m_hoverSlotEntity))
+            for (const auto& sp : sketch::slotAnchorPoints(*slot))
+                m_snapEngine.drawSnapIndicator(painter, sp);
+    }
+    if (m_selectedSlotAnchor.first >= 0) {
+        if (const SketchEntity* slot = entityById(m_selectedSlotAnchor.first)) {
+            const auto anchors = sketch::slotAnchorPoints(*slot);
+            const int idx = m_selectedSlotAnchor.second;
+            if (idx >= 0 && idx < static_cast<int>(anchors.size())) {
+                const QPoint sp = worldToScreen(QPointF(anchors[idx].position));
+                painter.save();
+                painter.setPen(QPen(m_theme.pointDotPen, 1));
+                painter.setBrush(m_theme.pointDotFill);
+                painter.drawEllipse(QPointF(sp), kMidpointDotRadiusPx, kMidpointDotRadiusPx);
+                painter.restore();
+            }
+        }
+    }
+}
+
+void SketchCanvas::drawCursorHint(QPainter& painter)
+{
+    // On-canvas hint near the cursor for the active tool at its current stage.
+    // Drawn in this always-run overlay pass so it shows even before the first
+    // point (drawPreview is gated on isDrawing); tools provide it via
+    // cursorHint(). Skipped for the Select tool: a hint trailing every idle
+    // selection is just noise. Supports multiple lines (split on '\n'). Matches
+    // the arc tool's on-canvas hint style. (Aaron)
+    if (m_showCursorHints && m_activeTool != SketchTool::Select) {
+        if (SketchToolHandler* h = activeHandler()) {
+            const QString msg = h->cursorHint(*this);
+            if (!msg.isEmpty()) {
+                const QPoint c = worldToScreen(m_currentMouseWorld);
+                const QFontMetrics fm(painter.font());
+                painter.save();
+                painter.setPen(QColor(80, 80, 80));
+                // Centered below the cursor and clear of its lower tip (Aaron).
+                // The arrow cursor's hotspot is its top-left point; it extends
+                // down by roughly the theme cursor size, so base the drop on
+                // that (XCURSOR_SIZE overrides; X default is 24px when unset)
+                // plus a small gap and the font ascent so the first line sits
+                // fully below the cursor. Multi-line stacks downward.
+                int cursorPx = qEnvironmentVariableIntValue("XCURSOR_SIZE");
+                if (cursorPx <= 0) cursorPx = kDefaultCursorSizePx;
+                const int y0 = c.y() + cursorPx + kCursorHintGapPx + fm.ascent();
+                int y = y0;
+                const QStringList lines = msg.split(QLatin1Char('\n'));
+                for (const QString& ln : lines) {
+                    painter.drawText(c.x() - fm.horizontalAdvance(ln) / 2, y, ln);
+                    y += fm.height();
+                }
+                painter.restore();
+            }
+        }
+    }
+}
+
+void SketchCanvas::drawScaleBar(QPainter& painter)
+{
+    // Scale bar (bottom-left, just above the coords). Shares the 3D viewport
+    // scale bar's logic: niceNumber snapping (1-2-5), the same 75px target /
+    // 180px max / 20px min, and formatScaleBarLabel's adaptive unit, so the 2D
+    // and 3D bars read identically (Aaron). Rescales as you zoom.
+    if (m_zoom > geometry::kZeroEps) {
+        const double worldPerPx = 1.0 / m_zoom;                 // mm per pixel
+        double worldLen = hobbycad::niceNumber(worldPerPx * hobbycad::kScaleBarTargetPx);
+        double barPx = worldLen / worldPerPx;
+        while (barPx > hobbycad::kScaleBarMaxPx && worldLen > 1e-3) {
+            worldLen = hobbycad::niceNumberBelow(worldLen);
+            barPx = worldLen / worldPerPx;
+        }
+        if (barPx < hobbycad::kScaleBarMinPx) barPx = hobbycad::kScaleBarMinPx;
+        if (std::isfinite(barPx) && barPx < width()) {
+            const QString label = QString::fromStdString(
+                hobbycad::formatScaleBarLabel(worldLen, m_displayUnit));
+            const int y  = height() - kScaleBarBottomMargin;
+            const int x0 = kScaleBarInset;
+            const int x1 = kScaleBarInset + static_cast<int>(barPx + 0.5);
+            painter.save();
+            painter.setPen(QPen(Qt::darkGray, 1));
+            painter.drawLine(x0, y, x1, y);
+            painter.drawLine(x0, y - kScaleBarTickPx, x0, y);   // end ticks
+            painter.drawLine(x1, y - kScaleBarTickPx, x1, y);
+            painter.drawText(x1 + 6, y + 4, label);
+            painter.restore();
+        }
+    }
+}
+
+void SketchCanvas::drawEnteredGroupBox(QPainter& painter)
+{
     // Draw entered-group bounding box (KiCad-style visual feedback)
     if (m_enteredGroupId >= 0) {
         // Compute the bounding rect of all entities in the entered group
@@ -1166,14 +2123,14 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
         }
         if (!first) {
             // Add padding in world units
-            double pad = 6.0 / m_zoom;
+            double pad = kHitPadPx / m_zoom;
             groupBounds.adjust(-pad, -pad, pad, pad);
 
             QPointF tl = worldToScreen(groupBounds.topLeft());
             QPointF br = worldToScreen(groupBounds.bottomRight());
             QRectF screenRect = QRectF(tl, br).normalized();
 
-            // Slightly different shade — dashed border with translucent fill
+            // Slightly different shade: dashed border with translucent fill
             painter.setPen(QPen(QColor(0, 120, 215, 160), 1.5, Qt::DashLine));
             painter.setBrush(QColor(0, 120, 215, 15));
             painter.drawRect(screenRect);
@@ -1194,3378 +2151,575 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
             }
         }
     }
-
-    // Draw window selection rectangle
-    if (m_isWindowSelecting) {
-        QRectF selRect = QRectF(m_windowSelectStart, m_windowSelectEnd).normalized();
-        QPointF screenTopLeft = worldToScreen(selRect.topLeft());
-        QPointF screenBottomRight = worldToScreen(selRect.bottomRight());
-        QRectF screenRect = QRectF(screenTopLeft, screenBottomRight).normalized();
-
-        // Different colors for window vs crossing selection
-        if (m_windowSelectCrossing) {
-            // Crossing (right-to-left): green, dashed
-            painter.setPen(QPen(QColor(0, 180, 0), 1, Qt::DashLine));
-            painter.setBrush(QColor(0, 180, 0, 30));
-        } else {
-            // Window (left-to-right): blue, solid
-            painter.setPen(QPen(QColor(0, 120, 215), 1, Qt::SolidLine));
-            painter.setBrush(QColor(0, 120, 215, 30));
-        }
-        painter.drawRect(screenRect);
-    }
-}
-
-void SketchCanvas::drawGrid(QPainter& painter)
-{
-    // Calculate visible area in world coordinates
-    QPointF topLeft = screenToWorld(QPoint(0, 0));
-    QPointF bottomRight = screenToWorld(QPoint(width(), height()));
-
-    // Adjust for Y-flip
-    double minY = qMin(topLeft.y(), bottomRight.y());
-    double maxY = qMax(topLeft.y(), bottomRight.y());
-    double minX = qMin(topLeft.x(), bottomRight.x());
-    double maxX = qMax(topLeft.x(), bottomRight.x());
-
-    // Determine grid spacing based on zoom level
-    double spacing = m_gridSpacing;
-    while (spacing * m_zoom < 10) spacing *= 5;  // Don't draw grid too dense
-    while (spacing * m_zoom > 100) spacing /= 5; // Don't draw grid too sparse
-
-    // Light grid lines
-    painter.setPen(QPen(QColor(200, 200, 200), 1));
-
-    // Vertical lines
-    double startX = qFloor(minX / spacing) * spacing;
-    for (double x = startX; x <= maxX; x += spacing) {
-        QPoint p1 = worldToScreen({x, minY});
-        QPoint p2 = worldToScreen({x, maxY});
-        painter.drawLine(p1, p2);
-    }
-
-    // Horizontal lines
-    double startY = qFloor(minY / spacing) * spacing;
-    for (double y = startY; y <= maxY; y += spacing) {
-        QPoint p1 = worldToScreen({minX, y});
-        QPoint p2 = worldToScreen({maxX, y});
-        painter.drawLine(p1, p2);
-    }
 }
 
 void SketchCanvas::drawAxes(QPainter& painter)
 {
-    // Red X-axis
-    painter.setPen(QPen(Qt::red, 2));
+    // The two in-plane axes are colored by which world axis they are for on
+    // this plane (X red, Y green, Z blue): so a YZ sketch shows Y and Z, an XZ
+    // sketch X and Z, etc. Custom planes keep the default red/green.
+    const hobbycad::PlaneAxisLabels ax = hobbycad::planeAxisLabels(m_plane);
+    auto axisColor = [this](const char* label, const QColor& fallback) -> QColor {
+        switch (label[0]) {
+        case 'X': return m_theme.axisX;
+        case 'Y': return m_theme.axisY;
+        case 'Z': return m_theme.axisZ;
+        default:  return fallback;   // U/V on a custom plane
+        }
+    };
+
+    // In-plane axis 1 (horizontal, u)
+    painter.setPen(QPen(axisColor(ax.u, m_theme.axisX), 2));
     QPoint origin = worldToScreen({0, 0});
     QPoint xEnd = worldToScreen({50, 0});
     painter.drawLine(origin, xEnd);
 
-    // Green Y-axis
-    painter.setPen(QPen(Qt::green, 2));
+    // In-plane axis 2 (vertical, v)
+    painter.setPen(QPen(axisColor(ax.v, m_theme.axisY), 2));
     QPoint yEnd = worldToScreen({0, 50});
     painter.drawLine(origin, yEnd);
 
     // Origin dot
-    painter.setBrush(Qt::black);
+    painter.setBrush(m_theme.origin);
     painter.setPen(Qt::NoPen);
     painter.drawEllipse(origin, 4, 4);
 }
 
-void SketchCanvas::drawEntity(QPainter& painter, const SketchEntity& entity)
-{
-    QPen pen(entity.selected ? QColor(0, 120, 215) : Qt::black, 2);
-    if (entity.constrained) {
-        pen.setColor(entity.selected ? QColor(0, 180, 0) : QColor(0, 128, 0));
-    }
-
-    // Construction geometry: dashed line, orange/brown color
-    if (entity.isConstruction) {
-        pen.setColor(entity.selected ? QColor(255, 140, 0) : QColor(180, 100, 50));
-        pen.setStyle(Qt::DashLine);
-    }
-
-    painter.setPen(pen);
-    painter.setBrush(Qt::NoBrush);
-
-    switch (entity.type) {
-    case SketchEntityType::Point:
-        if (!entity.points.empty()) {
-            QPoint p = worldToScreen(entity.points[0]);
-            painter.setBrush(pen.color());
-            painter.drawEllipse(p, 4, 4);
-        }
-        break;
-
-    case SketchEntityType::Line:
-        if (entity.points.size() >= 2) {
-            QPoint p1 = worldToScreen(entity.points[0]);
-            QPoint p2 = worldToScreen(entity.points[1]);
-            painter.drawLine(p1, p2);
-        }
-        break;
-
-    case SketchEntityType::Rectangle:
-        if (entity.points.size() >= 4) {
-            // 4-point rotated rectangle (from 3-point mode)
-            QPoint c1 = worldToScreen(entity.points[0]);
-            QPoint c2 = worldToScreen(entity.points[1]);
-            QPoint c3 = worldToScreen(entity.points[2]);
-            QPoint c4 = worldToScreen(entity.points[3]);
-            painter.drawLine(c1, c2);
-            painter.drawLine(c2, c3);
-            painter.drawLine(c3, c4);
-            painter.drawLine(c4, c1);
-        } else if (entity.points.size() >= 2) {
-            // Standard axis-aligned rectangle (2 points = opposite corners)
-            QPoint p1 = worldToScreen(entity.points[0]);
-            QPoint p2 = worldToScreen(entity.points[1]);
-            painter.drawRect(QRect(p1, p2).normalized());
-        }
-        break;
-
-    case SketchEntityType::Parallelogram:
-        if (entity.points.size() >= 4) {
-            // 4-point parallelogram
-            QPoint c1 = worldToScreen(entity.points[0]);
-            QPoint c2 = worldToScreen(entity.points[1]);
-            QPoint c3 = worldToScreen(entity.points[2]);
-            QPoint c4 = worldToScreen(entity.points[3]);
-            painter.drawLine(c1, c2);
-            painter.drawLine(c2, c3);
-            painter.drawLine(c3, c4);
-            painter.drawLine(c4, c1);
-        }
-        break;
-
-    case SketchEntityType::Circle:
-        if (!entity.points.empty()) {
-            QPointF centerF = worldToScreenF(entity.points[0]);
-            double r = entity.radius * m_zoom;
-            painter.drawEllipse(centerF, r, r);
-
-            // Draw center point marker (small cross)
-            painter.save();
-            int crossSize = 4;
-            painter.drawLine(QPointF(centerF.x() - crossSize, centerF.y()), QPointF(centerF.x() + crossSize, centerF.y()));
-            painter.drawLine(QPointF(centerF.x(), centerF.y() - crossSize), QPointF(centerF.x(), centerF.y() + crossSize));
-
-            // Draw perimeter point markers for clicked points (points[1+] are perimeter points)
-            for (int i = 1; i < entity.points.size(); ++i) {
-                QPointF pt = worldToScreenF(entity.points[i]);
-                painter.drawLine(QPointF(pt.x() - crossSize, pt.y()), QPointF(pt.x() + crossSize, pt.y()));
-                painter.drawLine(QPointF(pt.x(), pt.y() - crossSize), QPointF(pt.x(), pt.y() + crossSize));
-            }
-            painter.restore();
-        }
-        break;
-
-    case SketchEntityType::Arc:
-        if (!entity.points.empty()) {
-            QPointF centerF = worldToScreenF(entity.points[0]);
-            double r = entity.radius * m_zoom;
-            QRectF arcRect(centerF.x() - r, centerF.y() - r, r * 2.0, r * 2.0);
-            // Use QPainterPath for floating-point precision
-            QPainterPath arcPath;
-            arcPath.arcMoveTo(arcRect, entity.startAngle);
-            arcPath.arcTo(arcRect, entity.startAngle, entity.sweepAngle);
-            painter.drawPath(arcPath);
-
-            // Draw center point marker (small cross)
-            painter.save();
-            int crossSize = 4;
-            painter.drawLine(QPointF(centerF.x() - crossSize, centerF.y()), QPointF(centerF.x() + crossSize, centerF.y()));
-            painter.drawLine(QPointF(centerF.x(), centerF.y() - crossSize), QPointF(centerF.x(), centerF.y() + crossSize));
-            painter.restore();
-        }
-        break;
-
-    case SketchEntityType::Polygon:
-        // Polygons are decomposed into Lines + Circle at creation time;
-        // no committed Polygon entities exist in development builds.
-        break;
-
-    case SketchEntityType::Slot:
-        if (entity.points.size() >= 3) {
-            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
-            QPointF arcCenterWorld = entity.points[0];
-            QPointF startWorld = entity.points[1];
-            QPointF endWorld = entity.points[2];
-            double halfWidth = entity.radius;
-
-            double arcRadius = QLineF(arcCenterWorld, startWorld).length();
-
-            // Project end point onto the arc (same radius from center)
-            // This ensures both endpoints are on the arc
-            double endDist = QLineF(arcCenterWorld, endWorld).length();
-            if (endDist > 0.001) {
-                double scale = arcRadius / endDist;
-                endWorld = arcCenterWorld + (endWorld - arcCenterWorld) * scale;
-            }
-
-            double innerRadius = arcRadius - halfWidth;
-            double outerRadius = arcRadius + halfWidth;
-
-            // Convert to screen coords
-            QPointF start = worldToScreen(startWorld);
-            QPointF end = worldToScreen(endWorld);  // Now projected onto arc
-            QPointF arcCenter = worldToScreen(arcCenterWorld);
-            double screenHalfWidth = halfWidth * m_zoom;
-            double screenInnerRadius = innerRadius * m_zoom;
-            double screenOuterRadius = outerRadius * m_zoom;
-
-            if (screenInnerRadius > 1 && screenOuterRadius > screenInnerRadius) {
-                double startAngle = std::atan2(-(start.y() - arcCenter.y()), start.x() - arcCenter.x()) * 180.0 / M_PI;
-                double endAngle = std::atan2(-(end.y() - arcCenter.y()), end.x() - arcCenter.x()) * 180.0 / M_PI;
-                double sweepAngle = endAngle - startAngle;
-
-                // Normalize sweep angle
-                while (sweepAngle > 180) sweepAngle -= 360;
-                while (sweepAngle < -180) sweepAngle += 360;
-
-                // Apply arc flip for > 180 degree arcs
-                if (entity.arcFlipped) {
-                    if (sweepAngle > 0) {
-                        sweepAngle -= 360;
-                    } else {
-                        sweepAngle += 360;
-                    }
-                }
-
-                QPainterPath path;
-                // Outer arc
-                QRectF outerRect(arcCenter.x() - screenOuterRadius, arcCenter.y() - screenOuterRadius,
-                                screenOuterRadius * 2, screenOuterRadius * 2);
-                path.arcMoveTo(outerRect, startAngle);
-                path.arcTo(outerRect, startAngle, sweepAngle);
-
-                // End cap (semicircle at end)
-                QPointF outerEnd = path.currentPosition();
-                QRectF innerRect(arcCenter.x() - screenInnerRadius, arcCenter.y() - screenInnerRadius,
-                                screenInnerRadius * 2, screenInnerRadius * 2);
-                QPainterPath tempPath;
-                tempPath.arcMoveTo(innerRect, endAngle);
-                QPointF innerEnd = tempPath.currentPosition();
-
-                QPointF capCenter = (outerEnd + innerEnd) / 2;
-                double capRadius = screenHalfWidth;
-                QRectF capRect(capCenter.x() - capRadius, capCenter.y() - capRadius,
-                              capRadius * 2, capRadius * 2);
-                double capStartAngle = std::atan2(-(outerEnd.y() - capCenter.y()), outerEnd.x() - capCenter.x()) * 180.0 / M_PI;
-                // End cap direction depends on sweep direction
-                double capSweep = (sweepAngle >= 0) ? 180 : -180;
-                path.arcTo(capRect, capStartAngle, capSweep);
-
-                // Inner arc (reverse direction)
-                path.arcTo(innerRect, endAngle, -sweepAngle);
-
-                // Start cap (semicircle at start)
-                tempPath.arcMoveTo(outerRect, startAngle);
-                QPointF outerStart = tempPath.currentPosition();
-                tempPath.arcMoveTo(innerRect, startAngle);
-                QPointF innerStart = tempPath.currentPosition();
-                capCenter = (outerStart + innerStart) / 2;
-                capRect = QRectF(capCenter.x() - capRadius, capCenter.y() - capRadius,
-                                capRadius * 2, capRadius * 2);
-                capStartAngle = std::atan2(-(innerStart.y() - capCenter.y()), innerStart.x() - capCenter.x()) * 180.0 / M_PI;
-                // Start cap direction also depends on sweep direction
-                path.arcTo(capRect, capStartAngle, capSweep);
-
-                path.closeSubpath();
-                painter.drawPath(path);
-
-                // Draw construction line arc along centerline (connecting arc centers of slot ends)
-                painter.save();
-                QPen constructionPen(QColor(100, 100, 100, 180), 1, Qt::DashLine);
-                painter.setPen(constructionPen);
-                painter.setBrush(Qt::NoBrush);
-                double screenArcRadius = arcRadius * m_zoom;
-                QRectF centerlineRect(arcCenter.x() - screenArcRadius, arcCenter.y() - screenArcRadius,
-                                      screenArcRadius * 2, screenArcRadius * 2);
-                QPainterPath centerlinePath;
-                centerlinePath.arcMoveTo(centerlineRect, startAngle);
-                centerlinePath.arcTo(centerlineRect, startAngle, sweepAngle);
-                painter.drawPath(centerlinePath);
-                painter.restore();
-            } else {
-                // Arc radius too small for proper slot - draw centerline arc with endpoint circles
-                double startAngle = std::atan2(-(start.y() - arcCenter.y()), start.x() - arcCenter.x()) * 180.0 / M_PI;
-                double endAngle = std::atan2(-(end.y() - arcCenter.y()), end.x() - arcCenter.x()) * 180.0 / M_PI;
-                double sweepAngle = endAngle - startAngle;
-                while (sweepAngle > 180) sweepAngle -= 360;
-                while (sweepAngle < -180) sweepAngle += 360;
-
-                double screenArcRadius = QLineF(arcCenter, start).length();
-                if (screenArcRadius > 5) {
-                    QPainterPath path;
-                    QRectF arcRect(arcCenter.x() - screenArcRadius, arcCenter.y() - screenArcRadius,
-                                  screenArcRadius * 2, screenArcRadius * 2);
-                    path.arcMoveTo(arcRect, startAngle);
-                    path.arcTo(arcRect, startAngle, sweepAngle);
-                    painter.drawPath(path);
-
-                    // Draw slot width circles at start and end
-                    painter.drawEllipse(start, screenHalfWidth, screenHalfWidth);
-                    painter.drawEllipse(end, screenHalfWidth, screenHalfWidth);
-                } else {
-                    // Very close to center - just draw lines
-                    painter.drawLine(start.toPoint(), arcCenter.toPoint());
-                    painter.drawLine(end.toPoint(), arcCenter.toPoint());
-                }
-            }
-        } else if (entity.points.size() >= 2) {
-            // Linear slot: points[0] and points[1] are arc centers
-            QPointF p1 = worldToScreen(entity.points[0]);
-            QPointF p2 = worldToScreen(entity.points[1]);
-            double halfWidth = entity.radius * m_zoom;
-
-            // Calculate the direction and perpendicular vectors
-            QLineF centerLine(p1, p2);
-            double len = centerLine.length();
-            if (len < 0.001) break;  // Degenerate slot
-
-            // Unit vectors along and perpendicular to the slot axis
-            double dx = (p2.x() - p1.x()) / len;
-            double dy = (p2.y() - p1.y()) / len;
-            double px = -dy * halfWidth;  // Perpendicular x
-            double py = dx * halfWidth;   // Perpendicular y
-
-            // Four corners of the slot body (going clockwise around the slot)
-            QPointF c1(p1.x() + px, p1.y() + py);  // p1 + perp (top-left if horizontal)
-            QPointF c2(p2.x() + px, p2.y() + py);  // p2 + perp (top-right if horizontal)
-            QPointF c3(p2.x() - px, p2.y() - py);  // p2 - perp (bottom-right if horizontal)
-            QPointF c4(p1.x() - px, p1.y() - py);  // p1 - perp (bottom-left if horizontal)
-
-            // Calculate angles for arc start points relative to circle centers
-            // For c2 (on p2's circle): angle from p2 to c2
-            double startAngle2 = std::atan2(-(c2.y() - p2.y()), c2.x() - p2.x()) * 180.0 / M_PI;
-            // For c4 (on p1's circle): angle from p1 to c4
-            double startAngle1 = std::atan2(-(c4.y() - p1.y()), c4.x() - p1.x()) * 180.0 / M_PI;
-
-            QPainterPath path;
-            // Start at c1, line to c2 (along one side)
-            path.moveTo(c1);
-            path.lineTo(c2);
-            // Semicircle at p2 end (from c2 to c3) - counter-clockwise sweep (outward)
-            QRectF arcRect2(p2.x() - halfWidth, p2.y() - halfWidth,
-                           halfWidth * 2, halfWidth * 2);
-            path.arcTo(arcRect2, startAngle2, 180);
-            // Line from c3 to c4 (along other side)
-            path.lineTo(c4);
-            // Semicircle at p1 end (from c4 to c1) - counter-clockwise sweep (outward)
-            QRectF arcRect1(p1.x() - halfWidth, p1.y() - halfWidth,
-                           halfWidth * 2, halfWidth * 2);
-            path.arcTo(arcRect1, startAngle1, 180);
-            path.closeSubpath();
-            painter.drawPath(path);
-
-            // Draw construction line along the centerline of the slot
-            painter.save();
-            QPen constructionPen(QColor(100, 100, 100, 180), 1, Qt::DashLine);
-            painter.setPen(constructionPen);
-            painter.setBrush(Qt::NoBrush);
-            painter.drawLine(p1.toPoint(), p2.toPoint());
-            painter.restore();
-        }
-        break;
-
-    case SketchEntityType::Ellipse:
-        if (!entity.points.empty()) {
-            QPointF centerF = worldToScreenF(entity.points[0]);
-            double majorR = entity.majorRadius * m_zoom;
-            double minorR = entity.minorRadius * m_zoom;
-            // For now, draw axis-aligned ellipse
-            painter.drawEllipse(centerF, majorR, minorR);
-        }
-        break;
-
-    case SketchEntityType::Spline:
-        if (entity.points.size() >= 2) {
-            QPainterPath path;
-
-            // Convert to screen coordinates first
-            QVector<QPointF> screenPoints;
-            for (const QPointF& wp : entity.points) {
-                screenPoints.append(worldToScreen(wp));
-            }
-
-            path.moveTo(screenPoints[0]);
-
-            if (screenPoints.size() == 2) {
-                // Just two points - draw a line
-                path.lineTo(screenPoints[1]);
-            } else {
-                // Catmull-Rom spline through all points
-                // For each segment between consecutive points
-                for (int i = 0; i < screenPoints.size() - 1; ++i) {
-                    QPointF p0, p1, p2, p3;
-
-                    // Get control points (with endpoint duplication for first/last segments)
-                    p1 = screenPoints[i];
-                    p2 = screenPoints[i + 1];
-
-                    if (i == 0) {
-                        p0 = p1;  // Duplicate first point
-                    } else {
-                        p0 = screenPoints[i - 1];
-                    }
-
-                    if (i == screenPoints.size() - 2) {
-                        p3 = p2;  // Duplicate last point
-                    } else {
-                        p3 = screenPoints[i + 2];
-                    }
-
-                    // Convert Catmull-Rom to cubic Bezier control points
-                    // Catmull-Rom uses tension = 0.5
-                    QPointF c1 = p1 + (p2 - p0) / 6.0;
-                    QPointF c2 = p2 - (p3 - p1) / 6.0;
-
-                    // Draw cubic Bezier curve
-                    path.cubicTo(c1, c2, p2);
-                }
-            }
-
-            painter.drawPath(path);
-        }
-        break;
-
-    case SketchEntityType::Text:
-        if (!entity.points.empty()) {
-            painter.save();
-            QPoint p = worldToScreen(entity.points[0]);
-
-            // Apply font properties
-            QFont font = painter.font();
-            if (!entity.fontFamily.empty()) {
-                font.setFamily(QString::fromStdString(entity.fontFamily));
-            }
-            // Scale font size by zoom level (fontSize is in mm)
-            double scaledSize = entity.fontSize * m_zoom;
-            font.setPointSizeF(qMax(6.0, scaledSize));  // Minimum 6pt for readability
-            font.setBold(entity.fontBold);
-            font.setItalic(entity.fontItalic);
-            painter.setFont(font);
-
-            // Apply rotation if needed
-            if (qAbs(entity.textRotation) > 0.01) {
-                painter.translate(p);
-                painter.rotate(-entity.textRotation);  // Negative for screen coords
-                painter.drawText(QPoint(0, 0), QString::fromStdString(entity.text));
-            } else {
-                painter.drawText(p, QString::fromStdString(entity.text));
-            }
-            painter.restore();
-
-            // Draw rotation arm line when selected
-            if (entity.selected && entity.points.size() >= 2) {
-                painter.save();
-                QPen armPen(QColor(30, 160, 30, 160), 1, Qt::DashLine);
-                painter.setPen(armPen);
-                painter.drawLine(worldToScreen(entity.points[0]),
-                                 worldToScreen(entity.points[1]));
-                painter.restore();
-            }
-        }
-        break;
-
-    case SketchEntityType::Dimension:
-        // Draw dimension line and text
-        if (entity.points.size() >= 2) {
-            QPoint p1 = worldToScreen(entity.points[0]);
-            QPoint p2 = worldToScreen(entity.points[1]);
-            painter.setPen(QPen(Qt::blue, 1));
-            painter.drawLine(p1, p2);
-
-            // Draw value at midpoint
-            QPoint mid((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2 - 10);
-            double dist = QLineF(entity.points[0], entity.points[1]).length();
-            painter.drawText(mid, QString::fromStdString(formatValueWithUnit(dist, m_displayUnit)));
-        }
-        break;
-    }
-}
 
 void SketchCanvas::drawPreview(QPainter& painter)
 {
-    QPen pen(QColor(0, 120, 215), 2, Qt::DashLine);
-    // Construction line mode uses construction geometry color
-    if (m_activeTool == SketchTool::Line && m_lineMode == LineMode::Construction) {
-        pen.setColor(QColor(180, 100, 50));  // Construction geometry color
+    QPen pen(m_theme.preview, 2, Qt::DashLine);
+    // A tool that previews in a different color says so itself.
+    if (SketchToolHandler* h = activeHandler()) {
+        h->previewPen(*this, pen);
     }
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
 
-    switch (m_activeTool) {
-    case SketchTool::Line:
-        if (!m_previewPoints.isEmpty()) {
-            QPoint p1 = worldToScreen(m_previewPoints[0]);
-            // Use constrained endpoint from updateEntity when dims are locked
-            QPointF lineEndWorld = (m_pendingEntity.points.size() >= 2)
-                ? QPointF(m_pendingEntity.points[1]) : m_currentMouseWorld;
-            QPoint p2 = worldToScreen(lineEndWorld);
-            painter.drawLine(p1, p2);
-
-            // Draw angle snap indicator when Ctrl is held
-            if (m_angleSnapActive) {
-                painter.save();
-                painter.setPen(QPen(QColor(255, 140, 0), 1, Qt::DashLine));
-                // Draw extended guide line through the snapped angle
-                double len = QLineF(p1, p2).length();
-                double extendLen = qMax(len * 0.3, 30.0);
-                double angleRad = m_snappedAngle * M_PI / 180.0;
-                QPointF dir(std::cos(angleRad), -std::sin(angleRad));  // Screen Y is inverted
-                QPointF ext1 = QPointF(p1) - dir * extendLen;
-                QPointF ext2 = QPointF(p2) + dir * extendLen;
-                painter.drawLine(ext1.toPoint(), p1);
-                painter.drawLine(p2, ext2.toPoint());
-
-                // Draw angle label near the start point
-                QString angleText = QString::fromStdString(formatAngle(m_snappedAngle));
-                painter.setPen(QColor(255, 140, 0));
-                QFont font = painter.font();
-                font.setPointSize(9);
-                painter.setFont(font);
-                QFontMetrics fm(font);
-                QRect textRect = fm.boundingRect(angleText);
-                QPoint labelPos(p1.x() + 15, p1.y() - 15);
-                QRectF bgRect(labelPos.x() - 2, labelPos.y() - textRect.height(),
-                              textRect.width() + 4, textRect.height() + 2);
-                painter.fillRect(bgRect, QColor(255, 255, 255, 200));
-                painter.drawText(labelPos, angleText);
-                painter.restore();
-            }
-
-            // Draw dimension input fields below the line
-            double length = QLineF(m_previewPoints[0], lineEndWorld).length();
-            if (length > 0.1) {
-                if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                    // Update live values for dim fields (use constrained endpoint)
-                    double dx = lineEndWorld.x() - m_previewPoints[0].x();
-                    double dy = lineEndWorld.y() - m_previewPoints[0].y();
-                    double angleDeg = std::atan2(dy, dx) * 180.0 / M_PI;
-                    m_dimFields[0].currentValue = length;  // Length
-                    m_dimFields[1].currentValue = angleDeg; // Angle
-
-                    // Position: midpoint below line, rotated to follow edge
-                    QPointF midPoint = (QPointF(p1) + QPointF(p2)) / 2.0;
-                    double screenAngle = std::atan2(p2.y() - p1.y(), p2.x() - p1.x()) * 180.0 / M_PI;
-                    bool flipped = (screenAngle > 90 || screenAngle < -90);
-                    if (flipped) screenAngle += 180;
-
-                    // Length field: below the line at midpoint
-                    QPointF lengthPos = midPoint + QPointF(0, 18);
-                    drawDimInputField(painter, lengthPos, 0, screenAngle);
-
-                    // Angle field: further below
-                    QPointF anglePos = midPoint + QPointF(0, 38);
-                    drawDimInputField(painter, anglePos, 1, screenAngle);
-                } else {
-                    drawPreviewDimension(painter, p1, p2, length);
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Rectangle:
-        if (!m_previewPoints.isEmpty()) {
-            if (m_rectMode == RectMode::ThreePoint) {
-                // 3-Point mode: draw angled rectangle
-                // Point 1: first corner, Point 2: second corner (defines first edge)
-                // Point 3 (or mouse): perpendicular offset (defines width)
-                QPointF p1 = m_previewPoints[0];
-                QPointF p2 = (m_previewPoints.size() >= 2) ? m_previewPoints[1] : m_currentMouseWorld;
-                QPointF p3 = m_currentMouseWorld;
-
-                if (m_previewPoints.size() < 2) {
-                    // Still defining first edge - just draw the line
-                    QPoint sp1 = worldToScreen(p1);
-                    QPoint sp2 = worldToScreen(p2);
-                    painter.drawLine(sp1, sp2);
-
-                    // Draw edge length + angle dim input fields
-                    double edgeLen = QLineF(p1, p2).length();
-                    if (edgeLen > 0.1) {
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                            double dx = p2.x() - p1.x();
-                            double dy = p2.y() - p1.y();
-                            double angleDeg = std::atan2(dy, dx) * 180.0 / M_PI;
-                            m_dimFields[0].currentValue = edgeLen;
-                            m_dimFields[1].currentValue = angleDeg;
-
-                            QPointF midPt = (QPointF(sp1) + QPointF(sp2)) / 2.0;
-                            double screenAngle = std::atan2(sp2.y() - sp1.y(), sp2.x() - sp1.x()) * 180.0 / M_PI;
-                            bool flipped = (screenAngle > 90 || screenAngle < -90);
-                            if (flipped) screenAngle += 180;
-
-                            drawDimInputField(painter, midPt + QPointF(0, 18), 0, screenAngle);
-                            drawDimInputField(painter, midPt + QPointF(0, 38), 1, screenAngle);
-                        } else {
-                            drawPreviewDimension(painter, sp1, sp2, edgeLen);
-                        }
-                    }
-                } else {
-                    // Have two corners, now defining width
-                    // Calculate the direction of the first edge
-                    QPointF edge = p2 - p1;
-                    double edgeLen = QLineF(p1, p2).length();
-                    if (edgeLen > 0.01) {
-                        // Normalize edge direction
-                        QPointF edgeDir = edge / edgeLen;
-                        // Perpendicular direction (rotate 90 degrees CCW)
-                        QPointF perpDir(-edgeDir.y(), edgeDir.x());
-
-                        // Project mouse position onto perpendicular direction
-                        QPointF toMouse = p3 - p1;
-                        double perpDist = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-
-                        // Calculate all four corners
-                        QPointF c1 = p1;
-                        QPointF c2 = p2;
-                        QPointF c3 = p2 + perpDir * perpDist;
-                        QPointF c4 = p1 + perpDir * perpDist;
-
-                        // Draw the rectangle
-                        QPoint sc1 = worldToScreen(c1);
-                        QPoint sc2 = worldToScreen(c2);
-                        QPoint sc3 = worldToScreen(c3);
-                        QPoint sc4 = worldToScreen(c4);
-
-                        painter.drawLine(sc1, sc2);
-                        painter.drawLine(sc2, sc3);
-                        painter.drawLine(sc3, sc4);
-                        painter.drawLine(sc4, sc1);
-
-                        // Draw dimensions
-                        drawPreviewDimension(painter, sc1, sc2, edgeLen);  // Fixed edge from stage 1
-                        double width = std::abs(perpDist);
-                        if (width > 0.1) {
-                            if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 1) {
-                                m_dimFields[0].currentValue = width;
-                                QPointF midEdge2 = (QPointF(sc2) + QPointF(sc3)) / 2.0;
-                                double screenAngle2 = std::atan2(sc3.y() - sc2.y(), sc3.x() - sc2.x()) * 180.0 / M_PI;
-                                bool flipped2 = (screenAngle2 > 90 || screenAngle2 < -90);
-                                if (flipped2) screenAngle2 += 180;
-                                drawDimInputField(painter, midEdge2 + QPointF(0, 18), 0, screenAngle2);
-                            } else {
-                                drawPreviewDimension(painter, sc2, sc3, width);
-                            }
-                        }
-                    }
-                }
-
-                // Draw corner markers for placed points
-                painter.save();
-                painter.setPen(QPen(QColor(255, 140, 0), 1));
-                painter.setBrush(QColor(255, 140, 0));
-                for (int i = 0; i < m_previewPoints.size(); ++i) {
-                    QPoint sp = worldToScreen(m_previewPoints[i]);
-                    painter.drawEllipse(sp, 4, 4);
-                }
-                painter.restore();
-            } else if (m_rectMode == RectMode::Parallelogram) {
-                // Parallelogram mode: p1 -> p2 -> p3 -> p4, where p4 = p1 + (p3 - p2)
-                QPointF p1 = m_previewPoints[0];
-                QPointF p2 = (m_previewPoints.size() >= 2) ? m_previewPoints[1] : m_currentMouseWorld;
-                QPointF p3 = m_currentMouseWorld;
-
-                if (m_previewPoints.size() < 2) {
-                    // Still defining first edge - just draw the line
-                    QPoint sp1 = worldToScreen(p1);
-                    QPoint sp2 = worldToScreen(p2);
-                    painter.drawLine(sp1, sp2);
-
-                    // Draw edge length and angle dimensions
-                    double edgeLen = QLineF(p1, p2).length();
-                    if (edgeLen > 0.1) {
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                            double dx = p2.x() - p1.x();
-                            double dy = p2.y() - p1.y();
-                            double angleDeg = std::atan2(dy, dx) * 180.0 / M_PI;
-                            m_dimFields[0].currentValue = edgeLen;
-                            m_dimFields[1].currentValue = angleDeg;
-
-                            QPointF midPt = (QPointF(sp1) + QPointF(sp2)) / 2.0;
-                            double screenAngle = std::atan2(sp2.y() - sp1.y(), sp2.x() - sp1.x()) * 180.0 / M_PI;
-                            bool flipped = (screenAngle > 90 || screenAngle < -90);
-                            if (flipped) screenAngle += 180;
-
-                            drawDimInputField(painter, midPt + QPointF(0, 18), 0, screenAngle);
-                            drawDimInputField(painter, midPt + QPointF(0, 38), 1, screenAngle);
-                        } else {
-                            drawPreviewDimension(painter, sp1, sp2, edgeLen);
-                        }
-                    }
-                } else {
-                    // Have two corners, now defining third (and computing fourth)
-                    QPointF p4 = p1 + (p3 - p2);  // Complete the parallelogram
-
-                    double edge1Len = QLineF(p1, p2).length();
-                    double edge2Len = QLineF(p2, p3).length();
-
-                    // Calculate the INSIDE angle at p2 (angle between rays p2->p1 and p2->p3)
-                    QPointF toP1 = p1 - p2;  // Vector from p2 to p1
-                    QPointF toP3 = p3 - p2;  // Vector from p2 to p3
-                    double insideAngleDeg = 0.0;
-                    if (edge1Len > 0.001 && edge2Len > 0.001) {
-                        double dot = toP1.x() * toP3.x() + toP1.y() * toP3.y();
-                        double cosAngle = dot / (edge1Len * edge2Len);
-                        cosAngle = qBound(-1.0, cosAngle, 1.0);
-                        insideAngleDeg = std::acos(cosAngle) * 180.0 / M_PI;
-                    }
-
-                    // Draw the parallelogram
-                    QPoint sp1 = worldToScreen(p1);
-                    QPoint sp2 = worldToScreen(p2);
-                    QPoint sp3 = worldToScreen(p3);
-                    QPoint sp4 = worldToScreen(p4);
-
-                    painter.drawLine(sp1, sp2);
-                    painter.drawLine(sp2, sp3);
-                    painter.drawLine(sp3, sp4);
-                    painter.drawLine(sp4, sp1);
-
-                    // Draw edge1 dimension (already placed, not editable in stage 2)
-                    drawPreviewDimension(painter, sp1, sp2, edge1Len);
-
-                    // Draw edge2 dimension and angle via dim input fields
-                    if (edge2Len > 0.1 && m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                        // Update current values
-                        m_dimFields[0].currentValue = edge2Len;
-                        m_dimFields[1].currentValue = insideAngleDeg;
-
-                        // Edge2 length field along the sp2-sp3 edge
-                        QPointF midEdge2 = (QPointF(sp2) + QPointF(sp3)) / 2.0;
-                        double screenAngle2 = std::atan2(sp3.y() - sp2.y(), sp3.x() - sp2.x()) * 180.0 / M_PI;
-                        bool flipped2 = (screenAngle2 > 90 || screenAngle2 < -90);
-                        if (flipped2) screenAngle2 += 180;
-                        drawDimInputField(painter, midEdge2 + QPointF(0, 18), 0, screenAngle2);
-
-                        // Draw angle arc (decorative) at p2
-                        if (edge1Len > 0.1) {
-                            painter.save();
-                            painter.setPen(QPen(QColor(255, 140, 0), 1));
-                            double arcRadius = qMin(30.0, qMin(edge1Len, edge2Len) * m_zoom * 0.3);
-                            double angleStart = std::atan2(-(sp1.y() - sp2.y()), sp1.x() - sp2.x()) * 180.0 / M_PI;
-                            double angleEnd = std::atan2(-(sp3.y() - sp2.y()), sp3.x() - sp2.x()) * 180.0 / M_PI;
-                            double angleSweep = angleEnd - angleStart;
-                            while (angleSweep > 180) angleSweep -= 360;
-                            while (angleSweep < -180) angleSweep += 360;
-                            QRectF arcRect(sp2.x() - arcRadius, sp2.y() - arcRadius,
-                                           arcRadius * 2, arcRadius * 2);
-                            painter.drawArc(arcRect, static_cast<int>(angleStart * 16),
-                                           static_cast<int>(angleSweep * 16));
-                            painter.restore();
-
-                            // Angle dim input field at label position
-                            double labelAngle = (angleStart + angleSweep / 2.0) * M_PI / 180.0;
-                            QPointF labelPos(sp2.x() + (arcRadius + 15) * std::cos(-labelAngle),
-                                             sp2.y() + (arcRadius + 15) * std::sin(-labelAngle));
-                            drawDimInputField(painter, labelPos, 1, 0.0);
-                        }
-                    } else if (edge2Len > 0.1) {
-                        // Fallback: no dim fields available
-                        drawPreviewDimension(painter, sp2, sp3, edge2Len);
-                        // Draw inside angle indicator at p2
-                        if (edge1Len > 0.1) {
-                            painter.save();
-                            painter.setPen(QPen(QColor(255, 140, 0), 1));
-                            double arcRadius = qMin(30.0, qMin(edge1Len, edge2Len) * m_zoom * 0.3);
-                            double startAngle = std::atan2(-(sp1.y() - sp2.y()), sp1.x() - sp2.x()) * 180.0 / M_PI;
-                            double endAngle = std::atan2(-(sp3.y() - sp2.y()), sp3.x() - sp2.x()) * 180.0 / M_PI;
-                            double sweepAngle = endAngle - startAngle;
-                            while (sweepAngle > 180) sweepAngle -= 360;
-                            while (sweepAngle < -180) sweepAngle += 360;
-                            QRectF arcRect(sp2.x() - arcRadius, sp2.y() - arcRadius,
-                                           arcRadius * 2, arcRadius * 2);
-                            painter.drawArc(arcRect, static_cast<int>(startAngle * 16),
-                                           static_cast<int>(sweepAngle * 16));
-                            QString angleText = QString::fromStdString(formatAngle(insideAngleDeg));
-                            QFont font = painter.font();
-                            font.setPointSize(9);
-                            painter.setFont(font);
-                            QFontMetrics fm(font);
-                            QRect textRect = fm.boundingRect(angleText);
-                            double labelAngle = (startAngle + sweepAngle / 2.0) * M_PI / 180.0;
-                            QPointF labelPos(sp2.x() + (arcRadius + 15) * std::cos(-labelAngle),
-                                             sp2.y() + (arcRadius + 15) * std::sin(-labelAngle));
-                            QRectF bgRect(labelPos.x() - textRect.width() / 2 - 2,
-                                          labelPos.y() - textRect.height() / 2 - 1,
-                                          textRect.width() + 4, textRect.height() + 2);
-                            painter.fillRect(bgRect, QColor(255, 255, 255, 200));
-                            painter.drawText(bgRect, Qt::AlignCenter, angleText);
-                            painter.restore();
-                        }
-                    }
-                }
-
-                // Draw corner markers for placed points
-                painter.save();
-                painter.setPen(QPen(QColor(255, 140, 0), 1));
-                painter.setBrush(QColor(255, 140, 0));
-                for (int i = 0; i < m_previewPoints.size(); ++i) {
-                    QPoint sp = worldToScreen(m_previewPoints[i]);
-                    painter.drawEllipse(sp, 4, 4);
-                }
-                painter.restore();
-            } else {
-                // Corner or Center mode - use constrained corners from updateEntity
-                QPointF corner1, corner2;
-                if (m_rectMode == RectMode::Center) {
-                    // Center mode: pendingEntity stores [center, corner1, corner2]
-                    if (m_pendingEntity.points.size() >= 3) {
-                        corner1 = m_pendingEntity.points[1];
-                        corner2 = m_pendingEntity.points[2];
-                    } else {
-                        QPointF center = m_previewPoints[0];
-                        QPointF delta = m_currentMouseWorld - center;
-                        corner1 = center - delta;
-                        corner2 = m_currentMouseWorld;
-                    }
-                } else if (m_pendingEntity.points.size() >= 4) {
-                    // Corner mode — rotated (both W+H locked): 4 corners
-                    QPointF c0 = m_pendingEntity.points[0];
-                    QPointF c1 = m_pendingEntity.points[1];
-                    QPointF c2 = m_pendingEntity.points[2];
-                    QPointF c3 = m_pendingEntity.points[3];
-                    QPoint s0 = worldToScreen(c0);
-                    QPoint s1 = worldToScreen(c1);
-                    QPoint s2 = worldToScreen(c2);
-                    QPoint s3 = worldToScreen(c3);
-
-                    QPolygon poly;
-                    poly << s0 << s1 << s2 << s3 << s0;
-                    painter.drawPolyline(poly);
-
-                    // Width and height from locked dims
-                    double width = getLockedDim(0);
-                    double height = getLockedDim(1);
-                    if (width > 0 && height > 0 && m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                        m_dimFields[0].currentValue = width;
-                        m_dimFields[1].currentValue = height;
-                        // Width label along edge c0→c1
-                        QPointF wMid = (QPointF(s0) + QPointF(s1)) / 2.0;
-                        QPointF wDir = QPointF(s1) - QPointF(s0);
-                        double wAngle = std::atan2(wDir.y(), wDir.x()) * 180.0 / M_PI;
-                        if (wAngle > 90.0)  wAngle -= 180.0;
-                        if (wAngle < -90.0) wAngle += 180.0;
-                        // Offset perpendicular to the edge (outward)
-                        QPointF wPerp(-wDir.y(), wDir.x());
-                        double wLen = std::sqrt(wPerp.x() * wPerp.x() + wPerp.y() * wPerp.y());
-                        if (wLen > 1e-6) wPerp /= wLen;
-                        drawDimInputField(painter, wMid - wPerp * 18, 0, wAngle);
-                        // Height label along edge c0→c3
-                        QPointF hMid = (QPointF(s0) + QPointF(s3)) / 2.0;
-                        QPointF hDir = QPointF(s3) - QPointF(s0);
-                        double hAngle = std::atan2(hDir.y(), hDir.x()) * 180.0 / M_PI;
-                        if (hAngle > 90.0)  hAngle -= 180.0;
-                        if (hAngle < -90.0) hAngle += 180.0;
-                        QPointF hPerp(-hDir.y(), hDir.x());
-                        double hLen = std::sqrt(hPerp.x() * hPerp.x() + hPerp.y() * hPerp.y());
-                        if (hLen > 1e-6) hPerp /= hLen;
-                        drawDimInputField(painter, hMid - hPerp * 40, 1, hAngle);
-                    }
-                } else {
-                    // Corner mode — axis-aligned: 2 points
-                    corner1 = m_previewPoints[0];
-                    corner2 = (m_pendingEntity.points.size() >= 2)
-                        ? QPointF(m_pendingEntity.points[1]) : m_currentMouseWorld;
-                }
-
-                // Draw axis-aligned rectangle (2-point case and Center mode)
-                if (m_pendingEntity.points.size() < 4 || m_rectMode == RectMode::Center) {
-                    QPoint p1 = worldToScreen(corner1);
-                    QPoint p2 = worldToScreen(corner2);
-                    QRect rect = QRect(p1, p2).normalized();
-                    painter.drawRect(rect);
-
-                    // Draw center marker in center mode
-                    if (m_rectMode == RectMode::Center) {
-                        QPoint centerScreen = worldToScreen(m_previewPoints[0]);
-                        painter.save();
-                        painter.setPen(QPen(QColor(255, 140, 0), 1));
-                        painter.drawLine(centerScreen.x() - 5, centerScreen.y(),
-                                       centerScreen.x() + 5, centerScreen.y());
-                        painter.drawLine(centerScreen.x(), centerScreen.y() - 5,
-                                       centerScreen.x(), centerScreen.y() + 5);
-                        painter.restore();
-                    }
-
-                    // Draw width and height dimensions
-                    double width = std::abs(corner2.x() - corner1.x());
-                    double height = std::abs(corner2.y() - corner1.y());
-                    if (width > 0.1 || height > 0.1) {
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                            m_dimFields[0].currentValue = width;
-                            m_dimFields[1].currentValue = height;
-                            // Width below bottom edge
-                            QPointF bottomMid((rect.left() + rect.right()) / 2.0, rect.bottom() + 18);
-                            drawDimInputField(painter, bottomMid, 0);
-                            // Height along right edge
-                            QPointF rightMid(rect.right() + 40, (rect.top() + rect.bottom()) / 2.0);
-                            drawDimInputField(painter, rightMid, 1);
-                        } else {
-                            if (width > 0.1) {
-                                QPoint bottomLeft(rect.left(), rect.bottom());
-                                QPoint bottomRight(rect.right(), rect.bottom());
-                                drawPreviewDimension(painter, bottomLeft, bottomRight, width);
-                            }
-                            if (height > 0.1) {
-                                QPoint topRight(rect.right(), rect.top());
-                                QPoint bottomRight2(rect.right(), rect.bottom());
-                                drawPreviewDimension(painter, topRight, bottomRight2, height);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Circle:
-        if (!m_previewPoints.isEmpty()) {
-            QPointF centerWorld;
-            double r;
-            int crossSize = 4;
-
-            if (m_circleMode == CircleMode::TwoPoint) {
-                // Two-point (diameter) mode: first point is one end of diameter
-                QPointF p1 = m_previewPoints[0];
-                // Use constrained endpoint from updateEntity
-                QPointF p2 = (m_pendingEntity.points.size() >= 2)
-                    ? QPointF(m_pendingEntity.points[1]) : m_currentMouseWorld;
-                centerWorld = (p1 + p2) / 2.0;
-                r = QLineF(p1, p2).length() / 2.0;
-
-                QPoint center = worldToScreen(centerWorld);
-                int rPx = static_cast<int>(r * m_zoom);
-                painter.drawEllipse(center, rPx, rPx);
-
-                // Draw center point marker
-                painter.drawLine(center.x() - crossSize, center.y(), center.x() + crossSize, center.y());
-                painter.drawLine(center.x(), center.y() - crossSize, center.x(), center.y() + crossSize);
-
-                // Draw diameter line and endpoint markers
-                QPoint sp1 = worldToScreen(p1);
-                QPoint sp2 = worldToScreen(p2);
-                painter.save();
-                painter.setPen(QPen(QColor(128, 128, 128), 1, Qt::DashLine));
-                painter.drawLine(sp1, sp2);
-                painter.restore();
-
-                // Draw perimeter point markers (the two diameter endpoints)
-                painter.drawLine(sp1.x() - crossSize, sp1.y(), sp1.x() + crossSize, sp1.y());
-                painter.drawLine(sp1.x(), sp1.y() - crossSize, sp1.x(), sp1.y() + crossSize);
-                painter.drawLine(sp2.x() - crossSize, sp2.y(), sp2.x() + crossSize, sp2.y());
-                painter.drawLine(sp2.x(), sp2.y() - crossSize, sp2.x(), sp2.y() + crossSize);
-
-                // Draw diameter dimension
-                if (r > 0.05) {
-                    if (m_dimActiveIndex >= 0 && !m_dimFields.isEmpty()) {
-                        m_dimFields[0].currentValue = r * 2.0;
-                        QPointF midPt = (QPointF(sp1) + QPointF(sp2)) / 2.0 + QPointF(0, 18);
-                        drawDimInputField(painter, midPt, 0);
-                    } else {
-                        drawPreviewDimension(painter, sp1, sp2, r * 2.0);
-                    }
-                }
-            } else if (m_circleMode == CircleMode::ThreePoint) {
-                // Three-point circle: calculate circumcircle through points
-                QVector<QPointF> pts = m_previewPoints;
-                pts.append(m_currentMouseWorld);  // Add current mouse as next point
-
-                if (pts.size() >= 3) {
-                    // Use library function for circumcircle calculation
-                    auto arc = geometry::arcFromThreePoints(pts[0], pts[1], pts[2]);
-                    if (arc.has_value()) {
-                        centerWorld = arc->center;
-                        r = arc->radius;
-
-                        QPoint center = worldToScreen(centerWorld);
-                        int rPx = static_cast<int>(r * m_zoom);
-                        painter.drawEllipse(center, rPx, rPx);
-
-                        // Draw center point marker
-                        painter.drawLine(center.x() - crossSize, center.y(), center.x() + crossSize, center.y());
-                        painter.drawLine(center.x(), center.y() - crossSize, center.x(), center.y() + crossSize);
-
-                        // Draw the 3 perimeter points (no quadrant markers for 3-point circles)
-                        for (int i = 0; i < 3 && i < pts.size(); ++i) {
-                            QPoint pt = worldToScreen(pts[i]);
-                            painter.drawLine(pt.x() - crossSize, pt.y(), pt.x() + crossSize, pt.y());
-                            painter.drawLine(pt.x(), pt.y() - crossSize, pt.x(), pt.y() + crossSize);
-                        }
-
-                        // Draw radius dimension from center to first point
-                        if (r > 0.1) {
-                            QPoint sp1 = worldToScreen(pts[0]);
-                            drawPreviewDimension(painter, center, sp1, r);
-                        }
-                    }
-                } else if (pts.size() == 2) {
-                    // Only 2 points - show the line between them and point markers
-                    QPoint sp1 = worldToScreen(pts[0]);
-                    QPoint sp2 = worldToScreen(pts[1]);
-                    painter.save();
-                    painter.setPen(QPen(QColor(128, 128, 128), 1, Qt::DashLine));
-                    painter.drawLine(sp1, sp2);
-                    painter.restore();
-
-                    // Draw cross markers for placed points
-                    painter.drawLine(sp1.x() - crossSize, sp1.y(), sp1.x() + crossSize, sp1.y());
-                    painter.drawLine(sp1.x(), sp1.y() - crossSize, sp1.x(), sp1.y() + crossSize);
-                    painter.drawLine(sp2.x() - crossSize, sp2.y(), sp2.x() + crossSize, sp2.y());
-                    painter.drawLine(sp2.x(), sp2.y() - crossSize, sp2.x(), sp2.y() + crossSize);
-                }
-            } else {
-                // Center-radius mode - use constrained point from updateEntity
-                centerWorld = m_previewPoints[0];
-                QPointF perimWorld = (m_pendingEntity.points.size() >= 2)
-                    ? QPointF(m_pendingEntity.points[1]) : m_currentMouseWorld;
-                r = QLineF(centerWorld, perimWorld).length();
-
-                QPoint center = worldToScreen(centerWorld);
-                int rPx = static_cast<int>(r * m_zoom);
-                painter.drawEllipse(center, rPx, rPx);
-
-                // Draw center point marker
-                painter.drawLine(center.x() - crossSize, center.y(), center.x() + crossSize, center.y());
-                painter.drawLine(center.x(), center.y() - crossSize, center.x(), center.y() + crossSize);
-
-                // Draw perimeter point marker
-                QPoint radiusEnd = worldToScreen(perimWorld);
-                painter.drawLine(radiusEnd.x() - crossSize, radiusEnd.y(), radiusEnd.x() + crossSize, radiusEnd.y());
-                painter.drawLine(radiusEnd.x(), radiusEnd.y() - crossSize, radiusEnd.x(), radiusEnd.y() + crossSize);
-
-                // Draw radius dimension
-                if (r > 0.1) {
-                    if (m_dimActiveIndex >= 0 && !m_dimFields.isEmpty()) {
-                        m_dimFields[0].currentValue = r;
-                        QPointF midPt = (QPointF(center) + QPointF(radiusEnd)) / 2.0 + QPointF(0, 18);
-                        drawDimInputField(painter, midPt, 0);
-                    } else {
-                        drawPreviewDimension(painter, center, radiusEnd, r);
-                    }
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Point:
-        {
-            QPoint p = worldToScreen(snapPoint(m_currentMouseWorld));
-            painter.setBrush(QColor(0, 120, 215));
-            painter.drawEllipse(p, 4, 4);
-        }
-        break;
-
-    case SketchTool::Spline:
-        if (!m_previewPoints.isEmpty()) {
-            // Draw the spline curve preview with current mouse position
-            QVector<QPointF> allPoints = m_previewPoints;
-            allPoints.append(m_currentMouseWorld);
-
-            // Convert to screen coordinates
-            QVector<QPointF> screenPoints;
-            for (const QPointF& wp : allPoints) {
-                screenPoints.append(worldToScreen(wp));
-            }
-
-            QPainterPath path;
-            path.moveTo(screenPoints[0]);
-
-            if (screenPoints.size() == 2) {
-                // Just two points - draw a line
-                path.lineTo(screenPoints[1]);
-            } else {
-                // Catmull-Rom spline through all points
-                for (int i = 0; i < screenPoints.size() - 1; ++i) {
-                    QPointF p0, p1, p2, p3;
-
-                    p1 = screenPoints[i];
-                    p2 = screenPoints[i + 1];
-
-                    if (i == 0) {
-                        p0 = p1;
-                    } else {
-                        p0 = screenPoints[i - 1];
-                    }
-
-                    if (i == screenPoints.size() - 2) {
-                        p3 = p2;
-                    } else {
-                        p3 = screenPoints[i + 2];
-                    }
-
-                    // Convert Catmull-Rom to cubic Bezier control points
-                    QPointF c1 = p1 + (p2 - p0) / 6.0;
-                    QPointF c2 = p2 - (p3 - p1) / 6.0;
-
-                    path.cubicTo(c1, c2, p2);
-                }
-            }
-
-            painter.drawPath(path);
-
-            // Draw control points
-            painter.setBrush(QColor(0, 120, 215));
-            for (const QPointF& sp : screenPoints) {
-                painter.drawEllipse(sp, 3, 3);
-            }
-        }
-        break;
-
-    case SketchTool::Slot:
-        if (!m_previewPoints.isEmpty()) {
-            QPointF p1World = m_previewPoints[0];
-            // Use constrained endpoint from updateEntity for linear slots
-            QPointF p2World = (m_pendingEntity.points.size() >= 2 &&
-                               (m_slotMode == SlotMode::CenterToCenter || m_slotMode == SlotMode::Overall))
-                ? QPointF(m_pendingEntity.points[1]) : m_currentMouseWorld;
-            double radius = m_pendingEntity.radius;
-            if (radius < 0.1) radius = 5.0;  // Default radius
-
-            bool isArcSlot = (m_slotMode == SlotMode::ArcRadius || m_slotMode == SlotMode::ArcEnds);
-            if (isArcSlot) {
-                // Arc slot mode - needs 3 points
-                // ArcRadius: arc center -> start -> end (both endpoints constrained to arc)
-                // ArcEnds: start -> end -> arc center (free placement)
-                if (m_previewPoints.size() >= 2) {
-                    QPointF startWorld, endWorld, arcCenterWorld;
-
-                    if (m_slotMode == SlotMode::ArcRadius) {
-                        // Have arc center and start, current mouse is end (constrained to arc)
-                        arcCenterWorld = m_previewPoints[0];
-                        startWorld = m_previewPoints[1];
-                        // Constrain end point to arc radius
-                        double arcRadius = QLineF(arcCenterWorld, startWorld).length();
-                        double mouseAngle = std::atan2(m_currentMouseWorld.y() - arcCenterWorld.y(),
-                                                       m_currentMouseWorld.x() - arcCenterWorld.x());
-                        double startAngle = std::atan2(startWorld.y() - arcCenterWorld.y(),
-                                                       startWorld.x() - arcCenterWorld.x());
-
-                        // Minimum angular separation so slot ends don't overlap
-                        // Arc length between centers must be >= 2 * slot radius
-                        double slotRadius = m_pendingEntity.radius;
-                        if (slotRadius < 0.1) slotRadius = 5.0;
-                        double minAngularSep = (arcRadius > 0.001) ? (2.0 * slotRadius / arcRadius) : 0.1;
-
-                        // Calculate angular difference
-                        double angleDiff = mouseAngle - startAngle;
-                        // Normalize to [-PI, PI]
-                        while (angleDiff > M_PI) angleDiff -= 2 * M_PI;
-                        while (angleDiff < -M_PI) angleDiff += 2 * M_PI;
-
-                        // Clamp to minimum separation
-                        if (std::abs(angleDiff) < minAngularSep) {
-                            // Push to minimum distance in same direction
-                            double sign = (angleDiff >= 0) ? 1.0 : -1.0;
-                            mouseAngle = startAngle + sign * minAngularSep;
-                        }
-
-                        endWorld = arcCenterWorld + QPointF(arcRadius * std::cos(mouseAngle),
-                                                            arcRadius * std::sin(mouseAngle));
-                    } else {
-                        // ArcEnds: Have start and end points, current mouse is arc center
-                        // Both endpoints stay fixed; arc center is constrained to the perpendicular
-                        // bisector of the line between start and end (equidistant from both)
-                        startWorld = m_previewPoints[0];
-                        endWorld = m_previewPoints[1];
-
-                        // Find the perpendicular bisector of start-end line
-                        QPointF midpoint = (startWorld + endWorld) / 2.0;
-                        QPointF startToEnd = endWorld - startWorld;
-                        double chordLen = QLineF(startWorld, endWorld).length();
-
-                        if (chordLen > 0.001) {
-                            // Perpendicular direction (rotate 90 degrees)
-                            QPointF perpDir(-startToEnd.y() / chordLen, startToEnd.x() / chordLen);
-
-                            // Project mouse position onto the perpendicular bisector
-                            QPointF mouseToMid = m_currentMouseWorld - midpoint;
-                            double projDist = mouseToMid.x() * perpDir.x() + mouseToMid.y() * perpDir.y();
-
-                            // Arc center is on the perpendicular bisector
-                            arcCenterWorld = midpoint + perpDir * projDist;
-                        } else {
-                            arcCenterWorld = m_currentMouseWorld;
-                        }
-                    }
-
-                    // Calculate arc radius (now equidistant from both endpoints for ArcEnds mode)
-                    double arcRadius = QLineF(arcCenterWorld, startWorld).length();
-
-                    // Enforce minimum angular separation so slot ends don't overlap
-                    double startAngleRad = std::atan2(startWorld.y() - arcCenterWorld.y(),
-                                                       startWorld.x() - arcCenterWorld.x());
-                    double endAngleRad = std::atan2(endWorld.y() - arcCenterWorld.y(),
-                                                     endWorld.x() - arcCenterWorld.x());
-                    double slotRadius = m_pendingEntity.radius;
-                    if (slotRadius < 0.1) slotRadius = 5.0;
-                    double minAngularSep = (arcRadius > 0.001) ? (2.0 * slotRadius / arcRadius) : 0.1;
-
-                    double angleDiff = endAngleRad - startAngleRad;
-                    while (angleDiff > M_PI) angleDiff -= 2 * M_PI;
-                    while (angleDiff < -M_PI) angleDiff += 2 * M_PI;
-
-                    // If endpoints are too close angularly, push arc center further out
-                    if (std::abs(angleDiff) < minAngularSep && arcRadius > 0.001) {
-                        double halfChord = QLineF(startWorld, endWorld).length() / 2.0;
-                        // For minimum separation, we need a larger radius
-                        // halfChord = radius * sin(angle/2), so radius = halfChord / sin(minAngularSep/2)
-                        double requiredRadius = halfChord / std::sin(minAngularSep / 2.0);
-                        if (requiredRadius > arcRadius) {
-                            QPointF midpoint = (startWorld + endWorld) / 2.0;
-                            QPointF toCenter = arcCenterWorld - midpoint;
-                            double toCenterLen = QLineF(midpoint, arcCenterWorld).length();
-                            if (toCenterLen > 0.001) {
-                                double newDist = std::sqrt(requiredRadius * requiredRadius - halfChord * halfChord);
-                                arcCenterWorld = midpoint + toCenter * (newDist / toCenterLen);
-                                arcRadius = requiredRadius;
-                            }
-                        }
-                    }
-
-                    double innerRadius = arcRadius - radius;
-                    double outerRadius = arcRadius + radius;
-
-                    // Draw the arc slot preview
-                    QPointF ss = worldToScreen(startWorld);
-                    QPointF se = worldToScreen(endWorld);  // Now projected onto arc
-                    QPointF sc = worldToScreen(arcCenterWorld);
-
-                    double screenInnerRadius = innerRadius * m_zoom;
-                    double screenOuterRadius = outerRadius * m_zoom;
-                    double screenHalfWidth = radius * m_zoom;
-
-                    double startAngle = std::atan2(-(ss.y() - sc.y()), ss.x() - sc.x()) * 180.0 / M_PI;
-                    double endAngle = std::atan2(-(se.y() - sc.y()), se.x() - sc.x()) * 180.0 / M_PI;
-                    double sweepAngle = endAngle - startAngle;
-
-                    // Normalize sweep angle to [-180, 180]
-                    while (sweepAngle > 180) sweepAngle -= 360;
-                    while (sweepAngle < -180) sweepAngle += 360;
-
-                    // Use tracked flip state (toggled by Shift key)
-                    if (m_arcSlotFlipped) {
-                        if (sweepAngle > 0) {
-                            sweepAngle -= 360;
-                        } else {
-                            sweepAngle += 360;
-                        }
-                    }
-
-                    if (screenInnerRadius > 1 && screenOuterRadius > screenInnerRadius) {
-                        QPainterPath path;
-                        // Outer arc
-                        QRectF outerRect(sc.x() - screenOuterRadius, sc.y() - screenOuterRadius,
-                                        screenOuterRadius * 2, screenOuterRadius * 2);
-                        path.arcMoveTo(outerRect, startAngle);
-                        path.arcTo(outerRect, startAngle, sweepAngle);
-
-                        // End cap
-                        QPointF outerEnd = path.currentPosition();
-                        QRectF innerRect(sc.x() - screenInnerRadius, sc.y() - screenInnerRadius,
-                                        screenInnerRadius * 2, screenInnerRadius * 2);
-                        QPainterPath tempPath;
-                        tempPath.arcMoveTo(innerRect, endAngle);
-                        QPointF innerEnd = tempPath.currentPosition();
-
-                        // Semi-circle end cap at end
-                        QPointF capCenter = (outerEnd + innerEnd) / 2;
-                        double capRadius = screenHalfWidth;
-                        QRectF capRect(capCenter.x() - capRadius, capCenter.y() - capRadius,
-                                      capRadius * 2, capRadius * 2);
-                        double capStartAngle = std::atan2(-(outerEnd.y() - capCenter.y()), outerEnd.x() - capCenter.x()) * 180.0 / M_PI;
-                        // End cap direction depends on sweep direction
-                        double capSweep = (sweepAngle >= 0) ? 180 : -180;
-                        path.arcTo(capRect, capStartAngle, capSweep);
-
-                        // Inner arc (reverse direction)
-                        path.arcTo(innerRect, endAngle, -sweepAngle);
-
-                        // Start cap
-                        tempPath.arcMoveTo(outerRect, startAngle);
-                        QPointF outerStart = tempPath.currentPosition();
-                        tempPath.arcMoveTo(innerRect, startAngle);
-                        QPointF innerStart = tempPath.currentPosition();
-                        capCenter = (outerStart + innerStart) / 2;
-                        capRect = QRectF(capCenter.x() - capRadius, capCenter.y() - capRadius,
-                                        capRadius * 2, capRadius * 2);
-                        capStartAngle = std::atan2(-(innerStart.y() - capCenter.y()), innerStart.x() - capCenter.x()) * 180.0 / M_PI;
-                        // Start cap direction also depends on sweep direction
-                        path.arcTo(capRect, capStartAngle, capSweep);
-
-                        path.closeSubpath();
-                        painter.drawPath(path);
-                    } else {
-                        // Arc radius too small for proper slot - draw centerline arc to show path
-                        double screenArcRadius = QLineF(sc, ss).length();
-                        if (screenArcRadius > 5) {
-                            QPainterPath path;
-                            QRectF arcRect(sc.x() - screenArcRadius, sc.y() - screenArcRadius,
-                                          screenArcRadius * 2, screenArcRadius * 2);
-                            path.arcMoveTo(arcRect, startAngle);
-                            path.arcTo(arcRect, startAngle, sweepAngle);
-                            painter.drawPath(path);
-
-                            // Draw slot width circles at start and end to indicate width
-                            painter.drawEllipse(ss, screenHalfWidth, screenHalfWidth);
-                            painter.drawEllipse(se, screenHalfWidth, screenHalfWidth);
-                        } else {
-                            // Very close to center - just draw lines to show relationship
-                            painter.drawLine(ss.toPoint(), sc.toPoint());
-                            painter.drawLine(se.toPoint(), sc.toPoint());
-                        }
-                    }
-
-                    // Draw control points
-                    painter.setBrush(QColor(0, 120, 215));
-                    painter.drawEllipse(ss.toPoint(), 3, 3);
-                    painter.drawEllipse(se.toPoint(), 3, 3);
-                    painter.drawEllipse(sc.toPoint(), 3, 3);
-
-                    // Draw sweep angle dim input field along the centerline arc
-                    double arcLengthWorld = arcRadius * std::abs(sweepAngle * M_PI / 180.0);
-                    if (arcLengthWorld > 0.1) {
-                        // Position dimension label at the midpoint of the arc (offset outward)
-                        double midAngle = startAngle + sweepAngle / 2.0;
-                        double midAngleRad = midAngle * M_PI / 180.0;
-                        double outwardAngle = -midAngleRad;
-                        double offsetDist = screenOuterRadius + 20;
-                        QPointF labelCenter = sc + QPointF(offsetDist * std::cos(outwardAngle),
-                                                           offsetDist * std::sin(outwardAngle));
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 1) {
-                            m_dimFields[0].currentValue = std::abs(sweepAngle);
-                            drawDimInputField(painter, labelCenter, 0, 0);
-                        } else {
-                            drawArcDimensionLabel(painter, labelCenter, arcLengthWorld, sweepAngle);
-                        }
-                    }
-
-                    // Draw label to indicate what's being placed (3rd point)
-                    painter.save();
-                    painter.setPen(QColor(0, 120, 215));
-                    QFont font = painter.font();
-                    font.setPointSize(9);
-                    painter.setFont(font);
-                    QString line1 = (m_slotMode == SlotMode::ArcRadius)
-                        ? tr("Click to place END point")
-                        : tr("Click to place ARC CENTER");
-                    QString line2 = tr("(Shift to flip arc direction)");
-                    QFontMetrics fm = painter.fontMetrics();
-                    QRectF rect1 = fm.boundingRect(line1);
-                    QRectF rect2 = fm.boundingRect(line2);
-                    double totalHeight = rect1.height() + rect2.height() + 2;
-                    double maxWidth = qMax(rect1.width(), rect2.width());
-                    // Position label below the moving point
-                    QPointF labelPos = (m_slotMode == SlotMode::ArcRadius)
-                        ? se + QPointF(0, 15)   // ArcRadius: end point follows mouse
-                        : sc + QPointF(0, 15);  // ArcEnds: arc center follows mouse
-                    QRectF bgRect(-maxWidth / 2 - 2, 0, maxWidth + 4, totalHeight + 2);
-                    bgRect.translate(labelPos);
-                    // Draw background for readability
-                    painter.fillRect(bgRect, QColor(255, 255, 255, 200));
-                    // Draw line 1
-                    QPointF textPos1(labelPos.x() - rect1.width() / 2, labelPos.y() + rect1.height());
-                    painter.drawText(textPos1, line1);
-                    // Draw line 2
-                    QPointF textPos2(labelPos.x() - rect2.width() / 2, labelPos.y() + rect1.height() + rect2.height() + 2);
-                    painter.drawText(textPos2, line2);
-                    painter.restore();
-                } else if (m_previewPoints.size() == 1) {
-                    // Only have start point, draw line to current mouse (placing 2nd point)
-                    QPoint sp1 = worldToScreen(p1World);
-                    QPoint sp2 = worldToScreen(p2World);
-                    painter.drawLine(sp1, sp2);
-                    painter.setBrush(QColor(0, 120, 215));
-                    painter.drawEllipse(sp1, 3, 3);
-
-                    // Draw dimension below the line (Radius for ArcRadius, distance for ArcEnds)
-                    double distance = QLineF(p1World, p2World).length();
-                    if (distance > 0.1) {
-                        if (m_slotMode == SlotMode::ArcRadius && m_dimActiveIndex >= 0 && m_dimFields.size() >= 1) {
-                            m_dimFields[0].currentValue = distance;
-                            QPointF midPt = (QPointF(sp1) + QPointF(sp2)) / 2.0;
-                            double screenAngle = std::atan2(sp2.y() - sp1.y(), sp2.x() - sp1.x()) * 180.0 / M_PI;
-                            bool flipped = (screenAngle > 90 || screenAngle < -90);
-                            if (flipped) screenAngle += 180;
-                            drawDimInputField(painter, midPt + QPointF(0, 18), 0, screenAngle);
-                        } else {
-                            drawPreviewDimension(painter, sp1, sp2, distance);
-                        }
-                    }
-
-                    // Draw instruction label at midpoint of line, rotated to follow the line
-                    QPointF midPoint = (QPointF(sp1) + QPointF(sp2)) / 2.0;
-                    painter.save();
-                    painter.setPen(QColor(0, 120, 215));
-                    QFont font = painter.font();
-                    font.setPointSize(9);
-                    painter.setFont(font);
-
-                    // Calculate line angle
-                    double dx = sp2.x() - sp1.x();
-                    double dy = sp2.y() - sp1.y();
-                    double angle = std::atan2(dy, dx) * 180.0 / M_PI;
-
-                    // Keep text readable (Z-up orientation) - flip if pointing left
-                    if (angle > 90 || angle < -90) {
-                        angle += 180;
-                    }
-
-                    // Different label based on mode
-                    // ArcRadius: arc center -> start -> end (constrained)
-                    // ArcEnds: start -> end -> arc center
-                    QString label = (m_slotMode == SlotMode::ArcRadius)
-                        ? tr("Click to place START point")
-                        : tr("Click to place END point");
-                    QRectF textRect = painter.fontMetrics().boundingRect(label);
-
-                    // Translate to midpoint, rotate, then draw centered above the line
-                    painter.translate(midPoint);
-                    painter.rotate(angle);
-                    // Offset upward (negative Y in rotated coords) to sit on top of line
-                    QPointF offset(0, -textRect.height() / 2 - 4);
-                    textRect.moveCenter(offset);
-                    // Draw background for readability
-                    painter.fillRect(textRect.adjusted(-2, -1, 2, 1), QColor(255, 255, 255, 200));
-                    painter.drawText(textRect, Qt::AlignCenter, label);
-                    painter.restore();
-                }
-            } else {
-                // Linear slot modes (CenterToCenter and Overall)
-                QPointF center1, center2;
-
-                if (m_slotMode == SlotMode::Overall) {
-                    // Overall mode: points are endpoints, centers are offset inward by radius
-                    double len = QLineF(p1World, p2World).length();
-                    if (len > 0.001) {
-                        double dx = (p2World.x() - p1World.x()) / len;
-                        double dy = (p2World.y() - p1World.y()) / len;
-                        center1 = QPointF(p1World.x() + dx * radius, p1World.y() + dy * radius);
-                        center2 = QPointF(p2World.x() - dx * radius, p2World.y() - dy * radius);
-                    } else {
-                        center1 = p1World;
-                        center2 = p2World;
-                    }
-                } else {
-                    // CenterToCenter mode: points are arc centers
-                    center1 = p1World;
-                    center2 = p2World;
-                }
-
-                double halfWidth = radius * m_zoom;
-                QPointF sp1 = worldToScreen(center1);
-                QPointF sp2 = worldToScreen(center2);
-                QLineF centerLine(sp1, sp2);
-                double len = centerLine.length();
-
-                if (len > 0.001) {
-                    // Unit vectors along and perpendicular to the slot axis
-                    double dx = (sp2.x() - sp1.x()) / len;
-                    double dy = (sp2.y() - sp1.y()) / len;
-                    double px = -dy * halfWidth;  // Perpendicular x
-                    double py = dx * halfWidth;   // Perpendicular y
-
-                    // Four corners of the slot body (going clockwise around the slot)
-                    QPointF c1(sp1.x() + px, sp1.y() + py);  // p1 + perp
-                    QPointF c2(sp2.x() + px, sp2.y() + py);  // p2 + perp
-                    QPointF c3(sp2.x() - px, sp2.y() - py);  // p2 - perp
-                    QPointF c4(sp1.x() - px, sp1.y() - py);  // p1 - perp
-
-                    // Calculate angles for arc start points relative to circle centers
-                    double startAngle2 = std::atan2(-(c2.y() - sp2.y()), c2.x() - sp2.x()) * 180.0 / M_PI;
-                    double startAngle1 = std::atan2(-(c4.y() - sp1.y()), c4.x() - sp1.x()) * 180.0 / M_PI;
-
-                    QPainterPath path;
-                    path.moveTo(c1);
-                    path.lineTo(c2);
-                    QRectF arcRect2(sp2.x() - halfWidth, sp2.y() - halfWidth,
-                                   halfWidth * 2, halfWidth * 2);
-                    path.arcTo(arcRect2, startAngle2, 180);
-                    path.lineTo(c4);
-                    QRectF arcRect1(sp1.x() - halfWidth, sp1.y() - halfWidth,
-                                   halfWidth * 2, halfWidth * 2);
-                    path.arcTo(arcRect1, startAngle1, 180);
-                    path.closeSubpath();
-                    painter.drawPath(path);
-
-                    // Draw construction line along the centerline of the slot
-                    painter.save();
-                    QPen constructionPen(QColor(128, 128, 128), 1, Qt::DashLine);
-                    painter.setPen(constructionPen);
-                    painter.setBrush(Qt::NoBrush);
-                    painter.drawLine(sp1.toPoint(), sp2.toPoint());
-                    painter.restore();
-
-                    // Draw center points
-                    painter.setBrush(QColor(0, 120, 215));
-                    painter.drawEllipse(sp1.toPoint(), 3, 3);
-                    painter.drawEllipse(sp2.toPoint(), 3, 3);
-
-                    // In Overall mode, also show the actual endpoints
-                    if (m_slotMode == SlotMode::Overall) {
-                        QPointF end1 = worldToScreen(p1World);
-                        QPointF end2 = worldToScreen(p2World);
-                        painter.setBrush(QColor(255, 100, 100));
-                        painter.drawEllipse(end1.toPoint(), 2, 2);
-                        painter.drawEllipse(end2.toPoint(), 2, 2);
-                    }
-
-                    // Draw dimension label below the center line
-                    double slotLength = (m_slotMode == SlotMode::Overall)
-                        ? QLineF(p1World, p2World).length()       // Overall: endpoint to endpoint
-                        : QLineF(center1, center2).length();      // CenterToCenter: center to center
-                    if (slotLength > 0.1) {
-                        if (m_dimActiveIndex >= 0 && !m_dimFields.isEmpty()) {
-                            m_dimFields[0].currentValue = slotLength;
-                            QPointF midPt = (sp1 + sp2) / 2.0 + QPointF(0, 18);
-                            drawDimInputField(painter, midPt, 0);
-                        } else {
-                            drawPreviewDimension(painter, sp1.toPoint(), sp2.toPoint(), slotLength);
-                        }
-                    }
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Arc:
-        if (!m_previewPoints.isEmpty()) {
-            if (m_arcMode == ArcMode::ThreePoint) {
-                // 3-point arc: draw through existing points and current mouse
-                QVector<QPointF> pts = m_previewPoints;
-                pts.append(m_currentMouseWorld);
-
-                // Always draw placed-point markers (filled blue dots)
-                int numPlaced = m_previewPoints.size();
-                painter.setBrush(QColor(0, 120, 215));
-                for (int i = 0; i < numPlaced; ++i) {
-                    QPoint sp = worldToScreen(pts[i]);
-                    painter.drawEllipse(sp, 3, 3);
-                }
-                painter.setBrush(Qt::NoBrush);
-
-                if (pts.size() == 2) {
-                    // Just two points (1 placed + mouse) - draw a dashed line preview
-                    painter.save();
-                    painter.setPen(QPen(QColor(128, 128, 128), 1, Qt::DashLine));
-                    QPoint sp1 = worldToScreen(pts[0]);
-                    QPoint sp2 = worldToScreen(pts[1]);
-                    painter.drawLine(sp1, sp2);
-                    painter.restore();
-                } else if (pts.size() >= 3) {
-                    // Three points - calculate arc using library function
-                    auto arc = geometry::arcFromThreePoints(pts[0], pts[1], pts[2]);
-                    if (arc.has_value()) {
-                        // Use floating-point screen coords for precise arc rendering
-                        QPointF scf = worldToScreenF(arc->center);
-                        double rPx = arc->radius * m_zoom;
-
-                        // arcFromThreePoints returns angles in math convention
-                        // (CCW positive from 3 o'clock) which matches Qt's arcTo
-                        double startAngle = arc->startAngle;
-                        double sweep = arc->sweepAngle;
-
-                        // Draw arc using QPainterPath for sub-pixel precision
-                        QRectF arcRect(scf.x() - rPx, scf.y() - rPx, rPx * 2.0, rPx * 2.0);
-                        QPainterPath path;
-                        path.arcMoveTo(arcRect, startAngle);
-                        path.arcTo(arcRect, startAngle, sweep);
-                        painter.drawPath(path);
-
-                        // Draw center point marker (small cross)
-                        QPoint sc = scf.toPoint();
-                        int crossSize = 4;
-                        painter.drawLine(sc.x() - crossSize, sc.y(), sc.x() + crossSize, sc.y());
-                        painter.drawLine(sc.x(), sc.y() - crossSize, sc.x(), sc.y() + crossSize);
-
-                        // Draw mouse-position marker (open circle at 3rd point)
-                        QPoint sp3 = worldToScreen(pts[2]);
-                        painter.drawEllipse(sp3, 3, 3);
-
-                        // Draw arc length and angle dimension
-                        double arcLen = geometry::arcLength(*arc);
-                        if (arcLen > 0.1) {
-                            double midAngle = (arc->startAngle + arc->sweepAngle / 2.0) * M_PI / 180.0;
-                            double screenMidAngle = -midAngle;
-                            double offsetDist = rPx + 20;
-                            QPointF labelCenter = scf + QPointF(offsetDist * std::cos(screenMidAngle),
-                                                                 offsetDist * std::sin(screenMidAngle));
-                            drawArcDimensionLabel(painter, labelCenter, arcLen, arc->sweepAngle);
-                        }
-                    } else {
-                        // Collinear points — arc cannot be computed.
-                        // Draw dashed lines through all points as fallback.
-                        painter.save();
-                        painter.setPen(QPen(QColor(128, 128, 128), 1, Qt::DashLine));
-                        QPoint sp1 = worldToScreen(pts[0]);
-                        QPoint sp2 = worldToScreen(pts[1]);
-                        QPoint sp3 = worldToScreen(pts[2]);
-                        painter.drawLine(sp1, sp2);
-                        painter.drawLine(sp2, sp3);
-                        painter.restore();
-                    }
-                }
-            } else if (m_arcMode == ArcMode::CenterStartEnd) {
-                // Center-Start-End arc: center is first point, start defines radius
-                QPoint centerScreen = worldToScreen(m_previewPoints[0]);
-
-                if (m_previewPoints.size() == 1) {
-                    // Only center placed - draw line from center to mouse (radius preview)
-                    QPoint mouseScreen = worldToScreen(m_currentMouseWorld);
-                    painter.drawLine(centerScreen, mouseScreen);
-
-                    // Draw center marker
-                    int crossSize = 4;
-                    painter.drawLine(centerScreen.x() - crossSize, centerScreen.y(),
-                                     centerScreen.x() + crossSize, centerScreen.y());
-                    painter.drawLine(centerScreen.x(), centerScreen.y() - crossSize,
-                                     centerScreen.x(), centerScreen.y() + crossSize);
-
-                    // Show radius dim input field
-                    double radius = QLineF(m_previewPoints[0], m_currentMouseWorld).length();
-                    if (radius > 0.1) {
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 1) {
-                            m_dimFields[0].currentValue = radius;
-                            QPointF midPt = (QPointF(centerScreen) + QPointF(mouseScreen)) / 2.0;
-                            double screenAngle = std::atan2(mouseScreen.y() - centerScreen.y(), mouseScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-                            bool flipped = (screenAngle > 90 || screenAngle < -90);
-                            if (flipped) screenAngle += 180;
-                            drawDimInputField(painter, midPt + QPointF(0, 18), 0, screenAngle);
-                        } else {
-                            QPointF labelPos = (QPointF(centerScreen) + QPointF(mouseScreen)) / 2.0;
-                            labelPos += QPointF(10, -10);
-                            drawDimensionLabel(painter, labelPos, radius);
-                        }
-                    }
-                } else if (m_previewPoints.size() >= 2) {
-                    // Center and start placed - draw arc from start to mouse (constrained to radius)
-                    QPointF center = m_previewPoints[0];
-                    QPointF start = m_previewPoints[1];
-                    double radius = QLineF(center, start).length();
-
-                    // Constrain mouse to arc
-                    double endAngle = std::atan2(m_currentMouseWorld.y() - center.y(),
-                                                  m_currentMouseWorld.x() - center.x());
-                    QPointF endPoint = center + QPointF(radius * std::cos(endAngle),
-                                                         radius * std::sin(endAngle));
-
-                    // Convert to screen for drawing
-                    QPoint startScreen = worldToScreen(start);
-                    QPoint endScreen = worldToScreen(endPoint);
-                    int rPx = static_cast<int>(radius * m_zoom);
-                    QRect arcRect(centerScreen.x() - rPx, centerScreen.y() - rPx, rPx * 2, rPx * 2);
-
-                    // Calculate angles in screen space
-                    double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
-                                                          startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-                    double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
-                                                        endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-
-                    // Calculate sweep (take shorter path by default, flip with Shift)
-                    double sweep = endAngleScreen - startAngleScreen;
-                    if (sweep > 180) sweep -= 360;
-                    if (sweep < -180) sweep += 360;
-
-                    // Apply flip for > 180 degree arcs
-                    if (m_arcSlotFlipped) {
-                        if (sweep > 0) {
-                            sweep = sweep - 360;
-                        } else {
-                            sweep = sweep + 360;
-                        }
-                    }
-
-                    painter.drawArc(arcRect, static_cast<int>(-startAngleScreen * 16),
-                                    static_cast<int>(-sweep * 16));
-
-                    // Draw center marker
-                    int crossSize = 4;
-                    painter.drawLine(centerScreen.x() - crossSize, centerScreen.y(),
-                                     centerScreen.x() + crossSize, centerScreen.y());
-                    painter.drawLine(centerScreen.x(), centerScreen.y() - crossSize,
-                                     centerScreen.x(), centerScreen.y() + crossSize);
-
-                    // Draw start and end points
-                    painter.setBrush(QColor(0, 120, 215));
-                    painter.drawEllipse(startScreen, 3, 3);
-                    painter.drawEllipse(endScreen, 3, 3);
-
-                    // Draw sweep angle dim input field
-                    double arcLength = radius / m_zoom * std::abs(sweep * M_PI / 180.0);
-                    if (arcLength > 0.1) {
-                        double midAngle = (startAngleScreen + sweep / 2.0) * M_PI / 180.0;
-                        double offsetDist = rPx + 20;
-                        QPointF labelCenter = QPointF(centerScreen) + QPointF(offsetDist * std::cos(midAngle),
-                                                                               offsetDist * std::sin(midAngle));
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 1) {
-                            m_dimFields[0].currentValue = std::abs(sweep);
-                            drawDimInputField(painter, labelCenter, 0, 0);
-                        } else {
-                            drawArcDimensionLabel(painter, labelCenter, arcLength, sweep);
-                        }
-                    }
-
-                    // Draw hint message for Shift to flip
-                    QString line1 = tr("Arc: Center → Start → End");
-                    QString line2 = tr("(Shift to flip arc direction)");
-                    QFontMetrics fm(painter.font());
-                    int textWidth = std::max(fm.horizontalAdvance(line1), fm.horizontalAdvance(line2));
-                    int textHeight = fm.height() * 2 + 4;
-                    QPoint textPos(centerScreen.x() - textWidth / 2, centerScreen.y() + rPx + 30);
-                    painter.setPen(QColor(80, 80, 80));
-                    painter.drawText(textPos.x(), textPos.y(), line1);
-                    painter.drawText(textPos.x(), textPos.y() + fm.height() + 2, line2);
-                }
-            } else if (m_arcMode == ArcMode::StartEndRadius) {
-                // Start-End-Radius arc: start is first click, end is second click, then set radius
-                if (m_previewPoints.size() == 1) {
-                    // Only start placed - draw line from start to mouse (chord preview)
-                    QPoint startScreen = worldToScreen(m_previewPoints[0]);
-                    QPoint mouseScreen = worldToScreen(m_currentMouseWorld);
-                    painter.drawLine(startScreen, mouseScreen);
-
-                    // Draw start point
-                    painter.setBrush(QColor(0, 120, 215));
-                    painter.drawEllipse(startScreen, 3, 3);
-
-                    // Show chord length + angle dim input fields
-                    double chordLength = QLineF(m_previewPoints[0], m_currentMouseWorld).length();
-                    if (chordLength > 0.1) {
-                        if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                            double dx = m_currentMouseWorld.x() - m_previewPoints[0].x();
-                            double dy = m_currentMouseWorld.y() - m_previewPoints[0].y();
-                            double angleDeg = std::atan2(dy, dx) * 180.0 / M_PI;
-                            m_dimFields[0].currentValue = chordLength;
-                            m_dimFields[1].currentValue = angleDeg;
-                            QPointF midPt = (QPointF(startScreen) + QPointF(mouseScreen)) / 2.0;
-                            double screenAngle = std::atan2(mouseScreen.y() - startScreen.y(), mouseScreen.x() - startScreen.x()) * 180.0 / M_PI;
-                            bool flipped = (screenAngle > 90 || screenAngle < -90);
-                            if (flipped) screenAngle += 180;
-                            drawDimInputField(painter, midPt + QPointF(0, 18), 0, screenAngle);
-                            drawDimInputField(painter, midPt + QPointF(0, 38), 1, screenAngle);
-                        } else {
-                            QPointF labelPos = (QPointF(startScreen) + QPointF(mouseScreen)) / 2.0;
-                            labelPos += QPointF(10, -10);
-                            drawDimensionLabel(painter, labelPos, chordLength);
-                        }
-                    }
-                } else if (m_previewPoints.size() >= 2) {
-                    // Start and end placed - mouse controls arc center (constrained to perpendicular bisector)
-                    QPointF start = m_previewPoints[0];
-                    QPointF end = m_previewPoints[1];
-                    QPointF midChord = (start + end) / 2.0;
-                    double chordLength = QLineF(start, end).length();
-
-                    if (chordLength > 0.001) {
-                        // Calculate perpendicular direction from chord midpoint
-                        QPointF chordDir = (end - start) / chordLength;
-                        QPointF perpDir(-chordDir.y(), chordDir.x());
-
-                        // Project mouse onto perpendicular bisector to get arc center
-                        QPointF toMouse = m_currentMouseWorld - midChord;
-                        double projDist = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-
-                        // Ctrl snaps to midpoint (semicircle - exactly 180°)
-                        bool ctrlHeld = (QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier);
-                        if (ctrlHeld) {
-                            projDist = 0.0;
-                        }
-
-                        // Apply flip (Shift key) - move center to opposite side of chord
-                        if (m_arcSlotFlipped) {
-                            projDist = -projDist;
-                        }
-
-                        // Arc center is on the perpendicular bisector
-                        QPointF center = midChord + perpDir * projDist;
-
-                        // Calculate radius from center to endpoints (equidistant)
-                        double radius = QLineF(center, start).length();
-
-                        // Minimum radius to avoid degenerate arcs (skip if Ctrl for exact 180°)
-                        double halfChord = chordLength / 2.0;
-                        if (!ctrlHeld) {
-                            double minRadius = halfChord * 1.01;  // Just slightly larger than half chord
-                            if (radius < minRadius) {
-                                // Push center out to minimum distance
-                                double minDist = std::sqrt(minRadius * minRadius - halfChord * halfChord);
-                                double sign = (projDist >= 0) ? 1.0 : -1.0;
-                                center = midChord + perpDir * sign * minDist;
-                                radius = minRadius;
-                                // Update projDist after adjustment
-                                projDist = sign * minDist;
-                            }
-                        }
-
-                        // Convert to screen for drawing
-                        QPoint centerScreen = worldToScreen(center);
-                        QPoint startScreen = worldToScreen(start);
-                        QPoint endScreen = worldToScreen(end);
-                        int rPx = static_cast<int>(radius * m_zoom);
-                        QRect arcRect(centerScreen.x() - rPx, centerScreen.y() - rPx, rPx * 2, rPx * 2);
-
-                        // Calculate angles in screen space
-                        double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
-                                                              startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-                        double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
-                                                            endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-
-                        // Calculate sweep from start to end
-                        double sweep = endAngleScreen - startAngleScreen;
-                        // Normalize to [-180, 180]
-                        while (sweep > 180) sweep -= 360;
-                        while (sweep < -180) sweep += 360;
-
-                        // The arc length is determined by center position:
-                        // - Center far from chord (|projDist| > halfChord) = small arc (< 180°) because radius is large
-                        // - Center close to chord (|projDist| < halfChord) = large arc (> 180°) because radius is small
-                        // When |projDist| = halfChord, the arc is exactly 90° (radius = halfChord * sqrt(2))
-                        bool wantLongArc = (std::abs(projDist) < halfChord);
-
-                        // After normalization, sweep is in [-180, 180] (always "short" path)
-                        // If we want the long arc, flip to get > 180 or < -180
-                        if (wantLongArc) {
-                            if (sweep > 0) sweep -= 360;
-                            else sweep += 360;
-                        }
-                        // Note: m_arcSlotFlipped was already applied to projDist above,
-                        // which changed the center position and wantLongArc calculation.
-                        // We do NOT apply it again here.
-
-                        // For Ctrl (exact 180°), force sweep to exactly 180 or -180 degrees
-                        if (ctrlHeld) {
-                            sweep = (sweep > 0) ? 180.0 : -180.0;
-                        }
-
-                        painter.drawArc(arcRect, static_cast<int>(-startAngleScreen * 16),
-                                        static_cast<int>(-sweep * 16));
-
-                        // Draw center marker (this is where the cursor is constrained to)
-                        int crossSize = ctrlHeld ? 6 : 4;  // Larger when snapped
-                        painter.drawLine(centerScreen.x() - crossSize, centerScreen.y(),
-                                         centerScreen.x() + crossSize, centerScreen.y());
-                        painter.drawLine(centerScreen.x(), centerScreen.y() - crossSize,
-                                         centerScreen.x(), centerScreen.y() + crossSize);
-
-                        // When Ctrl is held, also draw a circle at the snap point for visibility
-                        if (ctrlHeld) {
-                            painter.setBrush(Qt::NoBrush);
-                            painter.drawEllipse(centerScreen, 8, 8);
-                        }
-
-                        // Draw start and end points (fixed)
-                        painter.setBrush(QColor(0, 120, 215));
-                        painter.drawEllipse(startScreen, 4, 4);
-                        painter.drawEllipse(endScreen, 4, 4);
-
-                        // Draw sweep angle dim input field at midpoint of arc
-                        double arcLength = radius * std::abs(sweep * M_PI / 180.0);
-                        if (arcLength > 0.1) {
-                            double midAngle = (startAngleScreen + sweep / 2.0) * M_PI / 180.0;
-                            double offsetDist = rPx + 25;
-                            QPointF labelCenter = QPointF(centerScreen) + QPointF(offsetDist * std::cos(midAngle),
-                                                                                   offsetDist * std::sin(midAngle));
-                            if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 1) {
-                                m_dimFields[0].currentValue = std::abs(sweep);
-                                drawDimInputField(painter, labelCenter, 0, 0);
-                            } else {
-                                drawArcDimensionLabel(painter, labelCenter, arcLength, sweep);
-                            }
-                        }
-
-                        // Draw hint message (positioned well below arc to avoid dimension overlap)
-                        QString line1 = tr("Arc: Start → End → Center");
-                        QString line2 = tr("(Shift to flip, Ctrl for 180°)");
-                        QFontMetrics fm(painter.font());
-                        int textWidth = std::max(fm.horizontalAdvance(line1), fm.horizontalAdvance(line2));
-                        QPoint textPos(centerScreen.x() - textWidth / 2, centerScreen.y() + rPx + 60);
-                        painter.setPen(QColor(80, 80, 80));
-                        painter.drawText(textPos.x(), textPos.y(), line1);
-                        painter.drawText(textPos.x(), textPos.y() + fm.height() + 2, line2);
-                    }
-                }
-            } else if (m_arcMode == ArcMode::Tangent) {
-                // Tangent arc preview (after first click)
-                if (!m_tangentTargets.isEmpty() && !m_previewPoints.isEmpty()) {
-                    // Find the tangent entity
-                    const SketchEntity* tangentEntity = nullptr;
-                    for (const auto& e : m_entities) {
-                        if (e.id == m_tangentTargets[0]) {
-                            tangentEntity = &e;
-                            break;
-                        }
-                    }
-
-                    if (tangentEntity) {
-                        QPointF clickPoint = m_previewPoints[0];
-                        QPointF endPoint = m_currentMouseWorld;
-
-                        // Project click point onto the entity to get the actual tangent point
-                        QPointF tangentPoint = clickPoint;
-                        if (tangentEntity->type == SketchEntityType::Line && tangentEntity->points.size() >= 2) {
-                            tangentPoint = geometry::closestPointOnLine(clickPoint,
-                                tangentEntity->points[0], tangentEntity->points[1]);
-                        } else if (tangentEntity->type == SketchEntityType::Rectangle && tangentEntity->points.size() >= 2) {
-                            // Find closest edge and project onto it
-                            QPointF corners[4];
-                            if (tangentEntity->points.size() >= 4) {
-                                for (int i = 0; i < 4; ++i) corners[i] = tangentEntity->points[i];
-                            } else {
-                                corners[0] = tangentEntity->points[0];
-                                corners[1] = QPointF(tangentEntity->points[1].x, tangentEntity->points[0].y);
-                                corners[2] = tangentEntity->points[1];
-                                corners[3] = QPointF(tangentEntity->points[0].x, tangentEntity->points[1].y);
-                            }
-                            double minDist = std::numeric_limits<double>::max();
-                            for (int i = 0; i < 4; ++i) {
-                                QPointF edgeStart = corners[i];
-                                QPointF edgeEnd = corners[(i + 1) % 4];
-                                QPointF projected = geometry::closestPointOnLine(clickPoint, edgeStart, edgeEnd);
-                                double dist = QLineF(clickPoint, projected).length();
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    tangentPoint = projected;
-                                }
-                            }
-                        }
-
-                        // Calculate the tangent arc
-                        TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, endPoint);
-
-                        if (ta.valid) {
-                            // Draw the arc preview
-                            QPoint centerScreen = worldToScreen(ta.center);
-                            QPoint startScreen = worldToScreen(tangentPoint);
-                            QPoint endScreen = worldToScreen(endPoint);
-                            int rPx = static_cast<int>(ta.radius * m_zoom);
-                            QRect arcRect(centerScreen.x() - rPx, centerScreen.y() - rPx, rPx * 2, rPx * 2);
-
-                            // Calculate angles in screen space (Y is inverted)
-                            double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
-                                                                  startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-                            double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
-                                                                endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-
-                            // Use the world-space sweep angle from calculateTangentArc.
-                            // Screen Y is inverted from world Y, so we negate the sweep.
-                            double sweep = -ta.sweepAngle;
-
-                            // Apply flip with Shift key
-                            if (m_arcSlotFlipped) {
-                                if (sweep > 0) sweep -= 360;
-                                else sweep += 360;
-                            }
-
-                            // Qt uses 1/16th degree units
-                            painter.drawArc(arcRect,
-                                static_cast<int>(-startAngleScreen * 16),
-                                static_cast<int>(-sweep * 16));
-
-                            // Draw center marker
-                            int crossSize = 4;
-                            painter.drawLine(centerScreen.x() - crossSize, centerScreen.y(),
-                                             centerScreen.x() + crossSize, centerScreen.y());
-                            painter.drawLine(centerScreen.x(), centerScreen.y() - crossSize,
-                                             centerScreen.x(), centerScreen.y() + crossSize);
-
-                            // Draw start and end points
-                            painter.setBrush(QColor(0, 120, 215));
-                            painter.drawEllipse(startScreen, 3, 3);
-                            painter.drawEllipse(endScreen, 3, 3);
-
-                            // Draw arc length dimension
-                            double arcLength = ta.radius * std::abs(sweep * M_PI / 180.0);
-                            if (arcLength > 0.1) {
-                                double midAngle = (startAngleScreen + sweep / 2.0) * M_PI / 180.0;
-                                double offsetDist = rPx + 20;
-                                QPointF labelCenter = QPointF(centerScreen) + QPointF(offsetDist * std::cos(midAngle),
-                                                                                       offsetDist * std::sin(midAngle));
-                                if (m_dimActiveIndex >= 0 && m_dimFields.size() >= 2) {
-                                    m_dimFields[0].currentValue = ta.radius;
-                                    m_dimFields[1].currentValue = std::abs(sweep);
-                                    drawDimInputField(painter, labelCenter, 0, 0);
-                                    drawDimInputField(painter, labelCenter + QPointF(0, 20), 1, 0);
-                                } else {
-                                    drawArcDimensionLabel(painter, labelCenter, arcLength, sweep);
-                                }
-                            }
-
-                            // Draw hint message
-                            QString hint = tr("(Shift to flip arc direction)");
-                            QFontMetrics fm(painter.font());
-                            int textWidth = fm.horizontalAdvance(hint);
-                            QPoint textPos(centerScreen.x() - textWidth / 2, centerScreen.y() + rPx + 30);
-                            painter.setPen(QColor(80, 80, 80));
-                            painter.drawText(textPos.x(), textPos.y(), hint);
-                        } else {
-                            // Arc not valid yet - just draw a line from start to cursor
-                            QPoint sp1 = worldToScreen(tangentPoint);
-                            QPoint sp2 = worldToScreen(endPoint);
-                            painter.drawLine(sp1, sp2);
-
-                            // Draw start point
-                            painter.setBrush(QColor(0, 120, 215));
-                            painter.drawEllipse(sp1, 3, 3);
-                        }
-                    } else {
-                        // Tangent entity not found - draw fallback line
-                        QPoint sp1 = worldToScreen(m_previewPoints[0]);
-                        QPoint sp2 = worldToScreen(m_currentMouseWorld);
-                        painter.drawLine(sp1, sp2);
-                        painter.setBrush(QColor(0, 120, 215));
-                        painter.drawEllipse(sp1, 3, 3);
-                    }
-                } else if (!m_previewPoints.isEmpty()) {
-                    // No tangent target yet - just show start point
-                    QPoint sp1 = worldToScreen(m_previewPoints[0]);
-                    QPoint sp2 = worldToScreen(m_currentMouseWorld);
-                    painter.drawLine(sp1, sp2);
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Polygon:
-        if (!m_previewPoints.isEmpty()) {
-            if (m_polygonMode == PolygonMode::Freeform) {
-                // Freeform polygon: draw polyline through clicked vertices + mouse
-                QVector<QPoint> screenPts;
-                for (const QPointF& wp : m_previewPoints) {
-                    screenPts.append(worldToScreen(wp));
-                }
-                QPoint mousePt = worldToScreen(m_currentMouseWorld);
-                screenPts.append(mousePt);
-
-                // Draw edges
-                for (int i = 0; i < screenPts.size() - 1; ++i) {
-                    painter.drawLine(screenPts[i], screenPts[i + 1]);
-                }
-
-                // Draw closing line from mouse back to start (dashed hint)
-                if (m_previewPoints.size() >= 2) {
-                    QPen savedPen = painter.pen();
-                    QPen dashPen = savedPen;
-                    dashPen.setStyle(Qt::DashLine);
-                    dashPen.setColor(QColor(100, 100, 100, 128));
-                    painter.setPen(dashPen);
-                    painter.drawLine(mousePt, screenPts[0]);
-                    painter.setPen(savedPen);  // Restore
-                }
-
-                // Draw vertex dots
-                painter.setBrush(QColor(0, 120, 215));
-                for (int i = 0; i < m_previewPoints.size(); ++i) {
-                    painter.drawEllipse(screenPts[i], 3, 3);
-                }
-
-                // Highlight start point green if mouse is close (snap-to-close)
-                if (m_previewPoints.size() >= 3) {
-                    double distToStart = QLineF(m_currentMouseWorld, m_previewPoints[0]).length();
-                    double snapDist = m_entitySnapTolerance / m_zoom;
-                    if (distToStart < snapDist) {
-                        painter.setBrush(QColor(0, 180, 100));
-                        painter.drawEllipse(screenPts[0], 5, 5);
-                    }
-                }
-            } else {
-                // Regular polygon: center + radius + sides
-                QPointF center = m_previewPoints[0];
-                // Use constrained radius from updateEntity
-                double radius = m_pendingEntity.radius;
-                int sides = m_pendingEntity.sides > 0 ? m_pendingEntity.sides : 6;
-
-                if (radius > 0.1) {
-                    QPoint sc = worldToScreen(center);
-                    int rPx = static_cast<int>(radius * m_zoom);
-
-                    // Draw construction circle behind polygon (dashed, construction color)
-                    painter.save();
-                    QPen constructionPen(QColor(180, 100, 50), 1, Qt::DashLine);
-                    painter.setPen(constructionPen);
-                    painter.setBrush(Qt::NoBrush);
-                    painter.drawEllipse(sc, rPx, rPx);
-                    painter.restore();
-
-                    // Calculate polygon vertices
-                    QPolygonF poly;
-                    double angleStep = 2.0 * M_PI / sides;
-                    double startAngle = std::atan2(m_currentMouseWorld.y() - center.y(),
-                                                   m_currentMouseWorld.x() - center.x());
-
-                    // Compute vertex radius — differs for Inscribed vs Circumscribed
-                    int vertexRPx = rPx;  // Inscribed: vertices on circle
-                    if (m_polygonMode == PolygonMode::Circumscribed) {
-                        // Circumscribed: radius is apothem, vertex distance = apothem / cos(pi/sides)
-                        vertexRPx = static_cast<int>((radius / std::cos(M_PI / sides)) * m_zoom);
-                        startAngle += M_PI / sides;  // Rotate so edge midpoint faces mouse
-                    }
-
-                    for (int i = 0; i < sides; ++i) {
-                        double angle = startAngle + i * angleStep;
-                        double x = sc.x() + vertexRPx * std::cos(angle);
-                        double y = sc.y() - vertexRPx * std::sin(angle);  // Negate sin: world Y-up → screen Y-down
-                        poly << QPointF(x, y);
-                    }
-                    poly << poly.first();  // Close the polygon
-
-                    painter.drawPolyline(poly);
-
-                    // Draw center point
-                    painter.setBrush(QColor(0, 120, 215));
-                    painter.drawEllipse(sc, 3, 3);
-
-                    // Draw radius dimension along dashed radius line
-                    QPoint radiusEnd = worldToScreen(m_currentMouseWorld);
-                    {
-                        // Dashed radius line from center to cursor
-                        painter.save();
-                        painter.setPen(QPen(QColor(128, 128, 128), 1, Qt::DashLine));
-                        painter.drawLine(sc, radiusEnd);
-                        painter.restore();
-
-                        // Cross marker at cursor point
-                        int crossSz = 4;
-                        painter.drawLine(radiusEnd.x() - crossSz, radiusEnd.y(),
-                                         radiusEnd.x() + crossSz, radiusEnd.y());
-                        painter.drawLine(radiusEnd.x(), radiusEnd.y() - crossSz,
-                                         radiusEnd.x(), radiusEnd.y() + crossSz);
-
-                        // Label at midpoint of radius line, offset perpendicular
-                        QPointF midPt = (QPointF(sc) + QPointF(radiusEnd)) / 2.0;
-                        double rdx = radiusEnd.x() - sc.x();
-                        double rdy = radiusEnd.y() - sc.y();
-                        double rlen = std::sqrt(rdx * rdx + rdy * rdy);
-
-                        // Perpendicular offset (always to the right of the line direction)
-                        QPointF perpOff(0, 14);
-                        if (rlen > 1.0) {
-                            perpOff = QPointF(-rdy / rlen * 14, rdx / rlen * 14);
-                        }
-                        QPointF labelPos = midPt + perpOff;
-
-                        if (m_dimActiveIndex >= 0 && !m_dimFields.isEmpty()) {
-                            m_dimFields[0].currentValue = radius;
-                            double screenAngle = std::atan2(rdy, rdx) * 180.0 / M_PI;
-                            if (screenAngle > 90 || screenAngle < -90)
-                                screenAngle += 180;
-                            drawDimInputField(painter, labelPos, 0, screenAngle);
-                        } else {
-                            drawDimensionLabel(painter, labelPos, radius);
-                        }
-                    }
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Ellipse:
-        if (!m_previewPoints.isEmpty()) {
-            QPointF center = m_previewPoints[0];
-            // Use constrained edge point from updateEntity
-            QPointF edge = (m_pendingEntity.points.size() >= 2)
-                ? QPointF(m_pendingEntity.points[1]) : m_currentMouseWorld;
-            double majorR = QLineF(center, edge).length();
-
-            if (majorR > 0.1) {
-                QPoint sc = worldToScreen(center);
-                int majorPx = static_cast<int>(majorR * m_zoom);
-                int minorPx = majorPx / 2;  // Default 2:1 aspect ratio for preview
-
-                // For now, draw axis-aligned ellipse preview
-                painter.drawEllipse(sc, majorPx, minorPx);
-
-                // Draw center and edge points
-                painter.setBrush(QColor(0, 120, 215));
-                painter.drawEllipse(sc, 3, 3);
-                QPoint edgeScreen = worldToScreen(edge);
-                painter.drawEllipse(edgeScreen, 3, 3);
-
-                // Draw major radius dimension
-                if (m_dimActiveIndex >= 0 && !m_dimFields.isEmpty()) {
-                    m_dimFields[0].currentValue = majorR;
-                    QPointF midPt = (QPointF(sc) + QPointF(edgeScreen)) / 2.0 + QPointF(0, 18);
-                    drawDimInputField(painter, midPt, 0);
-                } else {
-                    drawPreviewDimension(painter, sc, edgeScreen, majorR);
-                }
-            }
-        }
-        break;
-
-    default:
-        break;
-    }
-}
-
-void SketchCanvas::drawSelectionHandles(QPainter& painter, const SketchEntity& entity)
-{
-    // Ensure legacy text entities have their rotation handle point
-    if (entity.type == SketchEntityType::Text && entity.points.size() == 1)
-        ensureTextRotationHandle(const_cast<SketchEntity&>(entity));
-
-    // Arc-based entities use color-coded handles:
-    //   handle 0 = center (blue), handle 1 = sweep/angle (green), handle 2 = radius (red)
-    bool isArcBased = (entity.type == SketchEntityType::Arc && entity.points.size() >= 3)
-                   || (entity.type == SketchEntityType::Slot && entity.points.size() >= 3);
-    // Text entities: handle 0 = anchor (blue), handle 1 = rotation (green)
-    bool isTextEntity = (entity.type == SketchEntityType::Text && entity.points.size() >= 2);
-
-    for (int i = 0; i < entity.points.size(); ++i) {
-        QPoint p = worldToScreen(entity.points[i]);
-
-        if ((isArcBased && i == 1) || (isTextEntity && i == 1)) {
-            // Sweep/angle or rotation handle — GREEN
-            painter.setPen(QPen(QColor(30, 160, 30), 2));
-            painter.setBrush(QColor(150, 230, 150));
-        } else if (isArcBased && i == 2) {
-            // Radius handle — RED
-            painter.setPen(QPen(QColor(200, 50, 50), 2));
-            painter.setBrush(QColor(255, 150, 150));
-        } else {
-            // Default handle — BLUE/WHITE
-            painter.setPen(QPen(QColor(0, 120, 215), 1));
-            painter.setBrush(Qt::white);
-        }
-
-        painter.drawRect(p.x() - 4, p.y() - 4, 8, 8);
-    }
-}
-
-void SketchCanvas::drawPreviewDimension(QPainter& painter, const QPoint& p1, const QPoint& p2, double value)
-{
-    // Draw dimension label below the preview line during entity creation
-    // Uses same style as instruction text (blue text on white background, no border)
-    painter.save();
-
-    // Calculate midpoint and line angle
-    QPointF midPoint = (QPointF(p1) + QPointF(p2)) / 2.0;
-    double dx = p2.x() - p1.x();
-    double dy = p2.y() - p1.y();
-    double angle = std::atan2(dy, dx) * 180.0 / M_PI;
-
-    // Keep text readable - flip if pointing left
-    bool flipped = (angle > 90 || angle < -90);
-    if (flipped) {
-        angle += 180;
+    // The active tool paints its own preview. This MUST come after the
+    // shared pen/brush setup above: the handler inherits that state, and
+    // dispatching before it left the brush stale: a circle preview
+    // rendered as a filled black disc.
+    if (SketchToolHandler* h = activeHandler()) {
+        if (h->drawPreview(*this, painter)) return;
     }
 
-    // Format the dimension value with unit conversion and suffix
-    QString dimText = QString::fromStdString(formatValueWithUnit(value, m_displayUnit));
-
-    // Black text on solid white background (opaque so preview geometry doesn't bleed)
-    painter.setPen(Qt::black);
-    QFont font = painter.font();
-    font.setPointSize(9);
-    painter.setFont(font);
-
-    QFontMetrics fm(font);
-    QRect textRect = fm.boundingRect(dimText);
-
-    // Position below the line (positive Y offset in rotated coords)
-    painter.translate(midPoint);
-    painter.rotate(angle);
-
-    // Offset below the line
-    QPointF offset(0, textRect.height() + 6);
-    QRectF labelRect(-textRect.width() / 2.0 - 3, offset.y() - textRect.height(),
-                     textRect.width() + 6, textRect.height() + 2);
-
-    painter.fillRect(labelRect, Qt::white);
-
-    // Draw the text
-    painter.drawText(labelRect, Qt::AlignCenter, dimText);
-
-    painter.restore();
 }
 
-void SketchCanvas::drawDimensionLabel(QPainter& painter, const QPointF& position, double value)
-{
-    // Draw a dimension label at a specific position
-    // Black text on solid white background
-    painter.save();
 
-    QString dimText = QString::fromStdString(formatValueWithUnit(value, m_displayUnit));
-    painter.setPen(Qt::black);
-    QFont font = painter.font();
-    font.setPointSize(9);
-    painter.setFont(font);
 
-    QFontMetrics fm(font);
-    QRect textRect = fm.boundingRect(dimText);
 
-    QRectF labelRect(position.x() - textRect.width() / 2.0 - 3,
-                     position.y() - textRect.height() / 2.0 - 1,
-                     textRect.width() + 6, textRect.height() + 2);
 
-    painter.fillRect(labelRect, Qt::white);
-    painter.drawText(labelRect, Qt::AlignCenter, dimText);
 
-    painter.restore();
-}
-
-void SketchCanvas::drawArcDimensionLabel(QPainter& painter, const QPointF& position, double arcLength, double angleDeg)
-{
-    // Draw a two-line dimension label showing arc length and angle in degrees
-    // Black text on solid white background
-    painter.save();
-
-    QString line1 = QString::fromStdString(formatValueWithUnit(arcLength, m_displayUnit));
-    QString line2 = QString::fromStdString(formatAngle(std::abs(angleDeg)));
-
-    painter.setPen(Qt::black);
-    QFont font = painter.font();
-    font.setPointSize(9);
-    painter.setFont(font);
-
-    QFontMetrics fm(font);
-    int line1Width = fm.horizontalAdvance(line1);
-    int line2Width = fm.horizontalAdvance(line2);
-    int maxWidth = std::max(line1Width, line2Width);
-    int lineHeight = fm.height();
-    int totalHeight = lineHeight * 2 + 2;
-
-    QRectF labelRect(position.x() - maxWidth / 2.0 - 4,
-                     position.y() - totalHeight / 2.0 - 2,
-                     maxWidth + 8, totalHeight + 4);
-
-    painter.fillRect(labelRect, Qt::white);
-
-    // Draw first line (arc length with unit)
-    QRectF line1Rect(labelRect.x(), labelRect.y() + 2, labelRect.width(), lineHeight);
-    painter.drawText(line1Rect, Qt::AlignCenter, line1);
-
-    // Draw second line (angle with degree symbol)
-    QRectF line2Rect(labelRect.x(), labelRect.y() + lineHeight + 2, labelRect.width(), lineHeight);
-    painter.drawText(line2Rect, Qt::AlignCenter, line2);
-
-    painter.restore();
-}
-
-void SketchCanvas::drawSnapIndicator(QPainter& painter, const SnapPoint& snap)
-{
-    QPoint screenPos = worldToScreen(snap.position);
-    painter.save();
-
-    // Choose color and shape based on snap type
-    QColor snapColor(255, 140, 0);  // Orange for snap indicators
-    int size = 6;
-
-    painter.setPen(QPen(snapColor, 2));
-    painter.setBrush(Qt::NoBrush);
-
-    switch (snap.type) {
-    case SnapType::Endpoint:
-        // Square for endpoints
-        painter.drawRect(screenPos.x() - size, screenPos.y() - size, size * 2, size * 2);
-        break;
-
-    case SnapType::Point:
-        // Filled circle for standalone sketch points
-        painter.setBrush(snapColor);
-        painter.drawEllipse(screenPos, size, size);
-        break;
-
-    case SnapType::Midpoint:
-        // Triangle for midpoints
-        {
-            QPolygon triangle;
-            triangle << QPoint(screenPos.x(), screenPos.y() - size)
-                     << QPoint(screenPos.x() - size, screenPos.y() + size)
-                     << QPoint(screenPos.x() + size, screenPos.y() + size);
-            painter.drawPolygon(triangle);
-        }
-        break;
-
-    case SnapType::Center:
-        // Circle with cross for centers
-        painter.drawEllipse(screenPos, size, size);
-        painter.drawLine(screenPos.x() - size, screenPos.y(), screenPos.x() + size, screenPos.y());
-        painter.drawLine(screenPos.x(), screenPos.y() - size, screenPos.x(), screenPos.y() + size);
-        break;
-
-    case SnapType::Quadrant:
-        // Diamond for quadrant points
-        {
-            QPolygon diamond;
-            diamond << QPoint(screenPos.x(), screenPos.y() - size)
-                    << QPoint(screenPos.x() + size, screenPos.y())
-                    << QPoint(screenPos.x(), screenPos.y() + size)
-                    << QPoint(screenPos.x() - size, screenPos.y());
-            painter.drawPolygon(diamond);
-        }
-        break;
-
-    case SnapType::ArcEndCenter:
-        // Circle for arc end centers (slot endpoints)
-        painter.drawEllipse(screenPos, size, size);
-        break;
-
-    case SnapType::Intersection:
-        // X for intersections
-        painter.drawLine(screenPos.x() - size, screenPos.y() - size,
-                         screenPos.x() + size, screenPos.y() + size);
-        painter.drawLine(screenPos.x() - size, screenPos.y() + size,
-                         screenPos.x() + size, screenPos.y() - size);
-        break;
-
-    case SnapType::Nearest:
-        // Perpendicular symbol (right angle) for nearest point
-        {
-            int halfSize = size / 2;
-            // Draw a small right angle symbol
-            painter.drawLine(screenPos.x() - halfSize, screenPos.y(),
-                             screenPos.x(), screenPos.y());
-            painter.drawLine(screenPos.x(), screenPos.y(),
-                             screenPos.x(), screenPos.y() - halfSize);
-            // Draw a small perpendicular line
-            painter.drawLine(screenPos.x() - size, screenPos.y() + size,
-                             screenPos.x() + size, screenPos.y() + size);
-        }
-        break;
-
-    case SnapType::Origin:
-        // Crosshair with circle for origin
-        painter.drawEllipse(screenPos, size + 2, size + 2);
-        painter.drawLine(screenPos.x() - size - 4, screenPos.y(), screenPos.x() + size + 4, screenPos.y());
-        painter.drawLine(screenPos.x(), screenPos.y() - size - 4, screenPos.x(), screenPos.y() + size + 4);
-        break;
-
-    case SnapType::AxisX:
-        // Horizontal line indicator for X axis
-        painter.drawLine(screenPos.x() - size, screenPos.y(), screenPos.x() + size, screenPos.y());
-        painter.drawLine(screenPos.x() - size, screenPos.y() - 3, screenPos.x() - size, screenPos.y() + 3);
-        painter.drawLine(screenPos.x() + size, screenPos.y() - 3, screenPos.x() + size, screenPos.y() + 3);
-        break;
-
-    case SnapType::AxisY:
-        // Vertical line indicator for Y axis
-        painter.drawLine(screenPos.x(), screenPos.y() - size, screenPos.x(), screenPos.y() + size);
-        painter.drawLine(screenPos.x() - 3, screenPos.y() - size, screenPos.x() + 3, screenPos.y() - size);
-        painter.drawLine(screenPos.x() - 3, screenPos.y() + size, screenPos.x() + 3, screenPos.y() + size);
-        break;
-    }
-
-    painter.restore();
-}
-
-void SketchCanvas::drawSnapGuides(QPainter& painter)
-{
-    // Get current handle position
-    const SketchEntity* sel = selectedEntity();
-    if (!sel || m_dragHandleIndex < 0 || m_dragHandleIndex >= sel->points.size()) {
-        return;
-    }
-
-    QPointF handlePos = sel->points[m_dragHandleIndex];
-    QPoint handleScreen = worldToScreen(handlePos);
-
-    // Calculate visible area for drawing constraint lines
-    QPointF topLeft = screenToWorld(QPoint(0, 0));
-    QPointF bottomRight = screenToWorld(QPoint(width(), height()));
-
-    // Colors for constraint guides
-    QColor guideColor(255, 140, 0);  // Orange for guides
-    QColor xAxisColor(255, 80, 80);   // Red-ish for X constraint
-    QColor yAxisColor(80, 200, 80);   // Green-ish for Y constraint
-
-    // Dashed line style for guides
-    QPen guidePen(guideColor, 1, Qt::DashLine);
-
-    // Draw guide from original position to current snapped position
-    QPoint origScreen = worldToScreen(m_dragHandleOriginal);
-
-    if (m_snapAxis == SnapAxis::None) {
-        // Full snap - draw crosshair at snapped position
-        guidePen.setColor(guideColor);
-        painter.setPen(guidePen);
-
-        // Horizontal line through handle
-        painter.drawLine(0, handleScreen.y(), width(), handleScreen.y());
-        // Vertical line through handle
-        painter.drawLine(handleScreen.x(), 0, handleScreen.x(), height());
-
-        // Draw small indicator showing snap is active
-        painter.setPen(QPen(guideColor, 2));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(handleScreen, 12, 12);
-
-    } else if (m_snapAxis == SnapAxis::X) {
-        // X-axis locked - draw horizontal constraint line
-        guidePen.setColor(xAxisColor);
-        guidePen.setStyle(Qt::SolidLine);
-        guidePen.setWidth(2);
-        painter.setPen(guidePen);
-
-        // Draw horizontal line at the locked Y position
-        int lockedY = worldToScreen(QPointF(0, m_dragHandleOriginal.y())).y();
-        painter.drawLine(0, lockedY, width(), lockedY);
-
-        // Draw vertical dashed line showing X movement
-        guidePen.setStyle(Qt::DashLine);
-        guidePen.setWidth(1);
-        painter.setPen(guidePen);
-        painter.drawLine(handleScreen.x(), 0, handleScreen.x(), height());
-
-        // Draw "X" label near cursor
-        painter.setPen(QPen(xAxisColor, 1));
-        QFont font = painter.font();
-        font.setBold(true);
-        painter.setFont(font);
-        painter.drawText(handleScreen.x() + 15, handleScreen.y() - 10, QStringLiteral("X"));
-
-        // Draw arrow indicating constrained axis
-        painter.setPen(QPen(xAxisColor, 2));
-        painter.drawLine(handleScreen.x() - 20, lockedY, handleScreen.x() + 20, lockedY);
-        // Arrow heads
-        painter.drawLine(handleScreen.x() - 20, lockedY, handleScreen.x() - 15, lockedY - 4);
-        painter.drawLine(handleScreen.x() - 20, lockedY, handleScreen.x() - 15, lockedY + 4);
-        painter.drawLine(handleScreen.x() + 20, lockedY, handleScreen.x() + 15, lockedY - 4);
-        painter.drawLine(handleScreen.x() + 20, lockedY, handleScreen.x() + 15, lockedY + 4);
-
-    } else if (m_snapAxis == SnapAxis::Y) {
-        // Y-axis locked - draw vertical constraint line
-        guidePen.setColor(yAxisColor);
-        guidePen.setStyle(Qt::SolidLine);
-        guidePen.setWidth(2);
-        painter.setPen(guidePen);
-
-        // Draw vertical line at the locked X position
-        int lockedX = worldToScreen(QPointF(m_dragHandleOriginal.x(), 0)).x();
-        painter.drawLine(lockedX, 0, lockedX, height());
-
-        // Draw horizontal dashed line showing Y movement
-        guidePen.setStyle(Qt::DashLine);
-        guidePen.setWidth(1);
-        painter.setPen(guidePen);
-        painter.drawLine(0, handleScreen.y(), width(), handleScreen.y());
-
-        // Draw "Y" label near cursor
-        painter.setPen(QPen(yAxisColor, 1));
-        QFont font = painter.font();
-        font.setBold(true);
-        painter.setFont(font);
-        painter.drawText(handleScreen.x() + 15, handleScreen.y() - 10, QStringLiteral("Y"));
-
-        // Draw arrow indicating constrained axis
-        painter.setPen(QPen(yAxisColor, 2));
-        painter.drawLine(lockedX, handleScreen.y() - 20, lockedX, handleScreen.y() + 20);
-        // Arrow heads
-        painter.drawLine(lockedX, handleScreen.y() - 20, lockedX - 4, handleScreen.y() - 15);
-        painter.drawLine(lockedX, handleScreen.y() - 20, lockedX + 4, handleScreen.y() - 15);
-        painter.drawLine(lockedX, handleScreen.y() + 20, lockedX - 4, handleScreen.y() + 15);
-        painter.drawLine(lockedX, handleScreen.y() + 20, lockedX + 4, handleScreen.y() + 15);
-    }
-
-    // Draw snap point indicator (small filled circle at snapped position)
-    painter.setPen(QPen(guideColor, 1));
-    painter.setBrush(guideColor);
-    painter.drawEllipse(handleScreen, 4, 4);
-}
 
 // ---- Constraint Drawing Functions ----
 
-void SketchCanvas::resolveConstraintLabelOverlaps()
+
+
+
+void SketchCanvas::drawOffSegmentTangents(QPainter& painter)
 {
-    m_labelNudgeOffsets.clear();
-
-    // Collect screen-space bounding rects for all visible dimensional constraint labels
-    struct LabelInfo {
-        int constraintId;
-        QRectF screenRect;
-    };
-    QVector<LabelInfo> labels;
-
-    // Use a consistent font for measurement
-    QFont font = this->font();
-    font.setPointSize(9);
-    QFontMetricsF fm(font);
-
+    painter.save();
     for (const SketchConstraint& c : m_constraints) {
-        if (!c.enabled || !c.labelVisible) continue;
+        if (!c.enabled || c.type != ConstraintType::Tangent) continue;
+        if (c.entityIds.size() < 2) continue;
 
-        // Only dimensional constraints have labels that can collide
-        if (c.type != ConstraintType::Distance && c.type != ConstraintType::Radius
-            && c.type != ConstraintType::Diameter && c.type != ConstraintType::Angle
-            && c.type != ConstraintType::FixedAngle)
-            continue;
+        const SketchEntity* e1 = entityById(c.entityIds[0]);
+        const SketchEntity* e2 = entityById(c.entityIds[1]);
+        if (!e1 || !e2) continue;
 
-        // Estimate text content and size
-        QString text;
-        if (c.type == ConstraintType::Angle || c.type == ConstraintType::FixedAngle)
-            text = QString::fromStdString(formatAngle(c.value));
-        else if (c.type == ConstraintType::Radius)
-            text = QStringLiteral("R") + QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
-        else if (c.type == ConstraintType::Diameter)
-            text = QStringLiteral("Ø") + QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
-        else
-            text = QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
+        // Either order; the query rejects any pair that is not line+circle.
+        auto pt = sketch::offSegmentTangentPoint(*e1, *e2);
+        if (!pt) pt = sketch::offSegmentTangentPoint(*e2, *e1);
+        if (!pt) continue;
 
-        if (!c.isDriving) text = QStringLiteral("(") + text + QStringLiteral(")");
-
-        double textW = fm.horizontalAdvance(text) + 4.0;
-        double textH = fm.height() + 2.0;
-
-        // Compute screen-space center of label
-        QPointF labelCenter = worldToScreen(c.labelPosition).toPointF();
-
-        QRectF rect(labelCenter.x() - textW / 2.0,
-                    labelCenter.y() - textH / 2.0,
-                    textW, textH);
-        labels.append({c.id, rect});
+        const QPoint sp = worldToScreen(QPointF(pt->x, pt->y));
+        painter.setPen(QPen(m_theme.tangentMarker, 1.0));
+        painter.setBrush(m_theme.tangentMarker);
+        painter.drawEllipse(sp, 4, 4);
     }
+    painter.restore();
+}
 
-    // Greedy displacement: run up to 3 passes to resolve overlaps
-    for (int pass = 0; pass < 3; ++pass) {
-        bool anyOverlap = false;
-        for (int i = 0; i < labels.size(); ++i) {
-            for (int j = i + 1; j < labels.size(); ++j) {
-                if (!labels[i].screenRect.intersects(labels[j].screenRect))
-                    continue;
 
-                anyOverlap = true;
-                QPointF ci = labels[i].screenRect.center();
-                QPointF cj = labels[j].screenRect.center();
-                QPointF delta = cj - ci;
-                double dist = std::sqrt(delta.x() * delta.x() + delta.y() * delta.y());
-                if (dist < 1.0) delta = QPointF(0, -1); // default: push apart vertically
-                else delta /= dist; // normalize
 
-                // Compute overlap amount
-                double overlapX = std::min(labels[i].screenRect.right(), labels[j].screenRect.right())
-                                - std::max(labels[i].screenRect.left(), labels[j].screenRect.left());
-                double overlapY = std::min(labels[i].screenRect.bottom(), labels[j].screenRect.bottom())
-                                - std::max(labels[i].screenRect.top(), labels[j].screenRect.top());
-                double nudgeAmount = std::min(overlapX, overlapY) / 2.0 + 2.0;
 
-                QPointF nudge = delta * nudgeAmount;
-                labels[i].screenRect.translate(-nudge);
-                labels[j].screenRect.translate(nudge);
 
-                // Accumulate nudge offsets
-                m_labelNudgeOffsets[labels[i].constraintId] += (-nudge);
-                m_labelNudgeOffsets[labels[j].constraintId] += nudge;
+
+
+
+
+
+
+
+
+// Left press, Transform section: the star, a pick, or the free-move
+// manipulator owns the click before any tool or selection logic. Returns
+// true when it consumed the press.
+bool SketchCanvas::handleTransformPress(QMouseEvent* event, const QPointF& worldPos)
+{
+    if (m_transformGlyphVisible && !m_selectedIds.isEmpty()) {
+        ensureTransformStateCurrent();
+        if (transformStarHit(event->pos())) {
+            // press ON the star: drag it; it keeps its exact position until the mouse moves
+            m_transformPivotDragging = true;
+            m_transformPick = TransformPick::None;
+            setCursor(Qt::ClosedHandCursor);
+            update();
+            return true;
+        }
+        switch (m_transformPick) {
+        case TransformPick::Pivot: {
+            m_transformPivot = m_snapEngine.snapPoint(worldPos);        // place on press, so a plain click works
+            m_transformPivotUserSet = true; m_transformPivotCleared = false;
+            m_transformPivotDragging = true;
+            emit transformPivotChanged(m_transformPivot, false);
+            setCursor(Qt::ClosedHandCursor);
+            update();
+            return true;
+        }
+        case TransformPick::FromPoint: case TransformPick::ToPoint: case TransformPick::PointOnSelection:
+        case TransformPick::MirrorA: case TransformPick::MirrorB: case TransformPick::ReferencePoint: {
+            const QPointF p = m_snapEngine.snapPoint(worldPos);
+            const TransformPick done = m_transformPick;
+            m_transformPick = TransformPick::None;
+            setCursor(Qt::ArrowCursor);
+            emit transformPickCompleted(int(done), p);
+            update();
+            return true;
+        }
+        case TransformPick::FreeMove: {
+            if (freeMoveRingHit(event->pos())) {
+                m_freeMoveHandle = FreeMoveHandle::Ring;
+                const QPointF v = worldPos - m_transformPivot;
+                m_freeMoveStartAngle = qRadiansToDegrees(qAtan2(v.y(), v.x())) - m_freeMoveAngle;
+                setCursor(Qt::ClosedHandCursor);
+                return true;
+            }
+            if (freeMoveBodyHit(worldPos)) {
+                m_freeMoveHandle = FreeMoveHandle::Body;
+                m_freeMoveStartWorld = worldPos - m_freeMoveDelta;
+                setCursor(Qt::ClosedHandCursor);
+                return true;
+            }
+            break;   // a click elsewhere is a selection change, which resets the section
+        }
+        case TransformPick::None: break;
+        }
+    }
+    return false;
+}
+
+// Left press in a background-calibration mode (entity pick for alignment,
+// point pick for scale). Returns true when it consumed the press.
+bool SketchCanvas::handleCalibrationPress(const QPointF& worldPos)
+{
+    // Handle calibration entity selection mode - select line for alignment
+    if (m_calibrationEntitySelectionMode) {
+        int hitId = hitTest(worldPos);
+        if (hitId >= 0) {
+            const SketchEntity* entity = entityById(hitId);
+            // Only allow lines (including construction lines) for alignment
+            if (entity && entity->type == SketchEntityType::Line) {
+                double angle = getEntityAngle(hitId);
+                emit calibrationEntitySelected(hitId, angle);
+                return true;
             }
         }
-        if (!anyOverlap) break;
+        // Click didn't hit a valid entity - ignore
+        return true;
     }
+
+    // Handle background calibration mode - pick points for scale calibration
+    if (m_backgroundCalibrationMode && m_backgroundImage.enabled) {
+        // Check if click is within background bounds
+        if (m_backgroundImage.containsPoint(worldPos)) {
+            emit calibrationPointPicked(worldPos);
+            return true;
+        }
+    }
+    return false;
 }
 
-void SketchCanvas::drawConstraints(QPainter& painter)
+// Left press in background edit mode: a handle starts a drag (true); a press
+// elsewhere leaves the mode and falls through (false).
+bool SketchCanvas::handleBackgroundEditPress(const QPointF& worldPos)
 {
-    // Resolve label overlaps before drawing
-    resolveConstraintLabelOverlaps();
-
-    for (const SketchConstraint& constraint : m_constraints) {
-        if (!constraint.enabled || !constraint.labelVisible) continue;
-        drawConstraint(painter, constraint);
-    }
-
-    // Draw inline constraint edit overlay
-    if (m_inlineEditActive) {
-        const SketchConstraint* ec = constraintById(m_inlineEditConstraintId);
-        if (ec && ec->enabled) {
-            auto pos = computeConstraintLabelPosition(*ec);
-            if (pos.found)
-                drawInlineConstraintEdit(painter, pos.textCenter, pos.prefix);
+    // Handle background edit mode first
+    if (m_backgroundEditMode && m_backgroundImage.enabled) {
+        BackgroundHandle handle = hitTestBackgroundHandle(worldPos);
+        if (handle != BackgroundHandle::None) {
+            m_bgDragHandle = handle;
+            m_bgDragStartWorld = worldPos;
+            m_bgOriginalPosition = m_backgroundImage.position;
+            m_bgOriginalWidth = m_backgroundImage.width;
+            m_bgOriginalHeight = m_backgroundImage.height;
+            updateCursorForBackgroundHandle(handle);
+            return true;
         }
+        // Clicking outside background exits edit mode
+        setBackgroundEditMode(false);
     }
+    return false;
 }
 
-void SketchCanvas::drawConstraint(QPainter& painter, const SketchConstraint& constraint)
+// Select tool press on a handle (group-aware, so any corner of a decomposed
+// rectangle is draggable): arms a point-press. Returns true when it did.
+bool SketchCanvas::pressSelectsHandle(QMouseEvent* event, const QPointF& worldPos)
 {
-    QColor constraintColor;
-    if (!constraint.isDriving) {
-        constraintColor = QColor(128, 128, 128);  // Gray for Driven (reference) dimensions
-    } else if (constraint.satisfied) {
-        constraintColor = QColor(0, 120, 215);    // Blue for satisfied driving constraints
-    } else {
-        constraintColor = Qt::red;                 // Red for failed constraints
+    int handleEntityId = -1, handleIdx = -1;
+    bool handleHit = hitTestGroupHandle(worldPos, handleEntityId, handleIdx);
+    // Don't allow handle dragging on sweep-angle construction lines
+    // (but allow it for the arc entity itself, which is also in the group)
+    if (handleHit && handleEntityId >= 0) {
+        const SketchEntity* he = entityById(handleEntityId);
+        if (he && he->type == SketchEntityType::Line) {
+            for (const auto& g : m_groups) {
+                if (isSweepAngleGroup(g.id) && g.containsEntity(handleEntityId)) {
+                    handleHit = false;
+                    break;
+                }
+            }
+        }
     }
-
-    QPen pen(constraintColor, 1);
-    if (constraint.selected) {
-        pen.setColor(QColor(255, 140, 0));  // Orange for selected
-        pen.setWidth(2);
+    if (handleHit && handleIdx >= 0) {
+        if (handleEntityId != m_selectedId) {
+            m_selectedId = handleEntityId;
+        }
+        // Arm a point-press: a no-move click SELECTS this control point
+        // (needed to pick a Bezier anchor when its spline is selected);
+        // a drag converts to a handle drag in mouseMoveEvent.
+        m_pointPressArmed  = true;
+        m_pointPressEntity = handleEntityId;
+        m_pointPressIndex  = handleIdx;
+        m_pointPressScreen = event->pos();
+        m_pointPressMods   = event->modifiers();
+        beginDragDetection(event->pos());
+        return true;
     }
-    painter.setPen(pen);
-
-    switch (constraint.type) {
-    case ConstraintType::Distance:
-        drawDistanceConstraint(painter, constraint);
-        break;
-    case ConstraintType::Radius:
-    case ConstraintType::Diameter:
-        drawRadialConstraint(painter, constraint);
-        break;
-    case ConstraintType::Angle:
-        drawAngleConstraint(painter, constraint);
-        break;
-    case ConstraintType::FixedAngle:
-        drawFixedAngleConstraint(painter, constraint);
-        break;
-    case ConstraintType::Horizontal:
-    case ConstraintType::Vertical:
-    case ConstraintType::Parallel:
-    case ConstraintType::Perpendicular:
-    case ConstraintType::Coincident:
-    case ConstraintType::Equal:
-    case ConstraintType::Tangent:
-    case ConstraintType::Midpoint:
-    case ConstraintType::Symmetric:
-        drawGeometricConstraint(painter, constraint);
-        break;
-    default:
-        break;
-    }
+    return false;
 }
 
-void SketchCanvas::drawDistanceConstraint(QPainter& painter, const SketchConstraint& constraint)
+// Select tool press on a constraint label or glyph chip: selects it, or
+// starts a label drag when it was already selected. Returns true when hit.
+bool SketchCanvas::pressSelectsConstraint(QMouseEvent* event, const QPointF& worldPos)
 {
-    if (constraint.entityIds.size() < 2) return;
-
-    // Get constraint endpoints (geometry points being dimensioned)
-    QPointF p1, p2;
-    if (!getConstraintEndpoints(constraint, p1, p2)) return;
-
-    QPointF sp1 = worldToScreen(p1).toPointF();
-    QPointF sp2 = worldToScreen(p2).toPointF();
-    QPointF labelCenter = worldToScreen(constraint.labelPosition).toPointF();
-
-    // ---- Dimension line direction and offset ----------------------------
-    QPointF along = sp2 - sp1;
-    double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
-    if (len < 1.0) return;
-
-    QPointF dir = along / len;                      // unit direction
-    QPointF perp(-dir.y(), dir.x());                // perpendicular (outward)
-
-    // Angle of the dimension line (for rotating text)
-    double angleDeg = std::atan2(along.y(), along.x()) * 180.0 / M_PI;
-    // Flip so text is always readable (never upside-down)
-    if (angleDeg > 90.0)  angleDeg -= 180.0;
-    if (angleDeg < -90.0) angleDeg += 180.0;
-
-    // Project the label position onto the perpendicular to get the offset
-    QPointF labelDelta = labelCenter - sp1;
-    double offset = labelDelta.x() * perp.x() + labelDelta.y() * perp.y();
-
-    // Projected endpoints on the dimension line (parallel, offset from geometry)
-    QPointF d1 = sp1 + perp * offset;
-    QPointF d2 = sp2 + perp * offset;
-
-    // ---- Extension (witness) lines --------------------------------------
-    double extOvershoot = 3.0;
-    double extGap = 2.0;
-    QPen extPen(painter.pen().color(), 1, Qt::SolidLine);
-    painter.setPen(extPen);
-
-    QPointF extDir = (offset >= 0) ? perp : -perp;
-    double absOffset = std::abs(offset);
-    if (absOffset > extGap + 1.0) {
-        painter.drawLine(sp1 + extDir * extGap, sp1 + extDir * (absOffset + extOvershoot));
-        painter.drawLine(sp2 + extDir * extGap, sp2 + extDir * (absOffset + extOvershoot));
+    int constraintId = hitTestConstraintLabel(worldPos);
+    bool glyphHit = false;
+    if (constraintId < 0) {
+        constraintId = m_constraintRenderer.hitTestConstraintGlyph(event->pos());
+        glyphHit = (constraintId >= 0);
     }
+    if (constraintId >= 0) {
+        // If already selected, start dragging the label
+        // (glyph chips are not draggable)
+        if (!glyphHit && constraintId == m_selectedConstraintId) {
+            SketchConstraint* constraint = constraintById(constraintId);
+            if (constraint) {
+                m_isDraggingConstraintLabel = true;
+                m_constraintLabelOriginal = constraint->labelPosition;
+                m_dragStartWorld = worldPos;
+                setCursor(Qt::SizeAllCursor);
+            }
+        } else {
+            // Select constraint
+            // Deselect all entities
+            for (auto& e : m_entities) {
+                e.selected = false;
+            }
+            m_selectedId = -1;
+            selectClear();
 
-    // ---- Value text -----------------------------------------------------
-    QString text = QString::fromStdString(formatValueWithUnit(constraint.value, m_displayUnit));
-    if (!constraint.isDriving) {
-        text = QStringLiteral("(") + text + QStringLiteral(")");
-    }
-    QFontMetricsF fm(painter.font());
-    double textWidth = fm.horizontalAdvance(text);
-    double textHeight = fm.height();
-
-    QPointF dimMid = (d1 + d2) / 2.0;
-    // Apply label collision nudge offset
-    auto nudgeIt = m_labelNudgeOffsets.find(constraint.id);
-    if (nudgeIt != m_labelNudgeOffsets.end())
-        dimMid += *nudgeIt;
-    double halfText = textWidth / 2.0 + 3.0;  // padding
-    bool textFits = (halfText * 2.0 < len);
-
-    QPen dimPen(painter.pen().color(), 1.5, Qt::SolidLine);
-    painter.setPen(dimPen);
-
-    if (textFits) {
-        // ---- NORMAL: text between ticks ----------------------------------
-        // Dimension line with gap for text
-        QPointF gapStart = dimMid - dir * halfText;
-        QPointF gapEnd   = dimMid + dir * halfText;
-        painter.drawLine(d1, gapStart);
-        painter.drawLine(gapEnd, d2);
-
-        // Perpendicular tick terminators at each end
-        double tickSize = 5.0;
-        painter.drawLine(d1 - perp * tickSize, d1 + perp * tickSize);
-        painter.drawLine(d2 - perp * tickSize, d2 + perp * tickSize);
-
-        // Rotated text centred in the gap (suppressed during inline edit)
-        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
-            painter.save();
-            painter.translate(dimMid);
-            painter.rotate(angleDeg);
-
-            QRectF textRect(-textWidth / 2.0 - 2,
-                            -textHeight / 2.0 - 1,
-                             textWidth + 4, textHeight + 2);
-            painter.fillRect(textRect, Qt::white);
-            painter.drawText(textRect, Qt::AlignCenter, text);
-            painter.restore();
+            // Deselect old constraint
+            for (auto& c : m_constraints) {
+                c.selected = (c.id == constraintId);
+            }
+            m_selectedConstraintId = constraintId;
+            emit selectionChanged(-1);  // Deselect entity
+            emit constraintSelectionChanged(constraintId);
+            update();
         }
-    } else {
-        // ---- COMPACT: inward arrows, text outside ------------------------
-        // Two small filled arrowheads pointing inward (toward each other)
-        double arrowLen = 8.0;
-        double arrowHalf = 3.0;
-
-        // Arrow at d1 pointing toward d2
-        QPointF a1Tip  = d1;
-        QPointF a1Base = d1 + dir * arrowLen;
-        QPolygonF arrow1;
-        arrow1 << a1Tip
-               << (a1Base + perp * arrowHalf)
-               << (a1Base - perp * arrowHalf);
-        painter.setBrush(painter.pen().color());
-        painter.drawPolygon(arrow1);
-
-        // Arrow at d2 pointing toward d1
-        QPointF a2Tip  = d2;
-        QPointF a2Base = d2 - dir * arrowLen;
-        QPolygonF arrow2;
-        arrow2 << a2Tip
-               << (a2Base + perp * arrowHalf)
-               << (a2Base - perp * arrowHalf);
-        painter.drawPolygon(arrow2);
-        painter.setBrush(Qt::NoBrush);
-
-        // Short leader line extending outward from d2, then text
-        double leaderLen = 12.0;
-        double textGap = 4.0;
-        QPointF leaderEnd = d2 + dir * leaderLen;
-        painter.drawLine(d2, leaderEnd);
-
-        // Rotated text placed outside, past the leader (suppressed during inline edit)
-        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
-            QPointF textPos = leaderEnd + dir * (textWidth / 2.0 + textGap);
-            painter.save();
-            painter.translate(textPos);
-            painter.rotate(angleDeg);
-
-            QRectF textRect(-textWidth / 2.0 - 2,
-                            -textHeight / 2.0 - 1,
-                             textWidth + 4, textHeight + 2);
-            painter.fillRect(textRect, Qt::white);
-            painter.drawText(textRect, Qt::AlignCenter, text);
-            painter.restore();
-        }
+        return true;
     }
+    return false;
 }
 
-void SketchCanvas::drawRadialConstraint(QPainter& painter, const SketchConstraint& constraint)
+// Select tool press on a point-level target (endpoint, Bezier leg, tangent
+// contact dot, slot anchor, midpoint grip), which take precedence over the
+// entity pick. Returns true when one was hit.
+bool SketchCanvas::pressSelectsPoint(QMouseEvent* event, const QPointF& worldPos)
 {
-    if (constraint.entityIds.empty()) return;
-
-    const SketchEntity* entity = entityById(constraint.entityIds[0]);
-    if (!entity || (entity->type != SketchEntityType::Circle && entity->type != SketchEntityType::Arc)) {
-        return;
-    }
-
-    if (entity->points.empty()) return;
-
-    QPointF sc = worldToScreen(entity->points[0]).toPointF();
-    QPointF labelPt = worldToScreen(constraint.labelPosition).toPointF();
-    double radiusPx = entity->radius * m_zoom;
-
-    // Direction from center toward label (= toward first vertex)
-    QPointF along = labelPt - sc;
-    double alongLen = std::sqrt(along.x() * along.x() + along.y() * along.y());
-    if (alongLen < 1e-6) return;
-
-    QPointF dir = along / alongLen;
-    QPointF perp(-dir.y(), dir.x());
-
-    // Edge point on circle
-    QPointF edgePt = sc + dir * radiusPx;
-
-    // Angle for text rotation
-    double angleDeg = std::atan2(dir.y(), dir.x()) * 180.0 / M_PI;
-    if (angleDeg > 90.0)  angleDeg -= 180.0;
-    if (angleDeg < -90.0) angleDeg += 180.0;
-
-    // Value text
-    QString prefix = (constraint.type == ConstraintType::Radius) ? QStringLiteral("R") : QStringLiteral("Ø");
-    QString text = prefix + QString::fromStdString(formatValueWithUnit(constraint.value, m_displayUnit));
-    if (!constraint.isDriving) {
-        text = QStringLiteral("(") + text + QStringLiteral(")");
-    }
-
-    QFontMetricsF fm(painter.font());
-    double textWidth = fm.horizontalAdvance(text);
-    double textHeight = fm.height();
-    double halfText = textWidth / 2.0 + 3.0;
-    bool textFits = (halfText * 2.0 < radiusPx);
-
-    QPointF dimMid = (sc + edgePt) / 2.0;
-    // Apply label collision nudge offset
-    auto nudgeItR = m_labelNudgeOffsets.find(constraint.id);
-    if (nudgeItR != m_labelNudgeOffsets.end())
-        dimMid += *nudgeItR;
-
-    if (textFits) {
-        // ---- NORMAL: text inside, dashed line with gap for label -----------
-        QPointF gapStart = dimMid - dir * halfText;
-        QPointF gapEnd   = dimMid + dir * halfText;
-
-        QPen dashPen(painter.pen().color(), 1, Qt::DashLine);
-        painter.setPen(dashPen);
-        painter.drawLine(sc.toPoint(), gapStart.toPoint());
-        painter.drawLine(gapEnd.toPoint(), edgePt.toPoint());
-
-        // Perpendicular tick terminators at center and edge
-        QPen tickPen(painter.pen().color(), 1.5, Qt::SolidLine);
-        painter.setPen(tickPen);
-        double tickSize = 5.0;
-        painter.drawLine((sc - perp * tickSize).toPoint(), (sc + perp * tickSize).toPoint());
-        painter.drawLine((edgePt - perp * tickSize).toPoint(), (edgePt + perp * tickSize).toPoint());
-
-        // Rotated text centred in the gap (suppressed during inline edit)
-        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
-            painter.save();
-            painter.translate(dimMid);
-            painter.rotate(angleDeg);
-
-            QRectF textRect(-textWidth / 2.0 - 2,
-                            -textHeight / 2.0 - 1,
-                             textWidth + 4, textHeight + 2);
-            painter.fillRect(textRect, Qt::white);
-            painter.setPen(QPen(painter.pen().color(), 1, Qt::SolidLine));
-            painter.drawText(textRect, Qt::AlignCenter, text);
-            painter.restore();
-        }
-    } else {
-        // ---- COMPACT: inward arrows, text outside circle -------------------
-        double arrowLen = 8.0;
-        double arrowHalf = 3.0;
-
-        // Dashed line from center to edge
-        QPen dashPen(painter.pen().color(), 1, Qt::DashLine);
-        painter.setPen(dashPen);
-        painter.drawLine(sc.toPoint(), edgePt.toPoint());
-
-        // Arrow at center pointing toward edge (3px gap from center point)
-        double arrowGap = 3.0;
-        QPen arrowPen(painter.pen().color(), 1.5, Qt::SolidLine);
-        painter.setPen(arrowPen);
-        QPointF a1Tip = sc + dir * arrowGap;
-        QPointF a1Base = a1Tip + dir * arrowLen;
-        QPolygonF arrow1;
-        arrow1 << a1Tip << (a1Base + perp * arrowHalf) << (a1Base - perp * arrowHalf);
-        painter.setBrush(painter.pen().color());
-        painter.drawPolygon(arrow1);
-
-        // Arrow at edge pointing toward center (3px gap from edge point)
-        QPointF a2Tip = edgePt - dir * arrowGap;
-        QPointF a2Base = a2Tip - dir * arrowLen;
-        QPolygonF arrow2;
-        arrow2 << a2Tip << (a2Base + perp * arrowHalf) << (a2Base - perp * arrowHalf);
-        painter.drawPolygon(arrow2);
-        painter.setBrush(Qt::NoBrush);
-
-        // Leader line extending outward from edge, then text
-        double leaderLen = 12.0;
-        double textGap = 4.0;
-        QPointF leaderEnd = edgePt + dir * leaderLen;
-        painter.drawLine(edgePt.toPoint(), leaderEnd.toPoint());
-
-        // Rotated text placed outside, past the leader (suppressed during inline edit)
-        if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
-            QPointF textPos = leaderEnd + dir * (textWidth / 2.0 + textGap);
-            painter.save();
-            painter.translate(textPos);
-            painter.rotate(angleDeg);
-
-            QRectF textRect(-textWidth / 2.0 - 2,
-                            -textHeight / 2.0 - 1,
-                             textWidth + 4, textHeight + 2);
-            painter.fillRect(textRect, Qt::white);
-            painter.setPen(QPen(painter.pen().color(), 1, Qt::SolidLine));
-            painter.drawText(textRect, Qt::AlignCenter, text);
-            painter.restore();
-        }
-    }
-}
-
-void SketchCanvas::drawAngleConstraint(QPainter& painter, const SketchConstraint& constraint)
-{
-    if (constraint.entityIds.size() < 2) return;
-
-    const SketchEntity* e1 = entityById(constraint.entityIds[0]);
-    const SketchEntity* e2 = entityById(constraint.entityIds[1]);
-
-    if (!e1 || !e2 || e1->type != SketchEntityType::Line || e2->type != SketchEntityType::Line) {
-        return;
-    }
-
-    if (e1->points.size() < 2 || e2->points.size() < 2) return;
-
-    // ---- Determine the anchor (vertex) point ----
-    QPointF intersection;
-    if (constraint.hasAnchorPoint()) {
-        // Explicit anchor from the constraint
-        intersection = constraint.anchorPoint;
-    } else {
-        // Compute the intersection of the two line rays
-        QLineF line1(e1->points[0], e1->points[1]);
-        QLineF line2(e2->points[0], e2->points[1]);
-        QLineF::IntersectionType intersectType = line1.intersects(line2, &intersection);
-        if (intersectType == QLineF::NoIntersection) {
-            intersection = constraint.labelPosition;
+    // Point pick takes precedence over entity pick (unless the filter
+    // is Curves-only): a press on an endpoint arms a point selection
+    // (committed on release) or, if the cursor moves first, a handle
+    // drag of that point.
+    if (m_selectFilter != SelectFilter::CurvesOnly) {
+        int pe = -1, pi = -1;
+        if (hitTestAnyPoint(worldPos, pe, pi)) {
+            m_pointPressArmed  = true;
+            m_pointPressEntity = pe;
+            m_pointPressIndex  = pi;
+            m_pointPressScreen = event->pos();
+            m_pointPressMods   = event->modifiers();
+            beginDragDetection(event->pos());
+            return true;
         }
     }
 
-    QPointF originScreen = worldToScreen(intersection).toPointF();
-
-    // ---- Compute angles of the two lines in screen space ----------------
-    // Note: screen Y is inverted, so negate Y for angle calculation
-    QPointF s1a = worldToScreen(e1->points[0]).toPointF();
-    QPointF s1b = worldToScreen(e1->points[1]).toPointF();
-    QPointF s2a = worldToScreen(e2->points[0]).toPointF();
-    QPointF s2b = worldToScreen(e2->points[1]).toPointF();
-
-    // Use the ray direction from the anchor toward the far end of each line
-    QPointF dir1 = s1b - s1a;
-    QPointF dir2 = s2b - s2a;
-    // Orient rays away from anchor (pick the end farther from anchor)
-    if (QLineF(originScreen, s1a).length() > QLineF(originScreen, s1b).length())
-        dir1 = s1a - s1b;
-    if (QLineF(originScreen, s2a).length() > QLineF(originScreen, s2b).length())
-        dir2 = s2a - s2b;
-
-    double a1 = std::atan2(-dir1.y(), dir1.x());   // negate Y for math coords
-    double a2 = std::atan2(-dir2.y(), dir2.x());
-
-    // Compute the sweep between the two rays
-    double sweep = a2 - a1;
-    while (sweep > M_PI)  sweep -= 2.0 * M_PI;
-    while (sweep < -M_PI) sweep += 2.0 * M_PI;
-
-    // If supplementary flag is set, show the opposite (larger) angle
-    if (constraint.supplementary) {
-        if (sweep > 0)
-            sweep -= 2.0 * M_PI;
-        else
-            sweep += 2.0 * M_PI;
+    // A click on a Bezier control-polygon leg selects its two endpoints,
+    // so a Distance dimension on them constrains that handle's length.
+    if (m_selectFilter != SelectFilter::CurvesOnly) {
+        int le = -1, a = -1, b = -1;
+        if (hitTestBezierLeg(worldPos, le, a, b)) {
+            selectPoint(le, a, false, false);
+            selectPoint(le, b, true,  false);
+            update();
+            return true;
+        }
     }
 
-    double startAngle = a1;
-    double sweepAngle = sweep;
-
-    // ---- Arc radius (screen pixels) --------------------------------------
-    double arcRadius = 35.0;
-
-    // ---- Draw the arc ----------------------------------------------------
-    QPen arcPen(painter.pen().color(), 1.5, Qt::SolidLine);
-    painter.setPen(arcPen);
-
-    // Draw arc as a polyline for precision (QPainter::drawArc uses 1/16 degree ints)
-    const int segments = 40;
-    QVector<QPointF> arcPoints;
-    arcPoints.reserve(segments + 1);
-    for (int i = 0; i <= segments; ++i) {
-        double t = static_cast<double>(i) / segments;
-        double angle = startAngle + sweepAngle * t;
-        // Convert back to screen coords (negate Y)
-        arcPoints.append(QPointF(originScreen.x() + arcRadius * std::cos(angle),
-                                 originScreen.y() - arcRadius * std::sin(angle)));
-    }
-    for (int i = 0; i < arcPoints.size() - 1; ++i) {
-        painter.drawLine(arcPoints[i], arcPoints[i + 1]);
+    // The red tangent-contact dot selects its circle, so the user can
+    // then pick a line endpoint and Coincident-pin it onto the circle
+    // (see hitTestTangentContact). Curves are selectable here; only a
+    // points-only filter suppresses it.
+    if (m_selectFilter != SelectFilter::PointsOnly) {
+        const int tcCircle = hitTestTangentContact(worldPos);
+        if (tcCircle >= 0) {
+            const bool extend =
+                event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
+            if (!extend) m_selectedPoints.clear();
+            selectEntity(tcCircle, extend);
+            showStatus(tr("Tangent contact selected: Ctrl-click a line "
+                          "endpoint, then Coincident to pin it onto the circle."));
+            update();
+            return true;
+        }
     }
 
-    // ---- Arrowheads at both ends of the arc ------------------------------
-    double arrowSize = 7.0;
-    // Tangent at start (first end): perpendicular to radial direction
+    // A midpoint grip (line or arc), shown only on hover, selects the
+    // derived midpoint as a point, drawn white like an unconstrained
+    // end. Ctrl/Shift extend so it can pair with a target for a Midpoint
+    // constraint. (Aaron)
+    // Slot anchor point: click one to persist it as a white dot (a snap
+    // anchor, not a constraint). (Aaron)
     {
-        double angle = startAngle;
-        // Tangent direction along increasing sweep
-        double tx = -std::sin(angle) * (sweepAngle > 0 ? 1 : -1);
-        double ty = -std::cos(angle) * (sweepAngle > 0 ? 1 : -1);
-        QPointF tip = arcPoints.first();
-        // Tangent in screen coords (negate ty since screen Y is flipped)
-        QPointF tangent(tx, ty);
-        drawArrow(painter, tip, tangent, arrowSize);
-    }
-    // Tangent at end (second end): perpendicular to radial, reversed
-    {
-        double angle = startAngle + sweepAngle;
-        double tx = std::sin(angle) * (sweepAngle > 0 ? 1 : -1);
-        double ty = std::cos(angle) * (sweepAngle > 0 ? 1 : -1);
-        QPointF tip = arcPoints.last();
-        QPointF tangent(tx, ty);
-        drawArrow(painter, tip, tangent, arrowSize);
-    }
-
-    // ---- Extension lines from intersection to arc ends -------------------
-    // Skip extension lines for sweep-angle constraints (construction lines serve as visual guides)
-    bool isSweep = false;
-    for (const auto& g : m_groups) {
-        if (isSweepAngleGroup(g.id) && g.containsConstraint(constraint.id)) {
-            isSweep = true;
-            break;
+        const int hitId = pick(worldPos);
+        const SketchEntity* e = (hitId >= 0) ? entityById(hitId) : nullptr;
+        if (e && e->type == SketchEntityType::Slot) {
+            const auto anchors = sketch::slotAnchorPoints(*e);
+            const QPointF clickScr = worldToScreen(worldPos);
+            int best = -1; double bestD = kMidpointHitTolPx;
+            for (int i = 0; i < static_cast<int>(anchors.size()); ++i) {
+                const QPointF scr = worldToScreen(QPointF(anchors[i].position));
+                const double d = QLineF(clickScr, scr).length();
+                if (d <= bestD) { bestD = d; best = i; }
+            }
+            if (best >= 0) {
+                m_selectedSlotAnchor = { e->id, best };
+                update();
+                return true;
+            }
         }
     }
-    if (!isSweep) {
-        QPen extPen(painter.pen().color(), 1, Qt::SolidLine);
-        painter.setPen(extPen);
-        double extOvershoot = 5.0;
-        QPointF radDir1 = arcPoints.first() - originScreen;
-        double radLen1 = std::sqrt(radDir1.x() * radDir1.x() + radDir1.y() * radDir1.y());
-        if (radLen1 > 1.0) {
-            QPointF rn1 = radDir1 / radLen1;
-            painter.drawLine(originScreen, arcPoints.first() + rn1 * extOvershoot);
-        }
-        QPointF radDir2 = arcPoints.last() - originScreen;
-        double radLen2 = std::sqrt(radDir2.x() * radDir2.x() + radDir2.y() * radDir2.y());
-        if (radLen2 > 1.0) {
-            QPointF rn2 = radDir2 / radLen2;
-            painter.drawLine(originScreen, arcPoints.last() + rn2 * extOvershoot);
+    if (m_selectFilter != SelectFilter::CurvesOnly) {
+        const int midId = hitTestMidpoint(worldPos);
+        if (midId >= 0) {
+            const bool ctrl  = event->modifiers() & Qt::ControlModifier;
+            const bool shift = event->modifiers() & Qt::ShiftModifier;
+            if (!ctrl && !shift) clearSelection();
+            m_selectedMidpointEntity =
+                (ctrl && m_selectedMidpointEntity == midId) ? -1 : midId;
+            emit selectionChanged(m_selectedId);
+            update();
+            return true;
         }
     }
-
-    // ---- Value text at midpoint of arc -----------------------------------
-    double midAngle = startAngle + sweepAngle / 2.0;
-    double textRadius = arcRadius + 14.0;
-    QPointF textCenter(originScreen.x() + textRadius * std::cos(midAngle),
-                       originScreen.y() - textRadius * std::sin(midAngle));
-
-    // Apply label collision nudge offset
-    auto nudgeIt = m_labelNudgeOffsets.find(constraint.id);
-    if (nudgeIt != m_labelNudgeOffsets.end())
-        textCenter += *nudgeIt;
-
-    QString text = QString::fromStdString(formatAngle(constraint.value));
-    if (!constraint.isDriving) {
-        text = QStringLiteral("(") + text + QStringLiteral(")");
-    }
-
-    QFontMetricsF fm(painter.font());
-    double textW = fm.horizontalAdvance(text);
-    double textH = fm.height();
-    // Suppress label text during inline edit
-    if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
-        QRectF textRect(textCenter.x() - textW / 2.0 - 2,
-                        textCenter.y() - textH / 2.0 - 1,
-                        textW + 4, textH + 2);
-
-        painter.fillRect(textRect, Qt::white);
-        painter.drawText(textRect, Qt::AlignCenter, text);
-    }
+    return false;
 }
 
-
-
-void SketchCanvas::drawFixedAngleConstraint(QPainter& painter, const SketchConstraint& constraint)
+// Select tool press with no point-level hit: select/drag the entity under
+// the cursor, or start a window selection on empty space.
+void SketchCanvas::pressSelectsEntityOrWindow(QMouseEvent* event, const QPointF& worldPos)
 {
-    if (constraint.entityIds.empty()) return;
+    // Hit test for entity selection
+    int hitId = hitTest(worldPos);
+    // Points-only: curves are not selectable, so a non-point click is
+    // treated as empty (starts a rubber band / clears).
+    if (m_selectFilter == SelectFilter::PointsOnly) hitId = -1;
+    // Selection modifiers: Ctrl = toggle (add if new, remove if already
+    // selected); Shift = add-only (never deselect). Plain click replaces.
+    // Shift is otherwise free in the Select tool; its snap role only
+    // applies while drawing or dragging.
+    const bool ctrlHeld  = event->modifiers() & Qt::ControlModifier;
+    const bool shiftHeld = event->modifiers() & Qt::ShiftModifier;
+    const bool extendSel = ctrlHeld || shiftHeld;
 
-    const SketchEntity* e = entityById(constraint.entityIds[0]);
-    if (!e || e->type != SketchEntityType::Line) return;
-    if (e->points.size() < 2) return;
+    if (hitId >= 0) {
+        // Clicked on an entity
+        // Deselect constraints
+        for (auto& c : m_constraints) {
+            c.selected = false;
+        }
+        m_selectedConstraintId = -1;
 
-    // ---- Determine the anchor point ----
-    // Use explicit anchor if set, otherwise use the line's start point
-    QPointF anchor;
-    if (constraint.hasAnchorPoint()) {
-        anchor = constraint.anchorPoint;
+        // Group expansion is handled by enter-group mode now:
+        //   normal click = whole group; double-click = enter group
+        const SketchEntity* hit = entityById(hitId);
+        if (shiftHeld && !ctrlHeld && hit && hit->selected) {
+            // Add-only on an already-selected entity: keep it, do nothing.
+        } else {
+            // Ctrl toggles; Shift (new) and plain click add/replace.
+            selectEntity(hitId, extendSel);
+        }
+
+        // Direct drag (Fusion/Onshape): the same press that selected
+        // the entity can drag it. Near a handle of what is now
+        // selected, drag that handle; otherwise arm a body drag that
+        // starts once the cursor moves past the drag threshold.
+        if (!extendSel) {
+            int dhEnt = -1, dhIdx = -1;
+            if (hitTestGroupHandle(worldPos, dhEnt, dhIdx) && dhEnt == hitId && dhIdx >= 0) {
+                beginHandleDrag(dhEnt, dhIdx, worldPos, event->modifiers());
+            } else {
+                m_bodyDragArmed = true;
+                m_bodyDragEntityId = hitId;
+                m_bodyDragPressWorld = worldPos;
+                m_bodyDragLastWorld = worldPos;
+                m_bodyDragPressScreen = event->pos();
+            }
+        }
     } else {
-        anchor = e->points[0];
+        // Clicked on empty space
+
+        // If inside a group, leave it first
+        if (m_enteredGroupId >= 0) {
+            leaveGroup();
+            // Don't start window selection; just leave the group
+            return;
+        }
+
+        // Start window selection
+        m_isWindowSelecting = true;
+        m_windowSelectStart = worldPos;
+        m_windowSelectEnd = worldPos;
+        m_windowSelectCrossing = false;  // Will be determined by drag direction
+
+        // Clear selection unless Ctrl or Shift held (both keep it)
+        if (!extendSel) {
+            clearSelection();
+        }
     }
+}
 
-    QPointF originScreen = worldToScreen(anchor).toPointF();
+// Left press with the Select tool.
+void SketchCanvas::handleSelectToolPress(QMouseEvent* event, const QPointF& worldPos)
+{
+    // First check if clicking on a handle; use group-aware test
+    // so any corner of a decomposed rectangle is draggable.
+    if (pressSelectsHandle(event, worldPos)) return;
 
-    // ---- Compute angles in screen space ----
-    // Horizontal reference direction: pointing right in screen space
-    double aHoriz = 0.0;   // horizontal = 0 radians in math coords
-
-    // Line direction (from anchor toward far end)
-    QPointF sa = worldToScreen(e->points[0]).toPointF();
-    QPointF sb = worldToScreen(e->points[1]).toPointF();
-    QPointF dir = sb - sa;
-    // Orient ray away from anchor
-    if (QLineF(originScreen, sa).length() > QLineF(originScreen, sb).length())
-        dir = sa - sb;
-
-    double aLine = std::atan2(-dir.y(), dir.x());   // negate Y for math coords
-
-    // Sweep from horizontal to line direction
-    double sweep = aLine - aHoriz;
-    while (sweep > M_PI)  sweep -= 2.0 * M_PI;
-    while (sweep < -M_PI) sweep += 2.0 * M_PI;
-
-    double startAngle = aHoriz;
-    double sweepAngle = sweep;
-
-    // ---- Arc radius (screen pixels) ----
-    double arcRadius = 35.0;
-
-    // ---- Draw the arc ----
-    QPen arcPen(painter.pen().color(), 1.5, Qt::SolidLine);
-    painter.setPen(arcPen);
-
-    const int segments = 40;
-    QVector<QPointF> arcPoints;
-    arcPoints.reserve(segments + 1);
-    for (int i = 0; i <= segments; ++i) {
-        double t = static_cast<double>(i) / segments;
-        double angle = startAngle + sweepAngle * t;
-        arcPoints.append(QPointF(originScreen.x() + arcRadius * std::cos(angle),
-                                 originScreen.y() - arcRadius * std::sin(angle)));
-    }
-    for (int i = 0; i < arcPoints.size() - 1; ++i) {
-        painter.drawLine(arcPoints[i], arcPoints[i + 1]);
-    }
-
-    // ---- Arrowhead at the line end of the arc ----
-    double arrowSize = 7.0;
+    // Clicking the group indicator glyph selects the whole group.
     {
-        double angle = startAngle + sweepAngle;
-        double tx = std::sin(angle) * (sweepAngle > 0 ? 1 : -1);
-        double ty = std::cos(angle) * (sweepAngle > 0 ? 1 : -1);
-        QPointF tip = arcPoints.last();
-        QPointF tangent(tx, ty);
-        drawArrow(painter, tip, tangent, arrowSize);
+        int ggid = hitTestGroupGlyph(event->pos());
+        if (ggid >= 0) { selectGroup(ggid); return; }
     }
 
-    // ---- Short horizontal reference tick at the arc start ----
-    QPen extPen(painter.pen().color(), 1, Qt::DashLine);
-    painter.setPen(extPen);
-    double refLen = arcRadius + 10.0;
-    painter.drawLine(originScreen, QPointF(originScreen.x() + refLen, originScreen.y()));
+    // Check if clicking on a constraint label or glyph chip first
+    if (pressSelectsConstraint(event, worldPos)) return;
 
-    // ---- Extension line from anchor toward line end ----
-    extPen.setStyle(Qt::SolidLine);
-    painter.setPen(extPen);
-    double extOvershoot = 5.0;
-    QPointF radDir = arcPoints.last() - originScreen;
-    double radLen = std::sqrt(radDir.x() * radDir.x() + radDir.y() * radDir.y());
-    if (radLen > 1.0) {
-        QPointF rn = radDir / radLen;
-        painter.drawLine(originScreen, arcPoints.last() + rn * extOvershoot);
+    // If the sketch was deselected (Save/Discard bar visible),
+    // any click on the canvas re-engages the sketch.
+    if (!m_sketchSelected) {
+        m_sketchSelected = true;
+        emit selectionChanged(-1);  // re-engage sketch
+        // Fall through to normal selection handling below
     }
 
-    // ---- Value text at midpoint of arc ----
-    double midAngle = startAngle + sweepAngle / 2.0;
-    double textRadius = arcRadius + 14.0;
-    QPointF textCenter(originScreen.x() + textRadius * std::cos(midAngle),
-                       originScreen.y() - textRadius * std::sin(midAngle));
+    // Point-level picks take precedence over the entity pick.
+    if (pressSelectsPoint(event, worldPos)) return;
 
-    // Apply label collision nudge offset
-    auto nudgeIt2 = m_labelNudgeOffsets.find(constraint.id);
-    if (nudgeIt2 != m_labelNudgeOffsets.end())
-        textCenter += *nudgeIt2;
-
-    QString text = QString::fromStdString(formatAngle(constraint.value));
-    if (!constraint.isDriving) {
-        text = QStringLiteral("(") + text + QStringLiteral(")");
-    }
-
-    QFontMetricsF fm(painter.font());
-    double textW = fm.horizontalAdvance(text);
-    double textH = fm.height();
-    // Suppress label text during inline edit
-    if (!(m_inlineEditActive && constraint.id == m_inlineEditConstraintId)) {
-        QRectF textRect(textCenter.x() - textW / 2.0 - 2,
-                        textCenter.y() - textH / 2.0 - 1,
-                        textW + 4, textH + 2);
-
-        painter.fillRect(textRect, Qt::white);
-        painter.drawText(textRect, Qt::AlignCenter, text);
-    }
+    pressSelectsEntityOrWindow(event, worldPos);
 }
 
-void SketchCanvas::drawGeometricConstraint(QPainter& painter, const SketchConstraint& constraint)
+// Left press with a drawing or editing tool active.
+void SketchCanvas::handleDrawToolPress(QMouseEvent* event, const QPointF& worldPos)
 {
-    if (constraint.entityIds.empty()) return;
+    // Check if already drawing (click-click mode: second click to finish)
+    if (m_isDrawing) {
+        // Staged tools add their points on click: the arc-slot modes
+        // (SlotToolHandler), the 3-point and parallelogram rectangles
+        // (RectangleToolHandler), the 3-point circle (CircleToolHandler) and
+        // the 3-point / center-start-end / start-end-radius arcs
+        // (ArcToolHandler). Each handler declines when it is not its turn
+        // (a pure guard, no state change) and we fall through to the shared
+        // two-point path below.
+        if (SketchToolHandler* h = activeHandler()) {
+            if (h->mousePress(*this, event, worldPos)) return;
+        }
 
-    const SketchEntity* entity = entityById(constraint.entityIds[0]);
-    if (!entity) return;
+        // For two-point tools, second click finishes the entity
+        // (Arc and Spline have their own multi-click logic in mouseReleaseEvent)
+        // (Arc slots and 3-point rectangles are handled above and return early)
+        // (Point finishes on release, not second click)
+        // Note: Tangent arc is a two-click tool (tangent point + end point)
+        // Note: Tangent line needs special handling to constrain endpoint
+        const bool isMultiClickTool =
+            activeHandler() && activeHandler()->isMultiClick(*this);
 
-    // Get position for symbol - usually midpoint of line or center of entity
-    QPointF symbolPos;
-    if (entity->type == SketchEntityType::Line && entity->points.size() >= 2) {
-        symbolPos = (entity->points[0] + entity->points[1]) / 2.0;
-    } else if (!entity->points.empty()) {
-        symbolPos = entity->points[0];
+        // Line chaining, tangent-arc gesture (F-3): once a line segment
+        // has been placed, the NEXT segment is deferred to release so a
+        // press-drag off the chain point can sweep a tangent arc while a
+        // plain click still lays a straight segment. Only the Line tool,
+        // only while chaining (m_chainFromEntityId is set).
+        if (!isMultiClickTool && m_activeTool == SketchTool::Line
+            && m_chainFromEntityId >= 0 && !m_previewPoints.isEmpty()) {
+            beginDragDetection(event->pos());
+            m_lineChainPressActive = true;
+            return;
+        }
+
+        if (!isMultiClickTool) {
+            // Update the endpoint to the constrained position and finish
+            // m_currentMouseWorld already has angle snap and other constraints applied
+            updateEntity(m_currentMouseWorld);
+            recordEndpointSnap();   // so an endpoint on a snap gets its Coincident
+            finishEntity();
+            return;
+        }
+    }
+
+    // Tools whose first click is a real entity point (the 3-point arc
+    // modes and the 3-point circle) start the entity outright instead
+    // of going through the shared two-point path.
+    if (!m_isDrawing && activeHandler()
+        && activeHandler()->beginsOnFirstClick(*this)) {
+        beginDragDetection(event->pos());
+        startEntity(m_snapEngine.snapPoint(worldPos));
+        return;
+    }
+
+    if (activeHandler() && activeHandler()->mousePress(*this, event, worldPos)) {
+        // The handler consumed the click: circle tangent-target selection
+        // (gui/tools/circletoolhandler.cpp) or one of the single-click editing
+        // operations, trim, extend, split, offset, fillet, chamfer, both
+        // patterns and project (gui/tools/optoolhandlers.{h,cpp}).
     } else {
-        return;
+        // Start drawing normally.
+        //
+        // Guarded on !m_isDrawing: a multi-click tool whose press
+        // adds no point (the freeform polygon adds its vertices on
+        // RELEASE) falls all the way down here on every click after
+        // the first, and startEntity() clears the point list. Without
+        // the guard each click restarted the entity, so a freeform
+        // polygon never accumulated more than one vertex and was
+        // discarded as invalid; it drew nothing at all.
+        if (!m_isDrawing) {
+            beginDragDetection(event->pos());
+            startEntity(m_snapEngine.snapPoint(worldPos));
+        } else {
+            beginDragDetection(event->pos());
+        }
     }
-
-    QPoint symbolScreen = worldToScreen(symbolPos);
-
-    // Draw constraint symbol
-    QFont font = painter.font();
-    font.setPointSize(12);
-    font.setBold(true);
-    painter.setFont(font);
-
-    QString symbol;
-    switch (constraint.type) {
-    case ConstraintType::Horizontal:
-        symbol = "—";  // Horizontal line
-        break;
-    case ConstraintType::Vertical:
-        symbol = "|";  // Vertical line
-        break;
-    case ConstraintType::Parallel:
-        symbol = "//";
-        break;
-    case ConstraintType::Perpendicular:
-        symbol = "⊥";
-        break;
-    case ConstraintType::Coincident:
-        // Draw small filled circle
-        painter.setBrush(painter.pen().color());
-        painter.drawEllipse(symbolScreen, 4, 4);
-        return;
-    case ConstraintType::Equal:
-        symbol = "=";
-        break;
-    case ConstraintType::Tangent:
-        symbol = "⌒";  // Arc symbol for tangent
-        break;
-    case ConstraintType::Midpoint:
-        symbol = "◇";  // Diamond for midpoint
-        break;
-    case ConstraintType::Symmetric:
-        symbol = "⟷";  // Double arrow for symmetry
-        break;
-    default:
-        return;
-    }
-
-    // Draw symbol with white background
-    QFontMetrics fm(painter.font());
-    QRect textRect = fm.boundingRect(symbol);
-    textRect.moveCenter(symbolScreen);
-
-    painter.fillRect(textRect.adjusted(-2, -2, 2, 2), Qt::white);
-    painter.drawText(textRect, Qt::AlignCenter, symbol);
-}
-
-void SketchCanvas::drawArrow(QPainter& painter, const QPointF& pos, const QPointF& dir, double size)
-{
-    // Draw simple arrow at position pointing in direction
-    QPointF perpDir(-dir.y(), dir.x());
-
-    QPointF arrowTip = pos;
-    QPointF arrowLeft = arrowTip - dir * size + perpDir * (size / 2.0);
-    QPointF arrowRight = arrowTip - dir * size - perpDir * (size / 2.0);
-
-    painter.drawLine(arrowTip, arrowLeft);
-    painter.drawLine(arrowTip, arrowRight);
 }
 
 void SketchCanvas::mousePressEvent(QMouseEvent* event)
@@ -4590,1124 +2744,93 @@ void SketchCanvas::mousePressEvent(QMouseEvent* event)
 
     // Right-click to finish multi-click entities (spline, freeform polygon)
     if (event->button() == Qt::RightButton) {
-        if (m_isDrawing && (m_activeTool == SketchTool::Spline
-                            || (m_activeTool == SketchTool::Polygon
-                                && m_polygonMode == PolygonMode::Freeform))) {
-            finishEntity();
+        // Dimension tool: right-click before placing the label offers the
+        // radius/diameter and driving/driven choices up front (Fusion F-31),
+        // rather than forcing an edit after the dimension exists.
+        if (m_activeTool == SketchTool::Dimension && m_isCreatingConstraint
+            && !m_constraintTargetEntities.isEmpty()) {
+            showDimensionOptionsMenu(event->pos());
+            m_suppressNextContextMenu = true;   // Qt still delivers contextMenuEvent
+            return;
+        }
+        // Right-click == finish/end for every drawing tool: multi-click tools
+        // commit, a line chain ends keeping its committed segments, an incomplete
+        // fixed entity is discarded.
+        if (m_isDrawing) {
+            if (activeHandler() && activeHandler()->finishesOnRightClick(*this)) {
+                finishEntity();
+            } else {
+                const bool chaining = activeHandler()
+                    && activeHandler()->chainsFromLastPoint(*this);
+                cancelEntity();
+                m_chainFromEntityId = -1;
+                if (chaining) emit toolHintChanged(currentToolHint());
+            }
+            m_suppressNextContextMenu = true;
+            return;
         }
         return;
     }
 
     if (event->button() == Qt::LeftButton) {
-        // Handle calibration entity selection mode - select line for alignment
-        if (m_calibrationEntitySelectionMode) {
-            int hitId = hitTest(worldPos);
-            if (hitId >= 0) {
-                const SketchEntity* entity = entityById(hitId);
-                // Only allow lines (including construction lines) for alignment
-                if (entity && entity->type == SketchEntityType::Line) {
-                    double angle = getEntityAngle(hitId);
-                    emit calibrationEntitySelected(hitId, angle);
-                    return;
-                }
+        // Transform section: the star, a pick, or the free-move manipulator
+        // owns the click before any tool or selection logic.
+        if (handleTransformPress(event, worldPos)) return;
+        // Background calibration and edit modes come next.
+        if (handleCalibrationPress(worldPos)) return;
+        if (handleBackgroundEditPress(worldPos)) return;
+
+        // The Constraint tool works on what is already selected: click an
+        // entity to add it to the selection, and apply as soon as the
+        // selection supports a constraint. Before this, the tool set a
+        // cursor and a status hint and did nothing else: every
+        // apply*Constraint() function in this class had no caller at all,
+        // which is why geometric constraints were unreachable from the UI.
+        if (m_activeTool == SketchTool::Constraint) {
+            if (activeHandler()) {
+                activeHandler()->mousePress(*this, event, worldPos);
             }
-            // Click didn't hit a valid entity - ignore
             return;
         }
 
-        // Handle background calibration mode - pick points for scale calibration
-        if (m_backgroundCalibrationMode && m_backgroundImage.enabled) {
-            // Check if click is within background bounds
-            if (m_backgroundImage.containsPoint(worldPos)) {
-                emit calibrationPointPicked(worldPos);
-                return;
-            }
-        }
-
-        // Handle background edit mode first
-        if (m_backgroundEditMode && m_backgroundImage.enabled) {
-            BackgroundHandle handle = hitTestBackgroundHandle(worldPos);
-            if (handle != BackgroundHandle::None) {
-                m_bgDragHandle = handle;
-                m_bgDragStartWorld = worldPos;
-                m_bgOriginalPosition = m_backgroundImage.position;
-                m_bgOriginalWidth = m_backgroundImage.width;
-                m_bgOriginalHeight = m_backgroundImage.height;
-                updateCursorForBackgroundHandle(handle);
-                return;
-            }
-            // Clicking outside background exits edit mode
-            setBackgroundEditMode(false);
-        }
-
         if (m_activeTool == SketchTool::Select) {
-            // First check if clicking on a handle — use group-aware test
-            // so any corner of a decomposed rectangle is draggable.
-            int handleEntityId = -1, handleIdx = -1;
-            bool handleHit = hitTestGroupHandle(worldPos, handleEntityId, handleIdx);
-            // Don't allow handle dragging on sweep-angle construction lines
-            // (but allow it for the arc entity itself, which is also in the group)
-            if (handleHit && handleEntityId >= 0) {
-                const SketchEntity* he = entityById(handleEntityId);
-                if (he && he->type == SketchEntityType::Line) {
-                    for (const auto& g : m_groups) {
-                        if (isSweepAngleGroup(g.id) && g.containsEntity(handleEntityId)) {
-                            handleHit = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (handleHit && handleIdx >= 0) {
-                // If the handle belongs to a different entity than the
-                // current primary, switch the primary so the drag code
-                // operates on the correct entity.
-                if (handleEntityId != m_selectedId) {
-                    m_selectedId = handleEntityId;
-                }
-
-                // Start dragging the handle
-                m_isDraggingHandle = true;
-                m_dragHandleIndex = handleIdx;
-                m_dragStartWorld = worldPos;
-                m_lastRawMouseWorld = worldPos;
-                m_shiftWasPressed = (event->modifiers() & Qt::ShiftModifier);
-                m_ctrlWasPressed = (event->modifiers() & Qt::ControlModifier);
-
-                // Store original handle positions for constraint behavior
-                SketchEntity* sel = entityById(handleEntityId);
-                if (sel && handleIdx < sel->points.size()) {
-                    m_dragHandleOriginal = sel->points[handleIdx];
-                    if (sel->points.size() > 1) {
-                        m_dragHandleOriginal2 = sel->points[1];
-                    }
-                    m_dragOriginalRadius = sel->radius;
-                    m_dragOriginalEntity = *sel;  // Full snapshot for undo
-                }
-
-                setCursor(Qt::ArrowCursor);
-                return;
-            }
-
-            // Check if clicking on a constraint label first
-            int constraintId = hitTestConstraintLabel(worldPos);
-            if (constraintId >= 0) {
-                // If already selected, start dragging the label
-                if (constraintId == m_selectedConstraintId) {
-                    SketchConstraint* constraint = constraintById(constraintId);
-                    if (constraint) {
-                        m_isDraggingConstraintLabel = true;
-                        m_constraintLabelOriginal = constraint->labelPosition;
-                        m_dragStartWorld = worldPos;
-                        setCursor(Qt::SizeAllCursor);
-                    }
-                } else {
-                    // Select constraint
-                    // Deselect all entities
-                    for (auto& e : m_entities) {
-                        e.selected = false;
-                    }
-                    m_selectedId = -1;
-                    m_selectedIds.clear();
-
-                    // Deselect old constraint
-                    for (auto& c : m_constraints) {
-                        c.selected = (c.id == constraintId);
-                    }
-                    m_selectedConstraintId = constraintId;
-                    emit selectionChanged(-1);  // Deselect entity
-                    emit constraintSelectionChanged(constraintId);
-                    update();
-                }
-                return;
-            }
-
-            // If the sketch was deselected (Save/Discard bar visible),
-            // any click on the canvas re-engages the sketch.
-            if (!m_sketchSelected) {
-                m_sketchSelected = true;
-                emit selectionChanged(-1);  // re-engage sketch
-                // Fall through to normal selection handling below
-            }
-
-            // Hit test for entity selection
-            int hitId = hitTest(worldPos);
-            bool ctrlHeld = (event->modifiers() & Qt::ControlModifier);
-
-            if (hitId >= 0) {
-                // Clicked on an entity
-                // Deselect constraints
-                for (auto& c : m_constraints) {
-                    c.selected = false;
-                }
-                m_selectedConstraintId = -1;
-
-                // Use selectEntity with addToSelection based on Ctrl key.
-                // Group expansion is handled by enter-group mode now:
-                //   normal click = whole group; double-click = enter group
-                selectEntity(hitId, ctrlHeld);
-            } else {
-                // Clicked on empty space
-
-                // If inside a group, leave it first
-                if (m_enteredGroupId >= 0) {
-                    leaveGroup();
-                    // Don't start window selection — just leave the group
-                    return;
-                }
-
-                // Start window selection
-                m_isWindowSelecting = true;
-                m_windowSelectStart = worldPos;
-                m_windowSelectEnd = worldPos;
-                m_windowSelectCrossing = false;  // Will be determined by drag direction
-
-                // Clear selection unless Ctrl held
-                if (!ctrlHeld) {
-                    clearSelection();
-                }
-            }
+            handleSelectToolPress(event, worldPos);
         } else {
-            // Check if already drawing (click-click mode: second click to finish)
-            if (m_isDrawing) {
-                // Arc Slot (both modes): add points on click
-                bool isArcSlot = (m_activeTool == SketchTool::Slot &&
-                                  (m_slotMode == SlotMode::ArcRadius || m_slotMode == SlotMode::ArcEnds));
-                if (isArcSlot) {
-                    // Reset drag detection for this click (so we can detect drag from THIS point)
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // ArcRadius stage 1: locked Radius constrains start distance from arc center
-                    if (m_slotMode == SlotMode::ArcRadius && m_pendingEntity.points.size() == 1) {
-                        double lockedR = getLockedDim(0);
-                        if (lockedR > 0) {
-                            QPointF arcCenter = m_pendingEntity.points[0];
-                            QPointF dir = snapped - arcCenter;
-                            double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            if (len > 1e-6)
-                                snapped = arcCenter + dir * (lockedR / len);
-                        }
-                    }
-
-                    // ArcRadius stage 2: constrain end to arc + apply locked sweep angle
-                    if (m_slotMode == SlotMode::ArcRadius && m_pendingEntity.points.size() == 2) {
-                        QPointF arcCenterWorld = m_pendingEntity.points[0];
-                        QPointF startWorld = m_pendingEntity.points[1];
-                        double arcRadius = QLineF(arcCenterWorld, startWorld).length();
-                        double mouseAngle = std::atan2(snapped.y() - arcCenterWorld.y(),
-                                                       snapped.x() - arcCenterWorld.x());
-                        double startAngle = std::atan2(startWorld.y() - arcCenterWorld.y(),
-                                                       startWorld.x() - arcCenterWorld.x());
-
-                        // Apply locked sweep angle if present
-                        double lockedSweep = getLockedDim(0);  // Sweep Angle (stage 2 field 0)
-                        if (lockedSweep != -1.0) {
-                            double angleDiff = mouseAngle - startAngle;
-                            while (angleDiff > M_PI) angleDiff -= 2.0 * M_PI;
-                            while (angleDiff < -M_PI) angleDiff += 2.0 * M_PI;
-                            if (m_arcSlotFlipped) {
-                                angleDiff = (angleDiff > 0) ? angleDiff - 2.0 * M_PI : angleDiff + 2.0 * M_PI;
-                            }
-                            double sign = (angleDiff >= 0) ? 1.0 : -1.0;
-                            mouseAngle = startAngle + sign * qDegreesToRadians(std::abs(lockedSweep));
-                        } else {
-                            // Minimum angular separation so slot ends don't overlap
-                            double slotRadius = m_pendingEntity.radius;
-                            if (slotRadius < 0.1) slotRadius = 5.0;
-                            double minAngularSep = (arcRadius > 0.001) ? (2.0 * slotRadius / arcRadius) : 0.1;
-                            double angleDiff = mouseAngle - startAngle;
-                            while (angleDiff > M_PI) angleDiff -= 2 * M_PI;
-                            while (angleDiff < -M_PI) angleDiff += 2 * M_PI;
-                            if (std::abs(angleDiff) < minAngularSep) {
-                                double sign = (angleDiff >= 0) ? 1.0 : -1.0;
-                                mouseAngle = startAngle + sign * minAngularSep;
-                            }
-                        }
-
-                        snapped = arcCenterWorld + QPointF(arcRadius * std::cos(mouseAngle),
-                                                           arcRadius * std::sin(mouseAngle));
-                    }
-
-                    // ArcEnds stage 2: locked sweep constrains arc center on perp bisector
-                    if (m_slotMode == SlotMode::ArcEnds && m_pendingEntity.points.size() == 2) {
-                        double lockedSweep = getLockedDim(0);
-                        if (lockedSweep != -1.0) {
-                            QPointF start = m_pendingEntity.points[0];
-                            QPointF end = m_pendingEntity.points[1];
-                            QPointF midpoint = (start + end) / 2.0;
-                            double chordLen = QLineF(start, end).length();
-                            if (chordLen > 0.001) {
-                                QPointF startToEnd = end - start;
-                                QPointF perpDir(-startToEnd.y() / chordLen, startToEnd.x() / chordLen);
-                                double halfSweepRad = qDegreesToRadians(std::abs(lockedSweep)) / 2.0;
-                                double tanHalf = std::tan(halfSweepRad);
-                                double projDist = (tanHalf > 1e-6) ? (chordLen / 2.0) / tanHalf : 1e6;
-                                QPointF mouseToMid = snapped - midpoint;
-                                double mouseProjDist = mouseToMid.x() * perpDir.x() + mouseToMid.y() * perpDir.y();
-                                double sign = (mouseProjDist >= 0) ? 1.0 : -1.0;
-                                snapped = midpoint + perpDir * sign * projDist;
-                            }
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        // m_arcSlotFlipped is already set via Shift key toggle
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition: new dim fields for next stage
-                        update();
-                    }
-                    return;
-                }
-
-                // 3-point rectangle: add points on click
-                bool isThreePointRect = (m_activeTool == SketchTool::Rectangle &&
-                                         m_rectMode == RectMode::ThreePoint);
-                if (isThreePointRect) {
-                    // Reset drag detection for this click (so we can detect drag from THIS point)
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // Apply locked dimension constraints
-                    int pStage = m_previewPoints.size();
-                    if (pStage == 1) {
-                        QPointF p1 = m_previewPoints[0];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - p1;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                            if (useLen > 0.001)
-                                snapped = p1 + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    } else if (pStage >= 2) {
-                        double lockedW = getLockedDim(0);
-                        if (lockedW > 0) {
-                            QPointF p1 = m_previewPoints[0];
-                            QPointF p2 = m_previewPoints[1];
-                            QPointF edge = p2 - p1;
-                            double edgeLen = std::sqrt(edge.x() * edge.x() + edge.y() * edge.y());
-                            if (edgeLen > 0.001) {
-                                QPointF edgeDir = edge / edgeLen;
-                                QPointF perpDir(-edgeDir.y(), edgeDir.x());
-                                QPointF toMouse = snapped - p1;
-                                double perpDot = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-                                double sign = (perpDot >= 0) ? 1.0 : -1.0;
-                                double edgeDot = toMouse.x() * edgeDir.x() + toMouse.y() * edgeDir.y();
-                                snapped = p1 + edgeDir * edgeDot + perpDir * sign * lockedW;
-                            }
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition: new dim fields for next stage
-                        update();
-                    }
-                    return;
-                }
-
-                // Parallelogram mode (under Rectangle): 3 clicks define corners, 4th is computed
-                bool isParallelogram = (m_activeTool == SketchTool::Rectangle &&
-                                        m_rectMode == RectMode::Parallelogram);
-                if (isParallelogram) {
-                    // Reset drag detection for this click
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // Apply locked dimension constraints
-                    int pStage = m_previewPoints.size();
-                    if (pStage == 1) {
-                        QPointF p1 = m_previewPoints[0];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - p1;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                            if (useLen > 0.001)
-                                snapped = p1 + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    } else if (pStage >= 2) {
-                        QPointF p1 = m_previewPoints[0];
-                        QPointF p2 = m_previewPoints[1];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - p2;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng;
-                            if (lockedAng != -1.0) {
-                                double edge1Dir = std::atan2(p1.y() - p2.y(), p1.x() - p2.x());
-                                double dir1 = edge1Dir + qDegreesToRadians(lockedAng);
-                                double dir2 = edge1Dir - qDegreesToRadians(lockedAng);
-                                double diff1 = std::abs(std::remainder(mouseAng - dir1, 2.0 * M_PI));
-                                double diff2 = std::abs(std::remainder(mouseAng - dir2, 2.0 * M_PI));
-                                useAng = (diff1 <= diff2) ? dir1 : dir2;
-                            } else {
-                                useAng = mouseAng;
-                            }
-                            if (useLen > 0.001)
-                                snapped = p2 + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition: new dim fields for next stage
-                        update();
-                    }
-                    return;
-                }
-
-                // 3-point circle: add points on click
-                bool isThreePointCircle = (m_activeTool == SketchTool::Circle &&
-                                           m_circleMode == CircleMode::ThreePoint);
-                if (isThreePointCircle) {
-                    // Reset drag detection for this click
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        update();
-                    }
-                    return;
-                }
-
-                // 3-point arc: add points on click
-                bool isThreePointArc = (m_activeTool == SketchTool::Arc &&
-                                        m_arcMode == ArcMode::ThreePoint);
-                if (isThreePointArc) {
-                    // Reset drag detection for this click
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        update();
-                    }
-                    return;
-                }
-
-                // Center-Start-End arc: add points on click
-                bool isCenterStartEndArc = (m_activeTool == SketchTool::Arc &&
-                                            m_arcMode == ArcMode::CenterStartEnd);
-                if (isCenterStartEndArc) {
-                    // Reset drag detection for this click
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // Stage 1: locked Radius constrains distance from center
-                    if (m_pendingEntity.points.size() == 1) {
-                        double lockedR = getLockedDim(0);
-                        if (lockedR > 0) {
-                            QPointF center = m_pendingEntity.points[0];
-                            QPointF dir = snapped - center;
-                            double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            if (len > 1e-6)
-                                snapped = center + dir * (lockedR / len);
-                        }
-                    }
-
-                    // Stage 2: constrain to arc radius + apply locked sweep angle
-                    if (m_pendingEntity.points.size() == 2) {
-                        QPointF center = m_pendingEntity.points[0];
-                        QPointF start = m_pendingEntity.points[1];
-                        double radius = QLineF(center, start).length();
-                        double angle = std::atan2(snapped.y() - center.y(), snapped.x() - center.x());
-                        // Apply locked sweep angle
-                        double lockedSweep = getLockedDim(0);  // Sweep Angle (stage 2 field 0)
-                        if (lockedSweep != -1.0) {
-                            double startAngle = std::atan2(start.y() - center.y(), start.x() - center.x());
-                            double defaultSweep = angle - startAngle;
-                            while (defaultSweep > M_PI) defaultSweep -= 2.0 * M_PI;
-                            while (defaultSweep < -M_PI) defaultSweep += 2.0 * M_PI;
-                            if (m_arcSlotFlipped) {
-                                defaultSweep = (defaultSweep > 0) ? defaultSweep - 2.0 * M_PI : defaultSweep + 2.0 * M_PI;
-                            }
-                            double sign = (defaultSweep >= 0) ? 1.0 : -1.0;
-                            angle = startAngle + sign * qDegreesToRadians(std::abs(lockedSweep));
-                        }
-                        snapped = center + QPointF(radius * std::cos(angle), radius * std::sin(angle));
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition: new dim fields for next stage
-                        update();
-                    }
-                    return;
-                }
-
-                // Start-End-Radius arc: add points on click
-                // First click = start (fixed), second click = end (fixed), third click defines radius
-                bool isStartEndRadiusArc = (m_activeTool == SketchTool::Arc &&
-                                            m_arcMode == ArcMode::StartEndRadius);
-                if (isStartEndRadiusArc) {
-                    // Reset drag detection for this click
-                    m_drawStartPos = event->pos();
-                    m_wasDragged = false;
-
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // Apply locked dimension constraints
-                    int pStage = m_previewPoints.size();
-                    if (pStage == 1) {
-                        // Stage 1: placing end point — locked Chord Length/Angle
-                        QPointF start = m_previewPoints[0];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - start;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                            if (useLen > 0.001)
-                                snapped = start + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    } else if (pStage >= 2) {
-                        // Stage 2: placing arc center — locked Sweep constrains perp bisector position
-                        double lockedSweep = getLockedDim(0);
-                        if (lockedSweep != -1.0) {
-                            QPointF start = m_previewPoints[0];
-                            QPointF end = m_previewPoints[1];
-                            QPointF midChord = (start + end) / 2.0;
-                            double chordLength = QLineF(start, end).length();
-                            if (chordLength > 0.001) {
-                                QPointF chordDir = (end - start) / chordLength;
-                                QPointF perpDir(-chordDir.y(), chordDir.x());
-                                double halfSweepRad = qDegreesToRadians(std::abs(lockedSweep)) / 2.0;
-                                double tanHalf = std::tan(halfSweepRad);
-                                double projDist = (tanHalf > 1e-6) ? (chordLength / 2.0) / tanHalf : 1e6;
-                                QPointF toMouse = snapped - midChord;
-                                double mouseProjDist = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-                                if (m_arcSlotFlipped) mouseProjDist = -mouseProjDist;
-                                double sign = (mouseProjDist >= 0) ? 1.0 : -1.0;
-                                if (m_arcSlotFlipped) sign = -sign;
-                                snapped = midChord + perpDir * sign * projDist;
-                            }
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition: new dim fields for next stage
-                        update();
-                    }
-                    return;
-                }
-
-                // For two-point tools, second click finishes the entity
-                // (Arc and Spline have their own multi-click logic in mouseReleaseEvent)
-                // (Arc slots and 3-point rectangles are handled above and return early)
-                // (Point finishes on release, not second click)
-                // Note: Tangent arc is a two-click tool (tangent point + end point)
-                // Note: Tangent line needs special handling to constrain endpoint
-                bool isMultiClickTool = (m_activeTool == SketchTool::Arc && m_arcMode != ArcMode::Tangent) ||
-                                        (m_activeTool == SketchTool::Circle && m_circleMode == CircleMode::ThreePoint) ||
-                                        (m_activeTool == SketchTool::Spline) ||
-                                        (m_activeTool == SketchTool::Point);
-                if (!isMultiClickTool) {
-                    // Update the endpoint to the constrained position and finish
-                    // m_currentMouseWorld already has angle snap and other constraints applied
-                    updateEntity(m_currentMouseWorld);
-                    finishEntity();
-                    return;
-                }
-            }
-
-            // 3-point arc, Center-Start-End arc, or Start-End-Radius arc: if not drawing yet, start entity on first click
-            if (m_activeTool == SketchTool::Arc &&
-                (m_arcMode == ArcMode::ThreePoint || m_arcMode == ArcMode::CenterStartEnd || m_arcMode == ArcMode::StartEndRadius) &&
-                !m_isDrawing) {
-                m_drawStartPos = event->pos();
-                m_wasDragged = false;
-                startEntity(snapPoint(worldPos));
-                return;
-            }
-
-            // 3-point circle: if not drawing yet, start entity on first click
-            if (m_activeTool == SketchTool::Circle &&
-                m_circleMode == CircleMode::ThreePoint &&
-                !m_isDrawing) {
-                m_drawStartPos = event->pos();
-                m_wasDragged = false;
-                startEntity(snapPoint(worldPos));
-                return;
-            }
-
-            // Check if in tangent mode and selecting targets
-            if (m_activeTool == SketchTool::Circle &&
-                (m_circleMode == CircleMode::TwoTangent || m_circleMode == CircleMode::ThreeTangent)) {
-                // Select entity for tangent target
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0 && !m_tangentTargets.contains(hitId)) {
-                    m_tangentTargets.append(hitId);
-
-                    // Check if we have enough targets
-                    if ((m_circleMode == CircleMode::TwoTangent && m_tangentTargets.size() >= 2) ||
-                        (m_circleMode == CircleMode::ThreeTangent && m_tangentTargets.size() >= 3)) {
-                        // Have enough targets, now place the circle
-                        startEntity(snapPoint(worldPos));
-                    }
-                    update();
-                }
-            } else if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent) {
-                // For tangent arc, first click selects the entity to be tangent to
-                if (m_tangentTargets.isEmpty()) {
-                    // Check if there are any entities to be tangent to
-                    if (m_entities.isEmpty()) {
-                        QMessageBox::information(this, tr("Tangent Arc"),
-                            tr("There are no entities to create a tangent arc from.\n"
-                               "Please draw a line first."));
-                        return;
-                    }
-
-                    int hitId = hitTest(worldPos);
-                    if (hitId >= 0) {
-                        // Check if the entity type is supported for tangent arcs
-                        SketchEntity* entity = entityById(hitId);
-                        if (entity) {
-                            if (entity->type == SketchEntityType::Line ||
-                                entity->type == SketchEntityType::Rectangle) {
-                                m_tangentTargets.append(hitId);
-
-                                // Project click point onto the entity to get the tangent point
-                                QPointF clickPoint = snapPoint(worldPos);
-                                QPointF tangentPoint = clickPoint;
-                                bool altHeld = event->modifiers() & Qt::AltModifier;
-                                QPointF closestEdgeStart, closestEdgeEnd;
-
-                                if (entity->type == SketchEntityType::Line && entity->points.size() >= 2) {
-                                    QPointF p1 = entity->points[0];
-                                    QPointF p2 = entity->points[1];
-                                    tangentPoint = geometry::closestPointOnLine(clickPoint, p1, p2);
-
-                                    // Snap to endpoints or midpoint (unless Alt is held)
-                                    if (!altHeld) {
-                                        QPointF midpoint = (p1 + p2) / 2.0;
-                                        double snapDist = 10.0 / m_zoom;
-
-                                        if (QLineF(tangentPoint, p1).length() < snapDist) {
-                                            tangentPoint = p1;
-                                        } else if (QLineF(tangentPoint, p2).length() < snapDist) {
-                                            tangentPoint = p2;
-                                        } else if (QLineF(tangentPoint, midpoint).length() < snapDist) {
-                                            tangentPoint = midpoint;
-                                        }
-                                    }
-                                } else if (entity->type == SketchEntityType::Rectangle && entity->points.size() >= 2) {
-                                    // Find closest edge and project onto it
-                                    QPointF corners[4];
-                                    if (entity->points.size() >= 4) {
-                                        for (int i = 0; i < 4; ++i) corners[i] = entity->points[i];
-                                    } else {
-                                        corners[0] = entity->points[0];
-                                        corners[1] = QPointF(entity->points[1].x, entity->points[0].y);
-                                        corners[2] = entity->points[1];
-                                        corners[3] = QPointF(entity->points[0].x, entity->points[1].y);
-                                    }
-                                    double minDist = std::numeric_limits<double>::max();
-                                    for (int i = 0; i < 4; ++i) {
-                                        QPointF edgeStart = corners[i];
-                                        QPointF edgeEnd = corners[(i + 1) % 4];
-                                        QPointF projected = geometry::closestPointOnLine(clickPoint, edgeStart, edgeEnd);
-                                        double dist = QLineF(clickPoint, projected).length();
-                                        if (dist < minDist) {
-                                            minDist = dist;
-                                            tangentPoint = projected;
-                                            closestEdgeStart = edgeStart;
-                                            closestEdgeEnd = edgeEnd;
-                                        }
-                                    }
-
-                                    // Snap to corners or edge midpoint (unless Alt is held)
-                                    if (!altHeld) {
-                                        QPointF midpoint = (closestEdgeStart + closestEdgeEnd) / 2.0;
-                                        double snapDist = 10.0 / m_zoom;
-
-                                        if (QLineF(tangentPoint, closestEdgeStart).length() < snapDist) {
-                                            tangentPoint = closestEdgeStart;
-                                        } else if (QLineF(tangentPoint, closestEdgeEnd).length() < snapDist) {
-                                            tangentPoint = closestEdgeEnd;
-                                        } else if (QLineF(tangentPoint, midpoint).length() < snapDist) {
-                                            tangentPoint = midpoint;
-                                        }
-                                    }
-                                }
-
-                                // Start the arc with the projected tangent point
-                                startEntity(tangentPoint);
-                                update();
-                            } else {
-                                // Entity type not supported (yet)
-                                QMessageBox::information(this, tr("Tangent Arc"),
-                                    tr("Tangent arcs can currently only be created from lines or rectangles.\n"
-                                       "Please click on a line or rectangle edge."));
-                            }
-                        }
-                    } else {
-                        // User clicked but didn't hit any entity
-                        QMessageBox::information(this, tr("Tangent Arc"),
-                            tr("Please click on a line or rectangle edge to create a tangent arc from."));
-                    }
-                } else {
-                    // Second click is the end point - update and finish the entity
-                    updateEntity(snapPoint(worldPos));
-                    finishEntity();
-                }
-            } else if (m_activeTool == SketchTool::Line && m_lineMode == LineMode::Tangent && !m_tangentTargets.isEmpty()) {
-                // Tangent line second click: finish the entity
-                updateEntity(snapPoint(worldPos));
-                finishEntity();
-            } else if (m_activeTool == SketchTool::Dimension && m_isCreatingConstraint) {
-                // Dimension tool click workflow:
-                //   - Single-entity types (line→distance, circle/arc→radius)
-                //     prompt immediately on first click.
-                //   - Two-entity types (angle between lines) use 3-click:
-                //     click entity 1, click entity 2, click label position.
-                if (m_constraintTargetEntities.size() < 2) {
-                    int hitId = hitTest(worldPos);
-                    if (hitId >= 0) {
-                        SketchEntity* entity = entityById(hitId);
-
-                        // Single-entity shortcut: line→distance, circle/arc→radius
-                        if (entity && m_constraintTargetEntities.isEmpty()) {
-                            bool handled = false;
-                            if (entity->type == SketchEntityType::Line && entity->points.size() == 2) {
-                                setConstraintTargetsForLine(hitId, entity->points[0], entity->points[1]);
-                                m_pendingConstraintType = ConstraintType::Distance;
-                                handled = true;
-                            } else if ((entity->type == SketchEntityType::Circle
-                                        || entity->type == SketchEntityType::Arc)
-                                       && !entity->points.empty()) {
-                                setConstraintTargetsForRadial(hitId, entity->points[0]);
-                                m_pendingConstraintType = ConstraintType::Radius;
-                                handled = true;
-                            }
-                            if (handled) {
-                                // Compute initial value from current geometry
-                                std::vector<const sketch::Entity*> targetEntities;
-                                for (int eid : m_constraintTargetEntities)
-                                    targetEntities.push_back(entityById(eid));
-                                double initialValue = sketch::calculateConstraintValue(
-                                    m_pendingConstraintType, targetEntities);
-
-                                QPointF labelPos = worldPos;
-                                createConstraint(m_pendingConstraintType, initialValue, labelPos,
-                                                 /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
-                                // Reset for next constraint
-                                m_constraintTargetEntities.clear();
-                                m_constraintTargetPoints.clear();
-                                update();
-                                return;
-                            }
-                        }
-
-                        // Two-entity workflow: accumulate targets
-                        m_constraintTargetEntities.append(hitId);
-                        QPointF closestPoint = findClosestPointOnEntity(entity, worldPos);
-                        m_constraintTargetPoints.append(closestPoint);
-
-                        if (m_constraintTargetEntities.size() == 2) {
-                            m_pendingConstraintType = detectConstraintType(
-                                m_constraintTargetEntities[0],
-                                m_constraintTargetEntities[1]
-                            );
-                        }
-                        update();
-                    }
-                } else if (m_constraintTargetEntities.size() == 2) {
-                    // Third click: place dimension label
-                    QPointF labelPos = worldPos;
-
-                    // Calculate initial value from current geometry
-                    std::vector<const sketch::Entity*> targetEntities;
-                    for (int eid : m_constraintTargetEntities)
-                        targetEntities.push_back(entityById(eid));
-                    double initialValue = sketch::calculateConstraintValue(
-                        m_pendingConstraintType, targetEntities);
-
-                    // Create the constraint with current geometry value and
-                    // start inline edit for the user to adjust
-                    createConstraint(m_pendingConstraintType, initialValue, labelPos,
-                                     /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
-
-                    // Reset for next constraint
-                    m_constraintTargetEntities.clear();
-                    m_constraintTargetPoints.clear();
-                }
-            } else if (m_activeTool == SketchTool::Trim) {
-                // Trim tool: click on entity to remove segment between intersections
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    if (trimEntityAt(hitId, worldPos)) {
-                        // Successfully trimmed
-                        m_selectedId = -1;  // Deselect since original entity may be deleted
-                    } else {
-                        // No intersections found - show feedback
-                        QMessageBox::information(this, tr("Trim"),
-                            tr("No intersections found on this entity to trim."));
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Extend) {
-                // Extend tool: click on entity to extend to nearest intersection
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    if (extendEntityTo(hitId, worldPos)) {
-                        // Successfully extended
-                    } else {
-                        // No target found - show feedback
-                        QMessageBox::information(this, tr("Extend"),
-                            tr("No intersection target found in the extension direction."));
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Split) {
-                // Split tool behavior depends on selection state:
-                // 1. If a line and point are selected, split line at point
-                // 2. If two entities are selected, split at their intersection
-                // 3. Otherwise, click to split at that point or at all intersections
-                int hitId = hitTest(worldPos);
-
-                // Check if we have pre-selected entities for targeted split
-                if (m_selectedIds.size() == 2) {
-                    // Two entities selected - find their intersection and split there
-                    QList<int> ids = m_selectedIds.values();
-                    int id1 = ids[0];
-                    int id2 = ids[1];
-
-                    const SketchEntity* e1 = entityById(id1);
-                    const SketchEntity* e2 = entityById(id2);
-
-                    if (e1 && e2) {
-                        // Check if one is a point - split the other at that point
-                        if (e1->type == SketchEntityType::Point && !e1->points.empty()) {
-                            QVector<int> newIds = splitEntityAt(id2, e1->points[0]);
-                            if (!newIds.isEmpty()) {
-                                clearSelection();
-                                for (int id : newIds) selectEntity(id, true);
-                            }
-                        } else if (e2->type == SketchEntityType::Point && !e2->points.empty()) {
-                            QVector<int> newIds = splitEntityAt(id1, e2->points[0]);
-                            if (!newIds.isEmpty()) {
-                                clearSelection();
-                                for (int id : newIds) selectEntity(id, true);
-                            }
-                        } else {
-                            // Find intersection between the two entities
-                            QVector<Intersection> allIntersections = findAllIntersections();
-                            QPointF splitPoint;
-                            bool foundIntersection = false;
-
-                            for (const Intersection& inter : allIntersections) {
-                                if ((inter.entityId1 == id1 && inter.entityId2 == id2) ||
-                                    (inter.entityId1 == id2 && inter.entityId2 == id1)) {
-                                    splitPoint = inter.point;
-                                    foundIntersection = true;
-                                    break;
-                                }
-                            }
-
-                            if (foundIntersection) {
-                                // Split both entities at the intersection
-                                QVector<int> newIds1 = splitEntityAt(id1, splitPoint);
-                                QVector<int> newIds2 = splitEntityAt(id2, splitPoint);
-                                clearSelection();
-                                for (int id : newIds1) selectEntity(id, true);
-                                for (int id : newIds2) selectEntity(id, true);
-                            } else {
-                                QMessageBox::information(this, tr("Split"),
-                                    tr("No intersection found between selected entities."));
-                            }
-                        }
-                    }
-                } else if (hitId >= 0) {
-                    // No pre-selection or single selection - split clicked entity
-                    QVector<int> newIds = splitEntityAtIntersections(hitId);
-                    if (newIds.isEmpty()) {
-                        // No intersections - try splitting at click point
-                        newIds = splitEntityAt(hitId, worldPos);
-                        if (newIds.isEmpty()) {
-                            QMessageBox::information(this, tr("Split"),
-                                tr("Could not split entity at this location."));
-                        }
-                    }
-                    if (!newIds.isEmpty()) {
-                        m_selectedId = -1;  // Deselect since original entity is deleted
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Offset) {
-                // Offset tool: click on entity to create parallel geometry
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    const SketchEntity* entity = entityById(hitId);
-                    if (entity && (entity->type == SketchEntityType::Line ||
-                                   entity->type == SketchEntityType::Circle ||
-                                   entity->type == SketchEntityType::Arc)) {
-                        // Prompt for offset distance
-                        bool ok = false;
-                        double distance = QInputDialog::getDouble(
-                            this,
-                            tr("Offset Distance"),
-                            tr("Enter offset distance (mm):"),
-                            5.0,    // default
-                            0.1,    // minimum
-                            1000.0, // maximum
-                            2,      // decimals
-                            &ok
-                        );
-
-                        if (ok) {
-                            // Determine offset direction based on click position relative to entity
-                            offsetEntity(hitId, distance, worldPos);
-                        }
-                    } else {
-                        QMessageBox::information(this, tr("Offset"),
-                            tr("Offset is supported for lines, circles, and arcs."));
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Fillet) {
-                // Fillet tool: click on corner (intersection of two lines) to round it
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    const SketchEntity* entity = entityById(hitId);
-                    if (entity && entity->type == SketchEntityType::Line) {
-                        // Find connected line at closest endpoint
-                        int connectedId = sketch::findConnectedLineAtCorner(
-                            toLibraryEntity(*entity), toLibraryEntities(m_entities), worldPos);
-                        if (connectedId >= 0) {
-                            // Prompt for fillet radius
-                            bool ok = false;
-                            double radius = QInputDialog::getDouble(
-                                this,
-                                tr("Fillet Radius"),
-                                tr("Enter fillet radius (mm):"),
-                                5.0,    // default
-                                0.1,    // minimum
-                                1000.0, // maximum
-                                2,      // decimals
-                                &ok
-                            );
-
-                            if (ok) {
-                                filletCorner(hitId, connectedId, radius);
-                            }
-                        } else {
-                            QMessageBox::information(this, tr("Fillet"),
-                                tr("Click on a corner where two lines meet."));
-                        }
-                    } else {
-                        QMessageBox::information(this, tr("Fillet"),
-                            tr("Fillet requires two connected lines. Click on a line near a corner."));
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Chamfer) {
-                // Chamfer tool: click on corner to create beveled edge
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    const SketchEntity* entity = entityById(hitId);
-                    if (entity && entity->type == SketchEntityType::Line) {
-                        // Find connected line at closest endpoint
-                        int connectedId = sketch::findConnectedLineAtCorner(
-                            toLibraryEntity(*entity), toLibraryEntities(m_entities), worldPos);
-                        if (connectedId >= 0) {
-                            // Prompt for chamfer distance
-                            bool ok = false;
-                            double distance = QInputDialog::getDouble(
-                                this,
-                                tr("Chamfer Distance"),
-                                tr("Enter chamfer distance (mm):"),
-                                5.0,    // default
-                                0.1,    // minimum
-                                1000.0, // maximum
-                                2,      // decimals
-                                &ok
-                            );
-
-                            if (ok) {
-                                chamferCorner(hitId, connectedId, distance);
-                            }
-                        } else {
-                            QMessageBox::information(this, tr("Chamfer"),
-                                tr("Click on a corner where two lines meet."));
-                        }
-                    } else {
-                        QMessageBox::information(this, tr("Chamfer"),
-                            tr("Chamfer requires two connected lines. Click on a line near a corner."));
-                    }
-                }
-            } else if (m_activeTool == SketchTool::RectPattern) {
-                // Rectangular pattern: select entities then configure pattern
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    // Add to selection for pattern
-                    bool ctrlHeld = (event->modifiers() & Qt::ControlModifier);
-                    selectEntity(hitId, ctrlHeld);
-                    update();
-
-                    // If we have a selection, offer to create pattern
-                    if (!m_selectedIds.isEmpty()) {
-                        createRectangularPattern();
-                    }
-                }
-            } else if (m_activeTool == SketchTool::CircPattern) {
-                // Circular pattern: select entities then configure pattern
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    // Add to selection for pattern
-                    bool ctrlHeld = (event->modifiers() & Qt::ControlModifier);
-                    selectEntity(hitId, ctrlHeld);
-                    update();
-
-                    // If we have a selection, offer to create pattern
-                    if (!m_selectedIds.isEmpty()) {
-                        createCircularPattern();
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Project) {
-                // Project tool: project geometry from other sketches or 3D edges
-                // For now, show a dialog explaining this is for projecting external geometry
-                QMessageBox::information(this, tr("Project"),
-                    tr("Project tool allows projecting geometry from:\n"
-                       "• Other sketches in this document\n"
-                       "• 3D model edges onto this sketch plane\n\n"
-                       "Select geometry in the model tree or another sketch to project it here."));
-            } else if (m_activeTool == SketchTool::Line && m_lineMode == LineMode::Tangent && m_tangentTargets.isEmpty()) {
-                // Tangent line: first click selects a circle or arc to be tangent to
-                int hitId = hitTest(worldPos);
-                if (hitId >= 0) {
-                    SketchEntity* entity = entityById(hitId);
-                    if (entity && (entity->type == SketchEntityType::Circle ||
-                                   entity->type == SketchEntityType::Arc)) {
-                        m_tangentTargets.append(hitId);
-
-                        // Project click point onto the circle/arc perimeter
-                        QPointF center = entity->points[0];
-                        double radius = entity->radius;
-                        QPointF toClick = worldPos - center;
-                        double dist = std::sqrt(toClick.x() * toClick.x() + toClick.y() * toClick.y());
-
-                        QPointF tangentPoint;
-                        if (dist > 0.001) {
-                            tangentPoint = center + toClick * (radius / dist);
-                        } else {
-                            tangentPoint = center + QPointF(radius, 0);
-                        }
-
-                        // For arcs, clamp to the arc's angular range
-                        if (entity->type == SketchEntityType::Arc) {
-                            double angle = std::atan2(tangentPoint.y() - center.y(),
-                                                      tangentPoint.x() - center.x()) * 180.0 / M_PI;
-                            double startAngle = entity->startAngle;
-                            double endAngle = startAngle + entity->sweepAngle;
-
-                            // Check if on arc, if not clamp to nearest endpoint
-                            auto normalizeAngle = [](double a) {
-                                while (a < 0) a += 360;
-                                while (a >= 360) a -= 360;
-                                return a;
-                            };
-
-                            double normAngle = normalizeAngle(angle);
-                            double normStart = normalizeAngle(startAngle);
-                            double normEnd = normalizeAngle(endAngle);
-
-                            bool onArc = false;
-                            if (entity->sweepAngle > 0) {
-                                onArc = (normStart <= normEnd) ?
-                                    (normAngle >= normStart && normAngle <= normEnd) :
-                                    (normAngle >= normStart || normAngle <= normEnd);
-                            } else {
-                                onArc = (normEnd <= normStart) ?
-                                    (normAngle <= normStart && normAngle >= normEnd) :
-                                    (normAngle <= normStart || normAngle >= normEnd);
-                            }
-
-                            if (!onArc) {
-                                QPointF startPt = center + QPointF(
-                                    radius * std::cos(startAngle * M_PI / 180.0),
-                                    radius * std::sin(startAngle * M_PI / 180.0));
-                                QPointF endPt = center + QPointF(
-                                    radius * std::cos(endAngle * M_PI / 180.0),
-                                    radius * std::sin(endAngle * M_PI / 180.0));
-
-                                tangentPoint = (QLineF(worldPos, startPt).length() < QLineF(worldPos, endPt).length())
-                                    ? startPt : endPt;
-                            }
-                        }
-
-                        // Start the line entity
-                        m_drawStartPos = event->pos();
-                        m_wasDragged = false;
-                        startEntity(tangentPoint);
-                        update();
-                    } else {
-                        QMessageBox::information(this, tr("Tangent Line"),
-                            tr("Please click on a circle or arc to create a tangent line from."));
-                    }
-                } else {
-                    QMessageBox::information(this, tr("Tangent Line"),
-                        tr("Please click on a circle or arc to create a tangent line from."));
-                }
-            } else {
-                // Start drawing normally
-                m_drawStartPos = event->pos();
-                m_wasDragged = false;
-                startEntity(snapPoint(worldPos));
-            }
+            handleDrawToolPress(event, worldPos);
         }
     }
 }
 
-void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
+// mouseMoveEvent preamble: midpoint-grip and slot-anchor hover state (select mode).
+void SketchCanvas::updateHoverGrips(const QPointF& worldPos)
 {
-    QPointF worldPos = screenToWorld(event->pos());
-    bool ctrlHeld = event->modifiers() & Qt::ControlModifier;
-    bool altHeld = event->modifiers() & Qt::AltModifier;
+    // Midpoint grips appear only while hovering them in select mode.
+    {
+        const int hov = (m_activeTool == SketchTool::Select && !m_isDrawing)
+                            ? hitTestMidpoint(worldPos) : -1;
+        if (hov != m_hoverMidpointEntity) { m_hoverMidpointEntity = hov; update(); }
+    }
 
+    // Slot anchor points reveal while hovering a slot in select mode.
+    {
+        int hovSlot = -1;
+        if (m_activeTool == SketchTool::Select && !m_isDrawing
+                && !m_isDraggingHandle && !m_isDraggingBody) {
+            const int hitId = pick(worldPos);
+            if (const SketchEntity* e = (hitId >= 0) ? entityById(hitId) : nullptr)
+                if (e->type == SketchEntityType::Slot) hovSlot = hitId;
+        }
+        if (hovSlot != m_hoverSlotEntity) { m_hoverSlotEntity = hovSlot; update(); }
+    }
+}
+
+// mouseMoveEvent preamble: entity/grid snap, Ctrl angle snap, the tool's cursor
+// constraint, and drawing-time inference; sets m_currentMouseWorld.
+void SketchCanvas::applySnapAndInference(const QPointF& worldPos, bool ctrlHeld, bool altHeld)
+{
     // Alt disables entity snapping temporarily
     // Otherwise entity snapping is always active
-    m_angleSnapActive = false;
+    m_snapEngine.clearAngleSnap();
     if (altHeld) {
         // Free form - no entity snap
         m_currentMouseWorld = worldPos;
@@ -5717,27 +2840,19 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
             double snappedY = qRound(m_currentMouseWorld.y() / m_gridSpacing) * m_gridSpacing;
             m_currentMouseWorld = {snappedX, snappedY};
         }
-        m_activeSnap.reset();
+        m_snapEngine.clearActiveSnap();
     } else {
         // Entity snapping active
-        m_currentMouseWorld = snapPoint(worldPos);
+        m_currentMouseWorld = m_snapEngine.snapPoint(worldPos);
     }
 
     // Ctrl enables angle snapping (45° increments) during line-based entity creation
     // Skip for constrained line modes (Horizontal, Vertical, Tangent) - they have their own constraints
     if (ctrlHeld && m_isDrawing && !m_previewPoints.isEmpty()) {
-        bool isConstrainedLineMode = (m_activeTool == SketchTool::Line &&
-                                      (m_lineMode == LineMode::Horizontal ||
-                                       m_lineMode == LineMode::Vertical ||
-                                       m_lineMode == LineMode::Tangent));
-        if (!isConstrainedLineMode &&
-            (m_activeTool == SketchTool::Line ||
-             m_activeTool == SketchTool::Rectangle ||
-             (m_activeTool == SketchTool::Slot &&
-              (m_slotMode == SlotMode::CenterToCenter || m_slotMode == SlotMode::Overall)))) {
+        if (activeHandler() && activeHandler()->supportsAngleSnap(*this)) {
             // Calculate the angle-snapped position
             QPointF startPoint = m_previewPoints[0];
-            QPointF snappedPos = snapToAngle(startPoint, m_currentMouseWorld);
+            QPointF snappedPos = m_snapEngine.snapToAngle(startPoint, m_currentMouseWorld);
 
             // Get the direction of the snapped angle ray
             QPointF rayDir = snappedPos - startPoint;
@@ -5745,12 +2860,12 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
             if (geometry::length(rayDir) > 0.001) {
                 // Check if the entity snap point lies exactly on the angle ray
                 if (geometry::pointOnRay(m_currentMouseWorld, startPoint, rayDir) &&
-                    m_activeSnap.has_value() && !altHeld) {
+                    m_snapEngine.hasActiveSnap() && !altHeld) {
                     // Snap point is on the angle ray - keep it
                 } else {
                     // Snap point not on ray - use the angle-snapped position
                     m_currentMouseWorld = snappedPos;
-                    m_activeSnap.reset();
+                    m_snapEngine.clearActiveSnap();
                 }
             } else {
                 m_currentMouseWorld = snappedPos;
@@ -5758,100 +2873,39 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
         }
     }
 
-    // Horizontal/Vertical line mode constrains movement to that axis
-    if (m_isDrawing && !m_previewPoints.isEmpty() && m_activeTool == SketchTool::Line) {
-        if (m_lineMode == LineMode::Horizontal) {
-            // Horizontal line: Y must equal start point's Y
-            double targetY = m_previewPoints[0].y();
-            double tolerance = 0.001;  // World units - essentially exact
-            if (std::abs(m_currentMouseWorld.y() - targetY) < tolerance && m_activeSnap.has_value() && !altHeld) {
-                // Snap point is on the horizontal line - keep it
-            } else {
-                // Project to horizontal line
-                m_currentMouseWorld.setY(targetY);
-                m_activeSnap.reset();
-            }
-        } else if (m_lineMode == LineMode::Vertical) {
-            // Vertical line: X must equal start point's X
-            double targetX = m_previewPoints[0].x();
-            double tolerance = 0.001;  // World units - essentially exact
-            if (std::abs(m_currentMouseWorld.x() - targetX) < tolerance && m_activeSnap.has_value() && !altHeld) {
-                // Snap point is on the vertical line - keep it
-            } else {
-                // Project to vertical line
-                m_currentMouseWorld.setX(targetX);
-                m_activeSnap.reset();
-            }
-        } else if (m_lineMode == LineMode::Tangent && !m_tangentTargets.isEmpty()) {
-            // Tangent line: constrain to tangent direction (perpendicular to radius)
-            SketchEntity* entity = entityById(m_tangentTargets[0]);
-            if (entity && (entity->type == SketchEntityType::Circle ||
-                          entity->type == SketchEntityType::Arc)) {
-                QPointF center = entity->points[0];
-                QPointF tangentPoint = m_previewPoints[0];
-
-                // Tangent direction is perpendicular to radius
-                QPointF tangentDir = geometry::perpendicular(tangentPoint - center);
-
-                if (geometry::length(tangentDir) > 0.001) {
-                    // Check if the snapped point lies exactly on the tangent ray
-                    if (geometry::pointOnRay(m_currentMouseWorld, tangentPoint, tangentDir) &&
-                        m_activeSnap.has_value()) {
-                        // Snap point is on the tangent ray - keep it
-                    } else {
-                        // Snap point not on tangent ray - project mouse position onto tangent
-                        QPointF rawMouse = screenToWorld(mapFromGlobal(QCursor::pos()));
-                        m_currentMouseWorld = geometry::projectPointOntoRay(rawMouse, tangentPoint, tangentDir);
-                        m_activeSnap.reset();
-                    }
-                }
-            }
-        }
+    // Whatever the active tool's mode constrains the cursor to (a
+    // horizontal or vertical axis, a tangent ray, a tangent arc path), the
+    // tool applies here. A tool that moves the cursor invalidates the entity
+    // snap indicator, so the canvas drops it.
+    bool cursorConstrained = false;
+    if (m_isDrawing && activeHandler()
+        && activeHandler()->constrainCursor(*this, m_currentMouseWorld, altHeld)) {
+        m_snapEngine.clearActiveSnap();
+        cursorConstrained = true;
     }
 
-    // Tangent arc: constrain second click to lie on the arc path
-    // Constraint always applies; Alt only disables entity snapping (handled above)
-    if (m_isDrawing && !m_previewPoints.isEmpty() &&
-        m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent &&
-        !m_tangentTargets.isEmpty()) {
-        // Find the tangent entity
-        SketchEntity* tangentEntity = entityById(m_tangentTargets[0]);
-        if (tangentEntity) {
-            QPointF tangentPoint = m_previewPoints[0];
-            QPointF endPoint = m_currentMouseWorld;
-
-            // Calculate the tangent arc to get its center and radius
-            TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, endPoint);
-
-            if (ta.valid && ta.radius > 0.001) {
-                // Check if the snapped point lies exactly on the arc (at radius distance from center)
-                double distFromCenter = QLineF(m_currentMouseWorld, ta.center).length();
-                double distFromArc = std::abs(distFromCenter - ta.radius);
-
-                // Snap point must be exactly ON the arc path (within floating point tolerance)
-                double tolerance = 0.001;  // World units - essentially exact
-                if (distFromArc < tolerance && m_activeSnap.has_value() && !altHeld) {
-                    // Snap point is on the arc path and snapping is enabled - keep it
-                    // (m_currentMouseWorld is already the snap point)
-                } else {
-                    // Either: snap not on arc, no snap, or Alt held (snapping disabled)
-                    // Project mouse position onto the arc path
-                    QPointF rawMouse = screenToWorld(mapFromGlobal(QCursor::pos()));
-                    TangentArc rawTa = calculateTangentArc(*tangentEntity, tangentPoint, rawMouse);
-                    if (rawTa.valid && rawTa.radius > 0.001) {
-                        // Project the raw mouse onto the arc (point on circle at radius from center)
-                        Point2D toMouse = Point2D(rawMouse) - rawTa.center;
-                        double dist = std::sqrt(toMouse.x * toMouse.x + toMouse.y * toMouse.y);
-                        if (dist > 0.001) {
-                            m_currentMouseWorld = rawTa.center + toMouse * (rawTa.radius / dist);
-                        }
-                    }
-                    m_activeSnap.reset();  // Clear snap indicator since we're not using it
-                }
-            }
-        }
+    // Geometric inference while drawing straight segments: nudge the moving
+    // end onto a horizontal or vertical axis, or parallel/perpendicular to an
+    // existing line, and remember that alignment so it becomes a real
+    // constraint when the segment is committed (Fusion's inference lines).
+    // Suppressed by Alt, by a tool mode that already fixes the direction
+    // (H/V/tangent), by the Ctrl angle snap, and by a live point snap: a
+    // snap onto real geometry always wins over an axis alignment.
+    m_snapEngine.clearInferences();
+    if (!altHeld && m_isDrawing && !cursorConstrained && !m_snapEngine.angleSnapActive()
+        && !m_lineChainPressActive
+        && !m_previewPoints.isEmpty()
+        && activeHandler() && activeHandler()->supportsAngleSnap(*this)
+        && !(m_snapEngine.hasActiveSnap()
+             && m_snapEngine.activeSnap()->type != sketch::SnapType::Nearest)) {
+        const QPointF p0 = m_previewPoints.last();
+        m_currentMouseWorld = m_snapEngine.computeInferences(p0, m_currentMouseWorld);
     }
+}
 
+// mouseMoveEvent preamble: broadcast the 2D and plane-projected 3D cursor position.
+void SketchCanvas::emitCursorPositions()
+{
     emit mousePositionChanged(m_currentMouseWorld);
 
     // Emit absolute coordinates based on sketch plane
@@ -5885,26 +2939,87 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
         break;
     }
     emit mousePositionChangedAbsolute(absolutePos, m_currentMouseWorld);
+}
 
+// mouseMoveEvent guard: middle-drag viewport pan. Returns true if it consumed the move.
+bool SketchCanvas::handlePanMove(QMouseEvent* event)
+{
     if (m_isPanning) {
         QPoint delta = event->pos() - m_lastMousePos;
         m_viewCenter.rx() -= delta.x() / m_zoom;
         m_viewCenter.ry() += delta.y() / m_zoom;
         m_lastMousePos = event->pos();
         update();
-        return;
+        return true;
     }
+    return false;
+}
 
+// mouseMoveEvent guard: rubber-band (window/crossing) selection rectangle.
+bool SketchCanvas::handleWindowSelectMove(const QPointF& worldPos)
+{
     if (m_isWindowSelecting) {
         // Update window selection rectangle
         m_windowSelectEnd = worldPos;
         // Determine if crossing mode (right-to-left drag)
         m_windowSelectCrossing = (m_windowSelectEnd.x() < m_windowSelectStart.x());
         update();
-        return;
+        return true;
     }
+    return false;
+}
 
-    // Handle background dragging
+// mouseMoveEvent guard: dragging the transform pivot star.
+bool SketchCanvas::handleTransformPivotDragMove()
+{
+    if (m_transformPivotDragging) {
+        m_transformPivot = m_currentMouseWorld;          // already snapped (Alt = raw + grid)
+        m_transformPivotUserSet = true; m_transformPivotCleared = false;
+        emit transformPivotChanged(m_transformPivot, false);
+        update();
+        return true;
+    }
+    return false;
+}
+
+// mouseMoveEvent guard: free-move body translate (Ctrl = axis lock) or ring rotate
+// (Ctrl = 15-degree steps).
+bool SketchCanvas::handleFreeMoveDragMove(QMouseEvent* event, const QPointF& worldPos)
+{
+    if (m_freeMoveHandle != FreeMoveHandle::None) {
+        if (m_freeMoveHandle == FreeMoveHandle::Body) {
+            QPointF d = worldPos - m_freeMoveStartWorld;
+            if (event->modifiers() & Qt::ControlModifier) { if (std::fabs(d.x()) >= std::fabs(d.y())) d.setY(0); else d.setX(0); }
+            m_freeMoveDelta = d;
+        } else {
+            const QPointF v = worldPos - m_transformPivot;
+            double a = qRadiansToDegrees(qAtan2(v.y(), v.x())) - m_freeMoveStartAngle;
+            if (event->modifiers() & Qt::ControlModifier) a = qRound(a / 15.0) * 15.0;
+            while (a > 180.0) a -= 360.0;
+            while (a <= -180.0) a += 360.0;
+            m_freeMoveAngle = a;
+        }
+        emit freeMoveChanged(m_freeMoveDelta, m_freeMoveAngle);
+        update();
+        return true;
+    }
+    return false;
+}
+
+// mouseMoveEvent hover: cursor hint over the transform star/ring/body (no state change).
+void SketchCanvas::updateTransformGlyphCursor(QMouseEvent* event, const QPointF& worldPos)
+{
+    if (m_transformGlyphVisible && !m_selectedIds.isEmpty() && !(event->buttons() & Qt::LeftButton)) {
+        if (transformStarHit(event->pos())) setCursor(Qt::OpenHandCursor);
+        else if (m_transformPick == TransformPick::FreeMove)
+            setCursor(freeMoveRingHit(event->pos()) || freeMoveBodyHit(worldPos) ? Qt::OpenHandCursor : Qt::ArrowCursor);
+        else if (m_transformPick != TransformPick::None) setCursor(Qt::CrossCursor);
+    }
+}
+
+// mouseMoveEvent guard: background-image move/resize by handle (aspect-lock aware).
+bool SketchCanvas::handleBackgroundDragMove(const QPointF& worldPos)
+{
     if (m_bgDragHandle != BackgroundHandle::None) {
         double dx = worldPos.x() - m_bgDragStartWorld.x();
         double dy = worldPos.y() - m_bgDragStartWorld.y();
@@ -6018,1046 +3133,434 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
 
         emit backgroundImageChanged(m_backgroundImage);
         update();
-        return;
+        return true;
     }
+    return false;
+}
 
-    // Update cursor in background edit mode
+// mouseMoveEvent hover: cursor over background handles while in background edit mode.
+void SketchCanvas::updateBackgroundEditCursor(const QPointF& worldPos)
+{
     if (m_backgroundEditMode && m_backgroundImage.enabled) {
         BackgroundHandle handle = hitTestBackgroundHandle(worldPos);
         updateCursorForBackgroundHandle(handle);
     }
+}
 
+// mouseMoveEvent guard: drag a constraint label; radius/diameter labels snap to the
+// circle's perimeter-point angles.
+bool SketchCanvas::handleConstraintLabelDragMove(const QPointF& worldPos)
+{
     if (m_isDraggingConstraintLabel) {
         // Drag the constraint label
         SketchConstraint* constraint = constraintById(m_selectedConstraintId);
         if (constraint) {
             QPointF delta = worldPos - m_dragStartWorld;
-            constraint->labelPosition = m_constraintLabelOriginal + delta;
+            QPointF newPos = m_constraintLabelOriginal + delta;
+
+            // Snap radius/diameter labels to perimeter point angles on circles
+            if ((constraint->type == ConstraintType::Radius
+                 || constraint->type == ConstraintType::Diameter)
+                && !constraint->entityIds.empty()) {
+                const SketchEntity* ent = entityById(constraint->entityIds[0]);
+                if (ent && ent->type == SketchEntityType::Circle
+                    && ent->points.size() >= 2) {
+                    QPointF center = ent->points[0];
+                    QPointF toLabel = newPos - center;
+                    double labelAngle = std::atan2(toLabel.y(), toLabel.x());
+                    double labelDist = geometry::length(toLabel);
+                    if (labelDist > geometry::kDegenerateLen) {
+                        constexpr double snapThresholdRad = degreesToRadians(10.0);
+                        bool snapped = false;
+                        int numPerim = static_cast<int>(ent->points.size()) - 1;
+                        for (int pi = 1; pi <= numPerim; ++pi) {
+                            QPointF toP = QPointF(ent->points[pi]) - center;
+                            double pAngle = std::atan2(toP.y(), toP.x());
+                            double diff = labelAngle - pAngle;
+                            // Normalize to [-pi, pi]
+                            diff = hobbycad::geometry::wrapSweepRad(diff);
+                            if (std::abs(diff) < snapThresholdRad) {
+                                // Snap to this endpoint's angle
+                                labelAngle = pAngle;
+                                newPos = geometry::polarPoint(center, labelDist, pAngle);
+                                snapped = true;
+                                break;
+                            }
+                        }
+                        // Store the label angle on driving constraints
+                        if (constraint->isDriving) {
+                            constraint->labelAngle = labelAngle;
+                        }
+                    }
+                }
+            }
+
+            constraint->labelPosition = newPos;
+            if (constraint->type == ConstraintType::Angle) setAngleSideFromLabel(constraint);
             update();
         }
+        return true;
+    }
+    return false;
+}
+
+// mouseMoveEvent guard: a pressed point that moves past the drag threshold becomes a
+// handle drag of that point rather than a selection.
+bool SketchCanvas::promotePointPressToHandleDrag(QMouseEvent* event, const QPointF& worldPos)
+{
+    if (m_pointPressArmed && (event->buttons() & Qt::LeftButton)) {
+        if ((event->pos() - m_pointPressScreen).manhattanLength() > QApplication::startDragDistance()) {
+            m_pointPressArmed = false;
+            // Movement means "drag this endpoint", not "select it": select the
+            // owning entity and begin a handle drag of that point.
+            if (entityById(m_pointPressEntity)) {
+                selectEntity(m_pointPressEntity, false);
+                beginHandleDrag(m_pointPressEntity, m_pointPressIndex, worldPos, event->modifiers());
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+// mouseMoveEvent: arm a body drag once past the drag threshold. Deliberately falls
+// through so the same event runs the first drag frame (see handleBodyDragMove).
+void SketchCanvas::armBodyDragIfPastThreshold(QMouseEvent* event)
+{
+    if (m_bodyDragArmed && (event->buttons() & Qt::LeftButton)) {
+        if ((event->pos() - m_bodyDragPressScreen).manhattanLength() > QApplication::startDragDistance()) {
+            m_bodyDragArmed = false;
+            if (entityById(m_bodyDragEntityId)) {
+                m_isDraggingBody = true;
+                m_dragSnapshotEntities = m_entities;
+                m_dragSnapshotConstraints = m_constraints;
+                setCursor(Qt::SizeAllCursor);
+            }
+        }
+    } else if (m_bodyDragArmed) {
+        m_bodyDragArmed = false;
+    }
+}
+
+// mouseMoveEvent guard: whole-entity body drag (slot-centerline redirect; far points
+// held via drag weights or temporary fixes so the grabbed element deforms).
+bool SketchCanvas::handleBodyDragMove(const QPointF& worldPos)
+{
+    if (m_isDraggingBody) {
+        // Body drag translates the entity by the raw cursor motion (no
+        // snapping: Onshape's "normal drag does not snap"); the solver then
+        // moves the rest as little as the constraints require, holding all
+        // of the entity's points as the dragged ones.
+        SketchEntity* ent = entityById(m_bodyDragEntityId);
+        // A path-following slot is derived: body-drag its CENTERLINE instead
+        // (delta translation preserves the cursor offset for free), and the slot
+        // re-derives to follow; otherwise it slides off its centerline (Aaron).
+        if (ent && ent->type == SketchEntityType::Slot && ent->pathEntityIds.size() == 1) {
+            SketchEntity* cl = entityById(ent->pathEntityIds[0]);
+            if (cl && !cl->points.empty()) {
+                const QPointF delta = worldPos - m_bodyDragLastWorld;
+                m_bodyDragLastWorld = worldPos;
+                for (auto& p : cl->points) p = QPointF(p) + delta;
+                std::vector<std::pair<int, int>> dragged;
+                for (int i = 0; i < static_cast<int>(cl->points.size()); ++i)
+                    dragged.push_back({cl->id, i});
+                solveConstraintsDragging(dragged);
+                updateSlotsFromPaths();   // re-derive live so the slot follows during the drag (the phantom)
+                update();
+                return true;
+            }
+        }
+        if (ent) {
+            const QPointF delta = worldPos - m_bodyDragLastWorld;
+            m_bodyDragLastWorld = worldPos;
+            // Original (pre-delta) positions of the dragged entity's points, to
+            // recognize the corners it shares (coincident) with its neighbors.
+            std::vector<QPointF> draggedOrig;
+            draggedOrig.reserve(ent->points.size());
+            for (auto& p : ent->points) draggedOrig.push_back(QPointF(p));
+            for (auto& p : ent->points) p = QPointF(p) + delta;
+
+            std::vector<std::pair<int, int>> dragged;
+            for (int i = 0; i < ent->points.size(); ++i) dragged.push_back({ent->id, i});
+            // Deforming body-drag (Fusion-style): the grabbed element absorbs the
+            // deformation (its length is free) instead of shoving distant geometry.
+            // INTERIM implementation: temporarily HARD-FIX the rest of the
+            // sketch's points during this solve so the far corner stays put,
+            // EXCEPT the corners SHARED (coincident) with the dragged element,
+            // which must follow. The temp fixes are removed the instant the solve
+            // returns, so the PERSISTED sketch DOF is never changed (nothing is
+            // serialized or undone). A proper tunable "soft weight" on the far
+            // points is the follow-on (per-param drag weights in forked libslvs).
+            const double eps = kSnapWeldEps;
+#if defined(SLVS_HAS_DRAG_WEIGHTS)
+            // PROPER (patch 0009): give the far, non-shared points a high drag
+            // stiffness so they resist strongly but tunably: the grabbed
+            // element deforms and the far corner stays, without a hard fix and
+            // without ever changing the persisted DOF. Corners SHARED
+            // (coincident) with the dragged element are left free to follow.
+            std::vector<std::pair<int, int>> farPts;
+            for (const auto& e : m_entities) {
+                if (e.id == ent->id) continue;
+                for (int i = 0; i < e.points.size(); ++i) {
+                    const QPointF pp(e.points[i]);
+                    bool sharedWithDragged = false;
+                    for (const QPointF& o : draggedOrig)
+                        if (QLineF(pp, o).length() < eps) { sharedWithDragged = true; break; }
+                    if (!sharedWithDragged) farPts.push_back({e.id, i});
+                }
+            }
+            m_dragWeightPoints = farPts;
+            // Hold the far points far harder than the grabbed element (whose
+            // dragged default behaves like stiffness 20), so they stay put.
+            m_dragWeightStiffness = 400.0;
+            solveConstraintsDragging(dragged);
+#else
+            // INTERIM (linked libslvs has no per-param drag weights): temporarily
+            // HARD-FIX the far, non-shared points for this solve so the far corner
+            // stays; removed the instant the solve returns, so the PERSISTED
+            // sketch DOF is never changed.
+            std::vector<int> tempIds;
+            for (const auto& e : m_entities) {
+                if (e.id == ent->id) continue;
+                for (int i = 0; i < e.points.size(); ++i) {
+                    const QPointF pp(e.points[i]);
+                    bool sharedWithDragged = false;
+                    for (const QPointF& o : draggedOrig)
+                        if (QLineF(pp, o).length() < eps) { sharedWithDragged = true; break; }
+                    if (sharedWithDragged) continue;
+                    appendTempFixedPoint(e.id, i, tempIds);
+                }
+            }
+            solveConstraintsDragging(dragged);
+            if (!tempIds.empty())
+                m_constraints.erase(
+                    std::remove_if(m_constraints.begin(), m_constraints.end(),
+                        [](const SketchConstraint& c) { return c.id <= -1000000; }),
+                    m_constraints.end());
+#endif
+            emit entityDragging(ent->id);
+            update();
+        }
+        return true;
+    }
+    return false;
+}
+
+// Handle drag, shared first step: the snapped/axis-locked target for the
+// grabbed point, floored by keepHandleApart so no drag collapses an edge.
+QPointF SketchCanvas::computeHandleFinalPos(const SketchEntity* sel, const QPointF& worldPos,
+                                            bool shiftPressed, bool ctrlPressed)
+{
+        // Determine the final position based on modifiers:
+        // - Shift: snap to grid
+        // - Ctrl: constrain to axis (X or Y key selects which)
+        // - Shift+Ctrl: snap to grid AND constrain to axis
+        // Entity/origin snapping is always active (matches entity creation behavior)
+        QPointF finalPos;
+        if (ctrlPressed && m_snapAxis != SnapAxis::None) {
+            if (m_snapToGrid || shiftPressed) {
+                // Snap to grid/entities AND constrain to axis
+                finalPos = axisLockedSnapPoint(worldPos);
+            } else {
+                // Ctrl held with axis constraint - constrain without grid snap
+                QPointF raw = worldPos;
+                if (m_snapAxis == SnapAxis::X) {
+                    finalPos = QPointF(raw.x(), m_dragHandleOriginal.y());
+                } else {
+                    finalPos = QPointF(m_dragHandleOriginal.x(), raw.y());
+                }
+            }
+        } else {
+            // Always snap to entities/origin; grid snap when enabled or Shift held
+            finalPos = m_snapEngine.snapPoint(worldPos);
+        }
+
+        // Do not let a drag drive an edge to zero. Applied here, after
+        // snapping and before any entity-specific branch below, because
+        // this is the one place every handle drag passes through.
+        //
+        // A collapsed edge cannot be undone by dragging back out: a
+        // zero-length line has no direction, so its horizontal/vertical
+        // constraints go slack and the coincidents hold the corners
+        // together. The rectangle becomes a point that can only be
+        // translated, and the solver reports success the whole time.
+        //
+        // The floor follows the zoom rather than being a fixed world
+        // distance, so the smallest edge you can make is always still
+        // visible and grabbable at the zoom you are working at.
+        {
+            QVector<QPointF> obstacles;
+            auto addPoints = [&](const SketchEntity& e, bool skipDragged) {
+                for (int i = 0; i < e.points.size(); ++i) {
+                    if (skipDragged && i == m_dragHandleIndex) continue;
+                    obstacles.append(QPointF(e.points[i]));
+                }
+            };
+            addPoints(*sel, /*skipDragged=*/true);
+            if (sel->groupId >= 0) {
+                for (const auto& e : m_entities)
+                    if (e.groupId == sel->groupId && e.id != sel->id)
+                        addPoints(e, /*skipDragged=*/false);
+            }
+            std::vector<hobbycad::Point2D> others;
+            others.reserve(obstacles.size());
+            for (const QPointF& p : obstacles)
+                others.push_back(hobbycad::Point2D{p.x(), p.y()});
+
+            const hobbycad::Point2D guarded = sketch::keepHandleApart(
+                hobbycad::Point2D{finalPos.x(), finalPos.y()}, others,
+                hobbycad::Point2D{m_dragHandleOriginal.x(),
+                                  m_dragHandleOriginal.y()},
+                sketch::minHandleSeparation(m_zoom));
+            finalPos = QPointF(guarded.x, guarded.y);
+        }
+    return finalPos;
+}
+
+// Handle drag: circle (shared geometry via sketch::dragEntityHandle; the
+// radius/diameter label follow-along stays here because it needs m_constraints).
+// Handle drag: line. Solves inline as a dragged-point solve (so the shared
+// tail's type gate skips it) and keeps a distance label's perpendicular offset.
+void SketchCanvas::dragLineHandle(SketchEntity* sel, const QPointF& finalPos)
+{
+        // Dragged-point solve. The grabbed endpoint goes where the
+        // cursor is; the solver is told it is the dragged point and
+        // moves everything else as little as the constraints require
+        // (Onshape/Fusion drag). No group special cases: a rigid
+        // group move is the Transform section's Free Move.
+        SketchConstraint* distConstraint = findDrivingConstraint(sel->id, ConstraintType::Distance);
+        double labelPerpOffset = 0.0;
+        if (distConstraint && distConstraint->labelVisible) {
+            QPointF along = QPointF(sel->points[1]) - QPointF(sel->points[0]);
+            double len = geometry::length(along);
+            if (len > geometry::kDegenerateLen) {
+                QPointF perp = geometry::perpendicular(geometry::normalize(along));
+                QPointF mid = (QPointF(sel->points[0]) + QPointF(sel->points[1])) / 2.0;
+                QPointF rel = QPointF(distConstraint->labelPosition) - mid;
+                labelPerpOffset = rel.x() * perp.x() + rel.y() * perp.y();
+            }
+        }
+        const QPointF prevPos = sel->points[m_dragHandleIndex];
+        sel->points[m_dragHandleIndex] = finalPos;
+        // Points that sat exactly on the grabbed one (snapped
+        // coincidents) start the solve at the new position too.
+        const double coinEps = geometry::kCoincidentTol;
+        for (auto& e : m_entities) {
+            if (e.id == sel->id) continue;
+            for (auto& p : e.points) {
+                const double dx = p.x - prevPos.x(), dy = p.y - prevPos.y();
+                if (dx * dx + dy * dy < coinEps) p = finalPos;
+            }
+        }
+        if (!m_constraints.isEmpty()) {
+            // Hold other geometry rigid so swinging this endpoint around
+            // can't collapse a tangent partner (e.g. an arc). (Aaron)
+            solveHandleDragStabilized(sel->id, m_dragHandleIndex, finalPos);
+        }
+        if (distConstraint) {
+            distConstraint = findDrivingConstraint(sel->id, ConstraintType::Distance);
+            if (distConstraint && distConstraint->labelVisible) {
+                QPointF along = QPointF(sel->points[1]) - QPointF(sel->points[0]);
+                double len = geometry::length(along);
+                if (len > geometry::kDegenerateLen) {
+                    QPointF perp = geometry::perpendicular(geometry::normalize(along));
+                    QPointF mid = (QPointF(sel->points[0]) + QPointF(sel->points[1])) / 2.0;
+                    distConstraint->labelPosition = mid + perp * labelPerpOffset;
+                }
+            }
+        }
+}
+
+
+void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
+{
+    QPointF worldPos = screenToWorld(event->pos());
+    updateHoverGrips(worldPos);
+    bool ctrlHeld = event->modifiers() & Qt::ControlModifier;
+    bool altHeld = event->modifiers() & Qt::AltModifier;
+
+    // A tool that wants raw move events even when nothing is being drawn (the
+    // Trim tool's drag-through) gets first refusal here. Only such a handler
+    // returns true; every drawing tool declines and falls through unchanged.
+    if (activeHandler() && activeHandler()->mouseMove(*this, event, worldPos)) {
         return;
     }
+
+    applySnapAndInference(worldPos, ctrlHeld, altHeld);
+    emitCursorPositions();
+
+    // Priority-ordered interaction guards. Order is load-bearing: each
+    // returns true when it owned this move (and has already repainted).
+    if (handlePanMove(event)) return;
+    if (handleWindowSelectMove(worldPos)) return;
+    if (handleTransformPivotDragMove()) return;
+    if (handleFreeMoveDragMove(event, worldPos)) return;
+    updateTransformGlyphCursor(event, worldPos);
+    if (handleBackgroundDragMove(worldPos)) return;
+    updateBackgroundEditCursor(worldPos);
+    if (handleConstraintLabelDragMove(worldPos)) return;
+    if (promotePointPressToHandleDrag(event, worldPos)) return;
+    armBodyDragIfPastThreshold(event);          // falls through by design
+    if (handleBodyDragMove(worldPos)) return;
 
     if (m_isDraggingHandle) {
         // Move the handle point of the selected entity
         SketchEntity* sel = selectedEntity();
+        // A path-following slot is DERIVED from its centerline, so dragging one
+        // of its handles must move the CENTERLINE (whose point i the slot's
+        // point i mirrors); the slot then re-derives to follow. Without this the
+        // slot's own points move while the centerline stays put and the two
+        // detach (Aaron: "move the slot, centerline stays in place").
+        if (sel && sel->type == SketchEntityType::Slot && sel->pathEntityIds.size() == 1
+                && m_dragHandleIndex >= 0) {
+            SketchEntity* cl = entityById(sel->pathEntityIds[0]);
+            if (cl && m_dragHandleIndex < static_cast<int>(cl->points.size())) {
+                const QPointF finalPos = m_snapEngine.snapPoint(worldPos);
+                solveHandleDragStabilized(cl->id, m_dragHandleIndex, finalPos);
+                updateSlotsFromPaths();   // re-derive live so the slot follows during the drag (the phantom)
+                m_lastRawMouseWorld = worldPos;
+                update();
+                return;
+            }
+        }
         if (sel && m_dragHandleIndex >= 0 && m_dragHandleIndex < sel->points.size()) {
             m_lastRawMouseWorld = worldPos;
             bool shiftPressed = (event->modifiers() & Qt::ShiftModifier);
             bool ctrlPressed = (event->modifiers() & Qt::ControlModifier);
 
-            // Determine the final position based on modifiers:
-            // - Shift: snap to grid
-            // - Ctrl: constrain to axis (X or Y key selects which)
-            // - Shift+Ctrl: snap to grid AND constrain to axis
-            // Entity/origin snapping is always active (matches entity creation behavior)
-            QPointF finalPos;
-            if (ctrlPressed && m_snapAxis != SnapAxis::None) {
-                if (m_snapToGrid || shiftPressed) {
-                    // Snap to grid/entities AND constrain to axis
-                    finalPos = axisLockedSnapPoint(worldPos);
-                } else {
-                    // Ctrl held with axis constraint - constrain without grid snap
-                    QPointF raw = worldPos;
-                    if (m_snapAxis == SnapAxis::X) {
-                        finalPos = QPointF(raw.x(), m_dragHandleOriginal.y());
-                    } else {
-                        finalPos = QPointF(m_dragHandleOriginal.x(), raw.y());
-                    }
-                }
-            } else {
-                // Always snap to entities/origin; grid snap when enabled or Shift held
-                finalPos = snapPoint(worldPos);
-            }
+            // Snapped / axis-locked target for the grabbed point, floored so the
+            // drag cannot collapse an edge (see computeHandleFinalPos).
+            QPointF finalPos = computeHandleFinalPos(sel, worldPos, shiftPressed, ctrlPressed);
 
-            // Handle entity-specific handle dragging
-            if (sel->type == SketchEntityType::Circle) {
-                if (m_dragHandleIndex == 0) {
-                    // Dragging center - move ALL points together
-                    QPointF delta = finalPos - sel->points[0];
-                    for (int i = 0; i < sel->points.size(); ++i)
-                        sel->points[i] += delta;
-                } else if (m_dragHandleIndex >= 1) {
-                    // Dragging any perimeter point - update radius
-                    sel->points[m_dragHandleIndex] = finalPos;
-                    sel->radius = QLineF(sel->points[0], finalPos).length();
-                    // Reposition all other perimeter points to new radius
-                    QPointF center = sel->points[0];
-                    for (int i = 1; i < sel->points.size(); ++i) {
-                        if (i == m_dragHandleIndex) continue;
-                        QPointF dir = QPointF(sel->points[i]) - center;
-                        double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                        if (len > 1e-6) {
-                            sel->points[i] = center + dir * (sel->radius / len);
-                        }
-                    }
-                }
-            } else if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3) {
-                // Arc: points[0]=center, points[1]=start endpoint, points[2]=end endpoint
-                // Handle 0 (center): move entire arc
-                // Handle 1 (start): slide along circle to adjust arc angle
-                // Handle 2 (end): free drag to resize radius
-                QPointF center = sel->points[0];
-
-                // Tangent arc: start point must stay on the tangent entity
-                const SketchEntity* tangentEnt = (sel->tangentEntityId >= 0)
-                    ? entityById(sel->tangentEntityId) : nullptr;
-
-                if (tangentEnt && m_dragHandleIndex >= 0 && m_dragHandleIndex <= 2) {
-                    // Tangent arc: all handles maintain tangency to the entity
-                    QPointF tangentPoint = sel->points[1];  // current tangent point
-                    QPointF endPoint = sel->points[2];      // current end point
-
-                    // Helper: project a point onto the tangent entity
-                    auto projectOntoEntity = [&](const QPointF& pt) -> QPointF {
-                        if (tangentEnt->type == SketchEntityType::Line && tangentEnt->points.size() >= 2) {
-                            return geometry::closestPointOnLine(pt,
-                                tangentEnt->points[0], tangentEnt->points[1]);
-                        } else if (tangentEnt->type == SketchEntityType::Rectangle && tangentEnt->points.size() >= 2) {
-                            QPointF corners[4];
-                            if (tangentEnt->points.size() >= 4) {
-                                for (int i = 0; i < 4; ++i) corners[i] = tangentEnt->points[i];
-                            } else {
-                                corners[0] = tangentEnt->points[0];
-                                corners[1] = QPointF(tangentEnt->points[1].x, tangentEnt->points[0].y);
-                                corners[2] = tangentEnt->points[1];
-                                corners[3] = QPointF(tangentEnt->points[0].x, tangentEnt->points[1].y);
-                            }
-                            QPointF best = pt;
-                            double minDist = std::numeric_limits<double>::max();
-                            for (int i = 0; i < 4; ++i) {
-                                QPointF projected = geometry::closestPointOnLine(pt,
-                                    corners[i], corners[(i + 1) % 4]);
-                                double dist = QLineF(pt, projected).length();
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    best = projected;
-                                }
-                            }
-                            return best;
-                        }
-                        return pt;
-                    };
-
-                    // Helper: get entity edge direction at a given point
-                    auto entityEdgeDirAt = [&](const QPointF& pt) -> QPointF {
-                        if (tangentEnt->type == SketchEntityType::Line && tangentEnt->points.size() >= 2) {
-                            return QPointF(tangentEnt->points[1]) - QPointF(tangentEnt->points[0]);
-                        } else if (tangentEnt->type == SketchEntityType::Rectangle && tangentEnt->points.size() >= 2) {
-                            QPointF corners[4];
-                            if (tangentEnt->points.size() >= 4) {
-                                for (int i = 0; i < 4; ++i) corners[i] = tangentEnt->points[i];
-                            } else {
-                                corners[0] = tangentEnt->points[0];
-                                corners[1] = QPointF(tangentEnt->points[1].x, tangentEnt->points[0].y);
-                                corners[2] = tangentEnt->points[1];
-                                corners[3] = QPointF(tangentEnt->points[0].x, tangentEnt->points[1].y);
-                            }
-                            QPointF bestDir(1, 0);
-                            double minDist = std::numeric_limits<double>::max();
-                            for (int i = 0; i < 4; ++i) {
-                                QPointF projected = geometry::closestPointOnLine(pt,
-                                    corners[i], corners[(i + 1) % 4]);
-                                double dist = QLineF(pt, projected).length();
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    bestDir = corners[(i + 1) % 4] - corners[i];
-                                }
-                            }
-                            return bestDir;
-                        }
-                        return QPointF(1, 0);  // fallback
-                    };
-
-                    // Helper: compute tangent arc from tangent point + endpoint,
-                    // keeping center on the same side of the entity as the current arc.
-                    // This avoids the center-flip issue in calculateTangentArc where
-                    // certain endpoint positions cause the center to jump to the
-                    // opposite side of the tangent entity, breaking tangency.
-                    auto computeArcPreserveSide = [&](
-                            const QPointF& tanPt, const QPointF& endPt,
-                            QPointF& outCenter, double& outRadius,
-                            double& outStartAngle, double& outSweepAngle) -> bool {
-                        QPointF edgeDirV = entityEdgeDirAt(tanPt);
-                        double edgeLen = std::sqrt(edgeDirV.x() * edgeDirV.x() +
-                                                   edgeDirV.y() * edgeDirV.y());
-                        if (edgeLen < 1e-6) return false;
-
-                        QPointF normal(-edgeDirV.y() / edgeLen, edgeDirV.x() / edgeLen);
-
-                        // Orient normal toward the current center side
-                        QPointF oldOffset = center - QPointF(sel->points[1]);
-                        if (oldOffset.x() * normal.x() + oldOffset.y() * normal.y() < 0)
-                            normal = -normal;
-
-                        // Center must lie on the perpendicular to the entity at tanPt:
-                        //   center = tanPt + t * normal
-                        // and be equidistant from tanPt and endPt (radius = t).
-                        // Solving |tanPt + t*normal - endPt|² = t² gives:
-                        //   t = -|d|² / (2 * d·normal),  where d = tanPt - endPt
-                        QPointF d = tanPt - endPt;
-                        double dDotN = d.x() * normal.x() + d.y() * normal.y();
-                        if (std::abs(dDotN) < 1e-6) return false;  // degenerate
-
-                        double dSq = d.x() * d.x() + d.y() * d.y();
-                        double t = -(dSq) / (2.0 * dDotN);
-                        if (t < 1e-6) return false;  // center would flip to wrong side
-
-                        outCenter = tanPt + normal * t;
-                        outRadius = t;
-                        outStartAngle = std::atan2(tanPt.y() - outCenter.y(),
-                                                   tanPt.x() - outCenter.x()) * 180.0 / M_PI;
-                        double endAngle = std::atan2(endPt.y() - outCenter.y(),
-                                                     endPt.x() - outCenter.x()) * 180.0 / M_PI;
-                        outSweepAngle = endAngle - outStartAngle;
-                        // Normalize to [-180, 180]
-                        while (outSweepAngle > 180.0) outSweepAngle -= 360.0;
-                        while (outSweepAngle < -180.0) outSweepAngle += 360.0;
-                        // Preserve CW/CCW direction
-                        if (sel->sweepAngle >= 0 && outSweepAngle < 0) outSweepAngle += 360.0;
-                        else if (sel->sweepAngle < 0 && outSweepAngle > 0) outSweepAngle -= 360.0;
-
-                        return true;
-                    };
-
-                    if (m_dragHandleIndex == 0) {
-                        // Dragging center — slide tangent point along entity, preserve radius + sweep
-                        // Project drag position onto entity to find new tangent point
-                        QPointF newTangentPt = projectOntoEntity(finalPos);
-
-                        // Get entity edge direction at the tangent point for the normal
-                        QPointF edgeDir;
-                        if (tangentEnt->type == SketchEntityType::Line && tangentEnt->points.size() >= 2) {
-                            edgeDir = QPointF(tangentEnt->points[1]) - QPointF(tangentEnt->points[0]);
-                        } else if (tangentEnt->type == SketchEntityType::Rectangle && tangentEnt->points.size() >= 2) {
-                            // Find which edge the projected point is on
-                            QPointF corners[4];
-                            if (tangentEnt->points.size() >= 4) {
-                                for (int i = 0; i < 4; ++i) corners[i] = tangentEnt->points[i];
-                            } else {
-                                corners[0] = tangentEnt->points[0];
-                                corners[1] = QPointF(tangentEnt->points[1].x, tangentEnt->points[0].y);
-                                corners[2] = tangentEnt->points[1];
-                                corners[3] = QPointF(tangentEnt->points[0].x, tangentEnt->points[1].y);
-                            }
-                            double minDist = std::numeric_limits<double>::max();
-                            for (int i = 0; i < 4; ++i) {
-                                QPointF projected = geometry::closestPointOnLine(newTangentPt,
-                                    corners[i], corners[(i + 1) % 4]);
-                                double dist = QLineF(newTangentPt, projected).length();
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    edgeDir = corners[(i + 1) % 4] - corners[i];
-                                }
-                            }
-                        }
-
-                        double edgeLen = std::sqrt(edgeDir.x() * edgeDir.x() + edgeDir.y() * edgeDir.y());
-                        if (edgeLen > 1e-6) {
-                            // Normal perpendicular to edge (rotated 90°)
-                            QPointF normal(-edgeDir.y() / edgeLen, edgeDir.x() / edgeLen);
-
-                            // Choose the side: same side as the current center relative to the entity
-                            QPointF oldCenterToTangent = QPointF(sel->points[1]) - center;
-                            // Center is on the normal side of the tangent point
-                            // Dot product of (center - tangentPoint) with normal tells us the sign
-                            QPointF oldOffset = center - QPointF(sel->points[1]);
-                            double side = oldOffset.x() * normal.x() + oldOffset.y() * normal.y();
-                            if (side < 0) normal = -normal;
-
-                            double radius = sel->radius;
-                            QPointF newCenter = newTangentPt + normal * radius;
-
-                            // Start angle: from new center to new tangent point
-                            double newStartAngle = std::atan2(newTangentPt.y() - newCenter.y(),
-                                                               newTangentPt.x() - newCenter.x()) * 180.0 / M_PI;
-
-                            // Preserve sweep angle
-                            double sweepAngle = sel->sweepAngle;
-                            double endRad = qDegreesToRadians(newStartAngle + sweepAngle);
-
-                            sel->points[0] = newCenter;
-                            sel->points[1] = newTangentPt;
-                            sel->points[2] = QPointF(
-                                newCenter.x() + radius * qCos(endRad),
-                                newCenter.y() + radius * qSin(endRad));
-                            sel->startAngle = newStartAngle;
-                            // radius and sweepAngle preserved
-                        }
-                    } else if (m_dragHandleIndex == 1) {
-                        // Dragging start (tangent point) — project onto tangent entity
-                        tangentPoint = projectOntoEntity(finalPos);
-
-                        // Check for a locked radius constraint on this arc
-                        double lockedRadius = -1.0;
-                        for (const auto& c : m_constraints) {
-                            if ((c.type == ConstraintType::Radius
-                                    || c.type == ConstraintType::Diameter)
-                                    && c.isDriving && c.enabled
-                                    && !c.entityIds.empty()
-                                    && c.entityIds[0] == sel->id) {
-                                lockedRadius = (c.type == ConstraintType::Diameter)
-                                    ? c.value / 2.0 : c.value;
-                                break;
-                            }
-                        }
-
-                        if (lockedRadius > 0) {
-                            // Locked radius: slide along entity preserving
-                            // radius + sweep (same geometry as handle 0).
-                            QPointF edgeDirV = entityEdgeDirAt(tangentPoint);
-                            double edgeLen = std::sqrt(
-                                edgeDirV.x() * edgeDirV.x()
-                                + edgeDirV.y() * edgeDirV.y());
-                            if (edgeLen > 1e-6) {
-                                QPointF normal(-edgeDirV.y() / edgeLen,
-                                                edgeDirV.x() / edgeLen);
-                                // Orient normal toward current center side
-                                QPointF oldOff = center
-                                    - QPointF(sel->points[1]);
-                                if (oldOff.x() * normal.x()
-                                        + oldOff.y() * normal.y() < 0)
-                                    normal = -normal;
-
-                                QPointF newCenter = tangentPoint
-                                    + normal * lockedRadius;
-                                double newStartAngle = std::atan2(
-                                    tangentPoint.y() - newCenter.y(),
-                                    tangentPoint.x() - newCenter.x())
-                                    * 180.0 / M_PI;
-                                double sweepAngle = sel->sweepAngle;
-                                double endRad = qDegreesToRadians(
-                                    newStartAngle + sweepAngle);
-
-                                sel->points[0] = newCenter;
-                                sel->points[1] = tangentPoint;
-                                sel->points[2] = QPointF(
-                                    newCenter.x()
-                                        + lockedRadius * qCos(endRad),
-                                    newCenter.y()
-                                        + lockedRadius * qSin(endRad));
-                                sel->radius = lockedRadius;
-                                sel->startAngle = newStartAngle;
-                                // sweep preserved
-                            }
-                        } else {
-                            // No locked radius: keep endpoint fixed,
-                            // compute new radius from geometry.
-                            QPointF newCenter;
-                            double newRadius, newStartAngle, newSweepAngle;
-                            if (computeArcPreserveSide(tangentPoint, endPoint,
-                                    newCenter, newRadius,
-                                    newStartAngle, newSweepAngle)) {
-                                sel->points[0] = newCenter;
-                                sel->points[1] = tangentPoint;
-                                // Keep endpoint at its exact world position
-                                // to avoid cos/sin drift accumulation.
-                                sel->points[2] = endPoint;
-                                sel->radius = newRadius;
-                                sel->startAngle = newStartAngle;
-                                sel->sweepAngle = newSweepAngle;
-                            }
-                        }
-                    } else {
-                        // Dragging end — move endpoint, recompute arc
-                        // Re-project tangent point onto entity to maintain tangency
-                        tangentPoint = projectOntoEntity(tangentPoint);
-                        endPoint = finalPos;
-
-                        // Check for a locked radius constraint
-                        double lockedRadius = -1.0;
-                        for (const auto& c : m_constraints) {
-                            if ((c.type == ConstraintType::Radius
-                                    || c.type == ConstraintType::Diameter)
-                                    && c.isDriving && c.enabled
-                                    && !c.entityIds.empty()
-                                    && c.entityIds[0] == sel->id) {
-                                lockedRadius = (c.type == ConstraintType::Diameter)
-                                    ? c.value / 2.0 : c.value;
-                                break;
-                            }
-                        }
-
-                        if (lockedRadius > 0) {
-                            // Locked radius: center is fixed (tangent point
-                            // + radius along normal).  Endpoint is projected
-                            // onto the circle — only sweep angle changes.
-                            QPointF edgeDirV = entityEdgeDirAt(tangentPoint);
-                            double edgeLen = std::sqrt(
-                                edgeDirV.x() * edgeDirV.x()
-                                + edgeDirV.y() * edgeDirV.y());
-                            if (edgeLen > 1e-6) {
-                                QPointF normal(-edgeDirV.y() / edgeLen,
-                                                edgeDirV.x() / edgeLen);
-                                QPointF oldOff = center
-                                    - QPointF(sel->points[1]);
-                                if (oldOff.x() * normal.x()
-                                        + oldOff.y() * normal.y() < 0)
-                                    normal = -normal;
-
-                                QPointF newCenter = tangentPoint
-                                    + normal * lockedRadius;
-
-                                // Project drag position onto the circle
-                                QPointF dir = endPoint - newCenter;
-                                double dirLen = std::sqrt(
-                                    dir.x() * dir.x()
-                                    + dir.y() * dir.y());
-                                if (dirLen > 1e-6) {
-                                    QPointF projEnd = newCenter
-                                        + dir * (lockedRadius / dirLen);
-
-                                    double newStartAngle = std::atan2(
-                                        tangentPoint.y() - newCenter.y(),
-                                        tangentPoint.x() - newCenter.x())
-                                        * 180.0 / M_PI;
-                                    double endAngle = std::atan2(
-                                        projEnd.y() - newCenter.y(),
-                                        projEnd.x() - newCenter.x())
-                                        * 180.0 / M_PI;
-                                    double newSweep = endAngle
-                                        - newStartAngle;
-                                    while (newSweep > 180.0)
-                                        newSweep -= 360.0;
-                                    while (newSweep < -180.0)
-                                        newSweep += 360.0;
-                                    if (sel->sweepAngle >= 0
-                                            && newSweep < 0)
-                                        newSweep += 360.0;
-                                    else if (sel->sweepAngle < 0
-                                            && newSweep > 0)
-                                        newSweep -= 360.0;
-
-                                    sel->points[0] = newCenter;
-                                    sel->points[1] = tangentPoint;
-                                    sel->points[2] = projEnd;
-                                    sel->radius = lockedRadius;
-                                    sel->startAngle = newStartAngle;
-                                    sel->sweepAngle = newSweep;
-                                }
-                            }
-                        } else {
-                            // No locked radius: endpoint free, compute new
-                            // radius from geometry.
-                            QPointF newCenter;
-                            double newRadius, newStartAngle, newSweepAngle;
-                            if (computeArcPreserveSide(tangentPoint, endPoint,
-                                    newCenter, newRadius,
-                                    newStartAngle, newSweepAngle)) {
-                                sel->points[0] = newCenter;
-                                sel->points[1] = tangentPoint;
-                                double endRad = qDegreesToRadians(
-                                    newStartAngle + newSweepAngle);
-                                sel->points[2] = QPointF(
-                                    newCenter.x()
-                                        + newRadius * qCos(endRad),
-                                    newCenter.y()
-                                        + newRadius * qSin(endRad));
-                                sel->radius = newRadius;
-                                sel->startAngle = newStartAngle;
-                                sel->sweepAngle = newSweepAngle;
-                            }
-                        }
-                    }
-                } else if (m_dragHandleIndex == 0) {
-                    // Dragging center - move all points together
-                    QPointF delta = finalPos - center;
-                    sel->points[0] = finalPos;
-                    sel->points[1] += delta;
-                    sel->points[2] += delta;
-                } else if (m_dragHandleIndex == 1) {
-                    // Dragging start endpoint - constrain to arc radius (adjust angle)
-                    double radius = sel->radius;
-                    QPointF dir = finalPos - center;
-                    double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    if (len > 1e-6) {
-                        sel->points[1] = center + dir * (radius / len);
-
-                        // Recompute angles from endpoint positions
-                        double startAngle = std::atan2(sel->points[1].y - center.y(),
-                                                       sel->points[1].x - center.x()) * 180.0 / M_PI;
-                        double endAngle = std::atan2(sel->points[2].y - center.y(),
-                                                     sel->points[2].x - center.x()) * 180.0 / M_PI;
-                        double sweep = endAngle - startAngle;
-                        if (sel->sweepAngle >= 0) {
-                            while (sweep < 0) sweep += 360.0;
-                        } else {
-                            while (sweep > 0) sweep -= 360.0;
-                        }
-                        sel->startAngle = startAngle;
-                        sel->sweepAngle = sweep;
-                    }
-                } else if (m_dragHandleIndex == 2) {
-                    // Dragging end endpoint - free drag to resize radius
-                    sel->points[2] = finalPos;
-                    double newRadius = QLineF(center, finalPos).length();
-                    if (newRadius > 1e-6) {
-                        // Reposition start endpoint at same angle but new radius
-                        double startRad = qDegreesToRadians(sel->startAngle);
-                        sel->points[1] = center + QPointF(newRadius * qCos(startRad),
-                                                           newRadius * qSin(startRad));
-                        sel->radius = newRadius;
-
-                        // Recompute end angle (start angle preserved)
-                        double endAngle = std::atan2(finalPos.y() - center.y(),
-                                                     finalPos.x() - center.x()) * 180.0 / M_PI;
-                        double sweep = endAngle - sel->startAngle;
-                        if (sel->sweepAngle >= 0) {
-                            while (sweep < 0) sweep += 360.0;
-                        } else {
-                            while (sweep > 0) sweep -= 360.0;
-                        }
-                        sel->sweepAngle = sweep;
-                    }
-                }
-                // Enforce locked sweep angle if a sweep-angle constraint exists
-                if (m_dragHandleIndex != 0) {  // Handle 0 (center) already preserves sweep
-                    int sweepGid = findSweepAngleGroupForArc(sel->id);
-                    if (sweepGid >= 0) {
-                        double lockedSweep = -1.0;
-                        for (const auto& g : m_groups) {
-                            if (g.id == sweepGid) {
-                                for (int cid : g.constraintIds) {
-                                    const SketchConstraint* c = constraintById(cid);
-                                    if (c && c->type == ConstraintType::Angle
-                                            && c->isDriving && c->enabled) {
-                                        lockedSweep = c->value;
-                                        break;
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                        if (lockedSweep >= 0) {
-                            sel->sweepAngle = (sel->sweepAngle >= 0) ? lockedSweep : -lockedSweep;
-                            double endRad = qDegreesToRadians(sel->startAngle + sel->sweepAngle);
-                            sel->points[2] = {
-                                sel->points[0].x + sel->radius * std::cos(endRad),
-                                sel->points[0].y + sel->radius * std::sin(endRad)};
-                        }
-                    }
-                }
-                // Sync sweep-angle construction lines during drag
+            // A line is a dragged-point SOLVE (its own path); opening a full
+            // arc is a stateful gesture kept here; everything else is the
+            // library's handle drag, with the locks and modes resolved in
+            // applyHandleDrag (the same call the Ctrl-snap path makes).
+            if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
+                dragLineHandle(sel, finalPos);
+            } else if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3
+                       && m_openingFullArc && m_dragHandleIndex != 0
+                       && sel->tangentEntityId < 0) {
+                // Opening the full circle: shrink from 360, keep the sign,
+                // stay under 360, swapping the dragged end at the inflection.
+                const QPointF center = sel->points[0];
+                const sketch::ArcOpenResult res = sketch::openFullArcByDrag(
+                    center, sel->radius, finalPos,
+                    m_openArcFixedAngle, m_openArcDraggedIndex, m_openArcPrevSweep);
+                sel->startAngle = res.startAngle;
+                sel->sweepAngle = res.sweepAngle;
+                sketch::resyncArcEndpoints(*sel);
+                m_openArcPrevSweep = res.sweepAngle;
+                m_openArcDraggedIndex = res.draggedIndex;
                 syncSweepAngleConstructionLines(*sel);
-            } else if (sel->type == SketchEntityType::Slot && sel->points.size() >= 3) {
-                // Arc slot with 3 points: arc center, start, end
-                // Storage format: points[0] = arc center, points[1] = start, points[2] = end
-                // Modifiers for endpoint dragging (index 1 or 2):
-                //   Normal: constrain to arc radius (slide along arc)
-                //   Ctrl: snap to 45-degree intervals on arc
-                //   Shift: fix other endpoint, resize arc (center moves)
-                //   Alt: free move endpoint, resize arc (center moves)
-                // Dragging arc center (point 0) moves the whole slot
-                bool altPressed = (event->modifiers() & Qt::AltModifier);
-
-                if (m_dragHandleIndex == 0) {
-                    // Dragging arc center - move all points together
-                    QPointF delta = finalPos - sel->points[0];
-                    sel->points[0] = finalPos;
-                    sel->points[1] += delta;
-                    sel->points[2] += delta;
-                } else if (shiftPressed) {
-                    // Shift+drag endpoint - fix the OTHER endpoint, resize arc
-                    // The arc center moves to maintain the arc through both points
-                    QPointF draggedPt = finalPos;
-                    int otherIdx = (m_dragHandleIndex == 1) ? 2 : 1;
-                    QPointF fixedPt = sel->points[otherIdx];  // This point stays fixed
-
-                    // Calculate new arc center: must be equidistant from both points
-                    // and on the perpendicular bisector of the chord
-                    QPointF chordMid = (draggedPt + fixedPt) / 2.0;
-                    QPointF chordDir = fixedPt - draggedPt;
-                    double chordLen = std::sqrt(chordDir.x() * chordDir.x() + chordDir.y() * chordDir.y());
-
-                    if (chordLen > 1e-6) {
-                        QPointF perpDir(-chordDir.y() / chordLen, chordDir.x() / chordLen);
-
-                        // Project old center onto the new perpendicular bisector
-                        // to find where the new center should be
-                        QPointF oldCenter = sel->points[0];
-                        QPointF toOldCenter = oldCenter - chordMid;
-                        double perpDist = toOldCenter.x() * perpDir.x() + toOldCenter.y() * perpDir.y();
-
-                        // Ensure minimum distance to avoid degenerate arc
-                        double minDist = 0.1;
-                        if (std::abs(perpDist) < minDist) {
-                            perpDist = (perpDist >= 0) ? minDist : -minDist;
-                        }
-
-                        // Update dragged point and center (fixed point stays)
-                        sel->points[m_dragHandleIndex] = draggedPt;
-                        sel->points[0] = chordMid + perpDir * perpDist;
-                    } else {
-                        sel->points[m_dragHandleIndex] = finalPos;
-                    }
-                } else if (altPressed) {
-                    // Alt+drag endpoint - free move, resize arc radius
-                    // Move the arc center to maintain the new radius while keeping
-                    // the center on its perpendicular bisector line
-                    QPointF draggedPt = finalPos;
-                    int otherIdx = (m_dragHandleIndex == 1) ? 2 : 1;
-                    QPointF otherPt = sel->points[otherIdx];
-
-                    // New chord midpoint (between dragged point and other endpoint)
-                    QPointF chordMid = (draggedPt + otherPt) / 2.0;
-
-                    // Perpendicular direction to the new chord
-                    QPointF chordDir = otherPt - draggedPt;
-                    double chordLen = std::sqrt(chordDir.x() * chordDir.x() + chordDir.y() * chordDir.y());
-
-                    if (chordLen > 1e-6) {
-                        QPointF perpDir(-chordDir.y() / chordLen, chordDir.x() / chordLen);
-
-                        // New arc radius is distance from new position to arc center
-                        double newRadius = QLineF(sel->points[0], draggedPt).length();
-
-                        // Calculate where the center should be on the perpendicular bisector
-                        // to achieve this radius: radius^2 = (chordLen/2)^2 + perpDist^2
-                        double halfChord = chordLen / 2.0;
-                        double perpDistSq = newRadius * newRadius - halfChord * halfChord;
-
-                        if (perpDistSq > 0) {
-                            double perpDist = std::sqrt(perpDistSq);
-
-                            // Preserve which side of chord the center is on
-                            QPointF oldToCenter = QPointF(sel->points[0]) - chordMid;
-                            double oldProjDist = oldToCenter.x() * perpDir.x() + oldToCenter.y() * perpDir.y();
-                            if (oldProjDist < 0) perpDist = -perpDist;
-
-                            // Update all points
-                            sel->points[m_dragHandleIndex] = draggedPt;
-                            sel->points[0] = chordMid + perpDir * perpDist;
-                        } else {
-                            // Radius too small for chord - just move endpoint
-                            sel->points[m_dragHandleIndex] = draggedPt;
-                        }
-                    } else {
-                        sel->points[m_dragHandleIndex] = finalPos;
-                    }
-                } else if (m_fixedHandleIndex >= 0 && m_fixedHandleIndex != m_dragHandleIndex &&
-                           (m_fixedHandleIndex == 1 || m_fixedHandleIndex == 2)) {
-                    // A fixed point is set - resize arc keeping the fixed point in place
-                    QPointF draggedPt = finalPos;
-                    QPointF fixedPt = sel->points[m_fixedHandleIndex];
-
-                    // Calculate new arc center on the perpendicular bisector
-                    QPointF chordMid = (draggedPt + fixedPt) / 2.0;
-                    QPointF chordDir = fixedPt - draggedPt;
-                    double chordLen = std::sqrt(chordDir.x() * chordDir.x() + chordDir.y() * chordDir.y());
-
-                    if (chordLen > 1e-6) {
-                        QPointF perpDir(-chordDir.y() / chordLen, chordDir.x() / chordLen);
-
-                        // Project old center onto the new perpendicular bisector
-                        QPointF oldCenter = sel->points[0];
-                        QPointF toOldCenter = oldCenter - chordMid;
-                        double perpDist = toOldCenter.x() * perpDir.x() + toOldCenter.y() * perpDir.y();
-
-                        // Ensure minimum distance to avoid degenerate arc
-                        double minDist = 0.1;
-                        if (std::abs(perpDist) < minDist) {
-                            perpDist = (perpDist >= 0) ? minDist : -minDist;
-                        }
-
-                        // Ctrl snaps to 45-degree intervals relative to the arc center
-                        if (ctrlPressed) {
-                            QPointF newCenter = chordMid + perpDir * perpDist;
-                            QPointF dir = draggedPt - newCenter;
-                            double angle = std::atan2(dir.y(), dir.x());
-                            const double snapAngle = M_PI / 4.0;
-                            angle = std::round(angle / snapAngle) * snapAngle;
-                            double radius = QLineF(newCenter, fixedPt).length();
-                            draggedPt = newCenter + QPointF(radius * std::cos(angle), radius * std::sin(angle));
-
-                            // Recalculate chord and center with snapped point
-                            chordMid = (draggedPt + fixedPt) / 2.0;
-                            chordDir = fixedPt - draggedPt;
-                            chordLen = std::sqrt(chordDir.x() * chordDir.x() + chordDir.y() * chordDir.y());
-                            if (chordLen > 1e-6) {
-                                perpDir = QPointF(-chordDir.y() / chordLen, chordDir.x() / chordLen);
-                                toOldCenter = oldCenter - chordMid;
-                                perpDist = toOldCenter.x() * perpDir.x() + toOldCenter.y() * perpDir.y();
-                                if (std::abs(perpDist) < minDist) {
-                                    perpDist = (perpDist >= 0) ? minDist : -minDist;
-                                }
-                            }
-                        }
-
-                        // Update dragged point and center (fixed point stays)
-                        sel->points[m_dragHandleIndex] = draggedPt;
-                        sel->points[0] = chordMid + perpDir * perpDist;
-                    } else {
-                        sel->points[m_dragHandleIndex] = finalPos;
-                    }
-                } else if (m_dragHandleIndex == 1) {
-                    // Handle 1 (start) - slide along arc to adjust angle
-                    QPointF center = sel->points[0];
-                    double arcRadius = QLineF(center, sel->points[2]).length();
-
-                    QPointF dir = finalPos - center;
-                    double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    if (len > 1e-6 && arcRadius > 1e-6) {
-                        double angle = std::atan2(dir.y(), dir.x());
-
-                        // Ctrl snaps to 45-degree intervals
-                        if (ctrlPressed) {
-                            const double snapAngle = M_PI / 4.0;
-                            angle = std::round(angle / snapAngle) * snapAngle;
-                        }
-
-                        sel->points[1] = center + QPointF(
-                            arcRadius * std::cos(angle),
-                            arcRadius * std::sin(angle));
-
-                        // Clamp sweep: full circle minus 2x end cap radius
-                        double minGap = (arcRadius > 0.001) ? (2.0 * sel->radius / arcRadius) : 0.1;
-                        double maxSweep = 2.0 * M_PI - minGap;
-                        double startAng = std::atan2(sel->points[1].y - center.y(),
-                                                     sel->points[1].x - center.x());
-                        double endAng = std::atan2(sel->points[2].y - center.y(),
-                                                   sel->points[2].x - center.x());
-                        double sweep = endAng - startAng;
-                        if (sel->arcFlipped) {
-                            if (sweep > 0) sweep -= 2.0 * M_PI;
-                            else sweep += 2.0 * M_PI;
-                        } else {
-                            while (sweep > M_PI) sweep -= 2.0 * M_PI;
-                            while (sweep < -M_PI) sweep += 2.0 * M_PI;
-                        }
-                        if (std::abs(sweep) > maxSweep) {
-                            double clampedSweep = (sweep > 0) ? maxSweep : -maxSweep;
-                            double newStartAng = endAng - clampedSweep;
-                            sel->points[1] = center + QPointF(
-                                arcRadius * std::cos(newStartAng),
-                                arcRadius * std::sin(newStartAng));
-                        }
-                    } else {
-                        sel->points[1] = finalPos;
-                    }
-                } else if (m_dragHandleIndex == 2) {
-                    // Handle 2 (end) - free drag to resize arc radius
-                    QPointF center = sel->points[0];
-                    double newArcRadius = QLineF(center, finalPos).length();
-                    double slotHalfWidth = sel->radius;
-
-                    if (newArcRadius > 1e-6) {
-                        // Place end point at clamped radius in the drag direction
-                        QPointF endDir = finalPos - center;
-                        double endLen = std::sqrt(endDir.x() * endDir.x() + endDir.y() * endDir.y());
-                        if (endLen > 1e-6) {
-                            sel->points[2] = center + endDir * (newArcRadius / endLen);
-                        }
-
-                        // Reposition start endpoint at same angle but new arc radius
-                        QPointF startDir = QPointF(sel->points[1]) - center;
-                        double startLen = std::sqrt(startDir.x() * startDir.x() + startDir.y() * startDir.y());
-                        if (startLen > 1e-6) {
-                            sel->points[1] = center + startDir * (newArcRadius / startLen);
-                        }
-
-                        // Clamp sweep after radius change (minGap may have increased)
-                        double minGap = 2.0 * slotHalfWidth / newArcRadius;
-                        double maxSweep = 2.0 * M_PI - minGap;
-                        double startAng = std::atan2(sel->points[1].y - center.y(),
-                                                     sel->points[1].x - center.x());
-                        double endAng = std::atan2(sel->points[2].y - center.y(),
-                                                   sel->points[2].x - center.x());
-                        double sweep = endAng - startAng;
-                        if (sel->arcFlipped) {
-                            if (sweep > 0) sweep -= 2.0 * M_PI;
-                            else sweep += 2.0 * M_PI;
-                        } else {
-                            while (sweep > M_PI) sweep -= 2.0 * M_PI;
-                            while (sweep < -M_PI) sweep += 2.0 * M_PI;
-                        }
-                        if (std::abs(sweep) > maxSweep) {
-                            double clampedSweep = (sweep > 0) ? maxSweep : -maxSweep;
-                            double newStartAng = endAng - clampedSweep;
-                            sel->points[1] = center + QPointF(
-                                newArcRadius * std::cos(newStartAng),
-                                newArcRadius * std::sin(newStartAng));
-                        }
-                    }
-                }
-            } else if (sel->type == SketchEntityType::Polygon && sel->points.size() >= 2) {
-                // Polygon: points[0]=center, points[1]=radius handle
-                if (m_dragHandleIndex == 0) {
-                    QPointF delta = finalPos - sel->points[0];
-                    sel->points[0] = finalPos;
-                    sel->points[1] += delta;
-                } else if (m_dragHandleIndex == 1) {
-                    sel->points[1] = finalPos;
-                    sel->radius = QLineF(sel->points[0], sel->points[1]).length();
-                }
-            } else if (sel->type == SketchEntityType::Ellipse && sel->points.size() >= 2) {
-                // Ellipse: points[0]=center, points[1]=major axis point
-                if (m_dragHandleIndex == 0) {
-                    QPointF delta = finalPos - sel->points[0];
-                    sel->points[0] = finalPos;
-                    sel->points[1] += delta;
-                } else if (m_dragHandleIndex == 1) {
-                    double oldMajor = sel->majorRadius;
-                    sel->points[1] = finalPos;
-                    sel->majorRadius = QLineF(sel->points[0], finalPos).length();
-                    // Scale minor radius proportionally to maintain aspect ratio
-                    if (oldMajor > 1e-6) {
-                        sel->minorRadius *= sel->majorRadius / oldMajor;
-                    }
-                }
-            } else if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
-                // --- Group-aware Line handle drag ---
-                // Three cases:
-                //  1. FixedPoint corner of a group  → translate group
-                //  2. Other corner of a group       → rotate/resize via solver
-                //     (the permanent FixedPoint already anchors the pivot,
-                //      so NO temporary FixedPoint is added — that would
-                //      over-constrain the system)
-                //  3. Standalone line / entered group → classic resize with
-                //     temporary FixedPoint on the non-dragged endpoint.
-
-                bool inGroupOutside = (sel->groupId >= 0
-                                       && m_enteredGroupId < 0);
-
-                // Detect whether the dragged point is at the group's
-                // FixedPoint anchor (only relevant for case 1).
-                bool isFixedPointDrag = false;
-                if (inGroupOutside) {
-                    QPointF dragPt = sel->points[m_dragHandleIndex];
-                    for (const auto& c : m_constraints) {
-                        if (c.type != ConstraintType::FixedPoint || !c.enabled
-                            || c.entityIds.empty())
-                            continue;
-                        const SketchEntity* fpEnt = entityById(c.entityIds[0]);
-                        if (!fpEnt || fpEnt->groupId != sel->groupId)
-                            continue;
-                        int pi = hobbycad::valueAt(c.pointIndices, 0, 0);
-                        if (pi < fpEnt->points.size()) {
-                            double dx = fpEnt->points[pi].x - dragPt.x();
-                            double dy = fpEnt->points[pi].y - dragPt.y();
-                            if (dx * dx + dy * dy < 1e-4) {
-                                isFixedPointDrag = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (isFixedPointDrag) {
-                    // Case 1 — Translate the entire group.
-                    // Rigid-body move preserves all internal constraints
-                    // by construction so no solver call is needed during
-                    // the drag.  The solver runs once on mouse-release.
-                    QPointF delta = finalPos - sel->points[m_dragHandleIndex];
-                    int gid = sel->groupId;
-                    for (auto& e : m_entities) {
-                        if (e.groupId != gid) continue;
-                        for (auto& pt : e.points)
-                            pt += delta;
-                    }
-                    // Shift constraint labels belonging to this group
-                    for (const auto& g : m_groups) {
-                        if (g.id != gid) continue;
-                        for (int cid : g.constraintIds) {
-                            SketchConstraint* cc = constraintById(cid);
-                            if (cc && cc->labelVisible)
-                                cc->labelPosition += delta;
-                        }
-                        break;
-                    }
-                } else if (inGroupOutside) {
-                    // Case 2 — Rotate around the group's FixedPoint pivot.
-                    // Compute the rotation from (pivot→oldPos) to
-                    // (pivot→finalPos) and apply it to every point in the
-                    // group.  This gives the solver a near-exact initial
-                    // guess so it converges on the first iteration.
-
-                    // Find the pivot (FixedPoint anchor in the group).
-                    QPointF pivot;
-                    bool foundPivot = false;
-                    for (const auto& c : m_constraints) {
-                        if (c.type != ConstraintType::FixedPoint
-                            || !c.enabled || c.entityIds.empty())
-                            continue;
-                        const SketchEntity* fpEnt = entityById(c.entityIds[0]);
-                        if (!fpEnt || fpEnt->groupId != sel->groupId)
-                            continue;
-                        int pi = hobbycad::valueAt(c.pointIndices, 0, 0);
-                        if (pi < fpEnt->points.size()) {
-                            pivot = fpEnt->points[pi];
-                            foundPivot = true;
-                            break;
-                        }
-                    }
-
-                    QPointF oldPos = sel->points[m_dragHandleIndex];
-                    int gid = sel->groupId;
-
-                    if (foundPivot) {
-                        QPointF oldVec = oldPos - pivot;
-                        QPointF newVec = finalPos - pivot;
-                        double oldLen = std::sqrt(oldVec.x() * oldVec.x()
-                                                  + oldVec.y() * oldVec.y());
-                        double newLen = std::sqrt(newVec.x() * newVec.x()
-                                                  + newVec.y() * newVec.y());
-
-                        if (oldLen > 1e-6 && newLen > 1e-6) {
-                            double oldAng = std::atan2(oldVec.y(), oldVec.x());
-                            double newAng = std::atan2(newVec.y(), newVec.x());
-                            double dA = newAng - oldAng;
-                            double cosA = std::cos(dA);
-                            double sinA = std::sin(dA);
-
-                            // Rotate all entity points around the pivot
-                            for (auto& e : m_entities) {
-                                if (e.groupId != gid) continue;
-                                for (auto& pt : e.points) {
-                                    QPointF r = QPointF(pt) - pivot;
-                                    pt = pivot + QPointF(
-                                        r.x() * cosA - r.y() * sinA,
-                                        r.x() * sinA + r.y() * cosA);
-                                }
-                            }
-                            // Rotate constraint labels too
-                            for (const auto& g : m_groups) {
-                                if (g.id != gid) continue;
-                                for (int cid : g.constraintIds) {
-                                    SketchConstraint* cc = constraintById(cid);
-                                    if (cc && cc->labelVisible) {
-                                        QPointF r = QPointF(cc->labelPosition) - pivot;
-                                        cc->labelPosition = pivot + QPointF(
-                                            r.x() * cosA - r.y() * sinA,
-                                            r.x() * sinA + r.y() * cosA);
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    } else {
-                        // No pivot found — fall back to moving just the
-                        // dragged point and its coincident neighbours.
-                        sel->points[m_dragHandleIndex] = finalPos;
-                        const double coinEps = 1e-4;
-                        for (auto& e : m_entities) {
-                            if (e.groupId != gid || e.id == sel->id)
-                                continue;
-                            for (int pi = 0; pi < e.points.size(); ++pi) {
-                                double dx = e.points[pi].x - oldPos.x();
-                                double dy = e.points[pi].y - oldPos.y();
-                                if (dx * dx + dy * dy < coinEps)
-                                    e.points[pi] = finalPos;
-                            }
-                        }
-                    }
-                    solveConstraints();
-                } else {
-                    // Case 3 — Standalone line or entered-group member.
-                    // Classic resize: temporary FixedPoint on the
-                    // non-dragged endpoint tells the solver which end
-                    // is anchored.
-
-                    int fixedIdx = (m_dragHandleIndex == 0) ? 1 : 0;
-
-                    // Find the Distance constraint (if any) for label tracking
-                    SketchConstraint* distConstraint = findDrivingConstraint(sel->id, ConstraintType::Distance);
-
-                    // Capture label's perpendicular offset from OLD orientation
-                    double labelPerpOffset = 0.0;
-                    if (distConstraint) {
-                        QPointF oldAlong = QPointF(sel->points[1]) - QPointF(sel->points[0]);
-                        double oldLen = std::sqrt(oldAlong.x() * oldAlong.x() + oldAlong.y() * oldAlong.y());
-                        if (oldLen > 1e-6) {
-                            QPointF oldPerp(-oldAlong.y() / oldLen, oldAlong.x() / oldLen);
-                            QPointF oldMid = (QPointF(sel->points[0]) + QPointF(sel->points[1])) / 2.0;
-                            QPointF ld = QPointF(distConstraint->labelPosition) - oldMid;
-                            labelPerpOffset = ld.x() * oldPerp.x() + ld.y() * oldPerp.y();
-                        }
-                    }
-
-                    // Move the dragged point, and propagate to coincident
-                    // neighbours in the same group so the shape can't
-                    // open at shared corners (entered-group editing).
-                    QPointF prevPos = sel->points[m_dragHandleIndex];
-                    sel->points[m_dragHandleIndex] = finalPos;
-
-                    if (sel->groupId >= 0) {
-                        const double coinEps = 1e-4;
-                        for (auto& e : m_entities) {
-                            if (e.groupId != sel->groupId || e.id == sel->id)
-                                continue;
-                            for (int pi = 0; pi < e.points.size(); ++pi) {
-                                double dx = e.points[pi].x - prevPos.x();
-                                double dy = e.points[pi].y - prevPos.y();
-                                if (dx * dx + dy * dy < coinEps)
-                                    e.points[pi] = finalPos;
-                            }
-                        }
-                    }
-
-                    // Add temporary FixedPoint constraint on the non-dragged
-                    // endpoint, solve, then remove it.
-                    if (!m_constraints.isEmpty()) {
-                        SketchConstraint pinConstraint;
-                        pinConstraint.id = -999;  // temporary ID
-                        pinConstraint.type = ConstraintType::FixedPoint;
-                        pinConstraint.entityIds.push_back(sel->id);
-                        pinConstraint.pointIndices.push_back(fixedIdx);
-                        pinConstraint.isDriving = true;
-                        pinConstraint.enabled = true;
-                        pinConstraint.satisfied = true;
-                        pinConstraint.labelVisible = false;
-
-                        m_constraints.append(pinConstraint);
-                        solveConstraints();
-                        // Remove the temporary constraint
-                        m_constraints.erase(
-                            std::remove_if(m_constraints.begin(), m_constraints.end(),
-                                           [](const SketchConstraint& c) { return c.id == -999; }),
-                            m_constraints.end());
-                    }
-
-                    // Reposition label from FINAL line orientation
-                    if (distConstraint) {
-                        // Re-find distConstraint — pointer may be stale after
-                        // m_constraints append/erase
-                        distConstraint = findDrivingConstraint(sel->id, ConstraintType::Distance);
-                        if (distConstraint) {
-                            QPointF newAlong = sel->points[1] - sel->points[0];
-                            double newLen = std::sqrt(newAlong.x() * newAlong.x() + newAlong.y() * newAlong.y());
-                            if (newLen > 1e-6) {
-                                QPointF newPerp(-newAlong.y() / newLen, newAlong.x() / newLen);
-                                QPointF newMid = (sel->points[0] + sel->points[1]) / 2.0;
-                                distConstraint->labelPosition = newMid + newPerp * labelPerpOffset;
-                            }
-                        }
-                    }
-                }
-            } else if (sel->type == SketchEntityType::Text && sel->points.size() >= 2) {
-                // Text: handle 0 = anchor (translate), handle 1 = rotation
-                if (m_dragHandleIndex == 0) {
-                    QPointF delta = finalPos - sel->points[0];
-                    sel->points[0] += delta;
-                    sel->points[1] += delta;
-                } else if (m_dragHandleIndex == 1) {
-                    // Compute rotation angle from anchor to drag position
-                    QPointF anchor(sel->points[0]);
-                    QPointF dir = finalPos - anchor;
-                    double angle = qRadiansToDegrees(std::atan2(dir.y(), dir.x()));
-                    sel->textRotation = angle;
-                    // Keep handle at same distance along new angle
-                    double dist = std::max(sel->fontSize * 2.0,
-                                           sel->fontSize * static_cast<double>(sel->text.length()) * 0.6);
-                    double rad = qDegreesToRadians(angle);
-                    sel->points[1] = {anchor.x() + dist * std::cos(rad),
-                                      anchor.y() + dist * std::sin(rad)};
-                }
             } else {
-                // For other entities, just move the point directly
-                sel->points[m_dragHandleIndex] = finalPos;
+                applyHandleDrag(*sel, m_dragHandleIndex, finalPos, ctrlPressed,
+                                shiftPressed, altHeld);
             }
 
             // Non-line entities: run solver normally
             // (Lines use temporary FixedPoint pins above.)
-            // Skip solver for tangent arcs during handle drag — the solver
+            // Skip solver for tangent arcs during handle drag: the solver
             // doesn't know about the tangency relationship and would move
             // the center/tangent-point off the entity.  The solver still
             // runs on mouse-release (after the drag ends).
@@ -7065,13 +3568,31 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
                     && !m_constraints.isEmpty()
                     && !(sel->type == SketchEntityType::Arc
                          && sel->tangentEntityId >= 0)) {
-                solveConstraints();
+                // Anchor the dragged handle (like the line handle-drag path) so
+                // the solver makes a MINIMAL move from the current geometry
+                // rather than an unanchored re-solve. Unanchored, an
+                // under-constrained tangent arc had nothing holding its size, so
+                // the solver could collapse the radius toward zero (arc
+                // "disappears") or shrink the partner line. (Aaron)
+                if (m_dragHandleIndex >= 0
+                        && m_dragHandleIndex < static_cast<int>(sel->points.size())) {
+                    solveHandleDragStabilized(sel->id, m_dragHandleIndex,
+                                              QPointF(sel->points[m_dragHandleIndex]));
+                } else {
+                    solveConstraints();
+                }
             }
 
             // Emit real-time property update
             if (m_selectedId >= 0) {
                 emit entityDragging(m_selectedId);
             }
+
+            // If the dragged entity is a slot's centerline (dragged directly,
+            // not via the slot's own grip), the slot must re-derive live too;
+            // otherwise its phantom lags the centerline until release (Aaron).
+            // Dirty-checked, so a drag that touches no path pays nothing.
+            updateSlotsFromPaths();
 
             update();
         }
@@ -7082,28 +3603,23 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
         updateEntity(m_currentMouseWorld);
 
         // When in pre-fill selectAll mode, mouse movement keeps live tracking.
-        // Once the user starts typing (selectAll becomes false), don't interfere —
+        // Once the user starts typing (selectAll becomes false), don't interfere;
         // otherwise mouse tremor during keyboard input resets their typed value.
         // (selectAll=true is maintained as a no-op; selectAll=false is left alone.)
 
         // Check if we've moved enough to consider this a drag (5 pixels threshold)
         if (!m_wasDragged) {
             QPointF delta = event->pos() - m_drawStartPos;
-            if (delta.manhattanLength() > 5.0) {
+            if (delta.manhattanLength() > kDrawDragThresholdPx) {
                 m_wasDragged = true;
             }
         }
     }
 
-    // Update cursor when hovering over handles in Select mode
-    if (m_activeTool == SketchTool::Select && !m_isPanning && !m_isDraggingHandle) {
-        int handleIdx = hitTestHandle(worldPos);
-        if (handleIdx >= 0) {
-            setCursor(Qt::ArrowCursor);
-        } else {
-            setCursor(Qt::ArrowCursor);
-        }
-    }
+    // Select-mode hover: the cursor is the plain arrow whether or not a handle
+    // is under it (the former hit test only ever chose Arrow either way).
+    if (m_activeTool == SketchTool::Select && !m_isPanning && !m_isDraggingHandle)
+        setCursor(Qt::ArrowCursor);
 
     update();
 }
@@ -7117,7 +3633,52 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
     }
 
     if (event->button() == Qt::LeftButton) {
+        // An armed point-press that never moved is a point SELECTION.
+        if (m_pointPressArmed) {
+            m_pointPressArmed = false;
+            const bool ctrl  = m_pointPressMods & Qt::ControlModifier;
+            const bool shift = m_pointPressMods & Qt::ShiftModifier;
+            selectPoint(m_pointPressEntity, m_pointPressIndex,
+                        /*addToSelection=*/shift, /*toggle=*/ctrl);
+            return;
+        }
+
+        // A non-drawing tool that took the press (the Trim drag-through) ends
+        // its gesture here; drawing tools finish through the m_isDrawing path
+        // below, so this only fires when nothing is being drawn.
+        if (!m_isDrawing && activeHandler()
+            && activeHandler()->mouseRelease(*this, event, screenToWorld(event->pos()))) {
+            return;
+        }
+
+        // Deferred line-chaining finish (F-3): a drag off the chain point
+        // sweeps a tangent arc against the previous line; a plain click lays a
+        // straight segment.
+        if (m_lineChainPressActive) {
+            m_lineChainPressActive = false;
+            updateEntity(m_currentMouseWorld);
+            const SketchEntity* prev = entityById(m_chainFromEntityId);
+            if (m_wasDragged && prev && prev->type == SketchEntityType::Line) {
+                commitTangentArcSegment();
+            } else {
+                recordEndpointSnap();   // closing on an existing point -> Coincident
+                finishEntity();
+            }
+            return;
+        }
         // Finish background drag
+        if (m_transformPivotDragging) {
+            m_transformPivotDragging = false;    // it stays where the last move (or the press) put it
+            setCursor(transformStarHit(event->pos()) ? Qt::OpenHandCursor : (m_transformPick != TransformPick::None ? Qt::CrossCursor : Qt::ArrowCursor));
+            update();
+            return;
+        }
+        if (m_freeMoveHandle != FreeMoveHandle::None) {
+            m_freeMoveHandle = FreeMoveHandle::None;   // the preview stays until Apply
+            setCursor(Qt::OpenHandCursor);
+            update();
+            return;
+        }
         if (m_bgDragHandle != BackgroundHandle::None) {
             m_bgDragHandle = BackgroundHandle::None;
             emit backgroundImageChanged(m_backgroundImage);
@@ -7133,9 +3694,12 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
             QRectF selRect = QRectF(m_windowSelectStart, m_windowSelectEnd).normalized();
 
             // Only select if the rectangle has some size (not just a click)
-            if (selRect.width() > 2.0 / m_zoom && selRect.height() > 2.0 / m_zoom) {
-                bool ctrlHeld = (event->modifiers() & Qt::ControlModifier);
-                selectEntitiesInRect(selRect, m_windowSelectCrossing, ctrlHeld);
+            if (selRect.width() > kMinRubberBandPx / m_zoom && selRect.height() > kMinRubberBandPx / m_zoom) {
+                // Ctrl or Shift both keep the existing selection (rubber-band
+                // adds); plain drag replaces.
+                bool keepSelection = (event->modifiers() & Qt::ControlModifier)
+                                   || (event->modifiers() & Qt::ShiftModifier);
+                selectEntitiesInRect(selRect, m_windowSelectCrossing, keepSelection);
             }
 
             update();
@@ -7152,8 +3716,35 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
             return;
         }
 
+        m_bodyDragArmed = false;
+        if (m_isDraggingBody) {
+            m_isDraggingBody = false;
+            setCursor(Qt::ArrowCursor);
+            std::vector<sketch::UndoCommand> subs;
+            for (const SketchEntity& before : m_dragSnapshotEntities) {
+                const SketchEntity* now = entityById(before.id);
+                if (!now) continue;
+                if (now->points != before.points || now->radius != before.radius
+                    || now->startAngle != before.startAngle || now->sweepAngle != before.sweepAngle)
+                    subs.push_back(sketch::UndoCommand::modifyEntity(before, *now, "Move"));
+            }
+            for (const SketchConstraint& before : m_dragSnapshotConstraints) {
+                const SketchConstraint* now = constraintById(before.id);
+                if (now && now->labelPosition != before.labelPosition)
+                    subs.push_back(sketch::UndoCommand::modifyConstraint(before, *now, "Move label"));
+            }
+            if (subs.size() == 1) pushUndoCommand(subs.front());
+            else if (!subs.empty()) pushUndoCommand(sketch::UndoCommand::compound(subs, "Move"));
+            m_dragSnapshotEntities.clear();
+            m_dragSnapshotConstraints.clear();
+            solveConstraints();
+            if (m_bodyDragEntityId >= 0) emit entityModified(m_bodyDragEntityId);
+            m_bodyDragEntityId = -1;
+            return;
+        }
         if (m_isDraggingHandle) {
             // Finish handle drag - emit modified signal
+            const int draggedHandle = m_dragHandleIndex;   // before the reset below
             m_isDraggingHandle = false;
             m_dragHandleIndex = -1;
             m_snapAxis = SnapAxis::None;  // Reset axis lock
@@ -7161,8 +3752,29 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
             m_ctrlWasPressed = false;
             setCursor(Qt::ArrowCursor);
 
-            // Record undo command for the drag if geometry changed
-            if (m_selectedId >= 0) {
+            // Record undo command for the drag if geometry changed.
+            // A group drag changed every member: record them all in one
+            // compound so a single Ctrl+Z restores the whole group.
+            if (!m_dragOriginalGroupEntities.isEmpty()) {
+                std::vector<sketch::UndoCommand> subs;
+                for (const SketchEntity& before : m_dragOriginalGroupEntities) {
+                    const SketchEntity* now = entityById(before.id);
+                    if (!now) continue;
+                    if (now->points != before.points || now->radius != before.radius ||
+                        now->startAngle != before.startAngle || now->sweepAngle != before.sweepAngle)
+                        subs.push_back(sketch::UndoCommand::modifyEntity(before, *now, "Move group member"));
+                }
+                for (const SketchConstraint& before : m_dragOriginalGroupConstraints) {
+                    const SketchConstraint* now = constraintById(before.id);
+                    if (now && now->labelPosition != before.labelPosition)
+                        subs.push_back(sketch::UndoCommand::modifyConstraint(before, *now, "Move group label"));
+                }
+                if (!subs.empty())
+                    pushUndoCommand(sketch::UndoCommand::compound(subs, "Move group"));
+                m_dragOriginalGroupEntities.clear();
+                m_dragOriginalGroupConstraints.clear();
+                if (m_selectedId >= 0) emit entityModified(m_selectedId);
+            } else if (m_selectedId >= 0) {
                 SketchEntity* entity = entityById(m_selectedId);
                 if (entity) {
                     sketch::Entity current = *entity;
@@ -7173,6 +3785,18 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
                         pushUndoCommand(sketch::UndoCommand::modifyEntity(
                             m_dragOriginalEntity, current, "Resize"));
                     }
+                    // If the dragged point landed on another point (via snap),
+                    // join them with a Coincident, the constraint the join
+                    // implies. Added before the solve below so it is enforced.
+                    createCoincidenceOnDrag(m_selectedId, draggedHandle);
+                    // Opening a circle (one 360-degree arc with both ends at the
+                    // cut) by dragging one end away: the end left in place ties
+                    // to whatever entity sits at the cut. The moving end may have
+                    // swapped during the drag, so use the current dragged index
+                    // (its twin is the end that stayed at the cut).
+                    if (m_openingFullArc)
+                        tieOpenedArcEndOnDrag(m_selectedId, m_openArcDraggedIndex);
+                    m_openingFullArc = false;
                 }
                 emit entityModified(m_selectedId);
             }
@@ -7198,359 +3822,23 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
         }
 
         if (m_isDrawing) {
-            // Point tool: finish immediately on release
-            if (m_activeTool == SketchTool::Point) {
-                // Update point position to release location and finish
-                QPointF worldPos = screenToWorld(event->pos());
-                m_pendingEntity.points[0] = snapPoint(worldPos);
-                finishEntity();
+            // Every tool-specific release path now lives in its handler:
+            // Point commits here, the staged modes (3-point arc, arc slot,
+            // 3-point and parallelogram rectangle, 3-point circle) place
+            // their next point, freeform polygon adds a vertex, and tangent
+            // arc deliberately consumes the release without finishing.
+            if (activeHandler()
+                && activeHandler()->mouseRelease(*this, event,
+                                                 screenToWorld(event->pos()))) {
                 return;
             }
 
-            // Multi-click tools: arc (3-point, center-start-end, start-end-radius), 3-point rectangle, arc slot, and spline
-            if (m_activeTool == SketchTool::Arc &&
-                (m_arcMode == ArcMode::ThreePoint || m_arcMode == ArcMode::CenterStartEnd || m_arcMode == ArcMode::StartEndRadius)) {
-                // Only add point on release if user dragged (click already added point in mousePressEvent)
-                if (m_wasDragged) {
-                    QPointF worldPos = screenToWorld(event->pos());
-                    QPointF snapped = snapPoint(worldPos);
-
-                    if (m_arcMode == ArcMode::CenterStartEnd) {
-                        // Stage 1: locked Radius constrains distance from center
-                        if (m_pendingEntity.points.size() == 1) {
-                            double lockedR = getLockedDim(0);
-                            if (lockedR > 0) {
-                                QPointF center = m_pendingEntity.points[0];
-                                QPointF dir = snapped - center;
-                                double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                                if (len > 1e-6)
-                                    snapped = center + dir * (lockedR / len);
-                            }
-                        }
-                        // Stage 2: constrain to arc radius + apply locked sweep angle
-                        if (m_pendingEntity.points.size() == 2) {
-                            QPointF center = m_pendingEntity.points[0];
-                            QPointF start = m_pendingEntity.points[1];
-                            double radius = QLineF(center, start).length();
-                            double angle = std::atan2(snapped.y() - center.y(), snapped.x() - center.x());
-                            double lockedSweep = getLockedDim(0);
-                            if (lockedSweep != -1.0) {
-                                double startAngle = std::atan2(start.y() - center.y(), start.x() - center.x());
-                                double defaultSweep = angle - startAngle;
-                                while (defaultSweep > M_PI) defaultSweep -= 2.0 * M_PI;
-                                while (defaultSweep < -M_PI) defaultSweep += 2.0 * M_PI;
-                                if (m_arcSlotFlipped) {
-                                    defaultSweep = (defaultSweep > 0) ? defaultSweep - 2.0 * M_PI : defaultSweep + 2.0 * M_PI;
-                                }
-                                double sign = (defaultSweep >= 0) ? 1.0 : -1.0;
-                                angle = startAngle + sign * qDegreesToRadians(std::abs(lockedSweep));
-                            }
-                            snapped = center + QPointF(radius * std::cos(angle), radius * std::sin(angle));
-                        }
-                    } else if (m_arcMode == ArcMode::StartEndRadius) {
-                        int pStage = m_previewPoints.size();
-                        if (pStage == 1) {
-                            // Stage 1: locked Chord Length/Angle
-                            QPointF start = m_previewPoints[0];
-                            double lockedLen = getLockedDim(0);
-                            double lockedAng = getLockedDim(1);
-                            if (lockedLen > 0 || lockedAng != -1.0) {
-                                QPointF dir = snapped - start;
-                                double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                                double mouseAng = std::atan2(dir.y(), dir.x());
-                                double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                                double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                                if (useLen > 0.001)
-                                    snapped = start + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                            }
-                        } else if (pStage >= 2) {
-                            // Stage 2: locked Sweep constrains perp bisector position
-                            double lockedSweep = getLockedDim(0);
-                            if (lockedSweep != -1.0) {
-                                QPointF start = m_previewPoints[0];
-                                QPointF end = m_previewPoints[1];
-                                QPointF midChord = (start + end) / 2.0;
-                                double chordLength = QLineF(start, end).length();
-                                if (chordLength > 0.001) {
-                                    QPointF chordDir = (end - start) / chordLength;
-                                    QPointF perpDir(-chordDir.y(), chordDir.x());
-                                    double halfSweepRad = qDegreesToRadians(std::abs(lockedSweep)) / 2.0;
-                                    double tanHalf = std::tan(halfSweepRad);
-                                    double projDist = (tanHalf > 1e-6) ? (chordLength / 2.0) / tanHalf : 1e6;
-                                    QPointF toMouse = snapped - midChord;
-                                    double mouseProjDist = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-                                    if (m_arcSlotFlipped) mouseProjDist = -mouseProjDist;
-                                    double sign = (mouseProjDist >= 0) ? 1.0 : -1.0;
-                                    if (m_arcSlotFlipped) sign = -sign;
-                                    snapped = midChord + perpDir * sign * projDist;
-                                }
-                            }
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition
-                        update();
-                    }
-                } else {
-                    // Just a click - point was already added on press
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    }
-                }
-            } else if (m_activeTool == SketchTool::Slot &&
-                       (m_slotMode == SlotMode::ArcRadius || m_slotMode == SlotMode::ArcEnds)) {
-                // Arc slot: supports both click-click-click and click-drag modes
-                if (m_wasDragged) {
-                    QPointF worldPos = screenToWorld(event->pos());
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // ArcRadius stage 1: locked Radius constrains start distance
-                    if (m_slotMode == SlotMode::ArcRadius && m_pendingEntity.points.size() == 1) {
-                        double lockedR = getLockedDim(0);
-                        if (lockedR > 0) {
-                            QPointF arcCenter = m_pendingEntity.points[0];
-                            QPointF dir = snapped - arcCenter;
-                            double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            if (len > 1e-6)
-                                snapped = arcCenter + dir * (lockedR / len);
-                        }
-                    }
-
-                    // ArcRadius stage 2: constrain to arc + apply locked sweep angle
-                    if (m_slotMode == SlotMode::ArcRadius && m_pendingEntity.points.size() == 2) {
-                        QPointF arcCenterWorld = m_pendingEntity.points[0];
-                        QPointF startWorld = m_pendingEntity.points[1];
-                        double arcRadius = QLineF(arcCenterWorld, startWorld).length();
-                        double mouseAngle = std::atan2(snapped.y() - arcCenterWorld.y(),
-                                                       snapped.x() - arcCenterWorld.x());
-                        double lockedSweep = getLockedDim(0);
-                        if (lockedSweep != -1.0) {
-                            double startAngle = std::atan2(startWorld.y() - arcCenterWorld.y(),
-                                                           startWorld.x() - arcCenterWorld.x());
-                            double angleDiff = mouseAngle - startAngle;
-                            while (angleDiff > M_PI) angleDiff -= 2.0 * M_PI;
-                            while (angleDiff < -M_PI) angleDiff += 2.0 * M_PI;
-                            if (m_arcSlotFlipped) {
-                                angleDiff = (angleDiff > 0) ? angleDiff - 2.0 * M_PI : angleDiff + 2.0 * M_PI;
-                            }
-                            double sign = (angleDiff >= 0) ? 1.0 : -1.0;
-                            mouseAngle = startAngle + sign * qDegreesToRadians(std::abs(lockedSweep));
-                        }
-                        snapped = arcCenterWorld + QPointF(arcRadius * std::cos(mouseAngle),
-                                                           arcRadius * std::sin(mouseAngle));
-                    }
-
-                    // ArcEnds stage 2: locked sweep constrains arc center on perp bisector
-                    if (m_slotMode == SlotMode::ArcEnds && m_pendingEntity.points.size() == 2) {
-                        double lockedSweep = getLockedDim(0);
-                        if (lockedSweep != -1.0) {
-                            QPointF start = m_pendingEntity.points[0];
-                            QPointF end = m_pendingEntity.points[1];
-                            QPointF midpoint = (start + end) / 2.0;
-                            double chordLen = QLineF(start, end).length();
-                            if (chordLen > 0.001) {
-                                QPointF startToEnd = end - start;
-                                QPointF perpDir(-startToEnd.y() / chordLen, startToEnd.x() / chordLen);
-                                double halfSweepRad = qDegreesToRadians(std::abs(lockedSweep)) / 2.0;
-                                double tanHalf = std::tan(halfSweepRad);
-                                double projDist = (tanHalf > 1e-6) ? (chordLen / 2.0) / tanHalf : 1e6;
-                                QPointF mouseToMid = snapped - midpoint;
-                                double mouseProjDist = mouseToMid.x() * perpDir.x() + mouseToMid.y() * perpDir.y();
-                                double sign = (mouseProjDist >= 0) ? 1.0 : -1.0;
-                                snapped = midpoint + perpDir * sign * projDist;
-                            }
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition
-                        update();
-                    }
-                } else {
-                    // User clicked without dragging - point already added on press
-                    update();
-                }
-            } else if (m_activeTool == SketchTool::Rectangle &&
-                       m_rectMode == RectMode::ThreePoint) {
-                // 3-point rectangle: supports both click-click-click and click-drag modes
-                if (m_wasDragged) {
-                    QPointF worldPos = screenToWorld(event->pos());
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // Apply locked dimension constraints
-                    int pStage = m_previewPoints.size();
-                    if (pStage == 1) {
-                        QPointF p1 = m_previewPoints[0];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - p1;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                            if (useLen > 0.001)
-                                snapped = p1 + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    } else if (pStage >= 2) {
-                        double lockedW = getLockedDim(0);
-                        if (lockedW > 0) {
-                            QPointF p1 = m_previewPoints[0];
-                            QPointF p2 = m_previewPoints[1];
-                            QPointF edge = p2 - p1;
-                            double edgeLen = std::sqrt(edge.x() * edge.x() + edge.y() * edge.y());
-                            if (edgeLen > 0.001) {
-                                QPointF edgeDir = edge / edgeLen;
-                                QPointF perpDir(-edgeDir.y(), edgeDir.x());
-                                QPointF toMouse = snapped - p1;
-                                double perpDot = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-                                double sign = (perpDot >= 0) ? 1.0 : -1.0;
-                                double edgeDot = toMouse.x() * edgeDir.x() + toMouse.y() * edgeDir.y();
-                                snapped = p1 + edgeDir * edgeDot + perpDir * sign * lockedW;
-                            }
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition
-                        update();
-                    }
-                } else {
-                    // User clicked without dragging - point already added on press
-                    // Just update the display
-                    update();
-                }
-            } else if (m_activeTool == SketchTool::Rectangle &&
-                       m_rectMode == RectMode::Parallelogram) {
-                // Parallelogram mode: supports both click-click-click and click-drag modes
-                if (m_wasDragged) {
-                    // User dragged - add the release point
-                    QPointF worldPos = screenToWorld(event->pos());
-                    QPointF snapped = snapPoint(worldPos);
-
-                    // Apply locked dimension constraints
-                    int pStage = m_previewPoints.size();
-                    if (pStage == 1) {
-                        QPointF p1 = m_previewPoints[0];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - p1;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                            if (useLen > 0.001)
-                                snapped = p1 + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    } else if (pStage >= 2) {
-                        QPointF p1 = m_previewPoints[0];
-                        QPointF p2 = m_previewPoints[1];
-                        double lockedLen = getLockedDim(0);
-                        double lockedAng = getLockedDim(1);
-                        if (lockedLen > 0 || lockedAng != -1.0) {
-                            QPointF dir = snapped - p2;
-                            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                            double mouseAng = std::atan2(dir.y(), dir.x());
-                            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                            double useAng;
-                            if (lockedAng != -1.0) {
-                                double edge1Dir = std::atan2(p1.y() - p2.y(), p1.x() - p2.x());
-                                double dir1 = edge1Dir + qDegreesToRadians(lockedAng);
-                                double dir2 = edge1Dir - qDegreesToRadians(lockedAng);
-                                double diff1 = std::abs(std::remainder(mouseAng - dir1, 2.0 * M_PI));
-                                double diff2 = std::abs(std::remainder(mouseAng - dir2, 2.0 * M_PI));
-                                useAng = (diff1 <= diff2) ? dir1 : dir2;
-                            } else {
-                                useAng = mouseAng;
-                            }
-                            if (useLen > 0.001)
-                                snapped = p2 + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-                        }
-                    }
-
-                    m_pendingEntity.points.push_back(snapped);
-                    m_previewPoints.append(snapped);
-                    if (m_pendingEntity.points.size() >= 3) {
-                        finishEntity();
-                    } else {
-                        initDimFields();  // Stage transition
-                        update();
-                    }
-                } else {
-                    // User clicked without dragging - point already added on press
-                    // Just update the display
-                    update();
-                }
-            } else if (m_activeTool == SketchTool::Circle &&
-                       m_circleMode == CircleMode::ThreePoint) {
-                // Three-point circle: click-click-click mode
-                // Points are added on press in mousePressEvent
-                // On release, just check if we have enough points
-                if (m_pendingEntity.points.size() >= 3) {
-                    finishEntity();
-                } else {
-                    update();
-                }
-            } else if (m_activeTool == SketchTool::Spline) {
-                // Spline: add point and continue (finish with right-click or Enter)
-                QPointF worldPos = screenToWorld(event->pos());
-                QPointF snapped = snapPoint(worldPos);
-                m_pendingEntity.points.push_back(snapped);
-                m_previewPoints.append(snapped);  // Also update preview points
-                update();
-                // Don't finish - user needs to right-click or press Enter
-            } else if (m_activeTool == SketchTool::Polygon
-                       && m_polygonMode == PolygonMode::Freeform) {
-                // Freeform polygon: click to add vertex, close by clicking start
-                QPointF worldPos = screenToWorld(event->pos());
-                QPointF snapped = snapPoint(worldPos);
-
-                // Check if close to first point to close the polygon
-                if (m_previewPoints.size() >= 3) {
-                    double distToStart = QLineF(snapped, m_previewPoints[0]).length();
-                    double snapDist = m_entitySnapTolerance / m_zoom;
-                    if (distToStart < snapDist) {
-                        // Close the polygon — don't add the click as a new point
-                        finishEntity();
-                        return;
-                    }
-                }
-
-                // Add new vertex
-                m_pendingEntity.points.push_back(snapped);
-                m_previewPoints.append(snapped);
-                update();
-                // Don't finish - user continues clicking or right-clicks/Enter
-            } else if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::Tangent) {
-                // Tangent arc: first click selects target, second click sets endpoint
-                // Don't finish on drag-release after first click - wait for second click
-                // The second click is handled in mousePressEvent
-            } else {
-                // Two-point tools (Line, Rectangle, Circle, Slot, Ellipse, Polygon)
-                // Support both click-drag and click-click modes
-                if (m_wasDragged) {
-                    // User dragged - finish the entity now
-                    finishEntity();
-                } else {
-                    // User clicked without dragging - wait for second click
-                    // The entity is already started, just continue showing preview
-                    // Second click will come through mousePressEvent which will
-                    // call finishEntity since m_isDrawing is already true
-                }
+            // Two-point tools (Line, Rectangle, Circle, Slot, Ellipse,
+            // Polygon) accept both click-drag and click-click. A drag ends
+            // the entity here; a plain click leaves it in progress so the
+            // second press finishes it.
+            if (m_wasDragged) {
+                finishEntity();
             }
         }
     }
@@ -7558,32 +3846,19 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
 
 void SketchCanvas::wheelEvent(QWheelEvent* event)
 {
-    // During drawing, scroll wheel adjusts entity parameters
-    if (m_isDrawing) {
-        int delta = event->angleDelta().y() > 0 ? 1 : -1;
-
-        switch (m_activeTool) {
-        case SketchTool::Slot:
-            // Adjust slot width (radius) by 1mm per scroll step
-            m_pendingEntity.radius = qMax(1.0, m_pendingEntity.radius + delta);
+    // The active tool handles the wheel; if it declines, fall through to zoom.
+    if (SketchToolHandler* h = activeHandler()) {
+        if (h->wheel(*this, event)) {
             update();
             event->accept();
             return;
-
-        case SketchTool::Polygon:
-            // Adjust number of sides (3 to 64) — only for regular polygons
-            if (m_polygonMode != PolygonMode::Freeform) {
-                m_pendingEntity.sides = qBound(3, m_pendingEntity.sides + delta, 64);
-                update();
-                event->accept();
-                return;
-            }
-            break;
-
-        default:
-            break;
         }
     }
+
+    // (The per-tool wheel switch that used to live here is gone: Slot and
+    // Polygon now handle the wheel in their tool handlers, which are asked
+    // first, above.)
+
 
     // Zoom centered on mouse position
     QPointF worldPosBefore = screenToWorld(event->position().toPoint());
@@ -7601,7 +3876,7 @@ void SketchCanvas::wheelEvent(QWheelEvent* event)
 
 QPointF SketchCanvas::axisLockedSnapPoint(const QPointF& worldPos) const
 {
-    QPointF snapped = snapPoint(worldPos);
+    QPointF snapped = m_snapEngine.snapPoint(worldPos);
 
     if (m_snapAxis == SnapAxis::None)
         return snapped;
@@ -7609,6 +3884,153 @@ QPointF SketchCanvas::axisLockedSnapPoint(const QPointF& worldPos) const
     geometry::Axis axis = (m_snapAxis == SnapAxis::X) ? geometry::Axis::X : geometry::Axis::Y;
     return geometry::constrainToAxis(snapped, m_dragHandleOriginal, axis);
 }
+
+
+// =====================================================================
+//  Handle drag glue
+//
+//  The geometry itself lives in libhobbycad (sketch/handles.h).  These
+//  helpers cover what is genuinely GUI/model state: resolving driving
+//  constraints, keeping dimension labels attached, and propagating a
+//  moved point to coincident neighbors in the same group.
+// =====================================================================
+
+/// Reposition Radius/Diameter labels so they follow their circle.
+void SketchCanvas::moveCircleDimensionLabels(
+        const SketchEntity& sel, int handleIndex,
+        const sketch::HandleDragResult& drag)
+{
+    const QPointF oldCenter(drag.oldCenter);
+    const QPointF newCenter(drag.newCenter);
+    const QPointF centerDelta = newCenter - oldCenter;
+
+    for (auto& c : m_constraints) {
+        if (!c.labelVisible) continue;
+        if (c.type != ConstraintType::Radius
+            && c.type != ConstraintType::Diameter) continue;
+
+        for (int eid : c.entityIds) {
+            if (eid != sel.id) continue;
+
+            if (sel.points.size() == 2 && handleIndex >= 1) {
+                // Center-radius circle, perimeter dragged: the label keeps its
+                // distance from the center and turns to the perimeter point.
+                const QPointF dir = QPointF(sel.points[1]) - newCenter;
+                const double len = geometry::length(dir);
+                double labelDist = geometry::length(QPointF(c.labelPosition) - newCenter);
+                if (labelDist < geometry::kDegenerateLen) labelDist = sel.radius / 2.0;
+                if (len > geometry::kDegenerateLen) {
+                    const double newAngle = std::atan2(dir.y(), dir.x());
+                    c.labelPosition = geometry::polarPoint(newCenter, labelDist, newAngle);
+                    c.labelAngle = newAngle;
+                }
+            } else if (drag.diameterRotation) {
+                // The circle rotated about its fixed endpoint, so swing
+                // the label through the same angle instead of translating.
+                const QPointF oldOffset = QPointF(c.labelPosition) - oldCenter;
+                const double labelDist = geometry::length(oldOffset);
+                const double oldLabelAngle =
+                    std::atan2(oldOffset.y(), oldOffset.x());
+
+                const int fixedIdx = (handleIndex == 1) ? 2 : 1;
+                const QPointF oldFixedDir =
+                    QPointF(sel.points[fixedIdx]) - oldCenter;
+                const QPointF newFixedDir =
+                    QPointF(sel.points[fixedIdx]) - newCenter;
+                const double angleDelta =
+                    std::atan2(newFixedDir.y(), newFixedDir.x())
+                    - std::atan2(oldFixedDir.y(), oldFixedDir.x());
+
+                const double a = oldLabelAngle + angleDelta;
+                c.labelPosition = geometry::polarPoint(newCenter, labelDist, a);
+                c.labelAngle = a;
+            } else {
+                c.labelPosition += centerDelta;
+            }
+            break;
+        }
+    }
+}
+
+/// Move coincident points of sibling entities in the same group so the
+/// shape cannot open at a shared corner.
+void SketchCanvas::propagateCoincidentNeighbors(
+        const SketchEntity& sel, const QPointF& prevPos, const QPointF& newPos)
+{
+    if (sel.groupId < 0) return;
+
+    const double coinEps = geometry::kCoincidentTol;
+    for (auto& e : m_entities) {
+        if (e.groupId != sel.groupId || e.id == sel.id) continue;
+        for (std::size_t pi = 0; pi < e.points.size(); ++pi) {
+            const double dx = e.points[pi].x - prevPos.x();
+            const double dy = e.points[pi].y - prevPos.y();
+            if (dx * dx + dy * dy < coinEps)
+                e.points[pi] = newPos;
+        }
+    }
+}
+
+/// Resolve driving constraints, run the library handle-drag geometry,
+/// then apply the GUI-side consequences.
+void SketchCanvas::applyHandleDrag(SketchEntity& sel, int handleIndex,
+                                   const QPointF& finalPos, bool ctrlPressed,
+                                   bool shiftPressed, bool altPressed)
+{
+    sketch::HandleDragLocks locks;
+    if (shiftPressed) locks.slotEndMode = sketch::HandleDragLocks::SlotEndMode::ResizeAboutOther;
+    else if (altPressed) locks.slotEndMode = sketch::HandleDragLocks::SlotEndMode::FreeResize;
+    locks.fixedHandleIndex = m_fixedHandleIndex;
+    if (sel.type == SketchEntityType::Arc && sel.tangentEntityId >= 0)
+        locks.tangentHost = entityById(sel.tangentEntityId);
+
+    if (const SketchConstraint* rc =
+            findDrivingConstraint(sel.id, ConstraintType::Radius)) {
+        locks.radius = rc->value;
+    } else if (const SketchConstraint* dc =
+            findDrivingConstraint(sel.id, ConstraintType::Diameter)) {
+        locks.radius = dc->value / 2.0;
+    }
+
+    if (sel.type == SketchEntityType::Arc && handleIndex != 0) {
+        const int sweepGid = findSweepAngleGroupForArc(sel.id);
+        if (sweepGid >= 0) {
+            for (const auto& g : m_groups) {
+                if (g.id != sweepGid) continue;
+                for (int cid : g.constraintIds) {
+                    const SketchConstraint* c = constraintById(cid);
+                    if (c && c->type == ConstraintType::Angle
+                            && c->isDriving && c->enabled) {
+                        locks.sweepAngle = c->value;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    if (ctrlPressed) locks.angleSnapIncrement = M_PI / 4.0;
+
+    const sketch::HandleDragResult drag =
+        sketch::dragEntityHandle(sel, handleIndex, finalPos, locks);
+    if (!drag.changed) return;
+
+    if (sel.type == SketchEntityType::Circle) {
+        // A center-radius circle's perimeter drag moves no center but its
+        // label follows the perimeter point; see moveCircleDimensionLabels.
+        const bool perimFollow = sel.points.size() == 2 && handleIndex >= 1;
+        if (drag.centerMoved || perimFollow) moveCircleDimensionLabels(sel, handleIndex, drag);
+    } else if (sel.type == SketchEntityType::Arc && sel.points.size() >= 3) {
+        syncSweepAngleConstructionLines(sel);
+    }
+
+    if (drag.usedFallback) {
+        propagateCoincidentNeighbors(sel, QPointF(drag.previousHandlePos),
+                                      finalPos);
+    }
+}
+
 
 void SketchCanvas::applyCtrlSnapToHandle()
 {
@@ -7625,7 +4047,7 @@ void SketchCanvas::applyCtrlSnapToHandle()
         if (m_ctrlWasPressed && m_snapAxis != SnapAxis::None) {
             finalPos = axisLockedSnapPoint(m_lastRawMouseWorld);
         } else {
-            finalPos = snapPoint(m_lastRawMouseWorld);
+            finalPos = m_snapEngine.snapPoint(m_lastRawMouseWorld);
         }
     } else if (m_ctrlWasPressed && m_snapAxis != SnapAxis::None) {
         // Axis constraint without snap
@@ -7639,257 +4061,9 @@ void SketchCanvas::applyCtrlSnapToHandle()
         finalPos = m_lastRawMouseWorld;
     }
 
-    if (sel->type == SketchEntityType::Circle) {
-        if (m_dragHandleIndex == 0) {
-            QPointF delta = finalPos - sel->points[0];
-            for (int i = 0; i < sel->points.size(); ++i)
-                sel->points[i] += delta;
-        } else if (m_dragHandleIndex >= 1) {
-            sel->points[m_dragHandleIndex] = finalPos;
-            sel->radius = QLineF(sel->points[0], finalPos).length();
-            QPointF center = sel->points[0];
-            for (int i = 1; i < sel->points.size(); ++i) {
-                if (i == m_dragHandleIndex) continue;
-                QPointF dir = QPointF(sel->points[i]) - center;
-                double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                if (len > 1e-6) {
-                    sel->points[i] = center + dir * (sel->radius / len);
-                }
-            }
-        }
-    } else if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3) {
-        // Arc: points[0]=center, points[1]=start (angle), points[2]=end (radius)
-        QPointF center = sel->points[0];
-        if (m_dragHandleIndex == 0) {
-            QPointF delta = finalPos - center;
-            sel->points[0] = finalPos;
-            sel->points[1] += delta;
-            sel->points[2] += delta;
-        } else if (m_dragHandleIndex == 1) {
-            // Start endpoint - constrain to arc radius (adjust angle)
-            double radius = sel->radius;
-            QPointF dir = finalPos - center;
-            double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-            if (len > 1e-6) {
-                sel->points[1] = center + dir * (radius / len);
-                double startAngle = std::atan2(sel->points[1].y - center.y(),
-                                               sel->points[1].x - center.x()) * 180.0 / M_PI;
-                double endAngle = std::atan2(sel->points[2].y - center.y(),
-                                             sel->points[2].x - center.x()) * 180.0 / M_PI;
-                double sweep = endAngle - startAngle;
-                if (sel->sweepAngle >= 0) {
-                    while (sweep < 0) sweep += 360.0;
-                } else {
-                    while (sweep > 0) sweep -= 360.0;
-                }
-                sel->startAngle = startAngle;
-                sel->sweepAngle = sweep;
-            }
-        } else if (m_dragHandleIndex == 2) {
-            // End endpoint - free drag to resize radius
-            sel->points[2] = finalPos;
-            double newRadius = QLineF(center, finalPos).length();
-            if (newRadius > 1e-6) {
-                double startRad = qDegreesToRadians(sel->startAngle);
-                sel->points[1] = center + QPointF(newRadius * qCos(startRad),
-                                                   newRadius * qSin(startRad));
-                sel->radius = newRadius;
-                double endAngle = std::atan2(finalPos.y() - center.y(),
-                                             finalPos.x() - center.x()) * 180.0 / M_PI;
-                double sweep = endAngle - sel->startAngle;
-                if (sel->sweepAngle >= 0) {
-                    while (sweep < 0) sweep += 360.0;
-                } else {
-                    while (sweep > 0) sweep -= 360.0;
-                }
-                sel->sweepAngle = sweep;
-            }
-        }
-        // Enforce locked sweep angle if a sweep-angle constraint exists
-        if (m_dragHandleIndex != 0) {
-            int sweepGid = findSweepAngleGroupForArc(sel->id);
-            if (sweepGid >= 0) {
-                double lockedSweep = -1.0;
-                for (const auto& g : m_groups) {
-                    if (g.id == sweepGid) {
-                        for (int cid : g.constraintIds) {
-                            const SketchConstraint* c = constraintById(cid);
-                            if (c && c->type == ConstraintType::Angle
-                                    && c->isDriving && c->enabled) {
-                                lockedSweep = c->value;
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
-                if (lockedSweep >= 0) {
-                    sel->sweepAngle = (sel->sweepAngle >= 0) ? lockedSweep : -lockedSweep;
-                    double endRad = qDegreesToRadians(sel->startAngle + sel->sweepAngle);
-                    sel->points[2] = {
-                        sel->points[0].x + sel->radius * std::cos(endRad),
-                        sel->points[0].y + sel->radius * std::sin(endRad)};
-                }
-            }
-        }
-        // Sync sweep-angle construction lines during Ctrl+snap drag
-        syncSweepAngleConstructionLines(*sel);
-    } else if (sel->type == SketchEntityType::Slot && sel->points.size() >= 3) {
-        // Arc slot with 3 points: arc center, start, end
-        // Note: applyCtrlSnapToHandle doesn't have access to current modifiers,
-        // so Alt+drag resize is only handled in mouseMoveEvent
-        if (m_dragHandleIndex == 0) {
-            // Dragging arc center - move all points together
-            QPointF delta = finalPos - sel->points[0];
-            sel->points[0] = finalPos;
-            sel->points[1] += delta;
-            sel->points[2] += delta;
-        } else if (m_dragHandleIndex == 1) {
-            // Handle 1 (start) - slide along arc to adjust angle
-            QPointF center = sel->points[0];
-            double arcRadius = QLineF(center, sel->points[2]).length();
-
-            QPointF dir = finalPos - center;
-            double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-            if (len > 1e-6 && arcRadius > 1e-6) {
-                double angle = std::atan2(dir.y(), dir.x());
-                if (m_ctrlWasPressed) {
-                    const double snapAngle = M_PI / 4.0;
-                    angle = std::round(angle / snapAngle) * snapAngle;
-                }
-                sel->points[1] = center + QPointF(
-                    arcRadius * std::cos(angle),
-                    arcRadius * std::sin(angle));
-
-                // Clamp sweep: full circle minus 2x end cap radius
-                double minGap = 2.0 * sel->radius / arcRadius;
-                double maxSweep = 2.0 * M_PI - minGap;
-                double startAng = std::atan2(sel->points[1].y - center.y(),
-                                             sel->points[1].x - center.x());
-                double endAng = std::atan2(sel->points[2].y - center.y(),
-                                           sel->points[2].x - center.x());
-                double sweep = endAng - startAng;
-                if (sel->arcFlipped) {
-                    if (sweep > 0) sweep -= 2.0 * M_PI;
-                    else sweep += 2.0 * M_PI;
-                } else {
-                    while (sweep > M_PI) sweep -= 2.0 * M_PI;
-                    while (sweep < -M_PI) sweep += 2.0 * M_PI;
-                }
-                if (std::abs(sweep) > maxSweep) {
-                    double clampedSweep = (sweep > 0) ? maxSweep : -maxSweep;
-                    double newStartAng = endAng - clampedSweep;
-                    sel->points[1] = center + QPointF(
-                        arcRadius * std::cos(newStartAng),
-                        arcRadius * std::sin(newStartAng));
-                }
-            } else {
-                sel->points[1] = finalPos;
-            }
-        } else if (m_dragHandleIndex == 2) {
-            // Handle 2 (end) - free drag to resize arc radius
-            // Clamp: arc radius between slot half-width and 2x slot half-width
-            QPointF center = sel->points[0];
-            double newArcRadius = QLineF(center, finalPos).length();
-            double slotHalfWidth = sel->radius;
-
-            if (newArcRadius > 1e-6) {
-                QPointF endDir = finalPos - center;
-                double endLen = std::sqrt(endDir.x() * endDir.x() + endDir.y() * endDir.y());
-                if (endLen > 1e-6) {
-                    sel->points[2] = center + endDir * (newArcRadius / endLen);
-                }
-                QPointF startDir = QPointF(sel->points[1]) - center;
-                double startLen = std::sqrt(startDir.x() * startDir.x() + startDir.y() * startDir.y());
-                if (startLen > 1e-6) {
-                    sel->points[1] = center + startDir * (newArcRadius / startLen);
-                }
-
-                // Clamp sweep after radius change
-                double minGap = 2.0 * slotHalfWidth / newArcRadius;
-                double maxSweep = 2.0 * M_PI - minGap;
-                double startAng = std::atan2(sel->points[1].y - center.y(),
-                                             sel->points[1].x - center.x());
-                double endAng = std::atan2(sel->points[2].y - center.y(),
-                                           sel->points[2].x - center.x());
-                double sweep = endAng - startAng;
-                if (sel->arcFlipped) {
-                    if (sweep > 0) sweep -= 2.0 * M_PI;
-                    else sweep += 2.0 * M_PI;
-                } else {
-                    while (sweep > M_PI) sweep -= 2.0 * M_PI;
-                    while (sweep < -M_PI) sweep += 2.0 * M_PI;
-                }
-                if (std::abs(sweep) > maxSweep) {
-                    double clampedSweep = (sweep > 0) ? maxSweep : -maxSweep;
-                    double newStartAng = endAng - clampedSweep;
-                    sel->points[1] = center + QPointF(
-                        newArcRadius * std::cos(newStartAng),
-                        newArcRadius * std::sin(newStartAng));
-                }
-            }
-        }
-    } else if (sel->type == SketchEntityType::Polygon && sel->points.size() >= 2) {
-        if (m_dragHandleIndex == 0) {
-            QPointF delta = finalPos - sel->points[0];
-            sel->points[0] = finalPos;
-            sel->points[1] += delta;
-        } else if (m_dragHandleIndex == 1) {
-            sel->points[1] = finalPos;
-            sel->radius = QLineF(sel->points[0], sel->points[1]).length();
-        }
-    } else if (sel->type == SketchEntityType::Ellipse && sel->points.size() >= 2) {
-        if (m_dragHandleIndex == 0) {
-            QPointF delta = finalPos - sel->points[0];
-            sel->points[0] = finalPos;
-            sel->points[1] += delta;
-        } else if (m_dragHandleIndex == 1) {
-            double oldMajor = sel->majorRadius;
-            sel->points[1] = finalPos;
-            sel->majorRadius = QLineF(sel->points[0], finalPos).length();
-            if (oldMajor > 1e-6) {
-                sel->minorRadius *= sel->majorRadius / oldMajor;
-            }
-        }
-    } else if (sel->type == SketchEntityType::Parallelogram && sel->points.size() >= 4) {
-        sel->points[m_dragHandleIndex] = finalPos;
-        sel->points[3] = sel->points[0] + (sel->points[2] - sel->points[1]);
-    } else if (sel->type == SketchEntityType::Text && sel->points.size() >= 2) {
-        if (m_dragHandleIndex == 0) {
-            QPointF delta = finalPos - sel->points[0];
-            sel->points[0] += delta;
-            sel->points[1] += delta;
-        } else if (m_dragHandleIndex == 1) {
-            QPointF anchor(sel->points[0]);
-            QPointF dir = finalPos - anchor;
-            double angle = qRadiansToDegrees(std::atan2(dir.y(), dir.x()));
-            sel->textRotation = angle;
-            double dist = std::max(sel->fontSize * 2.0,
-                                   sel->fontSize * static_cast<double>(sel->text.length()) * 0.6);
-            double rad = qDegreesToRadians(angle);
-            sel->points[1] = {anchor.x() + dist * std::cos(rad),
-                              anchor.y() + dist * std::sin(rad)};
-        }
-    } else {
-        QPointF prevPos = sel->points[m_dragHandleIndex];
-        sel->points[m_dragHandleIndex] = finalPos;
-
-        // Propagate to coincident neighbours in the same group so
-        // the shape can't open at shared corners.
-        if (sel->groupId >= 0) {
-            const double coinEps = 1e-4;
-            for (auto& e : m_entities) {
-                if (e.groupId != sel->groupId || e.id == sel->id)
-                    continue;
-                for (int pi = 0; pi < e.points.size(); ++pi) {
-                    double dx = e.points[pi].x - prevPos.x();
-                    double dy = e.points[pi].y - prevPos.y();
-                    if (dx * dx + dy * dy < coinEps)
-                        e.points[pi] = finalPos;
-                }
-            }
-        }
-    }
+    // Geometry now lives in libhobbycad; this layer owns snapping,
+    // constraint lookup, label placement and group propagation.
+    applyHandleDrag(*sel, m_dragHandleIndex, finalPos, m_ctrlWasPressed);
 
     // If the entity is part of a group, run the constraint solver so that
     // coincident / perpendicular / distance constraints propagate the drag
@@ -7950,7 +4124,7 @@ bool SketchCanvas::event(QEvent* event)
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent* ke = static_cast<QKeyEvent*>(event);
         if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
-            if (m_isDrawing && !m_dimFields.isEmpty()) {
+            if (m_isDrawing && !m_dimInput.empty()) {
                 keyPressEvent(ke);   // route to our handler
                 return true;         // consumed
             }
@@ -7959,390 +4133,345 @@ bool SketchCanvas::event(QEvent* event)
     return QWidget::event(event);
 }
 
+// keyPressEvent while an inline constraint value edit is active: every key
+// is consumed here.
+void SketchCanvas::handleInlineEditKey(QKeyEvent* event)
+{
+    int key = event->key();
+
+    // Helper: replace entire buffer if selectAll, otherwise insert at cursor
+    auto replaceOrInsert = [&](QChar ch) {
+        if (m_inlineEditSelectAll) {
+            m_inlineEditBuffer = QString(ch);
+            m_inlineEditCursorPos = 1;
+            m_inlineEditSelectAll = false;
+        } else {
+            m_inlineEditBuffer.insert(m_inlineEditCursorPos, ch);
+            m_inlineEditCursorPos++;
+        }
+    };
+
+    // Printable characters valid in expressions
+    QString text = event->text();
+    if (!text.isEmpty()) {
+        QChar ch = text[0];
+        if (ch.isDigit() || ch.isLetter() || ch == QLatin1Char('_') ||
+            ch == QLatin1Char('.') || ch == QLatin1Char('-') || ch == QLatin1Char('+') ||
+            ch == QLatin1Char('*') || ch == QLatin1Char('/') || ch == QLatin1Char('^') ||
+            ch == QLatin1Char('(') || ch == QLatin1Char(')') || ch == QLatin1Char(',') ||
+            ch == QLatin1Char(' ') || ch == QLatin1Char('%') ||
+            ch == QChar(0x00B0) ||    // ° degree sign
+            ch == QLatin1Char('\'') || ch == QLatin1Char('"') ||
+            ch == QChar(0x2032) || ch == QChar(0x2033)) {
+            replaceOrInsert(ch);
+            update();
+            return;
+        }
+    }
+    if (key == Qt::Key_Backspace) {
+        if (m_inlineEditSelectAll) {
+            m_inlineEditBuffer.clear();
+            m_inlineEditCursorPos = 0;
+            m_inlineEditSelectAll = false;
+        } else if (m_inlineEditCursorPos > 0) {
+            m_inlineEditBuffer.remove(m_inlineEditCursorPos - 1, 1);
+            m_inlineEditCursorPos--;
+        }
+        update();
+        return;
+    }
+    if (key == Qt::Key_Delete) {
+        if (m_inlineEditSelectAll) {
+            m_inlineEditBuffer.clear();
+            m_inlineEditCursorPos = 0;
+            m_inlineEditSelectAll = false;
+        } else if (m_inlineEditCursorPos < m_inlineEditBuffer.length()) {
+            m_inlineEditBuffer.remove(m_inlineEditCursorPos, 1);
+        }
+        update();
+        return;
+    }
+    if (key == Qt::Key_Left) {
+        if (m_inlineEditSelectAll) {
+            m_inlineEditCursorPos = 0;
+            m_inlineEditSelectAll = false;
+        } else if (m_inlineEditCursorPos > 0) {
+            m_inlineEditCursorPos--;
+        }
+        update();
+        return;
+    }
+    if (key == Qt::Key_Right) {
+        if (m_inlineEditSelectAll) {
+            m_inlineEditSelectAll = false;
+        } else if (m_inlineEditCursorPos < m_inlineEditBuffer.length()) {
+            m_inlineEditCursorPos++;
+        }
+        update();
+        return;
+    }
+    if (key == Qt::Key_Home) {
+        m_inlineEditSelectAll = false;
+        m_inlineEditCursorPos = 0;
+        update();
+        return;
+    }
+    if (key == Qt::Key_End) {
+        m_inlineEditSelectAll = false;
+        m_inlineEditCursorPos = m_inlineEditBuffer.length();
+        update();
+        return;
+    }
+    if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+        commitInlineConstraintEdit();
+        return;
+    }
+    if (key == Qt::Key_Escape) {
+        cancelInlineConstraintEdit();
+        return;
+    }
+    // Ctrl+A = select all
+    if (key == Qt::Key_A && (event->modifiers() & Qt::ControlModifier)) {
+        m_inlineEditSelectAll = true;
+        update();
+        return;
+    }
+    // Consume all other keys while inline edit is active
+    return;
+}
+
+// keyPressEvent, Escape: the cancel cascade (transform gesture, drawing,
+// tool, entered group, constraint, selection, sketch), one step per press.
+void SketchCanvas::handleEscapeKey()
+{
+    if (m_transformPick != TransformPick::None || m_transformPivotDragging
+        || m_freeMoveHandle != FreeMoveHandle::None || !m_transformPreview.isEmpty()) {
+        // Step 0 of the cascade: cancelling a transform gesture must not
+        // also drop the selection the transform was about.
+        cancelTransformPick();
+        clearTransformPreview();
+        m_freeMoveDelta = QPointF(); m_freeMoveAngle = 0.0;
+        emit transformCanceled();
+        emit toolHintChanged(tr("Transform canceled; selection kept"));
+        update();
+        return;
+    }
+    if (m_isDrawing) {
+        // Cancel current drawing operation
+        cancelEntity();
+    } else if (m_activeTool != SketchTool::Select) {
+        // Switch back to Select mode, keeping current selection
+        m_activeTool = SketchTool::Select;
+        setCursor(Qt::ArrowCursor);
+        emit toolChangeRequested(SketchTool::Select);
+        // Re-emit selection to update properties panel with selected entity
+        if (m_selectedId >= 0) {
+            emit selectionChanged(m_selectedId);
+        }
+    } else if (m_enteredGroupId >= 0) {
+        // Leave the entered group (re-selects the whole group)
+        leaveGroup();
+    } else if (m_selectedConstraintId >= 0) {
+        // Constraint selected - deselect constraint
+        for (auto& c : m_constraints) c.selected = false;
+        m_selectedConstraintId = -1;
+        emit selectionChanged(-1);  // Update properties panel
+    } else if (!m_selectedIds.isEmpty()) {
+        // Already in Select mode with entity selected - deselect all entities
+        for (auto& e : m_entities) e.selected = false;
+        m_selectedId = -1;
+        selectClear();
+        emit selectionChanged(-1);
+    } else if (m_sketchSelected) {
+        // No entity selected, but sketch is selected - show exit bar
+        // but stay in the sketch so the user can return
+        m_sketchSelected = false;
+        emit sketchDeselected();
+        emit exitRequested();   // shows Save/Discard bar
+    } else {
+        // Sketch already deselected: pressing Escape again returns
+        // to the sketch instead of being stuck at the Save/Discard bar
+        m_sketchSelected = true;
+        emit selectionChanged(-1);  // re-engage sketch
+    }
+    update();
+}
+
+// keyPressEvent, Delete/Backspace: the selected constraint, else the
+// selected entities (confirmed when there are several).
+void SketchCanvas::deleteSelectionKey()
+{
+    if (m_selectedConstraintId >= 0) {
+        deleteConstraintById(m_selectedConstraintId);
+    } else if (!m_selectedIds.isEmpty()) {
+        // Delete all selected entities
+        int count = m_selectedIds.size();
+
+        // Show confirmation for multiple entities
+        if (count > 1) {
+            QMessageBox::StandardButton reply = QMessageBox::question(
+                this,
+                tr("Delete Entities"),
+                tr("Delete %1 selected entities?").arg(count),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::Yes
+            );
+            if (reply != QMessageBox::Yes) {
+                return;
+            }
+        }
+
+        // One deletion path: deleteSelectedEntities() records a single
+        // compound and re-solves. (This branch and the Delete QAction
+        // used to delete two different ways.)
+        deleteSelectedEntities();
+    }
+}
+
+// keyPressEvent, Tab: cycle the constraint type the D key will add.
+void SketchCanvas::cycleDimensionTypeHint(QKeyEvent* event)
+{
+    if (m_selectedId >= 0) {
+        SketchEntity* sel = selectedEntity();
+        if (sel) {
+            // Build list of available constraint types for this entity
+            QStringList typeNames;
+            if (sel->type == SketchEntityType::Line) {
+                typeNames << tr("Distance");
+            } else if (sel->type == SketchEntityType::Circle
+                       || sel->type == SketchEntityType::Arc) {
+                typeNames << tr("Radius") << tr("Diameter");
+            }
+            if (typeNames.size() > 1) {
+                m_dKeyTypeIndex = (m_dKeyTypeIndex + 1) % typeNames.size();
+                m_dKeyTypeHint = typeNames[m_dKeyTypeIndex];
+                update();
+            }
+        }
+        event->accept();
+        return;
+    }
+}
+
+// keyPressEvent, D: dimension the selection outright when its type is
+// unambiguous (two points, two lines, a line, a circle or arc), else arm the
+// Dimension tool.
+void SketchCanvas::quickDimensionKey()
+{
+    // Two selected points (a Bezier leg) -> Distance dimension.
+    if (m_selectedPoints.size() == 2) {
+        const auto pa = m_selectedPoints[0];
+        const auto pb = m_selectedPoints[1];
+        const SketchEntity* ea = entityById(pa.first);
+        const SketchEntity* eb = entityById(pb.first);
+        if (ea && eb && pa.second < ea->points.size() && pb.second < eb->points.size()) {
+            const QPointF A(ea->points[pa.second]), B(eb->points[pb.second]);
+            const double cur = QLineF(A, B).length();
+            m_constraintTargetEntities.clear(); m_constraintTargetPoints.clear();
+            m_constraintTargetEntities.append(pa.first); m_constraintTargetPoints.append(A);
+            m_constraintTargetEntities.append(pb.first); m_constraintTargetPoints.append(B);
+            const QPointF labelPos = (A + B) / 2.0 + QPointF(0, -10);
+            createConstraint(ConstraintType::Distance, cur, labelPos, false, true);
+            m_constraintTargetEntities.clear(); m_constraintTargetPoints.clear();
+            return;
+        }
+    }
+    // Two selected lines -> Angle dimension.
+    if (selectedEntityList().size() == 2 && dimensionSelectedLinesAngle()) return;
+    // If an entity is selected, immediately add the appropriate
+    // constraint.  TAB cycles the type (e.g. Radius ↔ Diameter).
+    if (m_selectedId >= 0) {
+        SketchEntity* sel = selectedEntity();
+        if (!sel) return;
+
+        // --- Line → Distance ---
+        if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
+            if (!findDrivingConstraint(sel->id, ConstraintType::Distance)) {
+                double currentLen = QLineF(sel->points[0], sel->points[1]).length();
+                setConstraintTargetsForLine(sel->id, sel->points[0], sel->points[1]);
+
+                QPointF mid = (sel->points[0] + sel->points[1]) / 2.0;
+                QPointF along = sel->points[1] - sel->points[0];
+                double len = geometry::length(along);
+                QPointF perp = (len > geometry::kDegenerateLen)
+                    ? QPointF(geometry::perpendicular(geometry::normalize(along)))
+                    : QPointF(0, -1);
+                QPointF labelPos = mid + perp * 10.0;
+
+                createConstraint(ConstraintType::Distance, currentLen, labelPos,
+                                 /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
+
+                m_dKeyTypeIndex = 0;
+                m_dKeyTypeHint.clear();
+                return;
+            }
+        }
+
+        // --- Circle/Arc → Radius or Diameter (TAB toggles) ---
+        if ((sel->type == SketchEntityType::Circle
+             || sel->type == SketchEntityType::Arc)
+            && !sel->points.empty()) {
+            if (!findDrivingConstraint(sel->id, ConstraintType::Radius)
+                && !findDrivingConstraint(sel->id, ConstraintType::Diameter)) {
+                // Index 0 = Radius (default), 1 = Diameter
+                ConstraintType ctype = (m_dKeyTypeIndex == 1)
+                    ? ConstraintType::Diameter
+                    : ConstraintType::Radius;
+                bool isDiameter = (ctype == ConstraintType::Diameter);
+
+                double currentValue = isDiameter
+                    ? sel->radius * 2.0
+                    : sel->radius;
+
+                setConstraintTargetsForRadial(sel->id, sel->points[0]);
+
+                QPointF labelPos = sel->points[0];
+                if (sel->points.size() >= 2) {
+                    // Place label in direction of p1, at the perimeter
+                    QPointF dir = sel->points[1] - sel->points[0];
+                    double dirLen = geometry::length(dir);
+                    if (dirLen > geometry::kDegenerateLen)
+                        labelPos = QPointF(sel->points[0]) + geometry::normalize(dir) * sel->radius;
+                } else {
+                    labelPos = QPointF(sel->points[0]) + QPointF(sel->radius, 0);
+                }
+
+                createConstraint(ctype, currentValue, labelPos,
+                                 /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
+
+                m_dKeyTypeIndex = 0;
+                m_dKeyTypeHint.clear();
+                return;
+            }
+        }
+    }
+    setActiveTool(SketchTool::Dimension);
+}
+
 void SketchCanvas::keyPressEvent(QKeyEvent* event)
 {
     // ---- Inline constraint value editing (on existing constraint labels) ----
     if (m_inlineEditActive) {
-        int key = event->key();
-
-        // Helper: replace entire buffer if selectAll, otherwise insert at cursor
-        auto replaceOrInsert = [&](QChar ch) {
-            if (m_inlineEditSelectAll) {
-                m_inlineEditBuffer = QString(ch);
-                m_inlineEditCursorPos = 1;
-                m_inlineEditSelectAll = false;
-            } else {
-                m_inlineEditBuffer.insert(m_inlineEditCursorPos, ch);
-                m_inlineEditCursorPos++;
-            }
-        };
-
-        // Printable characters valid in expressions
-        QString text = event->text();
-        if (!text.isEmpty()) {
-            QChar ch = text[0];
-            if (ch.isDigit() || ch.isLetter() || ch == QLatin1Char('_') ||
-                ch == QLatin1Char('.') || ch == QLatin1Char('-') || ch == QLatin1Char('+') ||
-                ch == QLatin1Char('*') || ch == QLatin1Char('/') || ch == QLatin1Char('^') ||
-                ch == QLatin1Char('(') || ch == QLatin1Char(')') || ch == QLatin1Char(',') ||
-                ch == QLatin1Char(' ') || ch == QLatin1Char('%') ||
-                ch == QChar(0x00B0) ||    // ° degree sign
-                ch == QLatin1Char('\'') || ch == QLatin1Char('"') ||
-                ch == QChar(0x2032) || ch == QChar(0x2033)) {
-                replaceOrInsert(ch);
-                update();
-                return;
-            }
-        }
-        if (key == Qt::Key_Backspace) {
-            if (m_inlineEditSelectAll) {
-                m_inlineEditBuffer.clear();
-                m_inlineEditCursorPos = 0;
-                m_inlineEditSelectAll = false;
-            } else if (m_inlineEditCursorPos > 0) {
-                m_inlineEditBuffer.remove(m_inlineEditCursorPos - 1, 1);
-                m_inlineEditCursorPos--;
-            }
-            update();
-            return;
-        }
-        if (key == Qt::Key_Delete) {
-            if (m_inlineEditSelectAll) {
-                m_inlineEditBuffer.clear();
-                m_inlineEditCursorPos = 0;
-                m_inlineEditSelectAll = false;
-            } else if (m_inlineEditCursorPos < m_inlineEditBuffer.length()) {
-                m_inlineEditBuffer.remove(m_inlineEditCursorPos, 1);
-            }
-            update();
-            return;
-        }
-        if (key == Qt::Key_Left) {
-            if (m_inlineEditSelectAll) {
-                m_inlineEditCursorPos = 0;
-                m_inlineEditSelectAll = false;
-            } else if (m_inlineEditCursorPos > 0) {
-                m_inlineEditCursorPos--;
-            }
-            update();
-            return;
-        }
-        if (key == Qt::Key_Right) {
-            if (m_inlineEditSelectAll) {
-                m_inlineEditSelectAll = false;
-            } else if (m_inlineEditCursorPos < m_inlineEditBuffer.length()) {
-                m_inlineEditCursorPos++;
-            }
-            update();
-            return;
-        }
-        if (key == Qt::Key_Home) {
-            m_inlineEditSelectAll = false;
-            m_inlineEditCursorPos = 0;
-            update();
-            return;
-        }
-        if (key == Qt::Key_End) {
-            m_inlineEditSelectAll = false;
-            m_inlineEditCursorPos = m_inlineEditBuffer.length();
-            update();
-            return;
-        }
-        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-            commitInlineConstraintEdit();
-            return;
-        }
-        if (key == Qt::Key_Escape) {
-            cancelInlineConstraintEdit();
-            return;
-        }
-        // Ctrl+A = select all
-        if (key == Qt::Key_A && (event->modifiers() & Qt::ControlModifier)) {
-            m_inlineEditSelectAll = true;
-            update();
-            return;
-        }
-        // Consume all other keys while inline edit is active
+        handleInlineEditKey(event);
         return;
     }
 
     // ---- Inline dimension input routing (during entity creation) ----
-    if (m_isDrawing && m_dimActiveIndex >= 0 && m_dimActiveIndex < m_dimStates.size()) {
-        auto& state = m_dimStates[m_dimActiveIndex];
-        int key = event->key();
-
-        // Helper: replace entire buffer if selectAll, otherwise insert at cursor
-        auto replaceOrInsert = [&](QChar ch) {
-            if (state.selectAll) {
-                state.inputBuffer = QString(ch);
-                state.cursorPos = 1;
-                state.selectAll = false;
-            } else {
-                state.inputBuffer.insert(state.cursorPos, ch);
-                state.cursorPos++;
-            }
-        };
-
-        // Accept any character valid in an expression:
-        // digits, letters (functions/params), operators, parens, period, comma, space
-        // Skip if the active field is locked (all fields locked — no typing allowed)
-        if (!state.locked) {
-            QString text = event->text();
-            if (!text.isEmpty()) {
-                QChar ch = text[0];
-                if (ch.isDigit() || ch.isLetter() || ch == QLatin1Char('_') ||
-                    ch == QLatin1Char('.') || ch == QLatin1Char('-') || ch == QLatin1Char('+') ||
-                    ch == QLatin1Char('*') || ch == QLatin1Char('/') || ch == QLatin1Char('^') ||
-                    ch == QLatin1Char('(') || ch == QLatin1Char(')') || ch == QLatin1Char(',') ||
-                    ch == QLatin1Char(' ') || ch == QLatin1Char('%') ||
-                    ch == QChar(0x00B0) ||    // ° degree sign
-                    ch == QLatin1Char('\'') || // ' arcminute
-                    ch == QLatin1Char('"') ||  // " arcsecond
-                    ch == QChar(0x2032) ||     // ′ prime (Unicode)
-                    ch == QChar(0x2033)) {     // ″ double prime (Unicode)
-                    replaceOrInsert(ch);
-                    update();
-                    return;
-                }
-            }
-        }
-        // Backspace
-        if (key == Qt::Key_Backspace) {
-            if (state.selectAll) {
-                state.inputBuffer.clear();
-                state.cursorPos = 0;
-                state.selectAll = false;
-                update();
-                return;
-            } else if (state.cursorPos > 0) {
-                state.inputBuffer.remove(state.cursorPos - 1, 1);
-                state.cursorPos--;
-                update();
-                return;
-            }
-            // If cursorPos == 0 and not selectAll, fall through to normal Backspace handling
-        }
-        // Delete key
-        if (key == Qt::Key_Delete) {
-            if (state.selectAll) {
-                state.inputBuffer.clear();
-                state.cursorPos = 0;
-                state.selectAll = false;
-                update();
-                return;
-            } else if (state.cursorPos < state.inputBuffer.length()) {
-                state.inputBuffer.remove(state.cursorPos, 1);
-                update();
-                return;
-            }
-        }
-        // Arrow keys: deselect and move cursor
-        // When deselecting, refresh buffer with current live value first
-        if (key == Qt::Key_Left) {
-            if (state.selectAll) {
-                prefillDimField(m_dimActiveIndex);  // Refresh buffer to current value
-                state.cursorPos = 0;
-                state.selectAll = false;
-            } else if (state.cursorPos > 0) {
-                state.cursorPos--;
-            }
-            update();
-            return;
-        }
-        if (key == Qt::Key_Right) {
-            if (state.selectAll) {
-                prefillDimField(m_dimActiveIndex);  // Refresh buffer to current value
-                state.selectAll = false;
-                // cursorPos already at end from prefill
-            } else if (state.cursorPos < state.inputBuffer.length()) {
-                state.cursorPos++;
-            }
-            update();
-            return;
-        }
-        // Home/End
-        if (key == Qt::Key_Home) {
-            if (state.selectAll) {
-                prefillDimField(m_dimActiveIndex);
-            }
-            state.selectAll = false;
-            state.cursorPos = 0;
-            update();
-            return;
-        }
-        if (key == Qt::Key_End) {
-            if (state.selectAll) {
-                prefillDimField(m_dimActiveIndex);
-            }
-            state.selectAll = false;
-            state.cursorPos = state.inputBuffer.length();
-            update();
-            return;
-        }
-        // Enter/Return: lock the value
-        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
-            if (!state.inputBuffer.isEmpty()) {
-                double val;
-                if (state.selectAll) {
-                    // selectAll = live tracking — lock the current live value directly
-                    val = m_dimFields[m_dimActiveIndex].currentValue;  // Already in mm/degrees
-                } else {
-                    // Evaluate expression (supports formulas, parameters, functions, unit suffixes)
-                    double exprResult;
-                    QString exprStr = state.inputBuffer.trimmed();
-                    std::string exprStdStr = exprStr.toStdString();
-                    if (m_dimFields[m_dimActiveIndex].isAngle) {
-                        // Angles: try DMS format first, then expression, then plain number
-                        double dmsResult;
-                        if (hobbycad::parseDMS(exprStdStr, dmsResult)) {
-                            val = dmsResult;
-                        } else if (m_paramEngine && m_paramEngine->evaluateExpression(exprStdStr, exprResult)) {
-                            val = exprResult;
-                        } else {
-                            val = exprStr.toDouble();  // Fallback
-                        }
-                    } else {
-                        // Lengths: unit-aware evaluation, result in display units
-                        // Bare numbers stay as-is, suffixed numbers converted to display units
-                        if (m_paramEngine && m_paramEngine->evaluateExpression(exprStdStr, exprResult, m_displayUnit)) {
-                            val = hobbycad::unitToMm(exprResult, m_displayUnit);  // Convert display units → mm
-                        } else {
-                            val = parseValueWithUnit(exprStdStr, m_displayUnit);  // Fallback
-                        }
-                    }
-                }
-                if (m_dimFields[m_dimActiveIndex].isAngle || val > 0.0) {
-                    state.locked = true;
-                    state.lockedValue = val;
-                    state.inputBuffer.clear();
-                    state.cursorPos = 0;
-                    state.selectAll = false;
-                    // Advance to next unlocked field and pre-fill
-                    for (int i = 1; i < m_dimFields.size(); ++i) {
-                        int next = (m_dimActiveIndex + i) % m_dimFields.size();
-                        if (!m_dimStates[next].locked) {
-                            m_dimActiveIndex = next;
-                            prefillDimField(next);
-                            break;
-                        }
-                    }
-                    // Capture rotation reference when both rect dims become locked
-                    if (m_activeTool == SketchTool::Rectangle &&
-                        m_rectMode == RectMode::Corner &&
-                        !m_rectBothLocked) {
-                        bool allLocked = true;
-                        for (int i = 0; i < m_dimStates.size(); ++i) {
-                            if (!m_dimStates[i].locked) { allLocked = false; break; }
-                        }
-                        if (allLocked && m_dimFields.size() >= 2) {
-                            QPointF origin = m_previewPoints[0];
-                            QPointF delta = m_currentMouseWorld - origin;
-                            m_rectLockRefAngle = std::atan2(delta.y(), delta.x());
-                            m_rectLockWidthAngle = (delta.x() >= 0) ? 0.0 : M_PI;
-                            m_rectLockHeightAngle = (delta.y() >= 0) ? M_PI / 2.0 : -M_PI / 2.0;
-                            m_rectBothLocked = true;
-                        }
-                    }
-
-                    // Force preview update with locked constraint
-                    updateEntity(m_currentMouseWorld);
-                }
-            }
-            update();
-            return;
-        }
-        // Tab / Shift+Tab: cycle to next/previous unlocked field, pre-fill with current value
-        if (key == Qt::Key_Tab || key == Qt::Key_Backtab) {
-            state.inputBuffer.clear();
-            state.cursorPos = 0;
-            state.selectAll = false;
-            // Advance (Tab) or retreat (Shift+Tab) to next unlocked field
-            if (m_dimFields.size() > 1) {
-                int n = m_dimFields.size();
-                int step = (key == Qt::Key_Backtab) ? (n - 1) : 1;  // n-1 ≡ -1 mod n
-                for (int i = 1; i <= n; ++i) {
-                    int next = (m_dimActiveIndex + step * i) % n;
-                    if (!m_dimStates[next].locked) {
-                        m_dimActiveIndex = next;
-                        break;
-                    }
-                }
-            }
-            prefillDimField(m_dimActiveIndex);
-            update();
-            return;
-        }
-        // Escape: clear buffer or unlock last locked field
-        if (key == Qt::Key_Escape) {
-            if (!state.inputBuffer.isEmpty()) {
-                state.inputBuffer.clear();
-                state.cursorPos = 0;
-                state.selectAll = false;
-                update();
-                return;
-            }
-            // Unlock in reverse priority: angles first, then lengths
-            int unlockIdx = -1;
-            // First pass: find last locked angle field
-            for (int i = m_dimFields.size() - 1; i >= 0; --i) {
-                if (i < m_dimStates.size() && m_dimStates[i].locked && m_dimFields[i].isAngle) {
-                    unlockIdx = i;
-                    break;
-                }
-            }
-            // Second pass: if no locked angles, find last locked length field
-            if (unlockIdx < 0) {
-                for (int i = m_dimFields.size() - 1; i >= 0; --i) {
-                    if (i < m_dimStates.size() && m_dimStates[i].locked && !m_dimFields[i].isAngle) {
-                        unlockIdx = i;
-                        break;
-                    }
-                }
-            }
-            if (unlockIdx >= 0) {
-                m_dimStates[unlockIdx].locked = false;
-                m_dimStates[unlockIdx].lockedValue = 0.0;
-                m_dimActiveIndex = unlockIdx;
-                // Remove from accumulated locked-for-constraints list
-                QString label = m_dimFields[unlockIdx].label;
-                for (int i = m_dimLockedForConstraints.size() - 1; i >= 0; --i) {
-                    if (m_dimLockedForConstraints[i].first == label) {
-                        m_dimLockedForConstraints.removeAt(i);
-                        break;
-                    }
-                }
-                updateEntity(m_currentMouseWorld);  // Re-apply without the constraint
-                update();
-                return;
-            }
-            // Fall through to normal Escape handling (cancel entity)
-        }
+    // The dimension-field input subsystem owns typing, expression evaluation,
+    // locking, Tab cycling, and Escape/unlock. It returns true when it
+    // consumed the key; an empty Enter on a chaining tool (and a bare Escape
+    // with nothing to clear) returns false so the cases below can end the
+    // chain or cancel the entity.
+    if (m_isDrawing && m_dimInput.activeIndex() >= 0) {
+        if (m_dimInput.handleKey(event)) return;
     }
 
-    // Shift key during arc slot or arc drawing - toggle flip state and update preview
-    if (event->key() == Qt::Key_Shift && m_isDrawing) {
-        bool isArcSlot = (m_activeTool == SketchTool::Slot &&
-                          (m_slotMode == SlotMode::ArcRadius || m_slotMode == SlotMode::ArcEnds) &&
-                          m_previewPoints.size() >= 2);
-        bool isFlippableArc = (m_activeTool == SketchTool::Arc &&
-                               (m_arcMode == ArcMode::CenterStartEnd || m_arcMode == ArcMode::StartEndRadius) &&
-                               m_previewPoints.size() >= 2);
-        bool isTangentArc = (m_activeTool == SketchTool::Arc &&
-                             m_arcMode == ArcMode::Tangent &&
-                             !m_previewPoints.isEmpty());
-        if (isArcSlot || isFlippableArc || isTangentArc) {
-            m_arcSlotFlipped = !m_arcSlotFlipped;
-            update();
-            return;
-        }
-    }
-
-    // Ctrl key during StartEndRadius arc - update preview for 180° snap
-    if (event->key() == Qt::Key_Control && m_isDrawing && m_previewPoints.size() >= 2) {
-        if (m_activeTool == SketchTool::Arc && m_arcMode == ArcMode::StartEndRadius) {
-            update();
-            return;
-        }
+    // Modifier keys that mean something to the tool being drawn: Shift
+    // flips an arc or arc slot, Ctrl refreshes the Start+End+Radius preview.
+    // Each tool answers for itself in gui/tools/.
+    if (m_isDrawing && activeHandler()
+        && activeHandler()->keyPress(*this, event)) {
+        return;
     }
 
     // Check configurable bindings first (for view rotation)
@@ -8358,96 +4487,50 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
         setViewRotation(0.0);
         return;
     }
+    if (matchesBinding(QStringLiteral("sketch.trim"), event)) {
+        setActiveTool(SketchTool::Trim); return;
+    }
+    if (matchesBinding(QStringLiteral("sketch.offset"), event)) {
+        setActiveTool(SketchTool::Offset); return;
+    }
+    if (matchesBinding(QStringLiteral("sketch.fillet"), event)) {
+        setActiveTool(SketchTool::Fillet); return;
+    }
+    if (matchesBinding(QStringLiteral("sketch.construction"), event)) {
+        toggleSelectedConstruction();
+        return;
+    }
 
     switch (event->key()) {
     case Qt::Key_Escape:
-        if (m_isDrawing) {
-            // Cancel current drawing operation
+        handleEscapeKey();
+        break;
+
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+        if (!m_transformPreview.isEmpty() || m_transformPick == TransformPick::FreeMove) { emit transformApplyRequested(); return; }
+        // End a line chain: discard the rubber-band segment, keep the
+        // committed ones (Fusion review C3). Escape does the same.
+        if (m_isDrawing && activeHandler() && activeHandler()->chainsFromLastPoint(*this)) {
             cancelEntity();
-        } else if (m_activeTool != SketchTool::Select) {
-            // Switch back to Select mode, keeping current selection
-            m_activeTool = SketchTool::Select;
-            setCursor(Qt::ArrowCursor);
-            emit toolChangeRequested(SketchTool::Select);
-            // Re-emit selection to update properties panel with selected entity
-            if (m_selectedId >= 0) {
-                emit selectionChanged(m_selectedId);
-            }
-        } else if (m_enteredGroupId >= 0) {
-            // Leave the entered group (re-selects the whole group)
-            leaveGroup();
-        } else if (m_selectedConstraintId >= 0) {
-            // Constraint selected - deselect constraint
-            for (auto& c : m_constraints) c.selected = false;
-            m_selectedConstraintId = -1;
-            emit selectionChanged(-1);  // Update properties panel
-        } else if (!m_selectedIds.isEmpty()) {
-            // Already in Select mode with entity selected - deselect all entities
-            for (auto& e : m_entities) e.selected = false;
-            m_selectedId = -1;
-            m_selectedIds.clear();
-            emit selectionChanged(-1);
-        } else if (m_sketchSelected) {
-            // No entity selected, but sketch is selected - show exit bar
-            // but stay in the sketch so the user can return
-            m_sketchSelected = false;
-            emit sketchDeselected();
-            emit exitRequested();   // shows Save/Discard bar
-        } else {
-            // Sketch already deselected — pressing Escape again returns
-            // to the sketch instead of being stuck at the Save/Discard bar
-            m_sketchSelected = true;
-            emit selectionChanged(-1);  // re-engage sketch
+            emit toolHintChanged(currentToolHint());   // stage hint back to "click the start point"
+            break;
         }
-        update();
+        break;
+
+    case Qt::Key_Home:
+        if (m_transformGlyphVisible && !m_selectedIds.isEmpty()) { resetTransformPivotToCenter(); return; }
         break;
 
     case Qt::Key_Delete:
-    case Qt::Key_Backspace:
-        if (m_selectedConstraintId >= 0) {
-            deleteConstraintById(m_selectedConstraintId);
-        } else if (!m_selectedIds.isEmpty()) {
-            // Delete all selected entities
-            int count = m_selectedIds.size();
-
-            // Show confirmation for multiple entities
-            if (count > 1) {
-                QMessageBox::StandardButton reply = QMessageBox::question(
-                    this,
-                    tr("Delete Entities"),
-                    tr("Delete %1 selected entities?").arg(count),
-                    QMessageBox::Yes | QMessageBox::No,
-                    QMessageBox::Yes
-                );
-                if (reply != QMessageBox::Yes) {
-                    break;
-                }
-            }
-
-            // Delete all selected entities
-            QSet<int> toDelete = m_selectedIds;
-            m_entities.erase(
-                std::remove_if(m_entities.begin(), m_entities.end(),
-                               [&toDelete](const SketchEntity& e) { return toDelete.contains(e.id); }),
-                m_entities.end());
-
-            // Also remove any constraints that reference deleted entities
-            m_constraints.erase(
-                std::remove_if(m_constraints.begin(), m_constraints.end(),
-                               [&toDelete](const SketchConstraint& c) {
-                                   for (int id : c.entityIds) {
-                                       if (toDelete.contains(id)) return true;
-                                   }
-                                   return false;
-                               }),
-                m_constraints.end());
-
-            m_selectedId = -1;
-            m_selectedIds.clear();
-            m_profilesCacheDirty = true;
-            emit selectionChanged(-1);
-            update();
+        {   // A selected Bezier anchor deletes that fit point, not the whole spline.
+            int aS = -1, aA = -1;
+            if (selectedBezierAnchor(aS, aA)) { deleteBezierAnchor(aS, aA); break; }
         }
+        cancelTransformPick();
+        clearTransformPreview();
+    case Qt::Key_Backspace:
+        deleteSelectionKey();
         break;
 
     case Qt::Key_S:
@@ -8475,98 +4558,12 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
         break;
     case Qt::Key_Tab:
         // Cycle constraint type for D-key quick-add
-        if (m_selectedId >= 0) {
-            SketchEntity* sel = selectedEntity();
-            if (sel) {
-                // Build list of available constraint types for this entity
-                QStringList typeNames;
-                if (sel->type == SketchEntityType::Line) {
-                    typeNames << tr("Distance");
-                } else if (sel->type == SketchEntityType::Circle
-                           || sel->type == SketchEntityType::Arc) {
-                    typeNames << tr("Radius") << tr("Diameter");
-                }
-                if (typeNames.size() > 1) {
-                    m_dKeyTypeIndex = (m_dKeyTypeIndex + 1) % typeNames.size();
-                    m_dKeyTypeHint = typeNames[m_dKeyTypeIndex];
-                    update();
-                }
-            }
-            event->accept();
-            return;
-        }
+        cycleDimensionTypeHint(event);
         break;
 
-    case Qt::Key_D: {
-        // If an entity is selected, immediately add the appropriate
-        // constraint.  TAB cycles the type (e.g. Radius ↔ Diameter).
-        if (m_selectedId >= 0) {
-            SketchEntity* sel = selectedEntity();
-            if (!sel) break;
-
-            // --- Line → Distance ---
-            if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
-                if (!findDrivingConstraint(sel->id, ConstraintType::Distance)) {
-                    double currentLen = QLineF(sel->points[0], sel->points[1]).length();
-                    setConstraintTargetsForLine(sel->id, sel->points[0], sel->points[1]);
-
-                    QPointF mid = (sel->points[0] + sel->points[1]) / 2.0;
-                    QPointF along = sel->points[1] - sel->points[0];
-                    double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
-                    QPointF perp = (len > 1e-6)
-                        ? QPointF(-along.y() / len, along.x() / len)
-                        : QPointF(0, -1);
-                    QPointF labelPos = mid + perp * 10.0;
-
-                    createConstraint(ConstraintType::Distance, currentLen, labelPos,
-                                     /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
-
-                    m_dKeyTypeIndex = 0;
-                    m_dKeyTypeHint.clear();
-                    break;
-                }
-            }
-
-            // --- Circle/Arc → Radius or Diameter (TAB toggles) ---
-            if ((sel->type == SketchEntityType::Circle
-                 || sel->type == SketchEntityType::Arc)
-                && !sel->points.empty()) {
-                if (!findDrivingConstraint(sel->id, ConstraintType::Radius)
-                    && !findDrivingConstraint(sel->id, ConstraintType::Diameter)) {
-                    // Index 0 = Radius (default), 1 = Diameter
-                    ConstraintType ctype = (m_dKeyTypeIndex == 1)
-                        ? ConstraintType::Diameter
-                        : ConstraintType::Radius;
-                    bool isDiameter = (ctype == ConstraintType::Diameter);
-
-                    double currentValue = isDiameter
-                        ? sel->radius * 2.0
-                        : sel->radius;
-
-                    setConstraintTargetsForRadial(sel->id, sel->points[0]);
-
-                    QPointF labelPos = sel->points[0];
-                    if (sel->points.size() >= 2) {
-                        QPointF dir = sel->points[1] - sel->points[0];
-                        double dirLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                        if (dirLen > 1e-6)
-                            labelPos = QPointF(sel->points[0]) + dir / dirLen * sel->radius;
-                    } else {
-                        labelPos = QPointF(sel->points[0]) + QPointF(sel->radius, 0);
-                    }
-
-                    createConstraint(ctype, currentValue, labelPos,
-                                     /*skipOverConstrainCheck=*/false, /*startEditing=*/true);
-
-                    m_dKeyTypeIndex = 0;
-                    m_dKeyTypeHint.clear();
-                    break;
-                }
-            }
-        }
-        setActiveTool(SketchTool::Dimension);
+    case Qt::Key_D:
+        quickDimensionKey();
         break;
-    }
     case Qt::Key_G:
         setGridVisible(!m_showGrid);
         break;
@@ -8668,315 +4665,587 @@ void SketchCanvas::resizeEvent(QResizeEvent* event)
     update();
 }
 
-void SketchCanvas::contextMenuEvent(QContextMenuEvent* event)
+// Collect group names that an entity belongs to
+QStringList SketchCanvas::groupNamesForEntity(int eid) const
 {
-    QPointF worldPos = screenToWorld(event->pos());
-
-    // Check if right-clicking on a handle of an arc slot
-    const SketchEntity* sel = selectedEntity();
-    if (sel && sel->type == SketchEntityType::Slot && sel->points.size() >= 3) {
-        int handleIdx = hitTestHandle(worldPos);
-        // Only allow fixing endpoint handles (1 or 2), not arc center (0)
-        // Storage: points[0] = arc center, points[1] = start, points[2] = end
-        if (handleIdx == 1 || handleIdx == 2) {
-            QMenu menu(this);
-
-            if (m_fixedHandleIndex == handleIdx) {
-                QAction* unfixAction = menu.addAction(tr("Unfix Point"));
-                connect(unfixAction, &QAction::triggered, this, [this]() {
-                    m_fixedHandleIndex = -1;
-                    update();
-                });
-            } else {
-                // Only one handle can be fixed at a time
-                QString actionText = (m_fixedHandleIndex >= 0)
-                    ? tr("Fix This Point Instead")
-                    : tr("Fix Point for Resize");
-                QAction* fixAction = menu.addAction(actionText);
-                connect(fixAction, &QAction::triggered, this, [this, handleIdx]() {
-                    m_fixedHandleIndex = handleIdx;
-                    update();
-                });
-            }
-
-            menu.exec(event->globalPos());
-            return;
-        }
+    QStringList names;
+    for (const SketchGroup& g : m_groups) {
+        if (g.containsEntity(eid))
+            names.append(QString::fromStdString(g.name));
     }
-
-    // Check if right-clicking on a constraint label
-    int constraintId = hitTestConstraintLabel(worldPos);
-    if (constraintId >= 0) {
-        SketchConstraint* constraint = constraintById(constraintId);
-        if (constraint) {
-            QMenu menu(this);
-
-            // Only show conversion options for dimensional constraints
-            bool isDimensional = (constraint->type == ConstraintType::Distance ||
-                                  constraint->type == ConstraintType::Radius ||
-                                  constraint->type == ConstraintType::Diameter ||
-                                  constraint->type == ConstraintType::Angle);
-
-            if (isDimensional) {
-                if (constraint->isDriving) {
-                    QAction* toDrivenAction = menu.addAction(tr("Make Driven (Reference)"));
-                    connect(toDrivenAction, &QAction::triggered, this, [this, constraintId]() {
-                        convertToDriven(constraintId);
-                    });
-                } else {
-                    QAction* toDrivingAction = menu.addAction(tr("Make Driving"));
-                    connect(toDrivingAction, &QAction::triggered, this, [this, constraintId]() {
-                        convertToDriving(constraintId);
-                    });
-                }
-                menu.addSeparator();
-            }
-
-            QAction* editAction = menu.addAction(tr("Edit Value..."));
-            connect(editAction, &QAction::triggered, this, [this, constraintId]() {
-                editConstraintValue(constraintId);
-            });
-
-            QAction* deleteAction = menu.addAction(tr("Delete"));
-            connect(deleteAction, &QAction::triggered, this, [this, constraintId]() {
-                deleteConstraintById(constraintId);
-            });
-
-            menu.exec(event->globalPos());
-            return;
-        }
-    }
-
-    // Check if right-clicking on an entity
-    int entityId = hitTest(worldPos);
-
-    // ---------------------------------------------------------------
-    //  Helper lambdas for building entity context menus
-    // ---------------------------------------------------------------
-
-    // Collect group names that an entity belongs to
-    auto groupNamesForEntity = [this](int eid) -> QStringList {
-        QStringList names;
-        for (const SketchGroup& g : m_groups) {
-            if (g.containsEntity(eid))
-                names.append(QString::fromStdString(g.name));
-        }
-        return names;
-    };
+    return names;
+}
 
     // Collect the distinct set of group IDs that the current selection
     // (or a single entity) belongs to
-    auto groupIdsForSelection = [this](const QSet<int>& ids) -> QSet<int> {
-        QSet<int> gids;
-        for (const SketchGroup& g : m_groups) {
-            for (int eid : ids) {
-                if (g.containsEntity(eid)) {
-                    gids.insert(g.id);
-                    break;
-                }
+QSet<int> SketchCanvas::groupIdsForSelection(const QSet<int>& ids) const
+{
+    QSet<int> gids;
+    for (const SketchGroup& g : m_groups) {
+        for (int eid : ids) {
+            if (g.containsEntity(eid)) {
+                gids.insert(g.id);
+                break;
             }
         }
-        return gids;
-    };
+    }
+    return gids;
+}
 
     // Adds the "Member of Group(s):" info label at the top of a menu.
-    // Greyed-out when no group membership exists.
-    auto addGroupInfoLabel = [&](QMenu& menu, const QSet<int>& entityIds) {
-        QStringList allNames;
-        for (int eid : entityIds) {
-            for (const QString& n : groupNamesForEntity(eid)) {
-                if (!allNames.contains(n))
-                    allNames.append(n);
-            }
+    // Grayed-out when no group membership exists.
+void SketchCanvas::addGroupInfoLabel(QMenu& menu, const QSet<int>& entityIds)
+{
+    QStringList allNames;
+    for (int eid : entityIds) {
+        for (const QString& n : groupNamesForEntity(eid)) {
+            if (!allNames.contains(n))
+                allNames.append(n);
         }
+    }
 
-        QAction* infoAction;
-        if (allNames.isEmpty()) {
-            infoAction = menu.addAction(tr("Member of Group(s): (none)"));
-        } else {
-            infoAction = menu.addAction(
-                tr("Member of Group(s): %1").arg(allNames.join(QStringLiteral(", "))));
-        }
-        infoAction->setEnabled(false);  // always greyed — informational only
-        menu.addSeparator();
-    };
+    QAction* infoAction;
+    if (allNames.isEmpty()) {
+        infoAction = menu.addAction(tr("Member of Group(s): (none)"));
+    } else {
+        infoAction = menu.addAction(
+            tr("Member of Group(s): %1").arg(allNames.join(QStringLiteral(", "))));
+    }
+    infoAction->setEnabled(false);  // always grayed, informational only
+    menu.addSeparator();
+}
+
+    // Adds a Constrain submenu offering exactly the geometric constraints
+    // the library says apply to the current selection.
+    //
+    // Used for BOTH the single- and multi-selection menus. It was in the
+    // multi-selection one alone at first, which meant the single case
+    // (select one line, ask to make it horizontal) silently had no entry,
+    // and that is the case people reach for first.
+void SketchCanvas::addConstrainMenu(QMenu& menu)
+{
+    std::vector<ConstraintType> opts;
+    const std::vector<int> selIds = selectedEntityList();
+    if (selIds.size() >= 2) {
+        const SketchEntity* a = entityById(selIds[0]);
+        const SketchEntity* b = entityById(selIds[1]);
+        if (a && b) opts = sketch::suggestConstraints(*a, *b);
+    } else if (selIds.size() == 1) {
+        if (const SketchEntity* only = entityById(selIds[0]))
+            opts = sketch::suggestConstraints(*only);
+    }
+    // Dimensional ones need a value, which is the Dimension tool's job.
+    opts.erase(std::remove_if(opts.begin(), opts.end(),
+                              [](ConstraintType t) {
+                                  return !sketch::isGeometricConstraint(t);
+                              }),
+               opts.end());
+    if (opts.empty()) return;
+
+    menu.addSeparator();
+    QMenu* constrainMenu = menu.addMenu(tr("Constrain"));
+    for (ConstraintType t : opts) {
+        QAction* act = constrainMenu->addAction(
+            QString::fromUtf8(sketch::constraintTypeName(t)));
+        connect(act, &QAction::triggered, this, [this, t]() {
+            applyConstraintToSelection(t);
+        });
+    }
+    constrainMenu->addSeparator();
+    QAction* fixAct = constrainMenu->addAction(
+        selectionHasFixedPoint() ? tr("Unfix") : tr("Fix"));
+    connect(fixAct, &QAction::triggered, this, [this]() { fixSelectedEntities(); });
+}
 
     // Adds Transform and Align submenus (used for both single + multi)
-    auto addTransformAlignMenus = [this](QMenu& menu) {
-        QMenu* transformMenu = menu.addMenu(tr("Transform"));
+void SketchCanvas::addTransformAlignMenus(QMenu& menu)
+{
+    QMenu* transformMenu = menu.addMenu(tr("Transform"));
 
-        QAction* moveAction = transformMenu->addAction(tr("Move..."));
-        connect(moveAction, &QAction::triggered, this, [this]() {
-            transformSelectedEntities(TransformType::Move);
-        });
+    QAction* moveAction = transformMenu->addAction(tr("Move..."));
+    connect(moveAction, &QAction::triggered, this, [this]() {
+        transformSelectedEntities(TransformType::Move);
+    });
 
-        QAction* copyAction = transformMenu->addAction(tr("Copy..."));
-        connect(copyAction, &QAction::triggered, this, [this]() {
-            transformSelectedEntities(TransformType::Copy);
-        });
+    QAction* copyAction = transformMenu->addAction(tr("Copy..."));
+    connect(copyAction, &QAction::triggered, this, [this]() {
+        transformSelectedEntities(TransformType::Copy);
+    });
 
-        QAction* rotateAction = transformMenu->addAction(tr("Rotate..."));
-        connect(rotateAction, &QAction::triggered, this, [this]() {
-            transformSelectedEntities(TransformType::Rotate);
-        });
+    QAction* rotateAction = transformMenu->addAction(tr("Rotate..."));
+    connect(rotateAction, &QAction::triggered, this, [this]() {
+        transformSelectedEntities(TransformType::Rotate);
+    });
 
-        QAction* scaleAction = transformMenu->addAction(tr("Scale..."));
-        connect(scaleAction, &QAction::triggered, this, [this]() {
-            transformSelectedEntities(TransformType::Scale);
-        });
+    QAction* scaleAction = transformMenu->addAction(tr("Scale..."));
+    connect(scaleAction, &QAction::triggered, this, [this]() {
+        transformSelectedEntities(TransformType::Scale);
+    });
 
-        QAction* mirrorAction = transformMenu->addAction(tr("Mirror..."));
-        connect(mirrorAction, &QAction::triggered, this, [this]() {
-            transformSelectedEntities(TransformType::Mirror);
-        });
+    QAction* mirrorAction = transformMenu->addAction(tr("Mirror..."));
+    connect(mirrorAction, &QAction::triggered, this, [this]() {
+        transformSelectedEntities(TransformType::Mirror);
+    });
 
-        menu.addSeparator();
+    menu.addSeparator();
 
-        QMenu* alignMenu = menu.addMenu(tr("Align"));
+    QMenu* alignMenu = menu.addMenu(tr("Align"));
 
-        QAction* alignLeftAction = alignMenu->addAction(tr("Align Left"));
-        connect(alignLeftAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::Left);
-        });
+    QAction* alignLeftAction = alignMenu->addAction(tr("Align Left"));
+    connect(alignLeftAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::Left);
+    });
 
-        QAction* alignRightAction = alignMenu->addAction(tr("Align Right"));
-        connect(alignRightAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::Right);
-        });
+    QAction* alignRightAction = alignMenu->addAction(tr("Align Right"));
+    connect(alignRightAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::Right);
+    });
 
-        QAction* alignTopAction = alignMenu->addAction(tr("Align Top"));
-        connect(alignTopAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::Top);
-        });
+    QAction* alignTopAction = alignMenu->addAction(tr("Align Top"));
+    connect(alignTopAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::Top);
+    });
 
-        QAction* alignBottomAction = alignMenu->addAction(tr("Align Bottom"));
-        connect(alignBottomAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::Bottom);
-        });
+    QAction* alignBottomAction = alignMenu->addAction(tr("Align Bottom"));
+    connect(alignBottomAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::Bottom);
+    });
 
-        alignMenu->addSeparator();
+    alignMenu->addSeparator();
 
-        QAction* alignHCenterAction = alignMenu->addAction(tr("Center Horizontally"));
-        connect(alignHCenterAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::HorizontalCenter);
-        });
+    QAction* alignHCenterAction = alignMenu->addAction(tr("Center Horizontally"));
+    connect(alignHCenterAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::HorizontalCenter);
+    });
 
-        QAction* alignVCenterAction = alignMenu->addAction(tr("Center Vertically"));
-        connect(alignVCenterAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::VerticalCenter);
-        });
+    QAction* alignVCenterAction = alignMenu->addAction(tr("Center Vertically"));
+    connect(alignVCenterAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::VerticalCenter);
+    });
 
-        alignMenu->addSeparator();
+    alignMenu->addSeparator();
 
-        QAction* distributeHAction = alignMenu->addAction(tr("Distribute Horizontally"));
-        connect(distributeHAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::DistributeHorizontal);
-        });
+    QAction* distributeHAction = alignMenu->addAction(tr("Distribute Horizontally"));
+    connect(distributeHAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::DistributeHorizontal);
+    });
 
-        QAction* distributeVAction = alignMenu->addAction(tr("Distribute Vertically"));
-        connect(distributeVAction, &QAction::triggered, this, [this]() {
-            alignSelectedEntities(AlignmentType::DistributeVertical);
-        });
-    };
+    QAction* distributeVAction = alignMenu->addAction(tr("Distribute Vertically"));
+    connect(distributeVAction, &QAction::triggered, this, [this]() {
+        alignSelectedEntities(AlignmentType::DistributeVertical);
+    });
+}
 
-    // ---------------------------------------------------------------
-    //  Multi-selection context menu
-    // ---------------------------------------------------------------
-    if (entityId >= 0 && m_selectedIds.size() > 1 && m_selectedIds.contains(entityId)) {
+// Context menu, multi-segment slot: when two or more lines/arcs are selected,
+// offer to make a slot that follows them as a path (chain, loop, or
+// branching tree). Returns true when it showed a menu.
+bool SketchCanvas::showPathSlotContextMenu(const QPoint& globalPos)
+{
+    int curveCount = 0;
+    for (const SketchEntity* e : selectedEntities())
+        if (e && (e->type == SketchEntityType::Line
+                  || e->type == SketchEntityType::Arc))
+            ++curveCount;
+    if (curveCount >= 2) {
         QMenu menu(this);
-        int count = m_selectedIds.size();
+        QAction* mk = menu.addAction(tr("Create Slot from Path"));
+        connect(mk, &QAction::triggered, this,
+                [this]() { createTreeSlotFromSelection(); });
+        menu.exec(globalPos);
+        return true;
+    }
+    return false;
+}
 
-        // --- Group info label ---
-        addGroupInfoLabel(menu, m_selectedIds);
-
-        // Check if all selected are construction or all normal
-        bool allConstruction = true;
-        bool allNormal = true;
-        for (int id : m_selectedIds) {
-            const SketchEntity* ent = entityById(id);
-            if (ent) {
-                if (ent->isConstruction) allNormal = false;
-                else allConstruction = false;
-            }
+// Context menu, Bezier: Insert/Delete Fit Point and Open/Close Spline.
+// Returns true when it showed a menu.
+bool SketchCanvas::showBezierContextMenu(const SketchEntity* sel, const QPointF& worldPos, const QPoint& globalPos)
+{
+    int aS = -1, aA = -1;
+    const bool anchorSel = selectedBezierAnchor(aS, aA);
+    const SketchEntity* bsel =
+        (sel && sel->type == SketchEntityType::Spline && sel->splineBezier) ? sel
+        : (anchorSel ? entityById(aS) : nullptr);
+    if (bsel) {
+        QMenu menu(this);
+        const int sid = bsel->id;
+        const QPointF wp = worldPos;
+        QAction* ins = menu.addAction(tr("Insert Fit Point"));
+        connect(ins, &QAction::triggered, this,
+                [this, sid, wp]() { insertBezierFitPoint(sid, wp); });
+        QAction* oc = menu.addAction(bsel->splineClosed ? tr("Open Spline")
+                                                        : tr("Close Spline"));
+        connect(oc, &QAction::triggered, this,
+                [this, sid]() { toggleBezierClosed(sid); });
+        if (anchorSel) {
+            QAction* del = menu.addAction(tr("Delete Fit Point"));
+            connect(del, &QAction::triggered, this,
+                    [this, aS, aA]() { deleteBezierAnchor(aS, aA); });
         }
+        menu.exec(globalPos);
+        return true;
+    }
+    return false;
+}
 
-        // Construction geometry toggle for all
-        if (allConstruction) {
-            QAction* normalAction = menu.addAction(tr("Make All Normal Geometry (%1)").arg(count));
-            connect(normalAction, &QAction::triggered, this, [this]() {
-                for (int id : m_selectedIds) {
-                    SketchEntity* ent = entityById(id);
-                    if (ent) ent->isConstruction = false;
-                }
-                m_profilesCacheDirty = true;
-                emit selectionChanged(m_selectedId);
-                update();
-            });
-        } else if (allNormal) {
-            QAction* constructionAction = menu.addAction(tr("Make All Construction Geometry (%1)").arg(count));
-            connect(constructionAction, &QAction::triggered, this, [this]() {
-                for (int id : m_selectedIds) {
-                    SketchEntity* ent = entityById(id);
-                    if (ent) ent->isConstruction = true;
-                }
-                m_profilesCacheDirty = true;
-                emit selectionChanged(m_selectedId);
+// Context menu, arc-slot endpoint handle: fix/unfix the point for resize.
+// Returns true when it showed a menu.
+bool SketchCanvas::showSlotHandleContextMenu(const SketchEntity* sel, const QPointF& worldPos, const QPoint& globalPos)
+{
+    int handleIdx = hitTestHandle(worldPos);
+    // Only allow fixing endpoint handles (1 or 2), not arc center (0)
+    // Storage: points[0] = arc center, points[1] = start, points[2] = end
+    if (handleIdx == 1 || handleIdx == 2) {
+        QMenu menu(this);
+
+        if (m_fixedHandleIndex == handleIdx) {
+            QAction* unfixAction = menu.addAction(tr("Unfix Point"));
+            connect(unfixAction, &QAction::triggered, this, [this]() {
+                m_fixedHandleIndex = -1;
                 update();
             });
         } else {
-            // Mixed - show both options
-            QAction* normalAction = menu.addAction(tr("Make All Normal Geometry (%1)").arg(count));
-            connect(normalAction, &QAction::triggered, this, [this]() {
+            // Only one handle can be fixed at a time
+            QString actionText = (m_fixedHandleIndex >= 0)
+                ? tr("Fix This Point Instead")
+                : tr("Fix Point for Resize");
+            QAction* fixAction = menu.addAction(actionText);
+            connect(fixAction, &QAction::triggered, this, [this, handleIdx]() {
+                m_fixedHandleIndex = handleIdx;
+                update();
+            });
+        }
+
+        menu.exec(globalPos);
+        return true;
+    }
+    return false;
+}
+
+// Context menu on a constraint label: driving/driven, edit value, delete.
+// Returns true when it showed a menu.
+bool SketchCanvas::showConstraintContextMenu(int constraintId, const QPoint& globalPos)
+{
+    SketchConstraint* constraint = constraintById(constraintId);
+    if (constraint) {
+        QMenu menu(this);
+
+        // Only show conversion options for dimensional constraints
+        bool isDimensional = (constraint->type == ConstraintType::Distance ||
+                              constraint->type == ConstraintType::Radius ||
+                              constraint->type == ConstraintType::Diameter ||
+                              constraint->type == ConstraintType::Angle);
+
+        if (isDimensional) {
+            if (constraint->isDriving) {
+                QAction* toDrivenAction = menu.addAction(tr("Make Driven (Reference)"));
+                connect(toDrivenAction, &QAction::triggered, this, [this, constraintId]() {
+                    convertToDriven(constraintId);
+                });
+            } else {
+                QAction* toDrivingAction = menu.addAction(tr("Make Driving"));
+                connect(toDrivingAction, &QAction::triggered, this, [this, constraintId]() {
+                    convertToDriving(constraintId);
+                });
+            }
+            menu.addSeparator();
+        }
+
+        QAction* editAction = menu.addAction(tr("Edit Value..."));
+        connect(editAction, &QAction::triggered, this, [this, constraintId]() {
+            editConstraintValue(constraintId);
+        });
+
+        QAction* deleteAction = menu.addAction(tr("Delete"));
+        connect(deleteAction, &QAction::triggered, this, [this, constraintId]() {
+            deleteConstraintById(constraintId);
+        });
+
+        menu.exec(globalPos);
+        return true;
+    }
+    return false;
+}
+
+// Context menu when the right-clicked entity is one of several selected.
+void SketchCanvas::showMultiSelectionContextMenu(const QPoint& globalPos)
+{
+    QMenu menu(this);
+    int count = m_selectedIds.size();
+
+    // --- Group info label ---
+    addGroupInfoLabel(menu, m_selectedIds);
+
+    // Check if all selected are construction or all normal
+    bool allConstruction = true;
+    bool allNormal = true;
+    for (int id : m_selectedIds) {
+        const SketchEntity* ent = entityById(id);
+        if (ent) {
+            if (ent->isConstruction) allNormal = false;
+            else allConstruction = false;
+        }
+    }
+
+    // Construction geometry toggle for all: whichever direction applies, both
+    // when the selection is mixed.
+    auto addMakeAll = [&](bool toConstruction) {
+        QAction* act = menu.addAction(toConstruction
+            ? tr("Make All Construction Geometry (%1)").arg(count)
+            : tr("Make All Normal Geometry (%1)").arg(count));
+        connect(act, &QAction::triggered, this, [this, toConstruction]() {
+            for (int id : m_selectedIds) {
+                SketchEntity* ent = entityById(id);
+                if (ent) ent->isConstruction = toConstruction;
+            }
+            m_profilesCacheDirty = true;
+            emit selectionChanged(m_selectedId);
+            update();
+        });
+    };
+    if (allConstruction || !allNormal) addMakeAll(false);   // all construction, or mixed
+    if (allNormal || !allConstruction) addMakeAll(true);    // all normal, or mixed
+
+    // --- Per-entity color (0xRRGGBB; -1 = default / by layer) ---
+    {
+        bool anyColored = false;
+        int shared = -2;   // -2 = not yet seen, -1 = mixed
+        for (int id : m_selectedIds) {
+            const SketchEntity* ent = entityById(id);
+            if (!ent) continue;
+            if (ent->color >= 0) anyColored = true;
+            if (shared == -2) shared = ent->color;
+            else if (shared != ent->color) shared = -1;
+        }
+        QAction* setColorAction = menu.addAction(tr("Set Color... (%1)").arg(count));
+        connect(setColorAction, &QAction::triggered, this, [this, shared]() {
+            QDialog dlg(this);
+            dlg.setWindowTitle(tr("Entity Color"));
+            auto* lay = new QVBoxLayout(&dlg);
+            auto* picker = new ColorPicker(&dlg);
+            if (shared >= 0)
+                picker->setColor(QColor((shared >> 16) & 0xFF, (shared >> 8) & 0xFF, shared & 0xFF));
+            picker->anchorPrevious();
+            lay->addWidget(picker);
+            auto* buttons = new QDialogButtonBox(
+                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+            auto* defaultBtn = buttons->addButton(tr("Default (by layer)"),
+                                                  QDialogButtonBox::ResetRole);
+            lay->addWidget(buttons);
+            connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+            connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+            // Reset (Default) closes with a sentinel so the caller clears color.
+            bool toDefault = false;
+            connect(defaultBtn, &QPushButton::clicked, &dlg, [&dlg, &toDefault]() {
+                toDefault = true; dlg.accept();
+            });
+            if (dlg.exec() != QDialog::Accepted) return;
+            int packed = -1;
+            if (!toDefault) {
+                const QColor c = picker->color();
+                packed = (c.red() << 16) | (c.green() << 8) | c.blue();
+            }
+            for (int id : m_selectedIds) {
+                if (SketchEntity* ent = entityById(id)) ent->color = packed;
+            }
+            emit selectionChanged(m_selectedId);
+            update();
+        });
+        if (anyColored) {
+            QAction* clearColorAction = menu.addAction(tr("Clear Color (%1)").arg(count));
+            connect(clearColorAction, &QAction::triggered, this, [this]() {
                 for (int id : m_selectedIds) {
-                    SketchEntity* ent = entityById(id);
-                    if (ent) ent->isConstruction = false;
+                    if (SketchEntity* ent = entityById(id)) ent->color = -1;
                 }
-                m_profilesCacheDirty = true;
                 emit selectionChanged(m_selectedId);
                 update();
             });
+        }
+    }
 
-            QAction* constructionAction = menu.addAction(tr("Make All Construction Geometry (%1)").arg(count));
-            connect(constructionAction, &QAction::triggered, this, [this]() {
-                for (int id : m_selectedIds) {
-                    SketchEntity* ent = entityById(id);
-                    if (ent) ent->isConstruction = true;
-                }
+    // --- Sweep along the selected path ---
+    // Only for a single line or arc: decomposeSweep() offsets one
+    // element and caps its two ends, so a longer path would need its
+    // offsets trimmed at each joint, which it does not do yet.
+    if (m_selectedIds.size() == 1) {
+        const SketchEntity* sel = entityById(*m_selectedIds.begin());
+        if (sel && (sel->type == SketchEntityType::Line
+                    || sel->type == SketchEntityType::Arc)) {
+            menu.addSeparator();
+            QAction* sweepAction = menu.addAction(tr("Sweep Along This Path..."));
+            sweepAction->setToolTip(
+                tr("Sweep a width along this line or arc, leaving the path "
+                   "itself as the construction centerline"));
+            connect(sweepAction, &QAction::triggered, this, [this]() {
+                sweepSelectedPath();
+            });
+        }
+    }
+
+    menu.addSeparator();
+
+    // --- Transform / Align (shared helper) ---
+    addConstrainMenu(menu);
+    addTransformAlignMenus(menu);
+
+    menu.addSeparator();
+
+    // --- Group / Ungroup ---
+    QAction* groupAction = menu.addAction(tr("Group (%1 entities)").arg(count));
+    connect(groupAction, &QAction::triggered, this, [this]() {
+        groupSelectedEntities();
+    });
+
+    // Enter Group / Ungroup: show for every group that has at least
+    // one selected member
+    QSet<int> selGroupIds = groupIdsForSelection(m_selectedIds);
+    if (!selGroupIds.isEmpty()) {
+        for (int gid : selGroupIds) {
+            const SketchGroup* grp = groupById(gid);
+            if (!grp) continue;
+
+            QAction* enterAction = menu.addAction(
+                tr("Enter Group \"%1\"").arg(QString::fromStdString(grp->name)));
+            connect(enterAction, &QAction::triggered, this, [this, gid]() {
+                enterGroup(gid);
+            });
+
+            QAction* ungroupAction = menu.addAction(
+                tr("Ungroup \"%1\"").arg(QString::fromStdString(grp->name)));
+            connect(ungroupAction, &QAction::triggered, this, [this, gid]() {
+                ungroupEntities(gid);
+            });
+        }
+    }
+
+    menu.addSeparator();
+
+    // Boolean-like operations
+    QAction* splitAllAction = menu.addAction(tr("Split All at Intersections"));
+    connect(splitAllAction, &QAction::triggered, this, [this]() {
+        splitSelectedAtIntersections();
+    });
+
+    // Rejoin: only enabled when all selected are collinear lines
+    {
+        bool allLines = true;
+        for (int id : m_selectedIds) {
+            const SketchEntity* ent = entityById(id);
+            if (!ent || ent->type != SketchEntityType::Line) {
+                allLines = false;
+                break;
+            }
+        }
+        QAction* rejoinAction = menu.addAction(tr("Rejoin Segments"));
+        rejoinAction->setEnabled(allLines);
+        connect(rejoinAction, &QAction::triggered, this, [this]() {
+            rejoinCollinearSegments();
+        });
+    }
+
+    menu.addSeparator();
+
+    // Delete all selected
+    QAction* deleteAction = menu.addAction(tr("Delete All (%1)").arg(count));
+    connect(deleteAction, &QAction::triggered, this, [this, count]() {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            tr("Delete Entities"),
+            tr("Delete %1 selected entities?").arg(count),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::Yes
+        );
+        if (reply == QMessageBox::Yes) {
+            deleteSelectedEntities();
+        }
+    });
+
+    menu.exec(globalPos);
+}
+
+// Context menu on a single entity. Returns true when it showed a menu.
+bool SketchCanvas::showEntityContextMenu(int entityId, const QPointF& worldPos, const QPoint& globalPos)
+{
+    SketchEntity* entity = entityById(entityId);
+    if (entity) {
+        QMenu menu(this);
+
+        // --- Group info label ---
+        addGroupInfoLabel(menu, {entityId});
+
+        // Construction geometry toggle
+        QAction* constructionAction = menu.addAction(
+            entity->isConstruction ? tr("Make Normal Geometry") : tr("Make Construction Geometry"));
+        connect(constructionAction, &QAction::triggered, this, [this, entityId]() {
+            SketchEntity* ent = entityById(entityId);
+            if (ent) {
+                ent->isConstruction = !ent->isConstruction;
+                if (ent->isConstruction) ent->isCenterline = false;
                 m_profilesCacheDirty = true;
-                emit selectionChanged(m_selectedId);
+                emit entityModified(entityId);
                 update();
+            }
+        });
+
+        // Centerline linetype toggle (a dash-dot reference axis; lines
+        // only, matching how symmetry and revolve axes are drawn).
+        if (entity->type == SketchEntityType::Line) {
+            QAction* centerlineAction = menu.addAction(
+                entity->isCenterline ? tr("Make Normal Geometry")
+                                     : tr("Make Centerline"));
+            connect(centerlineAction, &QAction::triggered, this, [this, entityId]() {
+                SketchEntity* ent = entityById(entityId);
+                if (ent) {
+                    ent->isCenterline = !ent->isCenterline;
+                    if (ent->isCenterline) ent->isConstruction = false;
+                    m_profilesCacheDirty = true;
+                    emit entityModified(entityId);
+                    update();
+                }
             });
         }
 
         menu.addSeparator();
 
-        // --- Transform / Align (shared helper) ---
+        // --- Transform / Align (same as multi, operates on selection) ---
+        // Ensure this entity is selected so the transform functions work
+        if (!m_selectedIds.contains(entityId)) {
+            selectEntity(entityId);
+        }
+        addConstrainMenu(menu);
         addTransformAlignMenus(menu);
 
         menu.addSeparator();
 
-        // --- Group / Ungroup ---
-        QAction* groupAction = menu.addAction(tr("Group (%1 entities)").arg(count));
-        connect(groupAction, &QAction::triggered, this, [this]() {
-            groupSelectedEntities();
-        });
+        // --- Enter Group / Leave Group / Ungroup ---
+        if (m_enteredGroupId >= 0) {
+            // Already inside a group: offer Leave Group
+            QString gName;
+            for (const SketchGroup& g : m_groups) {
+                if (g.id == m_enteredGroupId) { gName = QString::fromStdString(g.name); break; }
+            }
+            QAction* leaveAction = menu.addAction(
+                tr("Leave Group \"%1\"").arg(gName));
+            connect(leaveAction, &QAction::triggered, this, [this]() {
+                leaveGroup();
+            });
+            menu.addSeparator();
+        }
 
-        // Enter Group / Ungroup — show for every group that has at least
-        // one selected member
-        QSet<int> selGroupIds = groupIdsForSelection(m_selectedIds);
-        if (!selGroupIds.isEmpty()) {
-            for (int gid : selGroupIds) {
-                const SketchGroup* grp = nullptr;
-                for (const SketchGroup& g : m_groups) {
-                    if (g.id == gid) { grp = &g; break; }
-                }
+        QSet<int> entGroupIds = groupIdsForSelection({entityId});
+        if (!entGroupIds.isEmpty()) {
+            for (int gid : entGroupIds) {
+                const SketchGroup* grp = groupById(gid);
                 if (!grp) continue;
 
-                QAction* enterAction = menu.addAction(
-                    tr("Enter Group \"%1\"").arg(QString::fromStdString(grp->name)));
-                connect(enterAction, &QAction::triggered, this, [this, gid]() {
-                    enterGroup(gid);
-                });
+                // Only show Enter Group when not already inside it
+                if (m_enteredGroupId != gid) {
+                    QAction* enterAction = menu.addAction(
+                        tr("Enter Group \"%1\"").arg(QString::fromStdString(grp->name)));
+                    connect(enterAction, &QAction::triggered, this, [this, gid]() {
+                        enterGroup(gid);
+                    });
+                }
 
                 QAction* ungroupAction = menu.addAction(
                     tr("Ungroup \"%1\"").arg(QString::fromStdString(grp->name)));
@@ -8984,237 +5253,160 @@ void SketchCanvas::contextMenuEvent(QContextMenuEvent* event)
                     ungroupEntities(gid);
                 });
             }
+            menu.addSeparator();
         }
 
-        menu.addSeparator();
+        // --- Split submenu ---
+        QMenu* splitMenu = menu.addMenu(tr("Split"));
 
-        // Boolean-like operations
-        QAction* splitAllAction = menu.addAction(tr("Split All at Intersections"));
-        connect(splitAllAction, &QAction::triggered, this, [this]() {
-            splitSelectedAtIntersections();
-        });
-
-        // Rejoin — only enabled when all selected are collinear lines
-        {
-            bool allLines = true;
-            for (int id : m_selectedIds) {
-                const SketchEntity* ent = entityById(id);
-                if (!ent || ent->type != SketchEntityType::Line) {
-                    allLines = false;
-                    break;
-                }
-            }
-            QAction* rejoinAction = menu.addAction(tr("Rejoin Segments"));
-            rejoinAction->setEnabled(allLines);
-            connect(rejoinAction, &QAction::triggered, this, [this]() {
-                rejoinCollinearSegments();
-            });
-        }
-
-        menu.addSeparator();
-
-        // Delete all selected
-        QAction* deleteAction = menu.addAction(tr("Delete All (%1)").arg(count));
-        connect(deleteAction, &QAction::triggered, this, [this, count]() {
-            QMessageBox::StandardButton reply = QMessageBox::question(
-                this,
-                tr("Delete Entities"),
-                tr("Delete %1 selected entities?").arg(count),
-                QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::Yes
-            );
-            if (reply == QMessageBox::Yes) {
-                deleteSelectedEntities();
+        QAction* splitNearAction = splitMenu->addAction(tr("At Nearest Intersections"));
+        connect(splitNearAction, &QAction::triggered, this, [this, entityId, worldPos]() {
+            QVector<int> newIds = splitEntityNearClick(entityId, worldPos);
+            if (newIds.isEmpty()) {
+                QMessageBox::information(this, tr("Split"),
+                    tr("No intersections found near the click point."));
             }
         });
 
-        menu.exec(event->globalPos());
+        QAction* splitAllAction = splitMenu->addAction(tr("At All Intersections"));
+        connect(splitAllAction, &QAction::triggered, this, [this, entityId]() {
+            QVector<int> newIds = splitEntityAtIntersections(entityId);
+            if (newIds.isEmpty()) {
+                QMessageBox::information(this, tr("Split"),
+                    tr("No intersections found on this entity."));
+            }
+        });
+
+        menu.addSeparator();
+
+        QAction* deleteAction = menu.addAction(tr("Delete"));
+        connect(deleteAction, &QAction::triggered, this, [this, entityId]() {
+            m_entities.erase(
+                std::remove_if(m_entities.begin(), m_entities.end(),
+                               [entityId](const SketchEntity& e) { return e.id == entityId; }),
+                m_entities.end());
+
+            if (m_selectedId == entityId) {
+                m_selectedId = -1;
+                selectRemove(entityId);
+                emit selectionChanged(-1);
+            }
+            m_profilesCacheDirty = true;
+            update();
+        });
+
+        menu.exec(globalPos);
+        return true;
+    }
+    return false;
+}
+
+// Context menu on empty canvas: export options.
+void SketchCanvas::showCanvasContextMenu(const QPoint& globalPos)
+{
+    QMenu menu(this);
+
+    QAction* exportDXFAction = menu.addAction(tr("Export as DXF..."));
+    connect(exportDXFAction, &QAction::triggered, this, [this]() {
+        QString filePath = QFileDialog::getSaveFileName(
+            this, tr("Export DXF File"), QString(),
+            tr("DXF Files (*.dxf);;All Files (*)"));
+        if (filePath.isEmpty()) return;
+        if (!filePath.toLower().endsWith(QLatin1String(".dxf")))
+            filePath += QStringLiteral(".dxf");
+
+        std::vector<sketch::Entity> entities;
+        entities.reserve(static_cast<size_t>(m_entities.size()));
+        for (const auto& e : m_entities)
+            entities.push_back(static_cast<const sketch::Entity&>(e));
+
+        sketch::DXFExportOptions options;
+        // DXF OCS: keep the sketch plane through a round-trip, as the menu
+        // export paths do.
+        options.extrusion = hobbycad::planeBasisFor(sketchPlane()).normal;
+        if (!sketch::exportSketchToDXF(entities, filePath.toStdString(), options)) {
+            QMessageBox::critical(this, tr("Export Failed"),
+                tr("Failed to export DXF file."));
+        }
+    });
+
+    QAction* exportSVGAction = menu.addAction(tr("Export as SVG..."));
+    connect(exportSVGAction, &QAction::triggered, this, [this]() {
+        QString filePath = QFileDialog::getSaveFileName(
+            this, tr("Export SVG File"), QString(),
+            tr("SVG Files (*.svg);;All Files (*)"));
+        if (filePath.isEmpty()) return;
+        if (!filePath.toLower().endsWith(QLatin1String(".svg")))
+            filePath += QStringLiteral(".svg");
+
+        std::vector<sketch::Entity> entities;
+        entities.reserve(static_cast<size_t>(m_entities.size()));
+        for (const auto& e : m_entities)
+            entities.push_back(static_cast<const sketch::Entity&>(e));
+
+        std::vector<sketch::Constraint> constraints;
+        for (const auto& c : m_constraints) {
+            constraints.push_back(toLibraryConstraint(c));
+        }
+
+        sketch::SVGExportOptions options;
+        if (!sketch::exportSketchToSVG(entities, constraints, filePath.toStdString(), options)) {
+            QMessageBox::critical(this, tr("Export Failed"),
+                tr("Failed to export SVG file."));
+        }
+    });
+
+    menu.exec(globalPos);
+}
+
+void SketchCanvas::contextMenuEvent(QContextMenuEvent* event)
+{
+    // While a transform pick or drag owns the canvas the menu stays closed:
+    // its own Transform items would act on the same selection mid-step.
+    // Escape first, then right-click.
+    if (m_suppressNextContextMenu) {
+        m_suppressNextContextMenu = false;
+        event->accept();
+        return;
+    }
+    if (m_transformPick != TransformPick::None || m_transformPivotDragging || m_freeMoveHandle != FreeMoveHandle::None) {
+        event->accept();
+        return;
+    }
+    QPointF worldPos = screenToWorld(event->pos());
+    const QPoint globalPos = event->globalPos();
+
+    // Multi-segment slot: when two or more lines/arcs are selected, offer to
+    // make a slot that follows them as a path (chain, loop, or branching tree).
+    if (showPathSlotContextMenu(globalPos)) return;
+
+    const SketchEntity* sel = selectedEntity();
+
+    // Bezier: right-click offers Insert/Delete Fit Point and Open/Close Spline.
+    if (showBezierContextMenu(sel, worldPos, globalPos)) return;
+
+    // Right-click on an endpoint handle of an arc slot
+    if (sel && sel->type == SketchEntityType::Slot && sel->points.size() >= 3
+        && showSlotHandleContextMenu(sel, worldPos, globalPos)) {
         return;
     }
 
-    // ---------------------------------------------------------------
-    //  Single entity context menu
-    // ---------------------------------------------------------------
-    if (entityId >= 0) {
-        SketchEntity* entity = entityById(entityId);
-        if (entity) {
-            QMenu menu(this);
+    // Check if right-clicking on a constraint label
+    int constraintId = hitTestConstraintLabel(worldPos);
+    if (constraintId >= 0 && showConstraintContextMenu(constraintId, globalPos)) return;
 
-            // --- Group info label ---
-            addGroupInfoLabel(menu, {entityId});
-
-            // Construction geometry toggle
-            QAction* constructionAction = menu.addAction(
-                entity->isConstruction ? tr("Make Normal Geometry") : tr("Make Construction Geometry"));
-            connect(constructionAction, &QAction::triggered, this, [this, entityId]() {
-                SketchEntity* ent = entityById(entityId);
-                if (ent) {
-                    ent->isConstruction = !ent->isConstruction;
-                    m_profilesCacheDirty = true;
-                    emit entityModified(entityId);
-                    update();
-                }
-            });
-
-            menu.addSeparator();
-
-            // --- Transform / Align (same as multi, operates on selection) ---
-            // Ensure this entity is selected so the transform functions work
-            if (!m_selectedIds.contains(entityId)) {
-                selectEntity(entityId);
-            }
-            addTransformAlignMenus(menu);
-
-            menu.addSeparator();
-
-            // --- Enter Group / Leave Group / Ungroup ---
-            if (m_enteredGroupId >= 0) {
-                // Already inside a group — offer Leave Group
-                QString gName;
-                for (const SketchGroup& g : m_groups) {
-                    if (g.id == m_enteredGroupId) { gName = QString::fromStdString(g.name); break; }
-                }
-                QAction* leaveAction = menu.addAction(
-                    tr("Leave Group \"%1\"").arg(gName));
-                connect(leaveAction, &QAction::triggered, this, [this]() {
-                    leaveGroup();
-                });
-                menu.addSeparator();
-            }
-
-            QSet<int> entGroupIds = groupIdsForSelection({entityId});
-            if (!entGroupIds.isEmpty()) {
-                for (int gid : entGroupIds) {
-                    const SketchGroup* grp = nullptr;
-                    for (const SketchGroup& g : m_groups) {
-                        if (g.id == gid) { grp = &g; break; }
-                    }
-                    if (!grp) continue;
-
-                    // Only show Enter Group when not already inside it
-                    if (m_enteredGroupId != gid) {
-                        QAction* enterAction = menu.addAction(
-                            tr("Enter Group \"%1\"").arg(QString::fromStdString(grp->name)));
-                        connect(enterAction, &QAction::triggered, this, [this, gid]() {
-                            enterGroup(gid);
-                        });
-                    }
-
-                    QAction* ungroupAction = menu.addAction(
-                        tr("Ungroup \"%1\"").arg(QString::fromStdString(grp->name)));
-                    connect(ungroupAction, &QAction::triggered, this, [this, gid]() {
-                        ungroupEntities(gid);
-                    });
-                }
-                menu.addSeparator();
-            }
-
-            // --- Split submenu ---
-            QMenu* splitMenu = menu.addMenu(tr("Split"));
-
-            QAction* splitNearAction = splitMenu->addAction(tr("At Nearest Intersections"));
-            connect(splitNearAction, &QAction::triggered, this, [this, entityId, worldPos]() {
-                QVector<int> newIds = splitEntityNearClick(entityId, worldPos);
-                if (newIds.isEmpty()) {
-                    QMessageBox::information(this, tr("Split"),
-                        tr("No intersections found near the click point."));
-                }
-            });
-
-            QAction* splitAllAction = splitMenu->addAction(tr("At All Intersections"));
-            connect(splitAllAction, &QAction::triggered, this, [this, entityId]() {
-                QVector<int> newIds = splitEntityAtIntersections(entityId);
-                if (newIds.isEmpty()) {
-                    QMessageBox::information(this, tr("Split"),
-                        tr("No intersections found on this entity."));
-                }
-            });
-
-            menu.addSeparator();
-
-            QAction* deleteAction = menu.addAction(tr("Delete"));
-            connect(deleteAction, &QAction::triggered, this, [this, entityId]() {
-                m_entities.erase(
-                    std::remove_if(m_entities.begin(), m_entities.end(),
-                                   [entityId](const SketchEntity& e) { return e.id == entityId; }),
-                    m_entities.end());
-
-                if (m_selectedId == entityId) {
-                    m_selectedId = -1;
-                    m_selectedIds.remove(entityId);
-                    emit selectionChanged(-1);
-                }
-                m_profilesCacheDirty = true;
-                update();
-            });
-
-            menu.exec(event->globalPos());
-            return;
-        }
+    // Check if right-clicking on an entity: the multi-selection menu when it
+    // is one of several selected, otherwise the single-entity menu.
+    int entityId = hitTest(worldPos);
+    if (entityId >= 0 && m_selectedIds.size() > 1 && m_selectedIds.contains(entityId)) {
+        showMultiSelectionContextMenu(globalPos);
+        return;
     }
+    if (entityId >= 0 && showEntityContextMenu(entityId, worldPos, globalPos)) return;
 
     // No specific item clicked - show general sketch menu with export options
     if (!m_entities.isEmpty()) {
-        QMenu menu(this);
-
-        QAction* exportDXFAction = menu.addAction(tr("Export as DXF..."));
-        connect(exportDXFAction, &QAction::triggered, this, [this]() {
-            QString filePath = QFileDialog::getSaveFileName(
-                this, tr("Export DXF File"), QString(),
-                tr("DXF Files (*.dxf);;All Files (*)"));
-            if (filePath.isEmpty()) return;
-            if (!filePath.toLower().endsWith(QLatin1String(".dxf")))
-                filePath += QStringLiteral(".dxf");
-
-            std::vector<sketch::Entity> entities;
-            entities.reserve(static_cast<size_t>(m_entities.size()));
-            for (const auto& e : m_entities)
-                entities.push_back(static_cast<const sketch::Entity&>(e));
-
-            sketch::DXFExportOptions options;
-            if (!sketch::exportSketchToDXF(entities, filePath.toStdString(), options)) {
-                QMessageBox::critical(this, tr("Export Failed"),
-                    tr("Failed to export DXF file."));
-            }
-        });
-
-        QAction* exportSVGAction = menu.addAction(tr("Export as SVG..."));
-        connect(exportSVGAction, &QAction::triggered, this, [this]() {
-            QString filePath = QFileDialog::getSaveFileName(
-                this, tr("Export SVG File"), QString(),
-                tr("SVG Files (*.svg);;All Files (*)"));
-            if (filePath.isEmpty()) return;
-            if (!filePath.toLower().endsWith(QLatin1String(".svg")))
-                filePath += QStringLiteral(".svg");
-
-            std::vector<sketch::Entity> entities;
-            entities.reserve(static_cast<size_t>(m_entities.size()));
-            for (const auto& e : m_entities)
-                entities.push_back(static_cast<const sketch::Entity&>(e));
-
-            std::vector<sketch::Constraint> constraints;
-            for (const auto& c : m_constraints) {
-                sketch::Constraint lc;
-                lc.id = c.id;
-                lc.type = static_cast<sketch::ConstraintType>(c.type);
-                lc.entityIds = c.entityIds;
-                lc.pointIndices = c.pointIndices;
-                lc.value = c.value;
-                lc.isDriving = c.isDriving;
-                lc.labelPosition = c.labelPosition;
-                lc.labelVisible = c.labelVisible;
-                lc.enabled = c.enabled;
-                constraints.push_back(lc);
-            }
-
-            sketch::SVGExportOptions options;
-            if (!sketch::exportSketchToSVG(entities, constraints, filePath.toStdString(), options)) {
-                QMessageBox::critical(this, tr("Export Failed"),
-                    tr("Failed to export SVG file."));
-            }
-        });
-
-        menu.exec(event->globalPos());
+        showCanvasContextMenu(globalPos);
         return;
     }
 
@@ -9313,11 +5505,116 @@ void SketchCanvas::convertToDriven(int constraintId)
 // Multi-selection Operations
 // ============================================================================
 
+void SketchCanvas::copySelection()
+{
+    m_clipEntities.clear();
+    m_clipConstraints.clear();
+    if (m_selectedIds.isEmpty()) return;
+
+    const QSet<int>& sel = m_selectedIds;
+    for (const SketchEntity& e : m_entities)
+        if (sel.contains(e.id)) m_clipEntities.append(e);
+
+    // Only constraints wholly inside the selection travel with it; one that
+    // reaches outside would dangle on paste.
+    for (const SketchConstraint& c : m_constraints) {
+        if (c.entityIds.empty()) continue;
+        bool allIn = true;
+        for (int id : c.entityIds) if (!sel.contains(id)) { allIn = false; break; }
+        if (allIn) m_clipConstraints.append(c);
+    }
+}
+
+void SketchCanvas::cutSelection()
+{
+    if (m_selectedIds.isEmpty()) return;
+    copySelection();
+    deleteSelectedEntities();   // its own compound undo
+}
+
+bool SketchCanvas::pasteClipboard()
+{
+    if (m_clipEntities.isEmpty()) return false;
+
+    // A small offset so the pasted copy sits beside the original rather than
+    // exactly on top of it.
+    const double off = (m_gridSpacing > 0.0 ? m_gridSpacing : 10.0);
+    const double dx = off, dy = off;
+
+    // Pass 1: allocate fresh ids for every copied entity.
+    QHash<int,int> idMap;
+    for (const SketchEntity& src : m_clipEntities)
+        idMap.insert(src.id, nextEntityId());
+
+    auto remap = [&idMap](int& ref) {
+        if (ref >= 0) ref = idMap.value(ref, -1);  // drop links outside the paste
+    };
+
+    std::vector<sketch::UndoCommand> subs;
+    QVector<int> pastedIds;
+
+    // Pass 2: build and add each entity with remapped ids/links and offset.
+    for (const SketchEntity& src : m_clipEntities) {
+        SketchEntity e = src;
+        e.id = idMap.value(src.id);
+        e.groupId = -1;        // paste ungrouped
+        e.selected = false;
+        for (auto& pt : e.points) { pt.x += dx; pt.y += dy; }
+        remap(e.offsetParentId);
+        remap(e.projectionSourceId);
+        remap(e.tangentEntityId);
+        for (auto& pid : e.pathEntityIds) remap(pid);
+        m_entities.append(e);
+        subs.push_back(sketch::UndoCommand::addEntity(e, "Paste"));
+        pastedIds.append(e.id);
+        emit entityCreated(e.id);
+    }
+
+    // Constraints: remap their entity ids, offset their labels.
+    for (const SketchConstraint& src : m_clipConstraints) {
+        SketchConstraint c = src;
+        c.id = m_nextConstraintId++;
+        c.selected = false;
+        bool ok = true;
+        for (int& eid : c.entityIds) {
+            const int mapped = idMap.value(eid, -1);
+            if (mapped < 0) { ok = false; break; }
+            eid = mapped;
+        }
+        if (!ok) continue;
+        c.labelPosition = QPointF(c.labelPosition) + QPointF(dx, dy);
+        m_constraints.append(c);
+        subs.push_back(sketch::UndoCommand::addConstraint(c, "Paste"));
+    }
+
+    if (subs.empty()) return false;
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Paste"));
+
+    // Select what was pasted, so it can be dragged into place immediately.
+    clearSelection();
+    for (int id : pastedIds) selectEntity(id, true);
+
+    m_profilesCacheDirty = true;
+    solveConstraints();
+    update();
+    return true;
+}
+
+
 void SketchCanvas::deleteSelectedEntities()
 {
     if (m_selectedIds.isEmpty()) return;
 
     QSet<int> toDelete = m_selectedIds;
+
+    // A locked group's members cannot be deleted.
+    for (int id : m_selectedIds)
+        if (isEntityLocked(id)) toDelete.remove(id);
+    if (toDelete.isEmpty()) {
+        emit toolHintChanged(
+            tr("The selection is in a locked group; unlock it to delete."));
+        return;
+    }
 
     // Expand selection to include sweep-angle construction line entities
     QSet<int> expanded;
@@ -9335,364 +5632,620 @@ void SketchCanvas::deleteSelectedEntities()
     }
     toDelete = expanded;
 
-    // Push undo commands for deleted entities (in reverse order for proper undo)
-    for (int i = m_entities.size() - 1; i >= 0; --i) {
-        if (toDelete.contains(m_entities[i].id)) {
-            pushUndoCommand(sketch::UndoCommand::deleteEntity(m_entities[i]));
-        }
+    // Record everything the delete removes as ONE compound, so a single
+    // Ctrl+Z restores it all (a whole group came back one entity at a time
+    // before). Constraints first, then entities, then any emptied group.
+    std::vector<sketch::UndoCommand> subs;
+    for (const SketchConstraint& c : m_constraints) {
+        for (int id : c.entityIds)
+            if (toDelete.contains(id)) { subs.push_back(sketch::UndoCommand::deleteConstraint(c, "Delete")); break; }
     }
-
-    // Push undo commands for deleted constraints
-    for (int i = m_constraints.size() - 1; i >= 0; --i) {
-        bool shouldDelete = false;
-        for (int id : m_constraints[i].entityIds) {
-            if (toDelete.contains(id)) {
-                shouldDelete = true;
-                break;
-            }
-        }
-        if (shouldDelete) {
-            pushUndoCommand(sketch::UndoCommand::deleteConstraint(m_constraints[i]));
-        }
+    for (const SketchEntity& e : m_entities)
+        if (toDelete.contains(e.id)) subs.push_back(sketch::UndoCommand::deleteEntity(e, "Delete"));
+    for (const SketchGroup& g : m_groups) {
+        bool emptied = !g.entityIds.empty();
+        for (int id : g.entityIds) if (!toDelete.contains(id)) { emptied = false; break; }
+        if (emptied) subs.push_back(sketch::UndoCommand::deleteGroup(g, "Delete"));
     }
+    if (subs.size() == 1) pushUndoCommand(subs.front());
+    else if (!subs.empty()) pushUndoCommand(sketch::UndoCommand::compound(subs, "Delete"));
 
-    // Delete entities
-    m_entities.erase(
-        std::remove_if(m_entities.begin(), m_entities.end(),
-                       [&toDelete](const SketchEntity& e) { return toDelete.contains(e.id); }),
-        m_entities.end());
-
-    // Remove constraints referencing deleted entities
-    m_constraints.erase(
-        std::remove_if(m_constraints.begin(), m_constraints.end(),
-                       [&toDelete](const SketchConstraint& c) {
-                           for (int id : c.entityIds) {
-                               if (toDelete.contains(id)) return true;
-                           }
-                           return false;
-                       }),
-        m_constraints.end());
-
-    // Remove deleted entities and orphaned constraints from groups
-    for (SketchGroup& group : m_groups) {
-        for (int id : toDelete) {
-            group.entityIds.erase(
-                std::remove(group.entityIds.begin(), group.entityIds.end(), id),
-                group.entityIds.end());
-        }
-        // Remove constraints that no longer exist
-        group.constraintIds.erase(
-            std::remove_if(group.constraintIds.begin(), group.constraintIds.end(),
-                           [this](int cid) {
-                               return std::none_of(m_constraints.begin(), m_constraints.end(),
-                                                   [cid](const SketchConstraint& c) { return c.id == cid; });
-                           }),
-            group.constraintIds.end());
-    }
-    // Remove empty groups
-    m_groups.erase(
-        std::remove_if(m_groups.begin(), m_groups.end(),
-                       [](const SketchGroup& g) { return g.isEmpty(); }),
-        m_groups.end());
+    // The cascade (constraints naming them, slot links, group membership,
+    // emptied groups) is the library's, shared with the CLI.
+    sketch::deleteEntities(m_entities, m_constraints, m_groups,
+                           std::vector<int>(toDelete.begin(), toDelete.end()));
 
     m_selectedId = -1;
-    m_selectedIds.clear();
+    selectClear();
     m_profilesCacheDirty = true;
+
+    // Removing geometry changes the degrees of freedom just as adding it
+    // does, and it may drop constraints along with the entities, so the
+    // published state must be refreshed here too.
+    solveConstraints();
+
     emit selectionChanged(-1);
     update();
 }
 
-void SketchCanvas::transformSelectedEntities(TransformType type)
+std::vector<int> SketchCanvas::selectedMemberIds() const
 {
-    if (m_selectedIds.isEmpty()) return;
+    std::vector<int> members;
+    for (int id : m_selectedIds) members.push_back(id);
+    return members;
+}
 
-    // Get the bounding box center of selected entities
-    QRectF bounds;
+void SketchCanvas::selectGroup(int groupId)
+{
+    if (groupId < 0) return;
     bool first = true;
+    for (const auto& e : m_entities) {
+        if (e.groupId != groupId) continue;
+        selectEntity(e.id, /*addToSelection*/!first, /*individualOnly*/true);
+        first = false;
+    }
+    if (!first) update();
+}
+
+int SketchCanvas::hitTestGroupGlyph(const QPoint& screenPos) const
+{
+    if (m_groupGlyphGroupId >= 0 && m_groupGlyphRect.contains(screenPos))
+        return m_groupGlyphGroupId;
+    return -1;
+}
+
+int SketchCanvas::selectedWholeGroupId() const
+{
+    if (m_selectedIds.isEmpty()) return -1;
+    int gid = -2;
     for (int id : m_selectedIds) {
-        const SketchEntity* entity = entityById(id);
-        if (!entity) continue;
+        const SketchEntity* e = entityById(id);
+        if (!e) return -1;
+        if (gid == -2) gid = e->groupId;
+        else if (e->groupId != gid) return -1;
+    }
+    if (gid < 0) return -1;
+    for (const SketchGroup& g : m_groups) {
+        if (g.id != gid) continue;
+        for (int eid : g.entityIds)
+            if (!m_selectedIds.contains(eid)) return -1;   // a partial group is not the group
+        return gid;
+    }
+    return -1;
+}
 
-        for (const QPointF& pt : entity->points) {
-            if (first) {
-                bounds = QRectF(pt, QSizeF(0, 0));
-                first = false;
-            } else {
-                bounds = bounds.united(QRectF(pt, QSizeF(0, 0)));
-            }
+sketch::GroupTransformResult SketchCanvas::runTransformScratch(const sketch::GroupTransformParams& params, bool createCopy,
+                                                               std::vector<sketch::Entity>& ents,
+                                                               std::vector<sketch::Constraint>& cons,
+                                                               sketch::CloneSetResult& clones,
+                                                               std::vector<int>& targetIds) const
+{
+    // The scratch run is the library's (shared with the CLI's transform);
+    // the selection is the canvas's.
+    const std::vector<int> members = selectedMemberIds();
+    if (members.empty()) {
+        sketch::GroupTransformResult res;
+        res.refusal = "nothing selected";
+        return res;
+    }
+    sketch::TransformScratch sc = sketch::transformSet(
+        std::vector<sketch::Entity>(m_entities.begin(), m_entities.end()),
+        std::vector<sketch::Constraint>(m_constraints.begin(), m_constraints.end()),
+        members, params, createCopy, m_nextId, m_nextConstraintId);
+    ents = std::move(sc.entities);
+    cons = std::move(sc.constraints);
+    clones = std::move(sc.clones);
+    targetIds = std::move(sc.targetIds);
+    return sc.result;
+}
+
+sketch::GroupTransformResult SketchCanvas::applyTransform(const sketch::GroupTransformParams& params, bool createCopy)
+{
+    // One backend for every transform, shared with the CLI: transformSet works
+    // it out on copies and commitTransform solves, refuses or writes it. The
+    // canvas supplies the selection and the pivot gesture, records what the
+    // report says as ONE undo command, and repaints.
+    const std::vector<int> members = selectedMemberIds();
+    if (members.empty()) {
+        sketch::GroupTransformResult refused;
+        refused.refusal = "nothing selected";
+        return refused;
+    }
+    const sketch::TransformScratch scratch = sketch::transformSet(
+        std::vector<sketch::Entity>(m_entities.begin(), m_entities.end()),
+        std::vector<sketch::Constraint>(m_constraints.begin(), m_constraints.end()),
+        members, params, createCopy, m_nextId, m_nextConstraintId);
+    if (!scratch.result.applied) return scratch.result;
+
+    // The group the set belongs to, if it is exactly one whole group: added
+    // reference geometry joins it, copies form a sibling group, and its
+    // stored pivot moves with it. Not a whole group: reference geometry still
+    // joins a common group when every member has the same one.
+    sketch::TransformCommitOptions opts;
+    const int wholeGroup = selectedWholeGroupId();
+    opts.wholeGroup = wholeGroup >= 0;
+    opts.homeGroupId = wholeGroup;
+    if (opts.homeGroupId < 0) {
+        bool oneGroup = true; int gid = -2;
+        for (int id : members) {
+            const SketchEntity* e = entityById(id);
+            if (!e) continue;
+            if (gid == -2) gid = e->groupId; else if (e->groupId != gid) oneGroup = false;
         }
-        // Include circle/arc radius in bounds
-        if ((entity->type == SketchEntityType::Circle || entity->type == SketchEntityType::Arc) &&
-            !entity->points.empty()) {
-            QPointF center = entity->points[0];
-            bounds = bounds.united(QRectF(center.x() - entity->radius, center.y() - entity->radius,
-                                          entity->radius * 2, entity->radius * 2));
-        }
+        opts.homeGroupId = (oneGroup && gid >= 0) ? gid : -1;
+    }
+    if (m_transformPivotCleared) {
+        opts.pivot = sketch::PivotUpdate::Clear;
+    } else if (m_transformPivotUserSet) {
+        opts.pivot = sketch::PivotUpdate::Set;
+        opts.pivotPoint = Point2D(m_transformPivot.x(), m_transformPivot.y());
     }
 
-    QPointF center = bounds.center();
-    bool ok = false;
-
-    switch (type) {
-    case TransformType::Move: {
-        double dx = QInputDialog::getDouble(this, tr("Move"), tr("X offset (mm):"), 0, -10000, 10000, 2, &ok);
-        if (!ok) return;
-        double dy = QInputDialog::getDouble(this, tr("Move"), tr("Y offset (mm):"), 0, -10000, 10000, 2, &ok);
-        if (!ok) return;
-
-        for (int id : m_selectedIds) {
-            SketchEntity* entity = entityById(id);
-            if (!entity) continue;
-            for (auto& pt : entity->points) {
-                pt += Point2D{dx, dy};
-            }
-        }
-        break;
+    const sketch::TransformCommit commit = sketch::commitTransform(
+        m_entities, m_constraints, m_groups, scratch, createCopy, params, opts,
+        [this]() { return m_nextGroupId++; });
+    if (!commit.applied) {
+        sketch::GroupTransformResult refused = scratch.result;
+        refused.applied = false;
+        refused.refusal = commit.refusal;
+        return refused;
     }
-    case TransformType::Copy: {
-        double dx = QInputDialog::getDouble(this, tr("Copy"), tr("X offset (mm):"), 10, -10000, 10000, 2, &ok);
-        if (!ok) return;
-        double dy = QInputDialog::getDouble(this, tr("Copy"), tr("Y offset (mm):"), 0, -10000, 10000, 2, &ok);
-        if (!ok) return;
 
-        QVector<int> newIds;
-        for (int id : m_selectedIds) {
-            const SketchEntity* entity = entityById(id);
-            if (!entity) continue;
+    std::vector<sketch::UndoCommand> subs;
+    for (const auto& change : commit.modifiedEntities)
+        subs.push_back(sketch::UndoCommand::modifyEntity(change.first, change.second, "Transform"));
+    for (const auto& change : commit.modifiedConstraints)
+        subs.push_back(sketch::UndoCommand::modifyConstraint(change.first, change.second, "Transform"));
+    for (const auto& e : commit.addedEntities) {
+        if (e.id >= m_nextId) m_nextId = e.id + 1;
+        const bool clone = hobbycad::contains(commit.cloneEntityIds, e.id);
+        subs.push_back(sketch::UndoCommand::addEntity(e, clone ? "Copy" : "Reference line"));
+    }
+    for (const auto& c : commit.addedConstraints) {
+        if (c.id >= m_nextConstraintId) m_nextConstraintId = c.id + 1;
+        bool clone = false;
+        for (const auto& k : scratch.clones.constraints) if (k.id == c.id) { clone = true; break; }
+        subs.push_back(sketch::UndoCommand::addConstraint(c, clone ? "Copy" : "Reference pin"));
+    }
+    if (commit.copyGroupMade)
+        subs.push_back(sketch::UndoCommand::addGroup(commit.copyGroup, "Copy group"));
+    if (commit.pivotChanged)
+        subs.push_back(sketch::UndoCommand::modifyGroup(commit.groupBefore, commit.groupAfter, "Group pivot"));
+    if (!subs.empty())
+        pushUndoCommand(sketch::UndoCommand::compound(subs, createCopy ? "Copy" : "Transform"));
 
-            SketchEntity copy = *entity;
-            copy.id = m_nextId++;
-            copy.selected = false;
-            for (auto& pt : copy.points) {
-                pt += Point2D{dx, dy};
-            }
-            m_entities.append(copy);
-            newIds.append(copy.id);
-            emit entityCreated(copy.id);
-        }
-
-        // Select the new copies
+    for (const auto& e : commit.addedEntities)
+        if (!hobbycad::contains(commit.cloneEntityIds, e.id)) emit entityCreated(e.id);
+    if (createCopy) {
+        // Select the copies, as Copy always did.
         clearSelection();
-        for (int id : newIds) {
-            selectEntity(id, true);
-        }
-        break;
+        for (int id : commit.cloneEntityIds) selectEntity(id, true);
+        for (int id : commit.cloneEntityIds) emit entityCreated(id);
+    } else {
+        for (int id : scratch.result.changedEntityIds) emit entityModified(id);
     }
-    case TransformType::Rotate: {
-        double angle = QInputDialog::getDouble(this, tr("Rotate"), tr("Angle (degrees):"), 45, -360, 360, 1, &ok);
-        if (!ok) return;
-
-        double rad = qDegreesToRadians(angle);
-        double cosA = qCos(rad);
-        double sinA = qSin(rad);
-
-        for (int id : m_selectedIds) {
-            SketchEntity* entity = entityById(id);
-            if (!entity) continue;
-            for (auto& pt : entity->points) {
-                QPointF rel = QPointF(pt) - center;
-                pt = center + QPointF(rel.x() * cosA - rel.y() * sinA,
-                                      rel.x() * sinA + rel.y() * cosA);
-            }
-            // Adjust arc angles
-            if (entity->type == SketchEntityType::Arc) {
-                entity->startAngle += angle;
-                while (entity->startAngle >= 360) entity->startAngle -= 360;
-                while (entity->startAngle < 0) entity->startAngle += 360;
-            }
-        }
-        break;
-    }
-    case TransformType::Scale: {
-        double scale = QInputDialog::getDouble(this, tr("Scale"), tr("Scale factor:"), 1.0, 0.01, 100, 3, &ok);
-        if (!ok || qFuzzyCompare(scale, 1.0)) return;
-
-        for (int id : m_selectedIds) {
-            SketchEntity* entity = entityById(id);
-            if (!entity) continue;
-            for (auto& pt : entity->points) {
-                QPointF rel = QPointF(pt) - center;
-                pt = center + rel * scale;
-            }
-            entity->radius *= scale;
-            entity->majorRadius *= scale;
-            entity->minorRadius *= scale;
-        }
-        break;
-    }
-    case TransformType::Mirror: {
-        QStringList options;
-        options << tr("Horizontal (X axis)") << tr("Vertical (Y axis)");
-        QString choice = QInputDialog::getItem(this, tr("Mirror"), tr("Mirror axis:"), options, 0, false, &ok);
-        if (!ok) return;
-
-        bool horizontal = (choice == options[0]);
-
-        for (int id : m_selectedIds) {
-            SketchEntity* entity = entityById(id);
-            if (!entity) continue;
-            for (auto& pt : entity->points) {
-                if (horizontal) {
-                    pt.y = 2 * center.y() - pt.y;
-                } else {
-                    pt.x = 2 * center.x() - pt.x;
-                }
-            }
-            // Mirror arc angles
-            if (entity->type == SketchEntityType::Arc) {
-                if (horizontal) {
-                    entity->startAngle = -entity->startAngle - entity->sweepAngle;
-                } else {
-                    entity->startAngle = 180 - entity->startAngle - entity->sweepAngle;
-                }
-                while (entity->startAngle >= 360) entity->startAngle -= 360;
-                while (entity->startAngle < 0) entity->startAngle += 360;
-            }
-        }
-        break;
-    }
-    }
-
     m_profilesCacheDirty = true;
+    clearTransformPreview();
+    m_freeMoveDelta = QPointF(); m_freeMoveAngle = 0.0;
+    ++m_selectionRevision;            // the pivot is re-derived from the (possibly new) stored value
+    ensureTransformStateCurrent();
     solveConstraints();
     update();
+    return scratch.result;
+}
+
+QRectF SketchCanvas::worldBoundsOf(const QVector<int>& ids) const
+{
+    hobbycad::geometry::BoundingBox b;
+    for (int id : ids) {
+        if (const SketchEntity* e = entityById(id)) b.include(e->boundingBox());
+    }
+    if (!b.valid) return QRectF();
+    return QRectF(b.minX, b.minY, b.width(), b.height());
+}
+
+QRectF SketchCanvas::selectionWorldRect() const
+{
+    return worldBoundsOf(QVector<int>(m_selectedIds.begin(), m_selectedIds.end()));
+}
+
+void SketchCanvas::resetTransformStateForSelection()
+{
+    m_transformStateRevision = m_selectionRevision;
+    m_transformPick = TransformPick::None;
+    m_transformPivotDragging = false;
+    m_freeMoveHandle = FreeMoveHandle::None;
+    m_freeMoveDelta = QPointF(); m_freeMoveAngle = 0.0;
+    m_transformPreview.clear();
+    m_transformPivotUserSet = false;
+    m_transformPivotCleared = false;
+    m_transformPivotGroupId = selectedWholeGroupId();
+    m_transformPivotStored = false;
+    std::vector<sketch::Entity> ents(m_entities.begin(), m_entities.end());
+    if (m_transformPivotGroupId >= 0) {
+        for (const SketchGroup& g : m_groups) {
+            if (g.id != m_transformPivotGroupId) continue;
+            const Point2D pv = sketch::effectivePivot(g, ents);
+            m_transformPivot = QPointF(pv.x, pv.y);
+            m_transformPivotStored = g.hasPivot;
+            break;
+        }
+    } else {
+        const Point2D c = sketch::memberCenter(ents, selectedMemberIds());
+        m_transformPivot = QPointF(c.x, c.y);
+    }
+    emit transformPivotChanged(m_transformPivot, m_transformPivotStored);
+}
+
+void SketchCanvas::ensureTransformStateCurrent()
+{
+    if (m_transformStateRevision != m_selectionRevision) resetTransformStateForSelection();
+}
+
+QPointF SketchCanvas::transformPivot() const
+{
+    const_cast<SketchCanvas*>(this)->ensureTransformStateCurrent();
+    return m_transformPivot;
+}
+
+bool SketchCanvas::transformPivotStored() const
+{
+    const_cast<SketchCanvas*>(this)->ensureTransformStateCurrent();
+    return m_transformPivotStored;
+}
+
+void SketchCanvas::setTransformPivot(const QPointF& world)
+{
+    ensureTransformStateCurrent();
+    m_transformPivot = world;
+    m_transformPivotUserSet = true;
+    m_transformPivotCleared = false;
+    emit transformPivotChanged(m_transformPivot, false);
+    update();
+}
+
+void SketchCanvas::resetTransformPivotToCenter()
+{
+    ensureTransformStateCurrent();
+    std::vector<sketch::Entity> ents(m_entities.begin(), m_entities.end());
+    const Point2D c = sketch::memberCenter(ents, selectedMemberIds());
+    m_transformPivot = QPointF(c.x, c.y);
+    m_transformPivotUserSet = false;
+    m_transformPivotCleared = m_transformPivotStored;   // only meaningful when the group stores one
+    m_transformPivotStored = false;
+    emit transformPivotChanged(m_transformPivot, false);
+    update();
+}
+
+void SketchCanvas::setGroupPivot(int groupId, const std::optional<QPointF>& pivot)
+{
+    for (auto& g : m_groups) {
+        if (g.id != groupId) continue;
+        const SketchGroup before = g;
+        g.hasPivot = pivot.has_value();
+        if (pivot) g.pivot = {pivot->x(), pivot->y()};
+        if (g.hasPivot != before.hasPivot || g.pivot.x != before.pivot.x || g.pivot.y != before.pivot.y)
+            pushUndoCommand(sketch::UndoCommand::modifyGroup(before, g, "Group pivot"));
+        break;
+    }
+    ++m_selectionRevision;
+    ensureTransformStateCurrent();
+    update();
+}
+
+const SketchGroup* SketchCanvas::groupById(int groupId) const
+{
+    for (const auto& g : m_groups) if (g.id == groupId) return &g;
+    return nullptr;
+}
+
+bool SketchCanvas::renameGroup(int groupId, const QString& name)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty()) return false;
+    for (auto& g : m_groups) {
+        if (g.id != groupId) continue;
+        if (QString::fromStdString(g.name) == trimmed) return false;
+        const SketchGroup before = g;
+        g.name = trimmed.toStdString();
+        pushUndoCommand(sketch::UndoCommand::modifyGroup(before, g, "Rename group"));
+        update();
+        return true;
+    }
+    return false;
+}
+
+void SketchCanvas::setGroupLocked(int groupId, bool locked)
+{
+    for (auto& g : m_groups) {
+        if (g.id != groupId || g.locked == locked) continue;
+        const SketchGroup before = g;
+        g.locked = locked;
+        pushUndoCommand(sketch::UndoCommand::modifyGroup(before, g, locked ? "Lock group" : "Unlock group"));
+        update();
+        return;
+    }
+}
+
+void SketchCanvas::setTransformGlyph(bool visible, bool withArc)
+{
+    m_transformGlyphVisible = visible;
+    m_transformGlyphArc = withArc;
+    if (!visible) { cancelTransformPick(); clearTransformPreview(); }
+    update();
+}
+
+void SketchCanvas::beginTransformPick(TransformPick pick)
+{
+    ensureTransformStateCurrent();
+    if (m_isDrawing) cancelEntity();
+    if (m_backgroundCalibrationMode) setBackgroundCalibrationMode(false);
+    if (m_calibrationEntitySelectionMode) setCalibrationEntitySelectionMode(false);
+    m_transformPick = pick;
+    m_transformPivotDragging = false;
+    m_freeMoveHandle = FreeMoveHandle::None;
+    setCursor(pick == TransformPick::FreeMove ? Qt::OpenHandCursor : Qt::CrossCursor);
+    switch (pick) {
+    case TransformPick::Pivot:            emit toolHintChanged(tr("Pivot: click to place the star or drag it (snaps apply, Alt = free); Home = center; Escape cancels")); break;
+    case TransformPick::FromPoint:        emit toolHintChanged(tr("Point to point: click the point to move FROM (snaps apply); Escape cancels")); break;
+    case TransformPick::ToPoint:          emit toolHintChanged(tr("Point to point: click the point to move TO (snaps apply); Escape cancels")); break;
+    case TransformPick::PointOnSelection: emit toolHintChanged(tr("Point to position: click the point on the selection that should land on the target; Escape cancels")); break;
+    case TransformPick::MirrorA:          emit toolHintChanged(tr("Mirror line: click its first point (snaps apply); Escape cancels")); break;
+    case TransformPick::MirrorB:          emit toolHintChanged(tr("Mirror line: click its second point (snaps apply); Escape cancels")); break;
+    case TransformPick::ReferencePoint:   emit toolHintChanged(tr("Relative to: click the reference point the target is measured from (snaps apply); Escape cancels")); break;
+    case TransformPick::FreeMove:         emit toolHintChanged(tr("Free move: drag the selection to move it, drag the ring to turn it about the star (Ctrl = axis lock / 15-degree steps); Enter applies, Escape cancels")); break;
+    case TransformPick::None: break;
+    }
+    update();
+}
+
+void SketchCanvas::cancelTransformPick()
+{
+    if (m_transformPick == TransformPick::None && !m_transformPivotDragging && m_freeMoveHandle == FreeMoveHandle::None) return;
+    m_transformPick = TransformPick::None;
+    m_transformPivotDragging = false;
+    m_freeMoveHandle = FreeMoveHandle::None;
+    m_snapEngine.clearActiveSnap();
+    setCursor(Qt::ArrowCursor);
+    update();
+}
+
+void SketchCanvas::setFreeMove(const QPointF& delta, double angleDeg)
+{
+    m_freeMoveDelta = delta;
+    m_freeMoveAngle = angleDeg;
+    update();
+}
+
+sketch::GroupTransformResult SketchCanvas::previewTransform(const sketch::GroupTransformParams& params, bool createCopy)
+{
+    ensureTransformStateCurrent();
+    std::vector<sketch::Entity> ents; std::vector<sketch::Constraint> cons;
+    sketch::CloneSetResult clones; std::vector<int> targetIds;
+    const sketch::GroupTransformResult res = runTransformScratch(params, createCopy, ents, cons, clones, targetIds);
+    m_transformPreview.clear();
+    if (res.applied) {
+        for (int id : targetIds) {
+            for (const auto& e : ents) if (e.id == id) { SketchEntity g(e); g.selected = false; m_transformPreview.append(g); }
+        }
+        for (const auto& a : res.addedEntities) { SketchEntity g(a); g.selected = false; m_transformPreview.append(g); }
+    }
+    update();
+    return res;
+}
+
+void SketchCanvas::clearTransformPreview()
+{
+    if (m_transformPreview.isEmpty()) return;
+    m_transformPreview.clear();
+    update();
+}
+
+bool SketchCanvas::transformStarHit(const QPoint& screen) const
+{
+    if (!m_transformGlyphVisible || m_selectedIds.isEmpty()) return false;
+    return QLineF(QPointF(worldToScreen(m_transformPivot)), QPointF(screen)).length() <= kTransformPivotHitPx;
+}
+
+bool SketchCanvas::freeMoveRingHit(const QPoint& screen) const
+{
+    const double d = QLineF(QPointF(worldToScreen(m_transformPivot)), QPointF(screen)).length();
+    return std::fabs(d - kFreeMoveRingPx) <= kFreeMoveRingHitPx;
+}
+
+bool SketchCanvas::freeMoveBodyHit(const QPointF& world) const
+{
+    const int id = hitTest(world);
+    if (id >= 0 && m_selectedIds.contains(id)) return true;
+    QRectF r = selectionWorldRect().translated(m_freeMoveDelta);
+    const double pad = kHitPadPx / m_zoom;
+    r.adjust(-pad, -pad, pad, pad);
+    return r.contains(world);
+}
+
+void SketchCanvas::drawTransformPivot(QPainter& painter)
+{
+    const int k = m_transformGlyphArc ? kTransformPivotRotatePx : kTransformPivotGlyphPx;
+    const QPoint c = worldToScreen(m_transformPivot);
+    const QRectF r(c.x() - k / 2.0, c.y() - k / 2.0, k, k);
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    QPen halo(m_theme.labelHalo, 3.5);
+    halo.setJoinStyle(Qt::RoundJoin); halo.setCapStyle(Qt::RoundCap);
+    painter.setPen(halo); painter.setBrush(Qt::NoBrush);
+    hobbycad::drawPivotGlyph(painter, r, m_transformGlyphArc);
+    QPen ink(m_theme.pivotInk, 1.2);
+    ink.setJoinStyle(Qt::MiterJoin);
+    painter.setPen(ink); painter.setBrush(m_theme.pivotFill);   // like the sun
+    hobbycad::drawPivotGlyph(painter, r, m_transformGlyphArc);
+    painter.restore();
+}
+
+void SketchCanvas::drawFreeMoveHandles(QPainter& painter)
+{
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QPoint c = worldToScreen(m_transformPivot);
+    QPen ring(QColor(0, 120, 215), 1.2, Qt::DashLine);
+    painter.setPen(ring); painter.setBrush(Qt::NoBrush);
+    painter.drawEllipse(QPointF(c), double(kFreeMoveRingPx), double(kFreeMoveRingPx));
+    // the knob sits on the ring at the current angle (screen y is down)
+    const double a = qDegreesToRadians(m_freeMoveAngle);
+    const QPointF knob(c.x() + kFreeMoveRingPx * qCos(a), c.y() - kFreeMoveRingPx * qSin(a));
+    painter.setPen(QPen(QColor(0, 120, 215), 1)); painter.setBrush(Qt::white);
+    painter.drawEllipse(knob, 5.0, 5.0);
+    // the body affordance: the selection's box, where it currently previews
+    QRectF w = selectionWorldRect().translated(m_freeMoveDelta);
+    if (!w.isNull()) {
+        const QPoint a1 = worldToScreen(w.topLeft()), b1 = worldToScreen(w.bottomRight());
+        painter.setPen(QPen(QColor(0, 120, 215), 1, Qt::DashLine)); painter.setBrush(Qt::NoBrush);
+        painter.drawRect(QRect(a1, b1).normalized());
+    }
+    painter.restore();
+}
+
+void SketchCanvas::transformSelectedEntities(TransformType type)
+{
+    // The context menu no longer transforms anything itself. It opens the
+    // Transform section of the Sketch properties panel with the matching move
+    // type; nothing changes until the user presses Apply there. The former
+    // QInputDialog path and its unused bounding-box sweep are gone.
+    if (m_selectedIds.isEmpty()) return;
+    emit transformSectionRequested(int(type));
 }
 
 void SketchCanvas::alignSelectedEntities(AlignmentType type)
 {
     if (m_selectedIds.size() < 2) return;
 
-    // Collect bounds for each selected entity
-    struct EntityBounds {
-        int id;
-        QRectF bounds;
-        QPointF center;
-    };
-    QVector<EntityBounds> allBounds;
+    // Group the selection into ITEMS: a whole group is ONE item (all its
+    // members move together), an ungrouped entity is its own item, so a group
+    // stays rigid and alignment never tears it apart. [Aaron 2026-09-09]
+    using sketch::AlignItem;
+    std::vector<AlignItem> items;
+    QSet<int> usedGroups, usedIds;
 
     for (int id : m_selectedIds) {
-        const SketchEntity* entity = entityById(id);
-        if (!entity || entity->points.empty()) continue;
-
-        QRectF bounds;
-        bool first = true;
-        for (const QPointF& pt : entity->points) {
-            if (first) {
-                bounds = QRectF(pt, QSizeF(0, 0));
-                first = false;
-            } else {
-                bounds = bounds.united(QRectF(pt, QSizeF(0, 0)));
-            }
+        const SketchEntity* e = entityById(id);
+        if (!e) continue;
+        AlignItem item;
+        if (e->groupId >= 0) {
+            if (usedGroups.contains(e->groupId)) continue;   // group already an item
+            usedGroups.insert(e->groupId);
+            for (const auto& m : m_entities)
+                if (m.groupId == e->groupId) item.ids.push_back(m.id);
+        } else {
+            if (usedIds.contains(id)) continue;
+            item.ids.push_back(id);
         }
-        // Include radius for circles/arcs
-        if ((entity->type == SketchEntityType::Circle || entity->type == SketchEntityType::Arc) &&
-            !entity->points.empty()) {
-            QPointF c = entity->points[0];
-            bounds = bounds.united(QRectF(c.x() - entity->radius, c.y() - entity->radius,
-                                          entity->radius * 2, entity->radius * 2));
-        }
-        allBounds.append({id, bounds, bounds.center()});
+        for (int mid : item.ids)
+            if (const SketchEntity* m = entityById(mid)) item.bounds.include(m->boundingBox());
+        if (!item.bounds.valid) continue;
+        for (int mid : item.ids) usedIds.insert(mid);
+        items.push_back(item);
     }
+    if (items.size() < 2) return;
 
-    if (allBounds.size() < 2) return;
+    // Snapshot member entities for one compound undo.
+    QHash<int, SketchEntity> before;
+    for (const AlignItem& it : items)
+        for (int id : it.ids)
+            if (const SketchEntity* e = entityById(id)) before.insert(id, *e);
 
-    // Calculate target values
-    double targetLeft = std::numeric_limits<double>::max();
-    double targetRight = std::numeric_limits<double>::lowest();
-    double targetTop = std::numeric_limits<double>::lowest();
-    double targetBottom = std::numeric_limits<double>::max();
-    double targetHCenter = 0, targetVCenter = 0;
-
-    for (const auto& eb : allBounds) {
-        targetLeft = qMin(targetLeft, eb.bounds.left());
-        targetRight = qMax(targetRight, eb.bounds.right());
-        targetTop = qMax(targetTop, eb.bounds.top());
-        targetBottom = qMin(targetBottom, eb.bounds.bottom());
-        targetHCenter += eb.center.x();
-        targetVCenter += eb.center.y();
-    }
-    targetHCenter /= allBounds.size();
-    targetVCenter /= allBounds.size();
-
-    // Apply alignment
-    for (const auto& eb : allBounds) {
-        SketchEntity* entity = entityById(eb.id);
-        if (!entity) continue;
-
-        QPointF offset(0, 0);
-        switch (type) {
-        case AlignmentType::Left:
-            offset.setX(targetLeft - eb.bounds.left());
-            break;
-        case AlignmentType::Right:
-            offset.setX(targetRight - eb.bounds.right());
-            break;
-        case AlignmentType::Top:
-            offset.setY(targetTop - eb.bounds.top());
-            break;
-        case AlignmentType::Bottom:
-            offset.setY(targetBottom - eb.bounds.bottom());
-            break;
-        case AlignmentType::HorizontalCenter:
-            offset.setX(targetHCenter - eb.center.x());
-            break;
-        case AlignmentType::VerticalCenter:
-            offset.setY(targetVCenter - eb.center.y());
-            break;
-        case AlignmentType::DistributeHorizontal:
-        case AlignmentType::DistributeVertical:
-            // Handled separately below
-            break;
-        }
-
-        if (!offset.isNull()) {
-            for (auto& pt : entity->points) {
-                pt += Point2D{offset.x(), offset.y()};
-            }
+    // The offsets are the library's; applying them and recording undo is ours.
+    const std::vector<Point2D> offsets = sketch::alignOffsets(items, type);
+    QSet<int> movedIds;
+    for (size_t i = 0; i < items.size(); ++i) {
+        const Point2D off = offsets[i];
+        if (off.x == 0.0 && off.y == 0.0) continue;
+        for (int id : items[i].ids) {
+            SketchEntity* e = entityById(id);
+            if (!e) continue;
+            for (auto& pt : e->points) pt += off;
+            movedIds.insert(id);
         }
     }
 
-    // Handle distribution
-    if (type == AlignmentType::DistributeHorizontal || type == AlignmentType::DistributeVertical) {
-        // Sort by position
-        std::sort(allBounds.begin(), allBounds.end(), [type](const EntityBounds& a, const EntityBounds& b) {
-            if (type == AlignmentType::DistributeHorizontal) {
-                return a.center.x() < b.center.x();
-            } else {
-                return a.center.y() < b.center.y();
-            }
-        });
-
-        if (allBounds.size() >= 3) {
-            // Calculate spacing
-            double firstPos = (type == AlignmentType::DistributeHorizontal) ?
-                              allBounds.first().center.x() : allBounds.first().center.y();
-            double lastPos = (type == AlignmentType::DistributeHorizontal) ?
-                             allBounds.last().center.x() : allBounds.last().center.y();
-            double spacing = (lastPos - firstPos) / (allBounds.size() - 1);
-
-            for (int i = 1; i < allBounds.size() - 1; ++i) {
-                SketchEntity* entity = entityById(allBounds[i].id);
-                if (!entity) continue;
-
-                double targetPos = firstPos + i * spacing;
-                double currentPos = (type == AlignmentType::DistributeHorizontal) ?
-                                    allBounds[i].center.x() : allBounds[i].center.y();
-                double delta = targetPos - currentPos;
-
-                for (auto& pt : entity->points) {
-                    if (type == AlignmentType::DistributeHorizontal) {
-                        pt.x += delta;
-                    } else {
-                        pt.y += delta;
-                    }
-                }
-            }
-        }
+    // One compound undo (Align was previously not undoable).
+    std::vector<sketch::UndoCommand> subs;
+    for (int id : movedIds) {
+        if (!before.contains(id)) continue;
+        SketchEntity* now = entityById(id);
+        if (now) subs.push_back(sketch::UndoCommand::modifyEntity(before.value(id), *now, "Align"));
     }
+    if (subs.size() == 1) pushUndoCommand(subs.front());
+    else if (!subs.empty()) pushUndoCommand(sketch::UndoCommand::compound(subs, "Align"));
 
     m_profilesCacheDirty = true;
     solveConstraints();
+    update();
+}
+
+void SketchCanvas::sweepSelectedPath()
+{
+    if (m_selectedIds.size() != 1) return;
+    SketchEntity* path = entityById(*m_selectedIds.begin());
+    if (!path) return;
+    if (path->type != SketchEntityType::Line
+        && path->type != SketchEntityType::Arc) {
+        return;
+    }
+
+    bool ok = false;
+    const double width = QInputDialog::getDouble(
+        this, tr("Sweep Along Path"), tr("Width:"),
+        10.0, 0.0001, 100000.0, 3, &ok);
+    if (!ok) return;
+    const double halfWidth = width / 2.0;
+
+    // Same refusal the CLI makes, and the same limit: a half-width EQUAL to
+    // the radius is the 180-degree case and builds (the inner side is the
+    // center); only past it would the inner edge pass through the center.
+    if (path->type == SketchEntityType::Arc && halfWidth > path->radius) {
+        QMessageBox::warning(
+            this, tr("Sweep Along Path"),
+            tr("A width of %1 does not fit on an arc of radius %2: the inner "
+               "edge would pass through the center. Width can be at most %3.")
+                .arg(width).arg(path->radius).arg(path->radius * 2.0));
+        return;
+    }
+
+    const QStringList styles{tr("Round"), tr("Flat")};
+    const QString style = QInputDialog::getItem(
+        this, tr("Sweep Along Path"), tr("Ends:"), styles, 0, false, &ok);
+    if (!ok) return;
+    const sketch::SweepEndStyle ends = (style == styles.at(1))
+        ? sketch::SweepEndStyle::Flat
+        : sketch::SweepEndStyle::Round;
+
+    const int pathId = path->id;
+    // The commit is the library's (applySweep), shared with the CLI's
+    // "sweep"; this records it for undo.
+    const sketch::SweepApplied result = sketch::applySweep(
+        m_entities, m_constraints, m_groups, pathId, halfWidth, ends,
+        [this]() { return nextEntityId(); },
+        [this]() { return m_nextConstraintId++; },
+        m_nextGroupId++);
+    if (!result.success) {
+        QMessageBox::warning(this, tr("Sweep Along Path"),
+                             tr("That sweep could not be built."));
+        return;
+    }
+
+    std::vector<sketch::UndoCommand> subs;
+    for (const auto& e : result.entities) subs.push_back(sketch::UndoCommand::addEntity(e));
+    for (const auto& c : result.constraints) subs.push_back(sketch::UndoCommand::addConstraint(c));
+    if (result.pathConverted) {
+        if (const SketchEntity* after = entityById(pathId))
+            subs.push_back(sketch::UndoCommand::modifyEntity(result.pathBefore, *after));
+    }
+    subs.push_back(sketch::UndoCommand::addGroup(result.group));
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Sweep"));
+
+    m_selectedIds.clear();
+    m_selectedId = -1;
+    m_profilesCacheDirty = true;
+    emit selectionChanged(-1);
     update();
 }
 
@@ -9709,7 +6262,7 @@ int SketchCanvas::groupSelectedEntities()
     }
 
     // Include constraints whose referenced entities are all within the
-    // selection — they logically belong to this group.
+    // selection; they logically belong to this group.
     for (const auto& c : m_constraints) {
         bool allInside = !c.entityIds.empty();
         for (int eid : c.entityIds) {
@@ -9729,6 +6282,7 @@ int SketchCanvas::groupSelectedEntities()
     }
 
     m_groups.append(group);
+    pushUndoCommand(sketch::UndoCommand::addGroup(group, "Group"));
     update();
     return group.id;
 }
@@ -9738,6 +6292,7 @@ void SketchCanvas::ungroupEntities(int groupId)
     // Clear groupId on member entities before removing the group
     for (const SketchGroup& g : m_groups) {
         if (g.id == groupId) {
+            pushUndoCommand(sketch::UndoCommand::deleteGroup(g, "Ungroup"));
             for (int eid : g.entityIds) {
                 SketchEntity* ent = entityById(eid);
                 if (ent && ent->groupId == groupId)
@@ -9746,12 +6301,37 @@ void SketchCanvas::ungroupEntities(int groupId)
             break;
         }
     }
+    if (m_enteredGroupId == groupId) m_enteredGroupId = -1;
 
     m_groups.erase(
         std::remove_if(m_groups.begin(), m_groups.end(),
                        [groupId](const SketchGroup& g) { return g.id == groupId; }),
         m_groups.end());
     update();
+}
+
+void SketchCanvas::syncGroupMembership(const SketchGroup& group, int groupIdOrMinusOne)
+{
+    // Entity::groupId is the back-pointer that selection expansion and group
+    // drags key off; Group::entityIds is the list. Keep them in step whenever
+    // a group appears or disappears through undo/redo.
+    for (int eid : group.entityIds) {
+        SketchEntity* ent = entityById(eid);
+        if (!ent) continue;
+        if (groupIdOrMinusOne < 0) {
+            if (ent->groupId == group.id) ent->groupId = -1;
+        } else {
+            ent->groupId = groupIdOrMinusOne;
+        }
+    }
+}
+
+void SketchCanvas::dropStaleEnteredGroup()
+{
+    if (m_enteredGroupId < 0) return;
+    for (const SketchGroup& g : m_groups)
+        if (g.id == m_enteredGroupId) return;
+    m_enteredGroupId = -1;
 }
 
 void SketchCanvas::splitSelectedAtIntersections()
@@ -9799,7 +6379,7 @@ int SketchCanvas::hitTest(const QPointF& worldPos) const
 {
     // Build a set of entity IDs that belong to sweep-angle groups.
     // These construction lines are implementation details and should
-    // not be directly selectable — clicks on them are handled by the
+    // not be directly selectable; clicks on them are handled by the
     // constraint hit-test path instead.  Only skip Line entities (the
     // construction lines), NOT the arc entity that is also in the group.
     std::unordered_set<int> sweepAngleEntityIds;
@@ -9826,9 +6406,9 @@ int SketchCanvas::hitTest(const QPointF& worldPos) const
 
 bool SketchCanvas::hitTestEntity(const SketchEntity& entity, const QPointF& worldPos) const
 {
-    const double tolerance = 5.0 / m_zoom;  // 5 pixels in world units
+    const double tolerance = kEntityPickTolPx / m_zoom;  // 5 pixels in world units
 
-    // Text needs QFont/QFontMetrics and zoom — genuinely GUI-specific
+    // Text needs QFont/QFontMetrics and zoom (genuinely GUI-specific)
     if (entity.type == SketchEntityType::Text)
         return hitTestTextEntity(entity, worldPos, tolerance);
 
@@ -9888,77 +6468,13 @@ bool SketchCanvas::entityEnclosedByRect(const SketchEntity& entity, const QRectF
     return sketch::entityEnclosedByRect(entity, rect);
 }
 
-QVector<QPointF> SketchCanvas::getEntityEndpointsVec(const SketchEntity& entity) const
-{
-    QVector<QPointF> endpoints;
-
-    switch (entity.type) {
-    case SketchEntityType::Point:
-        if (!entity.points.empty()) {
-            endpoints.append(entity.points[0]);
-        }
-        break;
-
-    case SketchEntityType::Line:
-        if (entity.points.size() >= 2) {
-            endpoints.append(entity.points[0]);
-            endpoints.append(entity.points[1]);
-        }
-        break;
-
-    case SketchEntityType::Arc:
-        if (!entity.points.empty()) {
-            QPointF center = entity.points[0];
-            double r = entity.radius;
-            double startRad = qDegreesToRadians(entity.startAngle);
-            double endRad = qDegreesToRadians(entity.startAngle + entity.sweepAngle);
-            endpoints.append(center + QPointF(r * qCos(startRad), r * qSin(startRad)));
-            endpoints.append(center + QPointF(r * qCos(endRad), r * qSin(endRad)));
-        }
-        break;
-
-    case SketchEntityType::Spline:
-        if (entity.points.size() >= 2) {
-            endpoints.append(entity.points.front());
-            endpoints.append(entity.points.back());
-        }
-        break;
-
-    case SketchEntityType::Rectangle:
-        // Rectangle corners - all four as potential connection points
-        if (entity.points.size() >= 4) {
-            // 4-point (rotated) rectangle: directly return the stored corners
-            for (int i = 0; i < 4; ++i) {
-                endpoints.append(entity.points[i]);
-            }
-        } else if (entity.points.size() >= 2) {
-            QRectF rect(entity.points[0], entity.points[1]);
-            rect = rect.normalized();
-            endpoints.append(rect.topLeft());
-            endpoints.append(rect.topRight());
-            endpoints.append(rect.bottomRight());
-            endpoints.append(rect.bottomLeft());
-        }
-        break;
-
-    case SketchEntityType::Circle:
-        // Circles don't have endpoints (closed curve)
-        break;
-
-    default:
-        break;
-    }
-
-    return endpoints;
-}
-
 int SketchCanvas::hitTestHandle(const QPointF& worldPos) const
 {
     // Only test handles on selected entity
     const SketchEntity* sel = selectedEntity();
     if (!sel) return -1;
 
-    const double tolerance = 6.0 / m_zoom;  // 6 pixels in world units
+    const double tolerance = kHandlePickTolPx / m_zoom;  // 6 pixels in world units
 
     for (int i = 0; i < sel->points.size(); ++i) {
         if (QLineF(sel->points[i], worldPos).length() < tolerance) {
@@ -9975,7 +6491,7 @@ bool SketchCanvas::hitTestGroupHandle(const QPointF& worldPos,
     const SketchEntity* sel = selectedEntity();
     if (!sel) return false;
 
-    const double tolerance = 6.0 / m_zoom;
+    const double tolerance = kGroupHandlePickTolPx / m_zoom;
 
     // If the primary entity is in a group (and we're not inside the group),
     // test handles across every entity in the group.
@@ -10012,77 +6528,21 @@ void SketchCanvas::startEntity(const QPointF& pos)
 {
     m_isDrawing = true;
     m_previewPoints.clear();
+    m_placedSnaps.clear();
     m_previewPoints.append(pos);
+    if (m_snapEngine.hasActiveSnap()) {
+        m_placedSnaps.append({0, *m_snapEngine.activeSnap()});
+    }
     m_arcSlotFlipped = false;  // Reset flip state for new arc slot
-    m_rectBothLocked = false;  // Reset rotation state for new rectangle
     clearDimFields();  // Reset dim input for new entity
 
     m_pendingEntity = SketchEntity();
     m_pendingEntity.id = nextEntityId();
     m_pendingEntity.points.push_back(pos);
 
-    switch (m_activeTool) {
-    case SketchTool::Point:
-        m_pendingEntity.type = SketchEntityType::Point;
-        // Point is placed on mouse release, not immediately
-        break;
-    case SketchTool::Line:
-        m_pendingEntity.type = SketchEntityType::Line;
-        if (m_lineMode == LineMode::Construction) {
-            m_pendingEntity.isConstruction = true;
-        }
-        break;
-    case SketchTool::Rectangle:
-        // Parallelogram mode creates a Parallelogram entity, others create Rectangle
-        if (m_rectMode == RectMode::Parallelogram) {
-            m_pendingEntity.type = SketchEntityType::Parallelogram;
-        } else {
-            m_pendingEntity.type = SketchEntityType::Rectangle;
-        }
-        break;
-    case SketchTool::Circle:
-        m_pendingEntity.type = SketchEntityType::Circle;
-        break;
-    case SketchTool::Arc:
-        m_pendingEntity.type = SketchEntityType::Arc;
-        break;
-    case SketchTool::Polygon:
-        m_pendingEntity.type = SketchEntityType::Polygon;
-        if (m_polygonMode != PolygonMode::Freeform) {
-            m_pendingEntity.sides = 6;  // Default hexagon
-        }
-        // Freeform: sides will be derived from point count at finish time
-        break;
-    case SketchTool::Slot:
-        m_pendingEntity.type = SketchEntityType::Slot;
-        m_pendingEntity.radius = 5.0;  // Default slot half-width
-        break;
-    case SketchTool::Ellipse:
-        m_pendingEntity.type = SketchEntityType::Ellipse;
-        break;
-    case SketchTool::Spline:
-        m_pendingEntity.type = SketchEntityType::Spline;
-        // Spline uses multi-click mode (keep adding points until finished)
-        break;
-    case SketchTool::Text:
-        m_pendingEntity.type = SketchEntityType::Text;
-        // Prompt for text immediately
-        {
-            bool ok = false;
-            QString text = QInputDialog::getText(this, tr("Sketch Text"),
-                                                  tr("Enter text:"), QLineEdit::Normal,
-                                                  QString(), &ok);
-            if (ok && !text.isEmpty()) {
-                m_pendingEntity.text = text.toStdString();
-                finishEntity();  // Text is instant once entered
-            } else {
-                m_isDrawing = false;  // Canceled
-            }
-        }
-        break;
-    default:
-        m_isDrawing = false;
-        break;
+    // Every tool types its own pending entity.
+    if (SketchToolHandler* h = activeHandler()) {
+        h->beginEntity(*this, m_pendingEntity);
     }
 
     // Initialize inline dimension fields for the new entity
@@ -10095,1233 +6555,364 @@ void SketchCanvas::updateEntity(const QPointF& pos)
 {
     if (!m_isDrawing) return;
 
-    // Update pending entity based on tool
-    switch (m_activeTool) {
-    case SketchTool::Line: {
-        QPointF endpoint = pos;
-        QPointF start = m_pendingEntity.points[0];
-
-        // Apply locked dimensions if any
-        double lockedLen = getLockedDim(0);   // field 0 = Length
-        double lockedAng = getLockedDim(1);   // field 1 = Angle
-
-        // For tangent lines with locked angle, move the tangent point along the circle/arc
-        if (m_lineMode == LineMode::Tangent && !m_tangentTargets.isEmpty() && lockedAng != -1.0) {
-            SketchEntity* entity = entityById(m_tangentTargets[0]);
-            if (entity && (entity->type == SketchEntityType::Circle ||
-                          entity->type == SketchEntityType::Arc)) {
-                QPointF center = entity->points[0];
-                double radius = entity->radius;
-
-                // Tangent angle θ means radius angle is θ ± 90°
-                // Choose the direction based on which side of center the mouse is
-                double angRad = qDegreesToRadians(lockedAng);
-                double radiusAng1 = angRad + M_PI / 2.0;
-                double radiusAng2 = angRad - M_PI / 2.0;
-
-                // Calculate both possible tangent points
-                QPointF tp1 = center + QPointF(radius * std::cos(radiusAng1), radius * std::sin(radiusAng1));
-                QPointF tp2 = center + QPointF(radius * std::cos(radiusAng2), radius * std::sin(radiusAng2));
-
-                // Choose the tangent point that puts the endpoint on the correct side
-                // (the side where the mouse is pointing)
-                QPointF dir1 = QPointF(std::cos(angRad), std::sin(angRad));
-                double dot1 = (pos.x() - tp1.x()) * dir1.x() + (pos.y() - tp1.y()) * dir1.y();
-                double dot2 = (pos.x() - tp2.x()) * dir1.x() + (pos.y() - tp2.y()) * dir1.y();
-
-                // Use the tangent point where the mouse is in the positive direction
-                start = (dot1 > dot2) ? tp1 : tp2;
-
-                // For arcs, verify the point is on the arc (within sweep)
-                if (entity->type == SketchEntityType::Arc) {
-                    double startAng = entity->startAngle;
-                    double sweepAng = entity->sweepAngle;
-                    double pointAng = std::atan2(start.y() - center.y(), start.x() - center.x()) * 180.0 / M_PI;
-
-                    // Normalize angles
-                    auto normalizeAngle = [](double a) {
-                        while (a < 0) a += 360;
-                        while (a >= 360) a -= 360;
-                        return a;
-                    };
-                    pointAng = normalizeAngle(pointAng);
-                    double arcStart = normalizeAngle(startAng);
-                    double arcEnd = normalizeAngle(startAng + sweepAng);
-
-                    // Check if point is on the arc
-                    bool onArc;
-                    if (sweepAng >= 0) {
-                        if (arcEnd >= arcStart) {
-                            onArc = (pointAng >= arcStart && pointAng <= arcEnd);
-                        } else {
-                            onArc = (pointAng >= arcStart || pointAng <= arcEnd);
-                        }
-                    } else {
-                        if (arcEnd <= arcStart) {
-                            onArc = (pointAng <= arcStart && pointAng >= arcEnd);
-                        } else {
-                            onArc = (pointAng <= arcStart || pointAng >= arcEnd);
-                        }
-                    }
-
-                    if (!onArc) {
-                        // Try the other tangent point
-                        start = (dot1 > dot2) ? tp2 : tp1;
-                    }
-                }
-
-                // Update the pending entity's start point
-                m_pendingEntity.points[0] = start;
-                // Also update preview points for visual feedback
-                if (!m_previewPoints.isEmpty()) {
-                    m_previewPoints[0] = start;
-                }
-            }
-        }
-
-        if (lockedLen > 0 || lockedAng != -1.0) {
-            QPointF dir = pos - start;
-            double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-            double mouseAng = std::atan2(dir.y(), dir.x());
-
-            double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-            double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-
-            if (useLen > 0.001) {
-                endpoint = start + QPointF(useLen * std::cos(useAng), useLen * std::sin(useAng));
-            }
-        }
-        if (m_pendingEntity.points.size() > 1) {
-            m_pendingEntity.points[1] = endpoint;
-        } else {
-            m_pendingEntity.points.push_back(endpoint);
-        }
-        break;
-    }
-
-    case SketchTool::Rectangle:
-        if (m_rectMode == RectMode::Center) {
-            // Center mode: point[0] is center, compute opposite corners
-            if (!m_pendingEntity.points.empty()) {
-                QPointF center = m_pendingEntity.points[0];
-                // Compute delta from center to mouse position
-                QPointF delta = pos - center;
-                // Apply locked dimensions
-                double lockedW = getLockedDim(0);
-                double lockedH = getLockedDim(1);
-                if (lockedW > 0) delta.setX(delta.x() >= 0 ? lockedW / 2.0 : -lockedW / 2.0);
-                if (lockedH > 0) delta.setY(delta.y() >= 0 ? lockedH / 2.0 : -lockedH / 2.0);
-                // Opposite corner mirrors across center
-                QPointF corner1 = center - delta;
-                QPointF corner2 = center + delta;
-                // Store as corner-to-corner (points[0] and points[1] are opposite corners)
-                if (m_pendingEntity.points.size() > 2) {
-                    m_pendingEntity.points[1] = corner1;
-                    m_pendingEntity.points[2] = corner2;
-                } else if (m_pendingEntity.points.size() > 1) {
-                    m_pendingEntity.points[1] = corner1;
-                    m_pendingEntity.points.push_back(corner2);
-                } else {
-                    m_pendingEntity.points.push_back(corner1);
-                    m_pendingEntity.points.push_back(corner2);
-                }
-            }
-        } else if (m_rectMode == RectMode::ThreePoint) {
-            // 3-Point mode: apply locked dimension constraints to preview position.
-            // Override m_currentMouseWorld so the preview draws at the constrained position.
-            int stage = m_previewPoints.size();
-            if (stage == 1) {
-                // Stage 1: defining edge (p1 → p2). Same math as Line/Parallelogram.
-                QPointF p1 = m_previewPoints[0];
-                double lockedLen = getLockedDim(0);   // Edge Length
-                double lockedAng = getLockedDim(1);   // Edge Angle
-                if (lockedLen > 0 || lockedAng != -1.0) {
-                    QPointF dir = pos - p1;
-                    double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    double mouseAng = std::atan2(dir.y(), dir.x());
-                    double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                    double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                    if (useLen > 0.001) {
-                        m_currentMouseWorld = p1 + QPointF(useLen * std::cos(useAng),
-                                                           useLen * std::sin(useAng));
-                    }
-                }
-            } else if (stage >= 2) {
-                // Stage 2: defining width (perpendicular offset from edge).
-                // Preview projects m_currentMouseWorld onto perpendicular of p1-p2.
-                // Locked width → set m_currentMouseWorld so projection gives locked width.
-                double lockedW = getLockedDim(0);  // Width
-                if (lockedW > 0) {
-                    QPointF p1 = m_previewPoints[0];
-                    QPointF p2 = m_previewPoints[1];
-                    QPointF edge = p2 - p1;
-                    double edgeLen = std::sqrt(edge.x() * edge.x() + edge.y() * edge.y());
-                    if (edgeLen > 0.001) {
-                        QPointF edgeDir = edge / edgeLen;
-                        QPointF perpDir(-edgeDir.y(), edgeDir.x());
-                        QPointF toMouse = pos - p1;
-                        double perpDot = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-                        double sign = (perpDot >= 0) ? 1.0 : -1.0;
-                        // Keep edge-parallel position from mouse
-                        double edgeDot = toMouse.x() * edgeDir.x() + toMouse.y() * edgeDir.y();
-                        m_currentMouseWorld = p1 + edgeDir * edgeDot + perpDir * sign * lockedW;
-                    }
-                }
-            }
-        } else if (m_rectMode == RectMode::Parallelogram) {
-            // Parallelogram mode: apply locked dimension constraints to preview position.
-            // Override m_currentMouseWorld so the preview draws at the constrained position.
-            // Don't modify m_pendingEntity.points here — that breaks click-click mode.
-            int stage = m_previewPoints.size();
-            if (stage == 1) {
-                // Stage 1: defining edge1 (p1 → p2)
-                QPointF p1 = m_previewPoints[0];
-                double lockedLen = getLockedDim(0);   // Edge1
-                double lockedAng = getLockedDim(1);   // Edge1 Angle
-                if (lockedLen > 0 || lockedAng != -1.0) {
-                    QPointF dir = pos - p1;
-                    double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    double mouseAng = std::atan2(dir.y(), dir.x());
-                    double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                    double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                    if (useLen > 0.001) {
-                        m_currentMouseWorld = p1 + QPointF(useLen * std::cos(useAng),
-                                                           useLen * std::sin(useAng));
-                    }
-                }
-            } else if (stage >= 2) {
-                // Stage 2: defining edge2 (p2 → p3)
-                QPointF p1 = m_previewPoints[0];
-                QPointF p2 = m_previewPoints[1];
-                double lockedLen = getLockedDim(0);   // Edge2
-                double lockedAng = getLockedDim(1);   // Edge2 Angle (inside angle at p2)
-                if (lockedLen > 0 || lockedAng != -1.0) {
-                    QPointF dir = pos - p2;
-                    double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    double mouseAng = std::atan2(dir.y(), dir.x());
-                    double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                    double useAng;
-                    if (lockedAng != -1.0) {
-                        // Inside angle: between vectors p2→p1 and p2→p3
-                        double edge1Dir = std::atan2(p1.y() - p2.y(), p1.x() - p2.x());
-                        double dir1 = edge1Dir + qDegreesToRadians(lockedAng);
-                        double dir2 = edge1Dir - qDegreesToRadians(lockedAng);
-                        // Pick direction closest to mouse
-                        double diff1 = std::abs(std::remainder(mouseAng - dir1, 2.0 * M_PI));
-                        double diff2 = std::abs(std::remainder(mouseAng - dir2, 2.0 * M_PI));
-                        useAng = (diff1 <= diff2) ? dir1 : dir2;
-                    } else {
-                        useAng = mouseAng;
-                    }
-                    if (useLen > 0.001) {
-                        m_currentMouseWorld = p2 + QPointF(useLen * std::cos(useAng),
-                                                           useLen * std::sin(useAng));
-                    }
-                }
-            }
-        } else {
-            // Corner mode: standard corner-to-corner
-            double lockedW = getLockedDim(0);  // field 0 = Width
-            double lockedH = getLockedDim(1);  // field 1 = Height
-
-            if (lockedW > 0 && lockedH > 0 && m_rectBothLocked) {
-                // Both locked: user rotates the rectangle around the first corner.
-                // Rotation is relative to the axis-aligned state at lock time,
-                // so the rectangle starts axis-aligned and rotates as the mouse moves.
-                QPointF origin = m_previewPoints[0];
-                QPointF delta = pos - origin;
-                double currentAngle = std::atan2(delta.y(), delta.x());
-                double rotation = currentAngle - m_rectLockRefAngle;
-                double wAngle = m_rectLockWidthAngle + rotation;
-                double hAngle = m_rectLockHeightAngle + rotation;
-                QPointF wDir(std::cos(wAngle), std::sin(wAngle));
-                QPointF hDir(std::cos(hAngle), std::sin(hAngle));
-                // 4 corners: origin, along width, diagonal, along height
-                QPointF p0 = origin;
-                QPointF p1 = origin + wDir * lockedW;
-                QPointF p2 = p1 + hDir * lockedH;
-                QPointF p3 = origin + hDir * lockedH;
-                // Store all 4 corners for rotated rectangle
-                while (m_pendingEntity.points.size() < 4)
-                    m_pendingEntity.points.push_back(QPointF());
-                m_pendingEntity.points[0] = p0;
-                m_pendingEntity.points[1] = p1;
-                m_pendingEntity.points[2] = p2;
-                m_pendingEntity.points[3] = p3;
-            } else {
-                // One or no dim locked: axis-aligned (2-point) rectangle
-                QPointF corner = pos;
-                if (lockedW > 0 || lockedH > 0) {
-                    QPointF origin = m_pendingEntity.points[0];
-                    double dx = pos.x() - origin.x();
-                    double dy = pos.y() - origin.y();
-                    if (lockedW > 0) dx = (dx >= 0 ? lockedW : -lockedW);
-                    if (lockedH > 0) dy = (dy >= 0 ? lockedH : -lockedH);
-                    corner = origin + QPointF(dx, dy);
-                }
-                // Keep only 2 points for axis-aligned mode
-                while (m_pendingEntity.points.size() > 2)
-                    m_pendingEntity.points.pop_back();
-                if (m_pendingEntity.points.size() > 1) {
-                    m_pendingEntity.points[1] = corner;
-                } else {
-                    m_pendingEntity.points.push_back(corner);
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Circle:
-        if (!m_pendingEntity.points.empty()) {
-            if (m_circleMode == CircleMode::TwoPoint) {
-                // Two-point (diameter) mode: point[0] is one end, mouse is other end
-                QPointF p1 = m_pendingEntity.points[0];
-                QPointF endpoint = pos;
-                double lockedD = getLockedDim(0);  // field 0 = Diameter
-                if (lockedD > 0) {
-                    // Constrain endpoint at locked diameter distance in mouse direction
-                    QPointF dir = pos - p1;
-                    double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    if (len > 1e-6) {
-                        endpoint = p1 + dir * (lockedD / len);
-                    }
-                }
-                double diameter = QLineF(p1, endpoint).length();
-                m_pendingEntity.radius = diameter / 2.0;
-                if (m_pendingEntity.points.size() > 1) {
-                    m_pendingEntity.points[1] = endpoint;
-                } else {
-                    m_pendingEntity.points.push_back(endpoint);
-                }
-            } else if (m_circleMode == CircleMode::ThreePoint) {
-                // ThreePoint mode: points are added on click, not on mouse move
-                // Just update m_currentMouseWorld which is used by drawPreview()
-                // Don't modify m_pendingEntity.points here - that breaks click-click mode.
-            } else {
-                // Center-radius mode: point[0] is center, mouse defines radius
-                double lockedR = getLockedDim(0);  // field 0 = Radius
-                QPointF center = m_pendingEntity.points[0];
-                QPointF perimPt = pos;
-                if (lockedR > 0) {
-                    // Constrain to locked radius in mouse direction
-                    QPointF dir = pos - center;
-                    double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    if (len > 1e-6) {
-                        perimPt = center + dir * (lockedR / len);
-                    }
-                    m_pendingEntity.radius = lockedR;
-                } else {
-                    m_pendingEntity.radius = QLineF(center, pos).length();
-                }
-                // Store the perimeter point
-                if (m_pendingEntity.points.size() > 1) {
-                    m_pendingEntity.points[1] = perimPt;
-                } else {
-                    m_pendingEntity.points.push_back(perimPt);
-                }
-            }
-        }
-        break;
-
-    case SketchTool::Polygon:  // Polygon uses radius like circle
-        if (!m_pendingEntity.points.empty()) {
-            double lockedR = getLockedDim(0);  // field 0 = Radius
-            if (lockedR > 0) {
-                m_pendingEntity.radius = lockedR;
-                // Constrain cursor position to locked radius (keeps angle, fixes distance)
-                QPointF center = m_pendingEntity.points[0];
-                QPointF dir = pos - center;
-                double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                if (len > 1e-6) {
-                    m_currentMouseWorld = center + dir * (lockedR / len);
-                }
-            } else {
-                m_pendingEntity.radius = QLineF(m_pendingEntity.points[0], pos).length();
-            }
-        }
-        break;
-
-    case SketchTool::Arc:
-        if (m_arcMode == ArcMode::Tangent) {
-            // Tangent arc: update end point
-            if (m_pendingEntity.points.size() > 1) {
-                m_pendingEntity.points[1] = pos;
-            } else {
-                m_pendingEntity.points.push_back(pos);
-            }
-            // Apply locked dimension constraints (Radius and/or Sweep Angle)
-            double lockedRadius = getLockedDim(0);  // Radius (field index 0)
-            double lockedSweep = getLockedDim(1);   // Sweep Angle (field index 1)
-            if ((lockedRadius > 0 || lockedSweep != -1.0) &&
-                !m_tangentTargets.isEmpty() && !m_previewPoints.isEmpty()) {
-                const SketchEntity* tangentEntity = nullptr;
-                for (const auto& e : m_entities) {
-                    if (e.id == m_tangentTargets[0]) {
-                        tangentEntity = &e;
-                        break;
-                    }
-                }
-                if (tangentEntity) {
-                    // Project tangent point onto entity (same as paintEvent)
-                    QPointF tangentPoint = m_previewPoints[0];
-                    if (tangentEntity->type == SketchEntityType::Line && tangentEntity->points.size() >= 2) {
-                        tangentPoint = geometry::closestPointOnLine(tangentPoint,
-                            tangentEntity->points[0], tangentEntity->points[1]);
-                    } else if (tangentEntity->type == SketchEntityType::Rectangle && tangentEntity->points.size() >= 2) {
-                        QPointF corners[4];
-                        if (tangentEntity->points.size() >= 4) {
-                            for (int i = 0; i < 4; ++i) corners[i] = tangentEntity->points[i];
-                        } else {
-                            corners[0] = tangentEntity->points[0];
-                            corners[1] = QPointF(tangentEntity->points[1].x, tangentEntity->points[0].y);
-                            corners[2] = tangentEntity->points[1];
-                            corners[3] = QPointF(tangentEntity->points[0].x, tangentEntity->points[1].y);
-                        }
-                        double minDist = std::numeric_limits<double>::max();
-                        for (int i = 0; i < 4; ++i) {
-                            QPointF edgeStart = corners[i];
-                            QPointF edgeEnd = corners[(i + 1) % 4];
-                            QPointF projected = geometry::closestPointOnLine(tangentPoint, edgeStart, edgeEnd);
-                            double dist = QLineF(tangentPoint, projected).length();
-                            if (dist < minDist) {
-                                minDist = dist;
-                                tangentPoint = projected;
-                            }
-                        }
-                    }
-
-                    if (lockedRadius > 0 && lockedSweep != -1.0) {
-                        // Both locked: compute center from tangent point + locked radius,
-                        // then place endpoint at locked sweep angle
-                        // Get edge direction for the normal
-                        QPointF edgeDir;
-                        if (tangentEntity->type == SketchEntityType::Line && tangentEntity->points.size() >= 2) {
-                            edgeDir = tangentEntity->points[1] - tangentEntity->points[0];
-                        } else {
-                            edgeDir = QPointF(1, 0);  // fallback
-                        }
-                        double edgeLen = std::sqrt(edgeDir.x() * edgeDir.x() + edgeDir.y() * edgeDir.y());
-                        if (edgeLen > 1e-6) edgeDir /= edgeLen;
-                        QPointF normal(-edgeDir.y(), edgeDir.x());
-
-                        // Pick normal side closest to mouse
-                        QPointF candidateCenter1 = tangentPoint + normal * lockedRadius;
-                        QPointF candidateCenter2 = tangentPoint - normal * lockedRadius;
-                        QPointF center = (QLineF(pos, candidateCenter1).length() <
-                                          QLineF(pos, candidateCenter2).length())
-                                         ? candidateCenter1 : candidateCenter2;
-
-                        // Start angle from center to tangent point
-                        double startAngle = std::atan2(tangentPoint.y() - center.y(),
-                                                        tangentPoint.x() - center.x()) * 180.0 / M_PI;
-                        double sign = (std::atan2(pos.y() - center.y(), pos.x() - center.x()) * 180.0 / M_PI - startAngle > 0) ? 1.0 : -1.0;
-                        if (m_arcSlotFlipped) sign = -sign;
-                        double endAngle = startAngle + sign * std::abs(lockedSweep);
-                        double endRad = qDegreesToRadians(endAngle);
-                        m_currentMouseWorld = center + QPointF(lockedRadius * qCos(endRad),
-                                                                lockedRadius * qSin(endRad));
-                    } else if (lockedRadius > 0) {
-                        // Radius locked only: constrain the arc to the locked radius
-                        // Calculate tangent arc first to get direction, then override radius
-                        QPointF edgeDir;
-                        if (tangentEntity->type == SketchEntityType::Line && tangentEntity->points.size() >= 2) {
-                            edgeDir = tangentEntity->points[1] - tangentEntity->points[0];
-                        } else {
-                            edgeDir = QPointF(1, 0);
-                        }
-                        double edgeLen = std::sqrt(edgeDir.x() * edgeDir.x() + edgeDir.y() * edgeDir.y());
-                        if (edgeLen > 1e-6) edgeDir /= edgeLen;
-                        QPointF normal(-edgeDir.y(), edgeDir.x());
-
-                        // Pick normal side closest to mouse
-                        QPointF candidateCenter1 = tangentPoint + normal * lockedRadius;
-                        QPointF candidateCenter2 = tangentPoint - normal * lockedRadius;
-                        QPointF center = (QLineF(pos, candidateCenter1).length() <
-                                          QLineF(pos, candidateCenter2).length())
-                                         ? candidateCenter1 : candidateCenter2;
-
-                        // Project mouse onto circle of locked radius centered at 'center'
-                        QPointF dir = pos - center;
-                        double dist = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                        if (dist > 1e-6) {
-                            m_currentMouseWorld = center + dir * (lockedRadius / dist);
-                        }
-                    } else {
-                        // Sweep angle locked only (original logic)
-                        TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, pos);
-                        if (ta.valid) {
-                            double sign = (ta.sweepAngle >= 0) ? 1.0 : -1.0;
-                            if (m_arcSlotFlipped) sign = -sign;
-                            double endAngle = ta.startAngle + sign * std::abs(lockedSweep);
-                            double endRad = qDegreesToRadians(endAngle);
-                            m_currentMouseWorld = ta.center + Point2D(ta.radius * qCos(endRad),
-                                                                        ta.radius * qSin(endRad));
-                        }
-                    }
-                }
-            }
-        } else if (m_arcMode == ArcMode::CenterStartEnd) {
-            // Apply locked dimension constraints to preview position.
-            int stage = m_previewPoints.size();
-            if (stage == 1) {
-                // Stage 1: center placed, defining start point → locked Radius constrains distance
-                double lockedR = getLockedDim(0);  // Radius
-                if (lockedR > 0) {
-                    QPointF center = m_previewPoints[0];
-                    QPointF dir = pos - center;
-                    double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    if (len > 1e-6) {
-                        m_currentMouseWorld = center + dir * (lockedR / len);
-                    }
-                }
-            } else if (stage >= 2) {
-                // Stage 2: center+start placed, defining end → locked Sweep constrains angle
-                double lockedSweep = getLockedDim(0);  // Sweep Angle (field 0 in stage 2)
-                if (lockedSweep != -1.0) {
-                    QPointF center = m_previewPoints[0];
-                    QPointF start = m_previewPoints[1];
-                    double radius = QLineF(center, start).length();
-                    double startAngle = std::atan2(start.y() - center.y(), start.x() - center.x());
-                    double mouseAngle = std::atan2(pos.y() - center.y(), pos.x() - center.x());
-                    // Determine sweep direction from mouse
-                    double defaultSweep = mouseAngle - startAngle;
-                    while (defaultSweep > M_PI) defaultSweep -= 2.0 * M_PI;
-                    while (defaultSweep < -M_PI) defaultSweep += 2.0 * M_PI;
-                    if (m_arcSlotFlipped) {
-                        defaultSweep = (defaultSweep > 0) ? defaultSweep - 2.0 * M_PI : defaultSweep + 2.0 * M_PI;
-                    }
-                    double sign = (defaultSweep >= 0) ? 1.0 : -1.0;
-                    double endAngle = startAngle + sign * qDegreesToRadians(std::abs(lockedSweep));
-                    m_currentMouseWorld = center + QPointF(radius * std::cos(endAngle),
-                                                           radius * std::sin(endAngle));
-                }
-            }
-        } else if (m_arcMode == ArcMode::StartEndRadius) {
-            int stage = m_previewPoints.size();
-            if (stage == 1) {
-                // Stage 1: start placed, defining end → locked Chord Length/Angle
-                QPointF start = m_previewPoints[0];
-                double lockedLen = getLockedDim(0);  // Chord Length
-                double lockedAng = getLockedDim(1);  // Chord Angle
-                if (lockedLen > 0 || lockedAng != -1.0) {
-                    QPointF dir = pos - start;
-                    double mouseLen = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    double mouseAng = std::atan2(dir.y(), dir.x());
-                    double useLen = (lockedLen > 0) ? lockedLen : mouseLen;
-                    double useAng = (lockedAng != -1.0) ? qDegreesToRadians(lockedAng) : mouseAng;
-                    if (useLen > 0.001) {
-                        m_currentMouseWorld = start + QPointF(useLen * std::cos(useAng),
-                                                              useLen * std::sin(useAng));
-                    }
-                }
-            } else if (stage >= 2) {
-                // Stage 2: start+end placed, mouse controls arc center on perp bisector
-                // Locked Sweep → compute perpendicular bisector projection distance
-                double lockedSweep = getLockedDim(0);  // Sweep Angle
-                if (lockedSweep != -1.0) {
-                    QPointF start = m_previewPoints[0];
-                    QPointF end = m_previewPoints[1];
-                    QPointF midChord = (start + end) / 2.0;
-                    double chordLength = QLineF(start, end).length();
-                    if (chordLength > 0.001) {
-                        QPointF chordDir = (end - start) / chordLength;
-                        QPointF perpDir(-chordDir.y(), chordDir.x());
-                        // projDist = (chordLength/2) / tan(sweepAngle/2)
-                        double halfSweepRad = qDegreesToRadians(std::abs(lockedSweep)) / 2.0;
-                        double tanHalf = std::tan(halfSweepRad);
-                        double projDist = (tanHalf > 1e-6) ? (chordLength / 2.0) / tanHalf : 1e6;
-                        // Sign from mouse position (or flip)
-                        QPointF toMouse = pos - midChord;
-                        double mouseProjDist = toMouse.x() * perpDir.x() + toMouse.y() * perpDir.y();
-                        if (m_arcSlotFlipped) mouseProjDist = -mouseProjDist;
-                        double sign = (mouseProjDist >= 0) ? 1.0 : -1.0;
-                        if (m_arcSlotFlipped) sign = -sign;
-                        m_currentMouseWorld = midChord + perpDir * sign * projDist;
-                    }
-                }
-            }
-        } else if (m_arcMode == ArcMode::ThreePoint) {
-            // ThreePoint arc has no dim fields — no constraint support needed
-        }
-        break;
-
-    case SketchTool::Slot:
-        if (m_slotMode == SlotMode::ArcRadius) {
-            // Arc slot (Radius mode): apply locked dimension constraints
-            int stage = m_previewPoints.size();
-            if (stage == 1) {
-                // Stage 1: arc center placed, defining start → locked Radius constrains distance
-                double lockedR = getLockedDim(0);  // Radius
-                if (lockedR > 0) {
-                    QPointF arcCenter = m_previewPoints[0];
-                    QPointF dir = pos - arcCenter;
-                    double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                    if (len > 1e-6) {
-                        m_currentMouseWorld = arcCenter + dir * (lockedR / len);
-                    }
-                }
-            } else if (stage >= 2) {
-                // Stage 2: arc center+start placed, defining end → locked Sweep constrains angle
-                double lockedSweep = getLockedDim(0);  // Sweep Angle
-                if (lockedSweep != -1.0) {
-                    QPointF arcCenter = m_previewPoints[0];
-                    QPointF start = m_previewPoints[1];
-                    double arcRadius = QLineF(arcCenter, start).length();
-                    double startAngle = std::atan2(start.y() - arcCenter.y(),
-                                                   start.x() - arcCenter.x());
-                    double mouseAngle = std::atan2(pos.y() - arcCenter.y(),
-                                                   pos.x() - arcCenter.x());
-                    double defaultSweep = mouseAngle - startAngle;
-                    while (defaultSweep > M_PI) defaultSweep -= 2.0 * M_PI;
-                    while (defaultSweep < -M_PI) defaultSweep += 2.0 * M_PI;
-                    if (m_arcSlotFlipped) {
-                        defaultSweep = (defaultSweep > 0) ? defaultSweep - 2.0 * M_PI : defaultSweep + 2.0 * M_PI;
-                    }
-                    double sign = (defaultSweep >= 0) ? 1.0 : -1.0;
-                    double endAngle = startAngle + sign * qDegreesToRadians(std::abs(lockedSweep));
-                    m_currentMouseWorld = arcCenter + QPointF(arcRadius * std::cos(endAngle),
-                                                              arcRadius * std::sin(endAngle));
-                }
-            }
-        } else if (m_slotMode == SlotMode::ArcEnds) {
-            // Arc slot (Ends mode): apply locked dimension constraints
-            int stage = m_previewPoints.size();
-            if (stage >= 2) {
-                // Stage 2: start+end placed, mouse controls arc center on perp bisector
-                double lockedSweep = getLockedDim(0);  // Sweep Angle
-                if (lockedSweep != -1.0) {
-                    QPointF start = m_previewPoints[0];
-                    QPointF end = m_previewPoints[1];
-                    QPointF midpoint = (start + end) / 2.0;
-                    double chordLen = QLineF(start, end).length();
-                    if (chordLen > 0.001) {
-                        QPointF startToEnd = end - start;
-                        QPointF perpDir(-startToEnd.y() / chordLen, startToEnd.x() / chordLen);
-                        double halfSweepRad = qDegreesToRadians(std::abs(lockedSweep)) / 2.0;
-                        double tanHalf = std::tan(halfSweepRad);
-                        double projDist = (tanHalf > 1e-6) ? (chordLen / 2.0) / tanHalf : 1e6;
-                        QPointF mouseToMid = pos - midpoint;
-                        double mouseProjDist = mouseToMid.x() * perpDir.x() + mouseToMid.y() * perpDir.y();
-                        double sign = (mouseProjDist >= 0) ? 1.0 : -1.0;
-                        m_currentMouseWorld = midpoint + perpDir * sign * projDist;
-                    }
-                }
-            }
-        } else {
-            // Linear slot (CenterToCenter or Overall) - two endpoints
-            QPointF endpoint = pos;
-            double lockedLen = getLockedDim(0);  // field 0 = Length
-            if (lockedLen > 0) {
-                QPointF start = m_pendingEntity.points[0];
-                QPointF dir = pos - start;
-                double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                if (len > 1e-6) {
-                    endpoint = start + dir * (lockedLen / len);
-                }
-            }
-            if (m_pendingEntity.points.size() > 1) {
-                m_pendingEntity.points[1] = endpoint;
-            } else {
-                m_pendingEntity.points.push_back(endpoint);
-            }
-        }
-        break;
-
-    case SketchTool::Ellipse: {  // Ellipse: center to edge defines major axis, then minor
-        QPointF edgePt = pos;
-        double lockedR = getLockedDim(0);  // field 0 = Major Radius
-        if (lockedR > 0 && !m_pendingEntity.points.empty()) {
-            QPointF center = m_pendingEntity.points[0];
-            QPointF dir = pos - center;
-            double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-            if (len > 1e-6) {
-                edgePt = center + dir * (lockedR / len);
-            }
-        }
-        if (m_pendingEntity.points.size() > 1) {
-            m_pendingEntity.points[1] = edgePt;
-        } else {
-            m_pendingEntity.points.push_back(edgePt);
-        }
-        break;
-    }
-
-    case SketchTool::Spline:  // Spline: preview next point
-        // Don't add the point yet, just show preview
-        // Points are added on mouse release
-        break;
-
-    default:
-        break;
+    // The active tool updates the pending entity in its handler.
+    if (SketchToolHandler* h = activeHandler()) {
+        h->updateEntity(*this, pos);
     }
 }
 
+void SketchCanvas::showDimensionOptionsMenu(const QPoint& screenPos)
+{
+    QMenu menu(this);
+
+    // Radius vs diameter only makes sense for a circle or an arc.
+    const SketchEntity* target = entityById(firstConstraintTargetId());
+    const bool radial = target && (target->type == SketchEntityType::Circle
+                                    || target->type == SketchEntityType::Arc);
+    if (radial) {
+        QAction* radius = menu.addAction(tr("Radius"));
+        radius->setCheckable(true);
+        radius->setChecked(m_pendingConstraintType == ConstraintType::Radius);
+        connect(radius, &QAction::triggered, this, [this]() {
+            m_pendingConstraintType = ConstraintType::Radius;
+            update();
+        });
+        QAction* diameter = menu.addAction(tr("Diameter"));
+        diameter->setCheckable(true);
+        diameter->setChecked(m_pendingConstraintType == ConstraintType::Diameter);
+        connect(diameter, &QAction::triggered, this, [this]() {
+            m_pendingConstraintType = ConstraintType::Diameter;
+            update();
+        });
+        menu.addSeparator();
+    }
+
+    QAction* driven = menu.addAction(tr("Driven (Reference)"));
+    driven->setCheckable(true);
+    driven->setChecked(!m_pendingDimensionDriven);
+    connect(driven, &QAction::triggered, this, [this](bool on) {
+        m_pendingDimensionDriven = !on;   // checked = driven = not driving
+    });
+
+    menu.exec(mapToGlobal(screenPos));
+}
+
+void SketchCanvas::recordEndpointSnap()
+{
+    // createSnapConstraints() matches by position, so the index is nominal;
+    // what matters is that the endpoint's active snap (e.g. onto the first
+    // point when closing a triangle) is in m_placedSnaps for finishEntity().
+    if (m_snapEngine.hasActiveSnap())
+        m_placedSnaps.append({ 0, *m_snapEngine.activeSnap() });
+}
+
+bool SketchCanvas::createCoincidenceOnDrag(int entityId, int handleIndex)
+{
+    const SketchEntity* dragged = entityById(entityId);
+    if (!dragged || handleIndex < 0 || handleIndex >= static_cast<int>(dragged->points.size()))
+        return false;
+    const QPointF pos(dragged->points[handleIndex]);
+    const double eps = kSnapWeldEps;   // only when the point landed EXACTLY on another (i.e. it snapped)
+
+    // Dragged onto the sketch origin -> ground it there.
+    if (QLineF(pos, QPointF(0, 0)).length() <= eps) {
+        for (const auto& ex : m_constraints) {
+            if (ex.type == ConstraintType::Coincident && ex.entityIds.size() == 2
+                && ex.entityIds[0] == entityId && ex.pointIndices.size() == 2
+                && ex.pointIndices[0] == handleIndex
+                && ex.entityIds[1] == sketch::kSketchOriginEntity)
+                return false;   // already grounded
+        }
+        pushUndoCommand(makeConstraint(ConstraintType::Coincident,
+                                       { entityId, sketch::kSketchOriginEntity },
+                                       { handleIndex, 0 }));
+        return true;
+    }
+
+    for (const SketchEntity& other : m_entities) {
+        if (other.id == entityId) continue;   // same-entity self-join is not a coincidence
+        for (int i = 0; i < static_cast<int>(other.points.size()); ++i) {
+            if (QLineF(QPointF(other.points[i]), pos).length() > eps) continue;
+
+            // Skip if these two points are already tied by a Coincident.
+            for (const auto& ex : m_constraints) {
+                if (ex.type != ConstraintType::Coincident) continue;
+                if (ex.entityIds.size() != 2 || ex.pointIndices.size() != 2) continue;
+                const bool a = ex.entityIds[0] == entityId && ex.pointIndices[0] == handleIndex
+                            && ex.entityIds[1] == other.id  && ex.pointIndices[1] == i;
+                const bool b = ex.entityIds[1] == entityId && ex.pointIndices[1] == handleIndex
+                            && ex.entityIds[0] == other.id  && ex.pointIndices[0] == i;
+                if (a || b) return false;
+            }
+
+            pushUndoCommand(makeConstraint(ConstraintType::Coincident,
+                                           { entityId, other.id }, { handleIndex, i }));
+            return true;   // one join per drag
+        }
+    }
+    return false;
+}
+
+// Opening a circle produces one 360-degree arc whose two ends start on top of
+// each other at the cut (both unwelded). When the user drags one end away, the
+// end LEFT IN PLACE is the one that should catch any entity sitting at the cut.
+// That choice depends on the drag direction, so it is resolved here at release,
+// not at split time where the two ends overlap and neither has moved. Reuses the
+// shared library rule (point-on-object, or Coincident to a vertex / point
+// entity) so the tie matches trim/split elsewhere. (Needs GUI runtime check.)
+bool SketchCanvas::tieOpenedArcEndOnDrag(int entityId, int draggedHandle)
+{
+    SketchEntity* arc = entityById(entityId);
+    if (!arc || arc->type != SketchEntityType::Arc || arc->points.size() < 3)
+        return false;
+    if (draggedHandle != 1 && draggedHandle != 2) return false;   // endpoints only
+    const int twin = (draggedHandle == 1) ? 2 : 1;
+    if (static_cast<int>(m_dragOriginalEntity.points.size()) < 3) return false;
+
+    // Fire only when this drag OPENED a coincident pair: the two ends started
+    // together and the grabbed one has now been pulled off the twin.
+    const QPointF beforeDragged(m_dragOriginalEntity.points[draggedHandle]);
+    const QPointF beforeTwin(m_dragOriginalEntity.points[twin]);
+    if (QLineF(beforeDragged, beforeTwin).length() > kSnapWeldEps) return false;
+    const QPointF twinPos(arc->points[twin]);
+    if (QLineF(QPointF(arc->points[draggedHandle]), twinPos).length() <= kSnapWeldEps)
+        return false;   // nothing separated: not an opening drag
+
+    // Pin the twin (still at the cut) to whatever entity sits there.
+    std::vector<sketch::Entity> pieceLib{ hobbycad::toLibraryEntity(*arc) }, others;
+    for (const SketchEntity& e : m_entities)
+        if (e.id != entityId) others.push_back(hobbycad::toLibraryEntity(e));
+    const std::vector<sketch::Constraint> ties = sketch::computeCutConstraints(
+        pieceLib, others, {{ twinPos.x(), twinPos.y() }},
+        [this]() { return m_nextConstraintId++; });
+    if (ties.empty()) return false;
+
+    std::vector<sketch::UndoCommand> subs;
+    recordAddedConstraints(ties, subs);
+    pushCompoundOrSingle(subs, "Constrain opened arc");
+    m_profilesCacheDirty = true;
+    return true;
+}
+
+// Build a constraint, append it, mark its (real) entities constrained, and
+// return the undo command so the caller pushes it directly or into a compound
+// batch. The single place the SketchConstraint field defaults live, replacing a
+// dozen verbatim copies of the id/flags/append/mark trailer that had begun to
+// drift. Sentinel ids (e.g. the origin) that entityById cannot resolve are
+// simply skipped when marking. (audit)
+sketch::UndoCommand SketchCanvas::makeConstraint(ConstraintType type,
+                                                 std::vector<int> entityIds,
+                                                 std::vector<int> pointIndices,
+                                                 double value, bool driving,
+                                                 bool labelVisible)
+{
+    SketchConstraint c;
+    c.id = m_nextConstraintId++;
+    c.type = type;
+    c.entityIds = entityIds;
+    c.pointIndices = std::move(pointIndices);
+    c.value = value;
+    c.isDriving = driving;
+    c.enabled = true;
+    c.satisfied = true;
+    c.labelVisible = labelVisible;
+    m_constraints.append(c);
+    for (int id : entityIds)
+        if (SketchEntity* e = entityById(id)) e->constrained = true;
+    return sketch::UndoCommand::addConstraint(c);
+}
+
+// Find which of the given entities carries a point at pos (within eps), matching
+// by POSITION, the identity that survives entity decomposition. skipId is not
+// considered (a point never joins to itself). (audit)
+bool SketchCanvas::findOwnerPointAt(const QVector<int>& entityIds,
+                                    const QPointF& pos, double eps, int skipId,
+                                    int& outEntityId, int& outPointIndex) const
+{
+    for (int id : entityIds) {
+        if (id == skipId) continue;
+        const SketchEntity* e = entityById(id);
+        if (!e) continue;
+        if (e->type == SketchEntityType::Slot) continue;  // slots are derived: not a weld target
+        for (int i = 0; i < static_cast<int>(e->points.size()); ++i) {
+            if (QLineF(QPointF(e->points[i]), pos).length() <= eps) {
+                outEntityId = id;
+                outPointIndex = i;
+                return true;
+            }
+        }
+    }
+    outEntityId = -1;
+    outPointIndex = -1;
+    return false;
+}
+
+void SketchCanvas::createSnapConstraints(const QVector<int>& newEntityIds,
+                                         int excludeTarget)
+{
+    if (m_placedSnaps.isEmpty() || newEntityIds.isEmpty()) return;
+
+    // Match by POSITION rather than by point index. A rectangle or polygon
+    // is decomposed on finish, so the point index the snap was recorded
+    // against belongs to an entity that no longer exists, but the corner
+    // it placed is still there, on whichever line now owns it. Position is
+    // the one thing that survives decomposition, so it is what we look up.
+    const double eps = kSnapWeldEps;
+
+    std::vector<sketch::UndoCommand> subs;
+
+    for (const auto& [placedIndex, snap] : m_placedSnaps) {
+        Q_UNUSED(placedIndex);
+
+        // Snapped to the sketch origin: ground that point to (0,0). The origin
+        // is not a real entity, so it uses the origin sentinel rather than a
+        // target entity lookup.
+        if (snap.type == sketch::SnapType::Origin) {
+            const QPointF snapPos(snap.position.x, snap.position.y);
+            int ownerId = -1, ownerIndex = -1;
+            if (!findOwnerPointAt(newEntityIds, snapPos, eps, -1,
+                                  ownerId, ownerIndex)) continue;
+            subs.push_back(makeConstraint(ConstraintType::Coincident,
+                                          { ownerId, sketch::kSketchOriginEntity },
+                                          { ownerIndex, 0 }));
+            continue;
+        }
+
+        if (snap.entityId < 0) continue;
+
+        // The tangent tool excludes its target curve: tangency governs that
+        // contact, so a snap onto it must not also become a Coincident.
+        if (snap.entityId == excludeTarget) continue;
+
+        const SketchEntity* target = entityById(snap.entityId);
+        if (!target) continue;
+
+        const auto implied = sketch::constraintForSnap(snap.type, target->type);
+        if (!implied) continue;
+
+        const QPointF snapPos(snap.position.x, snap.position.y);
+
+        // Which produced entity carries the point that was placed here (never
+        // the snap target itself).
+        int ownerId = -1, ownerIndex = -1;
+        if (!findOwnerPointAt(newEntityIds, snapPos, eps, snap.entityId,
+                              ownerId, ownerIndex)) continue;
+
+        const int targetIndex = sketch::nearestPointIndex(*target, snap.position);
+        if (targetIndex < 0) continue;
+
+        subs.push_back(makeConstraint(*implied, {ownerId, snap.entityId},
+                                      {ownerIndex, targetIndex}));
+    }
+
+    m_placedSnaps.clear();
+    if (subs.empty()) return;
+
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Snap constraints"));
+    solveConstraints();
+}
+
+void SketchCanvas::createInferredConstraints(const QVector<int>& newEntityIds)
+{
+    if (m_snapEngine.activeInferences().empty() || newEntityIds.isEmpty()) {
+        m_snapEngine.clearInferences();
+        return;
+    }
+
+    // The inference is about the line just drawn: the first new entity that
+    // is a Line (the line tool produces exactly one).
+    int lineId = -1;
+    for (int id : newEntityIds) {
+        const SketchEntity* e = entityById(id);
+        if (e && e->type == SketchEntityType::Line) { lineId = id; break; }
+    }
+    if (lineId < 0) { m_snapEngine.clearInferences(); return; }
+
+    std::vector<sketch::UndoCommand> subs;
+    for (const auto& inf : m_snapEngine.activeInferences()) {
+        SketchConstraint c;
+        c.type = inf.constraint;
+        c.isDriving = true;
+        c.enabled = true;
+        c.satisfied = true;
+        c.labelVisible = false;
+        c.value = 0.0;
+        if (inf.constraint == ConstraintType::Parallel
+            || inf.constraint == ConstraintType::Perpendicular) {
+            if (inf.refEntityId == lineId || !entityById(inf.refEntityId)) continue;
+            c.entityIds = {lineId, inf.refEntityId};
+        } else {
+            c.entityIds = {lineId};   // Horizontal / Vertical
+        }
+
+        // Never add an alignment the line already carries.
+        bool duplicate = false;
+        for (const auto& ex : m_constraints) {
+            if (ex.type == c.type && ex.entityIds == c.entityIds) { duplicate = true; break; }
+        }
+        if (duplicate) continue;
+
+        // Honor the drawing rather than fight it: if this alignment would
+        // over-constrain the sketch, leave it off; the geometry is already
+        // aligned, and a conflicting constraint helps no one.
+        if (SketchSolver::isAvailable()) {
+            SketchSolver solver;
+            if (solver.checkOverConstrain(m_entities, m_constraints, c).wouldOverConstrain)
+                continue;
+        }
+
+        c.id = m_nextConstraintId++;
+        m_constraints.append(c);
+        subs.push_back(sketch::UndoCommand::addConstraint(c));
+        if (SketchEntity* e = entityById(lineId)) e->constrained = true;
+        if (inf.refEntityId >= 0)
+            if (SketchEntity* r = entityById(inf.refEntityId)) r->constrained = true;
+    }
+
+    m_snapEngine.clearInferences();
+    if (subs.empty()) return;
+
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Inferred constraints"));
+    solveConstraints();
+}
+
+
 void SketchCanvas::finishEntity()
 {
+    // Set when the committed entity can be chained from; see the end.
+    int chainFromId = -1;
+    QPointF chainFrom;
+    // A fresh finish clears the tangent-arc chain link; the chaining block
+    // below re-arms it when this segment is one that can be continued.
+    m_chainFromEntityId = -1;
+
     if (!m_isDrawing) return;
 
     // Validate entity
     bool valid = false;
-    switch (m_pendingEntity.type) {
-    case SketchEntityType::Point:
-        valid = !m_pendingEntity.points.empty();
-        break;
-    case SketchEntityType::Line:
-        valid = m_pendingEntity.points.size() >= 2 &&
-                QLineF(m_pendingEntity.points[0], m_pendingEntity.points[1]).length() > 0.1;
-        // Clear tangent targets if this was a tangent line
-        if (m_lineMode == LineMode::Tangent) {
-            m_tangentTargets.clear();
-        }
-        break;
-    case SketchEntityType::Rectangle:
-        // For center mode, we have 3 points: [center, corner1, corner2]
-        // Convert to standard 2-point corner format [corner1, corner2]
-        if (m_rectMode == RectMode::Center && m_pendingEntity.points.size() >= 3) {
-            QPointF corner1 = m_pendingEntity.points[1];
-            QPointF corner2 = m_pendingEntity.points[2];
-            m_pendingEntity.points.clear();
-            m_pendingEntity.points.push_back(corner1);
-            m_pendingEntity.points.push_back(corner2);
-        } else if (m_rectMode == RectMode::ThreePoint && m_pendingEntity.points.size() >= 3) {
-            // 3-point angled rectangle: [p1, p2, p3] where p1-p2 is first edge
-            // and p3 defines the perpendicular offset (width)
-            QPointF p1 = m_pendingEntity.points[0];
-            QPointF p2 = m_pendingEntity.points[1];
-            QPointF p3 = m_pendingEntity.points[2];
 
-            // Calculate edge direction and perpendicular
-            QPointF edge = p2 - p1;
-            double edgeLen = QLineF(p1, p2).length();
-            if (edgeLen > 0.01) {
-                QPointF edgeDir = edge / edgeLen;
-                QPointF perpDir(-edgeDir.y(), edgeDir.x());
+    // A tangent-mode line's target must be captured BEFORE normalize(), which
+    // clears the tangent targets; used below to build the Tangent constraint.
+    int pendingTangentTarget = -1;
+    if (m_activeTool == SketchTool::Line
+        && m_lineMode == LineMode::Tangent
+        && !m_tangentTargets.isEmpty())
+        pendingTangentTarget = m_tangentTargets.first();
 
-                // Project p3 onto perpendicular to get width
-                QPointF toP3 = p3 - p1;
-                double perpDist = toP3.x() * perpDir.x() + toP3.y() * perpDir.y();
-
-                // Calculate all four corners: p1, p2, p2+perp, p1+perp
-                QPointF c1 = p1;
-                QPointF c2 = p2;
-                QPointF c3 = p2 + perpDir * perpDist;
-                QPointF c4 = p1 + perpDir * perpDist;
-
-                // Store as 4-point polygon-style rectangle for proper rendering
-                // The drawing code will handle this as a rotated rectangle
-                m_pendingEntity.points.clear();
-                m_pendingEntity.points.push_back(c1);
-                m_pendingEntity.points.push_back(c2);
-                m_pendingEntity.points.push_back(c3);
-                m_pendingEntity.points.push_back(c4);
-            }
-        }
-        // Validate: need at least 2 points with some distance
-        // For 3-point mode, we now have 4 points (all corners)
-        if (m_pendingEntity.points.size() == 4) {
-            // 4-point rotated rectangle
-            valid = QLineF(m_pendingEntity.points[0], m_pendingEntity.points[1]).length() > 0.1;
-        } else {
-            valid = m_pendingEntity.points.size() >= 2 &&
-                    QLineF(m_pendingEntity.points[0], m_pendingEntity.points[1]).length() > 0.1;
-        }
-        break;
-    case SketchEntityType::Parallelogram:
-        // Parallelogram: 3 points clicked (p1, p2, p3), 4th is computed
-        // p1-p2 is first edge, p2-p3 is second edge, p4 = p1 + (p3 - p2)
-        if (m_pendingEntity.points.size() >= 3) {
-            QPointF p1 = m_pendingEntity.points[0];
-            QPointF p2 = m_pendingEntity.points[1];
-            QPointF p3 = m_pendingEntity.points[2];
-
-            // p4 completes the parallelogram: p4 = p1 + (p3 - p2)
-            QPointF p4 = p1 + (p3 - p2);
-
-            // Store all 4 corners
-            m_pendingEntity.points.clear();
-            m_pendingEntity.points.push_back(p1);
-            m_pendingEntity.points.push_back(p2);
-            m_pendingEntity.points.push_back(p3);
-            m_pendingEntity.points.push_back(p4);
-
-            valid = QLineF(p1, p2).length() > 0.1 && QLineF(p2, p3).length() > 0.1;
-        }
-        break;
-    case SketchEntityType::Circle:
-        // Handle tangent circles
-        if (m_circleMode == CircleMode::TwoTangent && m_tangentTargets.size() >= 2) {
-            const SketchEntity* e1 = nullptr;
-            const SketchEntity* e2 = nullptr;
-            for (const auto& e : m_entities) {
-                if (e.id == m_tangentTargets[0]) e1 = &e;
-                if (e.id == m_tangentTargets[1]) e2 = &e;
-            }
-            if (e1 && e2 && !m_pendingEntity.points.empty()) {
-                TangentCircle tc = calculate2TangentCircle(*e1, *e2, m_pendingEntity.points[0]);
-                if (tc.valid) {
-                    m_pendingEntity.points.clear();
-                    m_pendingEntity.points.push_back(tc.center);
-                    m_pendingEntity.points.push_back(Point2D(tc.center.x + tc.radius, tc.center.y));
-                    m_pendingEntity.radius = tc.radius;
-                    valid = true;
-                }
-            }
-            m_tangentTargets.clear();
-        } else if (m_circleMode == CircleMode::ThreeTangent && m_tangentTargets.size() >= 3) {
-            const SketchEntity* e1 = nullptr;
-            const SketchEntity* e2 = nullptr;
-            const SketchEntity* e3 = nullptr;
-            for (const auto& e : m_entities) {
-                if (e.id == m_tangentTargets[0]) e1 = &e;
-                if (e.id == m_tangentTargets[1]) e2 = &e;
-                if (e.id == m_tangentTargets[2]) e3 = &e;
-            }
-            if (e1 && e2 && e3) {
-                TangentCircle tc = calculate3TangentCircle(*e1, *e2, *e3);
-                if (tc.valid) {
-                    m_pendingEntity.points.clear();
-                    m_pendingEntity.points.push_back(tc.center);
-                    m_pendingEntity.points.push_back(Point2D(tc.center.x + tc.radius, tc.center.y));
-                    m_pendingEntity.radius = tc.radius;
-                    valid = true;
-                }
-            }
-            m_tangentTargets.clear();
-        } else if (m_circleMode == CircleMode::TwoPoint) {
-            // Two-point (diameter) circle: points[0] is first diameter end, points[1] is second
-            valid = m_pendingEntity.radius > 0.1;
-            if (valid && m_pendingEntity.points.size() >= 2) {
-                QPointF p1 = m_pendingEntity.points[0];
-                QPointF p2 = m_pendingEntity.points[1];
-                QPointF center = (p1 + p2) / 2.0;
-                double diameter = QLineF(p1, p2).length();
-                m_pendingEntity.radius = diameter / 2.0;
-                // Store as [center, p1, p2] - the two diameter endpoints
-                m_pendingEntity.points.clear();
-                m_pendingEntity.points.push_back(center);
-                m_pendingEntity.points.push_back(p1);
-                m_pendingEntity.points.push_back(p2);
-            }
-        } else if (m_circleMode == CircleMode::ThreePoint) {
-            // Three-point circle: calculate circumcircle from 3 points
-            // Store as: [center, p1, p2, p3] where p1, p2, p3 are the clicked points on perimeter
-            if (m_pendingEntity.points.size() >= 3) {
-                QPointF p1 = m_pendingEntity.points[0];
-                QPointF p2 = m_pendingEntity.points[1];
-                QPointF p3 = m_pendingEntity.points[2];
-
-                // Use library function for circumcircle calculation
-                auto arc = geometry::arcFromThreePoints(p1, p2, p3);
-                if (arc.has_value() && arc->radius > 0.1) {
-                    m_pendingEntity.radius = arc->radius;
-                    m_pendingEntity.points.clear();
-                    m_pendingEntity.points.push_back(arc->center);  // points[0] = center
-                    m_pendingEntity.points.push_back(p1);           // points[1] = first clicked point
-                    m_pendingEntity.points.push_back(p2);           // points[2] = second clicked point
-                    m_pendingEntity.points.push_back(p3);           // points[3] = third clicked point
-                    valid = true;
-                }
-            }
-        } else {
-            // Standard center-radius circle
-            // points[0] = center, points[1] = clicked perimeter point (set by updateEntity)
-            valid = m_pendingEntity.radius > 0.1 && m_pendingEntity.points.size() >= 2;
-        }
-        break;
-    case SketchEntityType::Arc:
-        // Handle tangent arc
-        if (m_arcMode == ArcMode::Tangent && !m_tangentTargets.isEmpty() && m_pendingEntity.points.size() >= 2) {
-            const SketchEntity* tangentEntity = nullptr;
-            for (const auto& e : m_entities) {
-                if (e.id == m_tangentTargets[0]) {
-                    tangentEntity = &e;
-                    break;
-                }
-            }
-            if (tangentEntity) {
-                QPointF tangentPoint = m_pendingEntity.points[0];
-                QPointF endPoint = m_pendingEntity.points[1];
-                TangentArc ta = calculateTangentArc(*tangentEntity, tangentPoint, endPoint);
-                if (ta.valid) {
-                    // Apply flip if Shift was held
-                    double sweepAngle = ta.sweepAngle;
-                    if (m_arcSlotFlipped) {
-                        if (sweepAngle > 0) sweepAngle -= 360;
-                        else sweepAngle += 360;
-                    }
-
-                    m_pendingEntity.points.clear();
-                    m_pendingEntity.points.push_back(ta.center);
-                    // Start endpoint (from startAngle + radius)
-                    double startRad = qDegreesToRadians(ta.startAngle);
-                    double endRad = qDegreesToRadians(ta.startAngle + sweepAngle);
-                    m_pendingEntity.points.push_back(Point2D(
-                        ta.center.x + ta.radius * qCos(startRad),
-                        ta.center.y + ta.radius * qSin(startRad)));
-                    // End endpoint
-                    m_pendingEntity.points.push_back(Point2D(
-                        ta.center.x + ta.radius * qCos(endRad),
-                        ta.center.y + ta.radius * qSin(endRad)));
-                    m_pendingEntity.radius = ta.radius;
-                    m_pendingEntity.startAngle = ta.startAngle;
-                    m_pendingEntity.sweepAngle = sweepAngle;
-                    m_pendingEntity.tangentEntityId = m_tangentTargets[0];
-                    valid = true;
-                }
-            }
-            m_tangentTargets.clear();
-        } else if (m_arcMode == ArcMode::ThreePoint && m_pendingEntity.points.size() >= 3) {
-            // Calculate arc from 3 points: p1 (start) -> p2 (middle/through point) -> p3 (end)
-            QPointF p1 = m_pendingEntity.points[0];  // start (first click)
-            QPointF p2 = m_pendingEntity.points[1];  // through point (second click)
-            QPointF p3 = m_pendingEntity.points[2];  // end (third click)
-
-            // Use library function for circumcircle calculation
-            auto arc = geometry::arcFromThreePoints(p1, p2, p3);
-            if (arc.has_value()) {
-                // Store final arc parameters: center + start/end endpoints
-                double startRad = qDegreesToRadians(arc->startAngle);
-                double endRad = qDegreesToRadians(arc->startAngle + arc->sweepAngle);
-                m_pendingEntity.points.clear();
-                m_pendingEntity.points.push_back(arc->center);
-                m_pendingEntity.points.push_back(Point2D{arc->center.x + arc->radius * qCos(startRad), arc->center.y + arc->radius * qSin(startRad)});
-                m_pendingEntity.points.push_back(Point2D{arc->center.x + arc->radius * qCos(endRad), arc->center.y + arc->radius * qSin(endRad)});
-                m_pendingEntity.radius = arc->radius;
-                m_pendingEntity.startAngle = arc->startAngle;
-                m_pendingEntity.sweepAngle = arc->sweepAngle;
-                valid = arc->radius > 0.1;
-            }
-        } else if (m_arcMode == ArcMode::CenterStartEnd && m_pendingEntity.points.size() >= 3) {
-            // Center-Start-End arc: points[0] = center, points[1] = start, points[2] = end
-            QPointF center = m_pendingEntity.points[0];
-            QPointF start = m_pendingEntity.points[1];
-            QPointF end = m_pendingEntity.points[2];
-
-            // Determine sweep direction: default to shorter path, flip if m_arcSlotFlipped
-            bool sweepCCW = true;
-            double startAngle = std::atan2(start.y() - center.y(), start.x() - center.x()) * 180.0 / M_PI;
-            double endAngle = std::atan2(end.y() - center.y(), end.x() - center.x()) * 180.0 / M_PI;
-            double sweep = endAngle - startAngle;
-            if (sweep > 180) sweep -= 360;
-            if (sweep < -180) sweep += 360;
-            // If sweep is positive, shorter path is CCW; if negative, shorter path is CW
-            sweepCCW = (sweep > 0);
-            // Flip reverses the direction
-            if (m_arcSlotFlipped) {
-                sweepCCW = !sweepCCW;
-            }
-
-            // Use library function
-            auto arc = geometry::arcFromCenterAndEndpoints(center, start, end, sweepCCW);
-
-            // Store final arc parameters: center + start/end endpoints
-            {
-                double startRad = qDegreesToRadians(arc.startAngle);
-                double endRad = qDegreesToRadians(arc.startAngle + arc.sweepAngle);
-                m_pendingEntity.points.clear();
-                m_pendingEntity.points.push_back(arc.center);
-                m_pendingEntity.points.push_back(Point2D{arc.center.x + arc.radius * qCos(startRad), arc.center.y + arc.radius * qSin(startRad)});
-                m_pendingEntity.points.push_back(Point2D{arc.center.x + arc.radius * qCos(endRad), arc.center.y + arc.radius * qSin(endRad)});
-                m_pendingEntity.radius = arc.radius;
-                m_pendingEntity.startAngle = arc.startAngle;
-                m_pendingEntity.sweepAngle = arc.sweepAngle;
-                valid = arc.radius > 0.1;
-            }
-        } else if (m_arcMode == ArcMode::StartEndRadius && m_pendingEntity.points.size() >= 3) {
-            // Start-End-Radius arc: points[0] = start, points[1] = end, points[2] = center point
-            // Third click defines arc center (constrained to perpendicular bisector)
-            QPointF start = m_pendingEntity.points[0];
-            QPointF end = m_pendingEntity.points[1];
-            QPointF centerPoint = m_pendingEntity.points[2];
-            QPointF midChord = (start + end) / 2.0;
-            double chordLength = QLineF(start, end).length();
-
-            if (chordLength > 0.001) {
-                // Calculate perpendicular direction from chord midpoint
-                QPointF chordDir = (end - start) / chordLength;
-                QPointF perpDir(-chordDir.y(), chordDir.x());
-
-                // Project center point onto perpendicular bisector
-                QPointF toCenter = centerPoint - midChord;
-                double projDist = toCenter.x() * perpDir.x() + toCenter.y() * perpDir.y();
-
-                // Ctrl snaps to midpoint (semicircle - exactly 180°)
-                bool ctrlHeld = (QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier);
-                if (ctrlHeld) {
-                    projDist = 0.0;
-                }
-
-                // Apply flip (Shift key) - move center to opposite side of chord
-                if (m_arcSlotFlipped) {
-                    projDist = -projDist;
-                }
-
-                // Arc center is on the perpendicular bisector
-                QPointF center = midChord + perpDir * projDist;
-
-                // Calculate radius from center to endpoints
-                double radius = QLineF(center, start).length();
-
-                // Minimum radius to avoid degenerate arcs (skip if Ctrl for exact 180°)
-                double halfChord = chordLength / 2.0;
-                if (!ctrlHeld) {
-                    double minRadius = halfChord * 1.01;
-                    if (radius < minRadius) {
-                        double minDist = std::sqrt(minRadius * minRadius - halfChord * halfChord);
-                        double sign = (projDist >= 0) ? 1.0 : -1.0;
-                        center = midChord + perpDir * sign * minDist;
-                        radius = minRadius;
-                        // Recalculate projDist after adjustment
-                        projDist = sign * minDist;
-                    }
-                }
-
-                // Match the preview's sweep calculation exactly.
-                // The preview uses screen-space angles with Qt's drawArc.
-                // We need to compute the same sweep and convert to world-space for the library.
-
-                // Calculate angles in screen space (same as preview)
-                QPoint centerScreen = worldToScreen(center);
-                QPoint startScreen = worldToScreen(start);
-                QPoint endScreen = worldToScreen(end);
-
-                double startAngleScreen = std::atan2(startScreen.y() - centerScreen.y(),
-                                                      startScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-                double endAngleScreen = std::atan2(endScreen.y() - centerScreen.y(),
-                                                    endScreen.x() - centerScreen.x()) * 180.0 / M_PI;
-
-                // Calculate sweep from start to end (same as preview)
-                double sweep = endAngleScreen - startAngleScreen;
-                // Normalize to [-180, 180] to get the "short" path
-                while (sweep > 180) sweep -= 360;
-                while (sweep < -180) sweep += 360;
-
-                // Determine if we want the long arc based on center position
-                // When center is close to chord (small |projDist|), we want the long arc
-                bool wantLongArc = (std::abs(projDist) < halfChord);
-
-                // If we want long arc, flip to the complementary sweep
-                if (wantLongArc) {
-                    if (sweep > 0) sweep -= 360;
-                    else sweep += 360;
-                }
-
-                // Now convert screen sweep to world sweep direction.
-                // Screen Y is inverted from world Y, so:
-                // - Positive screen sweep (CCW on screen) = CW in world = negative world sweep
-                // - Negative screen sweep (CW on screen) = CCW in world = positive world sweep
-                // The library's sweepCCW=true means positive sweep in world coords.
-                bool sweepCCW = (sweep < 0);  // negative screen sweep = CCW in world
-
-                // Use library function to create the arc
-                auto arc = geometry::arcFromCenterAndEndpoints(center, start, end, sweepCCW);
-
-                // Store final arc parameters: center + start/end endpoints
-                {
-                    double startRad = qDegreesToRadians(arc.startAngle);
-                    double endRad = qDegreesToRadians(arc.startAngle + arc.sweepAngle);
-                    m_pendingEntity.points.clear();
-                    m_pendingEntity.points.push_back(arc.center);
-                    m_pendingEntity.points.push_back(Point2D{arc.center.x + arc.radius * qCos(startRad), arc.center.y + arc.radius * qSin(startRad)});
-                    m_pendingEntity.points.push_back(Point2D{arc.center.x + arc.radius * qCos(endRad), arc.center.y + arc.radius * qSin(endRad)});
-                    m_pendingEntity.radius = arc.radius;
-                    m_pendingEntity.startAngle = arc.startAngle;
-                    m_pendingEntity.sweepAngle = arc.sweepAngle;
-                    valid = arc.radius > 0.1;
-                }
-            }
-        } else {
-            // Center-point arc (original behavior / tangent arc)
-            valid = m_pendingEntity.radius > 0.1;
-            if (valid && m_pendingEntity.points.size() == 1) {
-                // Store center + start/end endpoints
-                QPointF center = m_pendingEntity.points[0];
-                double r = m_pendingEntity.radius;
-                double startRad = qDegreesToRadians(m_pendingEntity.startAngle);
-                double endRad = qDegreesToRadians(m_pendingEntity.startAngle + m_pendingEntity.sweepAngle);
-                m_pendingEntity.points.push_back(center + QPointF(r * qCos(startRad), r * qSin(startRad)));
-                m_pendingEntity.points.push_back(center + QPointF(r * qCos(endRad), r * qSin(endRad)));
-            }
-        }
-        break;
-    case SketchEntityType::Polygon:
-        if (m_polygonMode == PolygonMode::Freeform) {
-            // Freeform polygon: need at least 3 vertices (triangle)
-            valid = m_pendingEntity.points.size() >= 3;
-            if (valid) {
-                m_pendingEntity.sides = m_pendingEntity.points.size();
-            }
-        } else {
-            // Regular polygon: center + radius
-            valid = m_pendingEntity.radius > 0.1;
-            if (valid && m_pendingEntity.points.size() == 1) {
-                QPointF center = m_pendingEntity.points[0];
-                int sides = m_pendingEntity.sides > 0 ? m_pendingEntity.sides : 6;
-                double radius = m_pendingEntity.radius;
-                double angleStep = 2.0 * M_PI / sides;
-                double startAngle = std::atan2(m_currentMouseWorld.y() - center.y(),
-                                               m_currentMouseWorld.x() - center.x());
-
-                // Circumscribed: vertex distance = apothem / cos(pi/sides)
-                double vertexRadius = radius;
-                if (m_polygonMode == PolygonMode::Circumscribed) {
-                    vertexRadius = radius / std::cos(M_PI / sides);
-                    startAngle += M_PI / sides;
-                }
-
-                // Store N vertex positions: points[0] = center, points[1..N] = vertices
-                for (int i = 0; i < sides; ++i) {
-                    double angle = startAngle + i * angleStep;
-                    m_pendingEntity.points.push_back(QPointF(
-                        center.x() + vertexRadius * std::cos(angle),
-                        center.y() + vertexRadius * std::sin(angle)));
-                }
-            }
-        }
-        break;
-    case SketchEntityType::Slot:
-        if (m_slotMode == SlotMode::ArcRadius) {
-            // Arc slot (Radius mode): points are arc center, start, end (constrained)
-            // Storage format: points[0] = arc center, points[1] = start, points[2] = end
-            if (m_pendingEntity.points.size() >= 3) {
-                QPointF arcCenter = m_pendingEntity.points[0];
-                QPointF start = m_pendingEntity.points[1];
-                QPointF end = m_pendingEntity.points[2];
-
-                // Project end point onto arc radius (same distance from center as start)
-                double arcRadius = QLineF(arcCenter, start).length();
-                double endDist = QLineF(arcCenter, end).length();
-                if (endDist > 0.001 && arcRadius > 0.001) {
-                    double scale = arcRadius / endDist;
-                    end = arcCenter + (end - arcCenter) * scale;
-                }
-
-                // Points already in correct order: arc center, start, end
-                m_pendingEntity.points[2] = end;  // Update projected end
-                m_pendingEntity.arcFlipped = m_arcSlotFlipped;
-                valid = true;
-            }
-            // Radius was set during startEntity or adjusted via scroll wheel
-        } else if (m_slotMode == SlotMode::ArcEnds) {
-            // Arc slot (Ends mode): points are start, end, arc center
-            // Both endpoints stay fixed; arc center is constrained to perpendicular bisector
-            // Reorder to storage format: points[0] = arc center, points[1] = start, points[2] = end
-            if (m_pendingEntity.points.size() >= 3) {
-                QPointF start = m_pendingEntity.points[0];
-                QPointF end = m_pendingEntity.points[1];
-                QPointF arcCenter = m_pendingEntity.points[2];
-
-                // Constrain arc center to perpendicular bisector of start-end
-                QPointF midpoint = (start + end) / 2.0;
-                QPointF startToEnd = end - start;
-                double chordLen = QLineF(start, end).length();
-
-                if (chordLen > 0.001) {
-                    QPointF perpDir(-startToEnd.y() / chordLen, startToEnd.x() / chordLen);
-                    QPointF toCenter = arcCenter - midpoint;
-                    double projDist = toCenter.x() * perpDir.x() + toCenter.y() * perpDir.y();
-                    arcCenter = midpoint + perpDir * projDist;
-                }
-
-                // Calculate arc radius (equidistant from both endpoints)
-                double arcRadius = QLineF(arcCenter, start).length();
-
-                // Enforce minimum angular separation
-                double slotRadius = m_pendingEntity.radius;
-                if (slotRadius < 0.1) slotRadius = 5.0;
-                double minAngularSep = (arcRadius > 0.001) ? (2.0 * slotRadius / arcRadius) : 0.1;
-
-                double startAngleRad = std::atan2(start.y() - arcCenter.y(), start.x() - arcCenter.x());
-                double endAngleRad = std::atan2(end.y() - arcCenter.y(), end.x() - arcCenter.x());
-                double angleDiff = endAngleRad - startAngleRad;
-                while (angleDiff > M_PI) angleDiff -= 2 * M_PI;
-                while (angleDiff < -M_PI) angleDiff += 2 * M_PI;
-
-                // If endpoints are too close angularly, push arc center further out
-                if (std::abs(angleDiff) < minAngularSep && chordLen > 0.001) {
-                    double halfChord = chordLen / 2.0;
-                    double requiredRadius = halfChord / std::sin(minAngularSep / 2.0);
-                    if (requiredRadius > arcRadius) {
-                        QPointF toCenter = arcCenter - midpoint;
-                        double toCenterLen = QLineF(midpoint, arcCenter).length();
-                        if (toCenterLen > 0.001) {
-                            double newDist = std::sqrt(requiredRadius * requiredRadius - halfChord * halfChord);
-                            arcCenter = midpoint + toCenter * (newDist / toCenterLen);
-                            arcRadius = requiredRadius;
-                        }
-                    }
-                }
-
-                // Reorder to: arc center, start, end
-                m_pendingEntity.points[0] = arcCenter;
-                m_pendingEntity.points[1] = start;
-                m_pendingEntity.points[2] = end;
-                m_pendingEntity.arcFlipped = m_arcSlotFlipped;
-                valid = true;
-            }
-            // Radius was set during startEntity or adjusted via scroll wheel
-        } else if (m_slotMode == SlotMode::Overall) {
-            // Overall mode: user clicked endpoints, convert to centers
-            valid = m_pendingEntity.points.size() >= 2 &&
-                    QLineF(m_pendingEntity.points[0], m_pendingEntity.points[1]).length() > 0.1;
-            if (valid) {
-                // Use user-adjusted radius (set during startEntity, adjusted via scroll wheel)
-                double radius = m_pendingEntity.radius;
-
-                // Convert endpoints to arc centers (move inward by radius)
-                QPointF p1 = m_pendingEntity.points[0];
-                QPointF p2 = m_pendingEntity.points[1];
-                double len = QLineF(p1, p2).length();
-                if (len > radius * 2) {
-                    double dx = (p2.x() - p1.x()) / len;
-                    double dy = (p2.y() - p1.y()) / len;
-                    m_pendingEntity.points[0] = QPointF(p1.x() + dx * radius, p1.y() + dy * radius);
-                    m_pendingEntity.points[1] = QPointF(p2.x() - dx * radius, p2.y() - dy * radius);
-                } else {
-                    // Slot too short for the radius, just use endpoints
-                }
-            }
-        } else {
-            // CenterToCenter mode (default): points are arc centers
-            valid = m_pendingEntity.points.size() >= 2 &&
-                    QLineF(m_pendingEntity.points[0], m_pendingEntity.points[1]).length() > 0.1;
-            // Radius was set during startEntity or adjusted via scroll wheel
-        }
-        break;
-    case SketchEntityType::Ellipse:
-        valid = m_pendingEntity.points.size() >= 2;
-        if (valid) {
-            // Calculate major and minor radii from the two points
-            QPointF center = m_pendingEntity.points[0];
-            QPointF majorPoint = m_pendingEntity.points[1];
-            m_pendingEntity.majorRadius = QLineF(center, majorPoint).length();
-            m_pendingEntity.minorRadius = m_pendingEntity.majorRadius * 0.5;  // Default 2:1 ratio
-        }
-        break;
-    case SketchEntityType::Spline:
-        valid = m_pendingEntity.points.size() >= 2;  // Need at least 2 points
-        break;
-    case SketchEntityType::Text:
-        valid = !m_pendingEntity.points.empty() && !m_pendingEntity.text.empty();
-        if (valid) {
-            ensureTextRotationHandle(m_pendingEntity);
-        }
-        break;
-    default:
-        break;
+    // Every tool normalizes its own point layout and reports whether the
+    // result is worth committing.
+    if (SketchToolHandler* h = activeHandler()) {
+        h->normalize(*this, m_pendingEntity, valid);
     }
 
     if (valid) {
-        // Save any remaining locked fields before clearing
-        for (int i = 0; i < m_dimFields.size(); ++i) {
-            if (i < m_dimStates.size() && m_dimStates[i].locked) {
-                m_dimLockedForConstraints.append({m_dimFields[i].label, m_dimStates[i].lockedValue});
-            }
-        }
+        // Carry any remaining locked fields into the constraint list.
+        m_dimInput.flushLocked();
 
         // --- Decomposition path for compound entities (Rectangle, Parallelogram) ---
         sketch::UndoCommand compoundCmd;
-        if (decomposeCompoundEntity(m_pendingEntity, m_dimLockedForConstraints, compoundCmd)) {
+        if (decomposeCompoundEntity(m_pendingEntity, m_dimInput.lockedForConstraints(), compoundCmd)
+            || createCenterlineSlot(m_pendingEntity, compoundCmd)) {
             // Decomposition succeeded: 4 lines + constraints + group already added
             // to m_entities, m_constraints, m_groups by the decompose function.
             m_profilesCacheDirty = true;
@@ -11334,7 +6925,15 @@ void SketchCanvas::finishEntity()
             }
 
             // Clear locked dims (already consumed by decomposition)
-            m_dimLockedForConstraints.clear();
+            m_dimInput.clearLocked();
+
+            // Snaps recorded against the compound entity still apply: the
+            // corner they placed now belongs to one of the lines below it.
+            {
+                QVector<int> produced;
+                for (int eid : group.entityIds) produced.append(eid);
+                createSnapConstraints(produced);
+            }
         } else {
             // --- Normal (non-decomposable) entity path ---
             m_entities.append(m_pendingEntity);
@@ -11346,21 +6945,237 @@ void SketchCanvas::finishEntity()
             emit entityCreated(m_pendingEntity.id);
 
             // Auto-create constraints from locked dimension values
-            if (!m_dimLockedForConstraints.isEmpty()) {
+            if (!m_dimInput.lockedForConstraints().isEmpty()) {
                 createLockedConstraints(m_pendingEntity.id);
+            }
+
+            // A point placed on a snap becomes a CONSTRAINT, not merely
+            // matching coordinates, in BOTH modes. Fusion: "If you snap
+            // to a specific point, the logical constraints are
+            // automatically added to the sketch." It is not an interaction
+            // style, it is what snapping means; without it a sketch looks
+            // joined and is not.
+            // A tangent-mode line always gets its Tangent constraint (the
+            // solver's touch-point construction IS the tangency, and it now
+            // sticks; the endpoints stay free to slide). Its point placements
+            // are then evaluated the SAME way every time (Aaron): a point
+            // clicked in free space creates no coincident, a point clicked onto
+            // a primitive or point welds there, exactly what a deliberate snap
+            // records. The ONE exception is the tangent target curve itself: a
+            // snap onto it is never turned into a coincident, because tangency
+            // already governs that contact (Aaron: "tangent line forces
+            // coincident which isn't required"). So we keep the deliberate
+            // snaps, drop only the ones aimed at the target curve, and skip the
+            // proximity auto-weld so a free-space click stays free.
+            const bool isTangentLine =
+                (m_activeTool == SketchTool::Line
+                 && m_lineMode == LineMode::Tangent
+                 && m_pendingEntity.type == SketchEntityType::Line
+                 && pendingTangentTarget >= 0
+                 && entityById(pendingTangentTarget) != nullptr);
+            if (isTangentLine) {
+                SketchConstraint tc;
+                tc.id = m_nextConstraintId++;
+                tc.type = ConstraintType::Tangent;
+                tc.entityIds = { m_pendingEntity.id, pendingTangentTarget };
+                tc.value = 0.0;
+                tc.isDriving = true;
+                tc.enabled = true;
+                tc.satisfied = true;
+                tc.labelVisible = false;
+                m_constraints.append(tc);
+                pushUndoCommand(sketch::UndoCommand::addConstraint(tc));
+                if (SketchEntity* le = entityById(m_pendingEntity.id)) le->constrained = true;
+                if (SketchEntity* te = entityById(pendingTangentTarget)) te->constrained = true;
+                emit constraintCreated(tc.id);
+
+                // Every placed point of the tangent line is evaluated the same
+                // generic way (a deliberate snap onto other geometry welds a
+                // Coincident, a free-space click welds nothing), except a snap
+                // onto the tangent target itself, which is excluded here.
+                createSnapConstraints({m_pendingEntity.id}, pendingTangentTarget);
+            } else {
+                createSnapConstraints({m_pendingEntity.id});
+                createProximityCoincidences(m_pendingEntity.id);   // weld close corners
+            }
+
+            // Turn the alignment inferred while drawing (horizontal, vertical,
+            // parallel, perpendicular) into real constraints on this line.
+            createInferredConstraints({m_pendingEntity.id});
+
+            // Remember where to continue from, before m_pendingEntity is
+            // reused for the next segment.
+            if (!m_pendingEntity.points.empty()) {
+                chainFromId = m_pendingEntity.id;
+                chainFrom = QPointF(m_pendingEntity.points.back());
             }
         }
     }
 
+    m_snapEngine.clearInferences();
     m_isDrawing = false;
     m_previewPoints.clear();
     clearDimFields();
+
+    // ADDING GEOMETRY CHANGES THE DEGREES OF FREEDOM, so the constraint state
+    // has to be re-published even though no constraint was touched. Without
+    // this the reported state goes stale the moment anything is drawn: a
+    // sketch with a fresh line still claimed to be "Empty".
+    //
+    // This costs a solve per committed entity. That is the same cost already
+    // paid on every constraint add/delete, and correctness of the displayed
+    // state is worth more than avoiding it; revisit only if profiling on a
+    // large sketch says otherwise.
+    solveConstraints();
+
+    // Polyline chaining: continue from the end just placed, and record the
+    // join the same way a snapped point is recorded, so the next segment
+    // finishes with a real Coincident rather than merely starting at the
+    // same coordinates.
+    if (chainFromId >= 0) {
+        if (SketchToolHandler* h = activeHandler()) {
+            if (h->chainsFromLastPoint(*this)) {
+                // Remember what we are chaining from so a drag off the next
+                // point can sweep a tangent arc against it (F-3).
+                m_chainFromEntityId = chainFromId;
+                startEntity(chainFrom);
+                // Re-arm drag detection for the NEW segment. Without this the
+                // release of the very click that ended the previous segment
+                // still counts as a drag (the pointer having traveled far
+                // from where that stroke began) and immediately finishes
+                // the segment just started, with one point in it. HobbyCAD
+                // accepts click-click-click AND press-drag-release, so the
+                // per-stage drag state has to start clean for each segment.
+                beginDragDetection(mapFromGlobal(QCursor::pos()));
+                m_placedSnaps.append({0, sketch::SnapPoint{
+                    hobbycad::Point2D(chainFrom.x(), chainFrom.y()),
+                    sketch::SnapType::Endpoint,
+                    chainFromId}});
+            }
+        }
+    }
+
     update();
+}
+
+void SketchCanvas::commitTangentArcSegment()
+{
+    const SketchEntity* prevLine = entityById(m_chainFromEntityId);
+    if (!prevLine || prevLine->type != SketchEntityType::Line
+        || prevLine->points.size() < 2 || m_previewPoints.isEmpty()) {
+        finishEntity();   // cannot build an arc here: lay a straight segment
+        return;
+    }
+
+    const QPointF tangentPoint = m_previewPoints[0];      // shared chain point
+    const QPointF endPoint = m_currentMouseWorld;
+    const TangentArcResult ta = tangentArcFor(*prevLine, tangentPoint, endPoint);
+    if (!ta.valid) { finishEntity(); return; }
+
+    // Build the arc entity from the tangent solve, the same [center, start,
+    // end] layout the Arc tool's tangent mode uses. Reuse the id already
+    // allocated for this (now-abandoned) chained line segment.
+    SketchEntity arc;
+    arc.id = m_pendingEntity.id;
+    sketch::setArcFromAngles(arc, ta.center, ta.radius, ta.startAngle, ta.sweepAngle);
+
+    // Which arc endpoint is the shared (tangent) one, and which line endpoint
+    // it meets, so the join Coincident names the right points.
+    const int sharedArcIdx = sketch::nearestArcEndIndex(arc, tangentPoint);
+    const int lineIdx =
+        (QLineF(QPointF(prevLine->points[0]), tangentPoint).length()
+         <= QLineF(QPointF(prevLine->points[1]), tangentPoint).length()) ? 0 : 1;
+    const int prevLineId = prevLine->id;
+
+    m_entities.append(arc);
+
+    // Join the arc to the line (Coincident at the shared point) and hold the
+    // tangency (Tangent, realized as endpoint tangency by the solver). Two
+    // real constraints keep the arc parametric, no re-derivation link needed.
+    SketchConstraint join;
+    join.id = m_nextConstraintId++;
+    join.type = ConstraintType::Coincident;
+    join.entityIds = { arc.id, prevLineId };
+    join.pointIndices = { sharedArcIdx, lineIdx };
+    join.isDriving = true; join.enabled = true; join.satisfied = true; join.labelVisible = false;
+    m_constraints.append(join);
+
+    SketchConstraint tangent;
+    tangent.id = m_nextConstraintId++;
+    tangent.type = ConstraintType::Tangent;
+    tangent.entityIds = { arc.id, prevLineId };
+    tangent.isDriving = true; tangent.enabled = true; tangent.satisfied = true; tangent.labelVisible = false;
+    m_constraints.append(tangent);
+
+    std::vector<sketch::UndoCommand> subs;
+    subs.push_back(sketch::UndoCommand::addEntity(arc, "Tangent Arc"));
+    subs.push_back(sketch::UndoCommand::addConstraint(join, "Tangent Arc"));
+    subs.push_back(sketch::UndoCommand::addConstraint(tangent, "Tangent Arc"));
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Tangent Arc"));
+
+    emit entityCreated(arc.id);
+    emit constraintCreated(join.id);      // keep listeners (constraint list, DOF
+    emit constraintCreated(tangent.id);   // badge) in sync, as the tangent-LINE path does
+    if (SketchEntity* a = entityById(arc.id)) a->constrained = true;
+    if (SketchEntity* l = entityById(prevLineId)) l->constrained = true;
+    m_profilesCacheDirty = true;
+
+    // The deferred line segment is abandoned (never appended); drop it and
+    // continue chaining from the arc's far endpoint.
+    m_isDrawing = false;
+    m_previewPoints.clear();
+    clearDimFields();
+    solveConstraints();
+
+    const QPointF farPoint = arc.points[(sharedArcIdx == 1) ? 2 : 1];
+    if (SketchToolHandler* h = activeHandler()) {
+        if (h->chainsFromLastPoint(*this)) {
+            m_chainFromEntityId = arc.id;   // next drag would be tangent to the arc
+            startEntity(farPoint);
+            beginDragDetection(mapFromGlobal(QCursor::pos()));
+            m_placedSnaps.append({0, sketch::SnapPoint{
+                hobbycad::Point2D(farPoint.x(), farPoint.y()),
+                sketch::SnapType::Endpoint, arc.id}});
+        }
+    }
+    update();
+}
+
+bool SketchCanvas::drawTangentArcPreview(QPainter& painter)
+{
+    const SketchEntity* prevLine = entityById(m_chainFromEntityId);
+    if (!prevLine || prevLine->type != SketchEntityType::Line
+        || m_previewPoints.isEmpty())
+        return false;
+    const TangentArcResult ta =
+        tangentArcFor(*prevLine, m_previewPoints[0], m_currentMouseWorld);
+    if (!ta.valid) return false;
+
+    // Sample the arc into a screen-space polyline: robust to the y-flip and
+    // sweep direction without angle bookkeeping.
+    painter.save();
+    QPen pen(m_theme.preview, 2, Qt::DashLine);
+    pen.setCosmetic(true);
+    painter.setPen(pen);
+    QPainterPath path;
+    const int N = 40;
+    for (int i = 0; i <= N; ++i) {
+        const double a = qDegreesToRadians(ta.startAngle + ta.sweepAngle * (double(i) / N));
+        const QPointF w(ta.center.x + ta.radius * qCos(a),
+                        ta.center.y + ta.radius * qSin(a));
+        const QPointF sc = worldToScreenF(w);
+        if (i == 0) path.moveTo(sc); else path.lineTo(sc);
+    }
+    painter.drawPath(path);
+    painter.restore();
+    return true;
 }
 
 void SketchCanvas::cancelEntity()
 {
     m_isDrawing = false;
+    m_lineChainPressActive = false;
+    m_chainFromEntityId = -1;
     m_previewPoints.clear();
     m_tangentTargets.clear();  // Clear any tangent arc targets
     clearDimFields();
@@ -11443,148 +7258,216 @@ bool SketchCanvas::decomposeCompoundEntity(
     return true;
 }
 
+bool SketchCanvas::createCenterlineSlot(SketchEntity& slot,
+                                       sketch::UndoCommand& compoundCmd)
+{
+    // Centerline-driven slot (Aaron's pivot; mirror of the CLI addSlotCenterline).
+    // A slot is a round profile swept along a centerline: build the centerline as
+    // ordinary construction geometry, a Line for a linear slot (2 centers) or an
+    // Arc for an arc slot (center,start,end); point the slot at it via
+    // pathEntityId, and group the two. The slot then FOLLOWS the centerline by
+    // re-derivation (updateSlotsFromPaths after each solve), not by a constraint;
+    // the user constrains/drags the centerline. No decomposition; that is now
+    // the separate "Explode" action.
+    if (slot.type != SketchEntityType::Slot) return false;
+    if (!slot.pathEntityIds.empty()) return false;   // already centerline-driven
+    if (slot.points.size() < 2) return false;
+
+    // The centerline itself (Line or Arc, construction) is the library's, shared
+    // with the CLI's addSlotCenterline; only the id is the GUI's to give.
+    SketchEntity path = hobbycad::toGuiEntity(sketch::makeSlotCenterline(slot));
+    path.id = nextEntityId();
+    slot.pathEntityIds = { path.id };
+
+    m_entities.append(path);
+    m_entities.append(slot);
+
+    // Kind Slot, named by the slot's id: what the CLI makes and the script
+    // exporter recognizes.
+    SketchGroup group = sketch::makeSlotGroup(m_nextGroupId++, slot.id, {path.id});
+    m_groups.append(group);
+    for (auto& e : m_entities)
+        if (group.containsEntity(e.id)) e.groupId = group.id;
+
+    std::vector<sketch::UndoCommand> subs;
+    subs.push_back(sketch::UndoCommand::addEntity(path));
+    subs.push_back(sketch::UndoCommand::addEntity(slot));
+    subs.push_back(sketch::UndoCommand::addGroup(group));
+    compoundCmd = sketch::UndoCommand::compound(subs, "Slot");
+    m_profilesCacheDirty = true;
+    return true;
+}
+
+bool SketchCanvas::createTreeSlotFromSelection()
+{
+    // Make a MULTI-segment slot from the selected construction path: a chain,
+    // a closed loop, or a branching tree of lines and arcs. The selected
+    // segments become the centerline (marked construction), and the slot
+    // follows their swept outline through every solve, the same pattern as the
+    // simple slot, one complexity up. (Aaron: the Y/tree slot.)
+    std::vector<int> pathIds;
+    for (const SketchEntity* e : selectedEntities()) {
+        if (!e) continue;
+        if (e->type == SketchEntityType::Line || e->type == SketchEntityType::Arc)
+            pathIds.push_back(e->id);
+    }
+    if (pathIds.size() < 2) {
+        emit statusMessage(tr("Select at least two connected lines or arcs to "
+                              "make a slot from a path."), 4000);
+        return false;
+    }
+
+    const double halfWidth = 5.0;   // default; the width becomes editable in the
+                                    // properties panel and by scroll later.
+
+    // Validate the path is sweepable at this width before committing anything.
+    const std::vector<sketch::Entity> libAll = hobbycad::toLibraryEntities(m_entities);
+    const sketch::SlotPathInfo info = sketch::analyzeSlotPath(libAll, pathIds);
+    if (!info.valid) {
+        emit statusMessage(tr("These do not form a slot path: %1")
+                           .arg(QString::fromStdString(info.reason)), 5000);
+        return false;
+    }
+    const std::string problem = sketch::slotWidthProblem(info, halfWidth);
+    if (!problem.empty()) {
+        emit statusMessage(tr("A width of %1 does not fit this path: %2")
+                           .arg(halfWidth * 2.0)
+                           .arg(QString::fromStdString(problem)), 5000);
+        return false;
+    }
+
+    std::vector<sketch::UndoCommand> subs;
+
+    // The segments become the centerline: guides, not profile edges.
+    for (int pid : pathIds) {
+        SketchEntity* seg = entityById(pid);
+        if (!seg || seg->isConstruction) continue;
+        const SketchEntity before = *seg;
+        seg->isConstruction = true;
+        subs.push_back(sketch::UndoCommand::modifyEntity(
+            hobbycad::toLibraryEntity(before), hobbycad::toLibraryEntity(*seg)));
+    }
+
+    SketchEntity slot;
+    slot.id = nextEntityId();
+    slot.type = SketchEntityType::Slot;
+    slot.radius = halfWidth;               // half-width
+    slot.pathEntityIds = pathIds;          // follows the whole path
+    m_entities.append(slot);
+    subs.push_back(sketch::UndoCommand::addEntity(hobbycad::toLibraryEntity(slot)));
+
+    SketchGroup group = sketch::makeSlotGroup(m_nextGroupId++, slot.id, pathIds);
+    m_groups.append(group);
+    for (auto& e : m_entities)
+        if (group.containsEntity(e.id)) e.groupId = group.id;
+    subs.push_back(sketch::UndoCommand::addGroup(group));
+
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Slot from path"));
+
+    // Derive the outline now so it draws before the next solve.
+    updateSlotsFromPaths();
+    m_profilesCacheDirty = true;
+    emit entityCreated(slot.id);
+    update();
+    return true;
+}
+
+bool SketchCanvas::decomposeSlotEntity(const SketchEntity& slot,
+                                       sketch::UndoCommand& compoundCmd)
+{
+    // Simple linear slots only for now: a single straight centerline. Arc
+    // slots decompose less cleanly (concentric sides) and path-slots must stay
+    // whole to follow an arbitrary path, so both keep the first-class Slot.
+    if (slot.type != SketchEntityType::Slot) return false;
+    if (!slot.pathEntityIds.empty()) return false;     // path-slot: keep whole
+    if (slot.points.size() != 2) return false;         // linear (2 centers) only
+    const double halfWidth = slot.radius;
+    if (!sketch::slotWidthIsPositive(2.0 * halfWidth)) return false;
+
+    // The slot's centerline becomes a construction Line between its two
+    // centers, the same role the path plays in "Sweep Along This Path".
+    sketch::Entity centerline;
+    centerline.id = nextEntityId();
+    centerline.type = sketch::EntityType::Line;
+    centerline.points = { slot.points[0], slot.points[1] };
+    centerline.isConstruction = true;
+
+    // The centerline goes in first; applySweep then adds the sides, caps and
+    // constraints, groups them with it, and wires the back-links (the same
+    // commit as Sweep Along Path and the CLI).
+    m_entities.append(SketchEntity(centerline));
+    const sketch::SweepApplied result = sketch::applySweep(
+        m_entities, m_constraints, m_groups, centerline.id, halfWidth,
+        sketch::SweepEndStyle::Round,
+        [this]() { return nextEntityId(); },
+        [this]() { return m_nextConstraintId++; },
+        m_nextGroupId++);
+    if (!result.success) {
+        m_entities.removeLast();   // the centerline was only for the sweep
+        return false;
+    }
+
+    // Constraints: the decomposition supplies them all (the corner
+    // coincidents, the equal-width half-segment chain, and the one tie that
+    // keeps the centerline the slot's centerline). No rigidity ties are added
+    // here: matching the CLI "sweep", the slot is under-constrained by design
+    // and the user adds dimensions by hand. Every extra tie tried before
+    // (perpendicular radius segments, cap Tangent / PointOnLine / Equal)
+    // over-constrained, conflicted under drag, or ballooned a cap.
+    std::vector<sketch::UndoCommand> subs;
+    subs.push_back(sketch::UndoCommand::addEntity(centerline));
+    for (const auto& e : result.entities) subs.push_back(sketch::UndoCommand::addEntity(e));
+    for (const auto& cc : result.constraints) subs.push_back(sketch::UndoCommand::addConstraint(cc));
+    subs.push_back(sketch::UndoCommand::addGroup(result.group));
+    compoundCmd = sketch::UndoCommand::compound(subs, "Slot");
+
+    m_profilesCacheDirty = true;
+    return true;
+}
+
 // ---- Inline dimension input helpers ------------------------------------
 
 void SketchCanvas::initDimFields()
 {
-    // Save any locked fields from previous stage before reinitializing
-    for (int i = 0; i < m_dimFields.size(); ++i) {
-        if (i < m_dimStates.size() && m_dimStates[i].locked) {
-            m_dimLockedForConstraints.append({m_dimFields[i].label, m_dimStates[i].lockedValue});
-        }
-    }
-
-    m_dimFields.clear();
-    m_dimStates.clear();
-    m_dimActiveIndex = -1;
-
-    int stage = m_previewPoints.size();  // Number of points placed so far
-
-    if (m_activeTool == SketchTool::Line) {
-        // After 1st click: Length + Angle
-        if (stage >= 1) {
-            m_dimFields.append({QStringLiteral("Length"), false, 0.0});
-            m_dimFields.append({QStringLiteral("Angle"), true, 0.0});
-        }
-    } else if (m_activeTool == SketchTool::Rectangle) {
-        if (m_rectMode == RectMode::Corner || m_rectMode == RectMode::Center) {
-            if (stage >= 1) {
-                m_dimFields.append({QStringLiteral("Width"), false, 0.0});
-                m_dimFields.append({QStringLiteral("Height"), false, 0.0});
-            }
-        } else if (m_rectMode == RectMode::ThreePoint) {
-            if (stage == 1) {
-                m_dimFields.append({QStringLiteral("Edge Length"), false, 0.0});
-                m_dimFields.append({QStringLiteral("Edge Angle"), true, 0.0});
-            } else if (stage >= 2) {
-                m_dimFields.append({QStringLiteral("Width"), false, 0.0});
-            }
-        } else if (m_rectMode == RectMode::Parallelogram) {
-            if (stage == 1) {
-                // Lengths first, then angles
-                m_dimFields.append({QStringLiteral("Edge1"), false, 0.0});
-                m_dimFields.append({QStringLiteral("Edge1 Angle"), true, 0.0});
-            } else if (stage >= 2) {
-                // Lengths first, then angles
-                m_dimFields.append({QStringLiteral("Edge2"), false, 0.0});
-                m_dimFields.append({QStringLiteral("Edge2 Angle"), true, 0.0});
-            }
-        }
-    } else if (m_activeTool == SketchTool::Circle) {
-        if (m_circleMode == CircleMode::CenterRadius && stage >= 1) {
-            m_dimFields.append({QStringLiteral("Radius"), false, 0.0});
-        } else if (m_circleMode == CircleMode::TwoPoint && stage >= 1) {
-            m_dimFields.append({QStringLiteral("Diameter"), false, 0.0});
-        }
-    } else if (m_activeTool == SketchTool::Polygon) {
-        // Radius field only for regular polygons (Inscribed/Circumscribed), not Freeform
-        if (m_polygonMode != PolygonMode::Freeform && stage >= 1) {
-            m_dimFields.append({QStringLiteral("Radius"), false, 0.0});
-        }
-    } else if (m_activeTool == SketchTool::Ellipse) {
-        if (stage >= 1) {
-            m_dimFields.append({QStringLiteral("Major Radius"), false, 0.0});
-        }
-    } else if (m_activeTool == SketchTool::Arc) {
-        if (m_arcMode == ArcMode::CenterStartEnd) {
-            if (stage == 1) {
-                m_dimFields.append({QStringLiteral("Radius"), false, 0.0});
-            } else if (stage >= 2) {
-                m_dimFields.append({QStringLiteral("Sweep Angle"), true, 0.0});
-            }
-        } else if (m_arcMode == ArcMode::StartEndRadius) {
-            if (stage == 1) {
-                m_dimFields.append({QStringLiteral("Chord Length"), false, 0.0});
-                m_dimFields.append({QStringLiteral("Chord Angle"), true, 0.0});
-            } else if (stage >= 2) {
-                m_dimFields.append({QStringLiteral("Sweep Angle"), true, 0.0});
-            }
-        } else if (m_arcMode == ArcMode::Tangent) {
-            // Tangent arc has only 1 preview point (the tangent point); the mouse
-            // position acts as the second point.  Dim fields appear immediately.
-            if (!m_tangentTargets.isEmpty()) {
-                m_dimFields.append({QStringLiteral("Radius"), false, 0.0});
-                m_dimFields.append({QStringLiteral("Sweep Angle"), true, 0.0});
-            }
-        }
-    } else if (m_activeTool == SketchTool::Slot) {
-        if (m_slotMode == SlotMode::CenterToCenter || m_slotMode == SlotMode::Overall) {
-            if (stage >= 1) {
-                m_dimFields.append({QStringLiteral("Length"), false, 0.0});
-            }
-        } else if (m_slotMode == SlotMode::ArcRadius) {
-            if (stage == 1) {
-                m_dimFields.append({QStringLiteral("Radius"), false, 0.0});
-            } else if (stage >= 2) {
-                m_dimFields.append({QStringLiteral("Sweep Angle"), true, 0.0});
-            }
-        } else if (m_slotMode == SlotMode::ArcEnds) {
-            if (stage >= 2) {
-                m_dimFields.append({QStringLiteral("Sweep Angle"), true, 0.0});
-            }
-        }
-    }
-
-    // Initialize states for all fields
-    for (int i = 0; i < m_dimFields.size(); ++i) {
-        m_dimStates.append({QString(), false, 0.0, 0, false});
-    }
-
-    if (!m_dimFields.isEmpty()) {
-        m_dimActiveIndex = 0;
-    }
+    // Drop the previous stage's fields (carrying locked values forward), let
+    // the active tool populate the new ones, then build their input state.
+    m_dimInput.reinitForNextStage();
+    if (SketchToolHandler* h = activeHandler())
+        h->initDimFields(*this);   // calls addDimField() -> m_dimInput.addField()
+    m_dimInput.beginStates();
+    emit toolHintChanged(currentToolHint());
 }
 
 void SketchCanvas::clearDimFields()
 {
-    m_dimFields.clear();
-    m_dimStates.clear();
-    m_dimActiveIndex = -1;
-    m_dimLockedForConstraints.clear();
+    m_dimInput.clearAll();
 }
 
 double SketchCanvas::getLockedDim(int fieldIndex) const
 {
-    if (fieldIndex >= 0 && fieldIndex < m_dimStates.size() && m_dimStates[fieldIndex].locked)
-        return m_dimStates[fieldIndex].lockedValue;
-    return -1.0;
+    return m_dimInput.getLocked(fieldIndex);
 }
 
-void SketchCanvas::prefillDimField(int fieldIndex)
+// ---- DimensionInputHost callbacks -----------------------------------
+bool SketchCanvas::dimChainsFromLastPoint() const
 {
-    if (fieldIndex < 0 || fieldIndex >= m_dimFields.size()) return;
-    if (fieldIndex >= m_dimStates.size()) return;
-    auto& field = m_dimFields[fieldIndex];
-    auto& state = m_dimStates[fieldIndex];
-    if (state.locked) return;
+    const SketchToolHandler* h = activeHandler();
+    return h && h->chainsFromLastPoint(*this);
+}
 
-    if (field.isAngle) {
-        state.inputBuffer = QString::fromStdString(hobbycad::formatValue(field.currentValue));
-    } else {
-        state.inputBuffer = QString::fromStdString(hobbycad::formatValue(hobbycad::mmToUnit(field.currentValue, m_displayUnit)));
-    }
-    state.cursorPos = state.inputBuffer.length();
-    state.selectAll = true;
+void SketchCanvas::dimAfterLock()
+{
+    // A value was just locked. Tools that derive state from "all fields
+    // locked" capture it now (Rectangle's rotation reference), then the
+    // preview is refreshed with the new constraint.
+    if (SketchToolHandler* h = activeHandler())
+        h->dimFieldsChanged(*this);
+    updateEntity(m_currentMouseWorld);
+}
+
+void SketchCanvas::dimReapplyPreview()
+{
+    updateEntity(m_currentMouseWorld);
 }
 
 void SketchCanvas::createLockedConstraints(int entityId)
@@ -11592,7 +7475,7 @@ void SketchCanvas::createLockedConstraints(int entityId)
     const SketchEntity* entity = entityById(entityId);
     if (!entity) return;
 
-    for (const auto& [label, value] : m_dimLockedForConstraints) {
+    for (const auto& [label, value] : m_dimInput.lockedForConstraints()) {
         m_constraintTargetEntities.clear();
         m_constraintTargetPoints.clear();
 
@@ -11642,19 +7525,18 @@ void SketchCanvas::createLockedConstraints(int entityId)
                 // Compute label position at midpoint of sweep arc
                 double midAngleRad = qDegreesToRadians(
                     entity->startAngle + entity->sweepAngle / 2.0);
-                double labelDist = entity->radius + 15.0 / m_zoom;
-                angleC.labelPosition = {
-                    center.x() + labelDist * std::cos(midAngleRad),
-                    center.y() + labelDist * std::sin(midAngleRad)};
+                double labelDist = entity->radius + kRadiusLabelOffsetPx / m_zoom;
+                angleC.labelPosition = geometry::polarPoint(center, labelDist, midAngleRad);
 
-                // Create group: "Sweep Angle N"
+                // The rig is a group of kind SweepAngle; the name is a label.
                 int groupCount = 0;
                 for (const auto& g : m_groups) {
-                    if (g.name.rfind("Sweep Angle", 0) == 0) groupCount++;
+                    if (sketch::isSweepAngleGroup(g)) groupCount++;
                 }
                 SketchGroup group;
                 group.id = m_nextGroupId++;
-                group.name = "Sweep Angle " + std::to_string(groupCount + 1);
+                group.kind = sketch::GroupKind::SweepAngle;
+                group.name = sketch::sweepAngleGroupName(groupCount + 1);
                 group.entityIds = {entityId, line1.id, line2.id};
                 group.constraintIds = {angleC.id};
                 group.locked = true;
@@ -11679,11 +7561,16 @@ void SketchCanvas::createLockedConstraints(int entityId)
             }
             continue;  // Skip the generic createConstraint call
         } else if (label.contains(QStringLiteral("Angle"))) {
-            ctype = ConstraintType::Angle;
-            // Angle between two lines requires 2 entities — skip auto-creation
-            // for single-entity angle locks (e.g., line angle from horizontal).
-            // TODO: Support angle-from-horizontal as a solver constraint.
-            continue;
+            // A locked Angle field on a single line fixes that line's angle
+            // from horizontal. FixedAngle is a one-entity constraint that the
+            // solver realizes against an internal horizontal reference line.
+            // (Angle between two picked lines is a separate two-entity flow.)
+            if (entity->type == SketchEntityType::Line) {
+                ctype = ConstraintType::FixedAngle;
+                m_constraintTargetEntities.append(entityId);
+            } else {
+                continue;  // Non-line entity: no single-entity angle lock
+            }
         } else {
             ctype = ConstraintType::Distance;
 
@@ -11698,10 +7585,20 @@ void SketchCanvas::createLockedConstraints(int entityId)
             }
         }
 
-        // Position label near entity center
+        // Position label near entity
         QPointF labelPos;
         if (!entity->points.empty()) {
-            if (entity->points.size() >= 2) {
+            if ((ctype == ConstraintType::Radius || ctype == ConstraintType::Diameter)
+                && entity->points.size() >= 2) {
+                // Radius/Diameter: place label along direction from center to p1
+                QPointF center = entity->points[0];
+                QPointF dir = QPointF(entity->points[1]) - center;
+                double dirLen = geometry::length(dir);
+                if (dirLen > geometry::kDegenerateLen)
+                    labelPos = center + geometry::normalize(dir) * (entity->radius / 2.0);
+                else
+                    labelPos = center + QPointF(entity->radius / 2.0, 0);
+            } else if (entity->points.size() >= 2) {
                 labelPos = QPointF((entity->points[0] + entity->points[1]) / 2.0) + QPointF(0, -10);
             } else {
                 labelPos = QPointF(entity->points[0]) + QPointF(15, -15);
@@ -11710,118 +7607,12 @@ void SketchCanvas::createLockedConstraints(int entityId)
 
         // Skip the over-constrained check: the user explicitly locked
         // this dimension by typing a value and pressing Enter, so we
-        // honour their intent and create the constraint directly.
+        // honor their intent and create the constraint directly.
         createConstraint(ctype, value, labelPos, /*skipOverConstrainCheck=*/true);
     }
 }
 
-void SketchCanvas::drawDimInputField(QPainter& painter, const QPointF& position,
-                                      int fieldIndex, double rotation)
-{
-    if (fieldIndex < 0 || fieldIndex >= m_dimFields.size()) return;
-
-    const auto& field = m_dimFields[fieldIndex];
-    const auto& state = m_dimStates[fieldIndex];
-    bool isActive = (fieldIndex == m_dimActiveIndex);
-
-    painter.save();
-
-    QFont font = painter.font();
-    font.setPointSize(9);
-    painter.setFont(font);
-    QFontMetricsF fm(font);
-
-    // Determine display text and colors
-    QString displayText;
-    QColor bgColor;
-    QColor textColor;
-    QColor borderColor = Qt::transparent;
-
-    if (state.locked) {
-        // Locked: green, show formatted value with checkmark
-        if (field.isAngle) {
-            displayText = QString::fromStdString(formatAngle(state.lockedValue)) + QStringLiteral(" \u2713");
-        } else {
-            displayText = QString::fromStdString(formatValueWithUnit(state.lockedValue, m_displayUnit)) + QStringLiteral(" \u2713");
-        }
-        bgColor = QColor(200, 255, 200);
-        textColor = QColor(30, 100, 30);
-        borderColor = QColor(80, 180, 80);
-    } else if (isActive && !state.inputBuffer.isEmpty()) {
-        if (state.selectAll) {
-            // Active + selected: show LIVE currentValue with selection highlight
-            // Blue highlight + white text = standard "text selected, type to replace"
-            if (field.isAngle) {
-                displayText = QString::fromStdString(hobbycad::formatValue(field.currentValue));
-            } else {
-                displayText = QString::fromStdString(hobbycad::formatValue(hobbycad::mmToUnit(field.currentValue, m_displayUnit)));
-            }
-            bgColor = QColor(51, 153, 255);        // Selection blue
-            textColor = Qt::white;
-            borderColor = QColor(30, 100, 200);
-        } else {
-            // Active + typing with cursor: yellow, insert │ at cursorPos
-            int safePos = qBound(0, state.cursorPos, state.inputBuffer.length());
-            displayText = state.inputBuffer;
-            displayText.insert(safePos, QStringLiteral("\u2502"));  // │ cursor
-            bgColor = QColor(255, 235, 160);
-            textColor = Qt::black;
-            borderColor = QColor(210, 170, 50);
-        }
-    } else if (isActive) {
-        // Active + empty: live measurement, not yet editing
-        if (field.isAngle) {
-            displayText = QString::fromStdString(formatAngle(field.currentValue));
-        } else {
-            displayText = QString::fromStdString(formatValueWithUnit(field.currentValue, m_displayUnit));
-        }
-        bgColor = Qt::white;
-        textColor = Qt::black;
-        borderColor = QColor(100, 100, 100);
-    } else {
-        // Inactive: black text on white background
-        if (field.isAngle) {
-            displayText = QString::fromStdString(formatAngle(field.currentValue));
-        } else {
-            displayText = QString::fromStdString(formatValueWithUnit(field.currentValue, m_displayUnit));
-        }
-        bgColor = Qt::white;
-        textColor = Qt::black;
-    }
-
-    // Add field label prefix for multi-field tools
-    if (m_dimFields.size() > 1) {
-        displayText = field.label + QStringLiteral(": ") + displayText;
-    }
-
-    QRectF textBounds = fm.boundingRect(displayText);
-
-    // Apply rotation if provided (for dimension labels along edges)
-    painter.translate(position);
-    if (qAbs(rotation) > 0.01) {
-        painter.rotate(rotation);
-    }
-
-    // Draw background
-    QRectF labelRect(-textBounds.width() / 2.0 - 5,
-                     -textBounds.height() / 2.0 - 2,
-                     textBounds.width() + 10,
-                     textBounds.height() + 4);
-    painter.fillRect(labelRect, bgColor);
-
-    // Draw border for active/locked fields (NoBrush so drawRect doesn't fill over the background)
-    if (borderColor != Qt::transparent) {
-        painter.setPen(QPen(borderColor, 1));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(labelRect);
-    }
-
-    // Draw text
-    painter.setPen(textColor);
-    painter.drawText(labelRect, Qt::AlignCenter, displayText);
-
-    painter.restore();
-}
+// drawDimInputField() moved to DimensionInput::draw() (dimensioninput.cpp).
 
 int SketchCanvas::nextEntityId()
 {
@@ -11886,39 +7677,53 @@ void SketchCanvas::setEntityConstruction(int entityId, bool isConstruction)
     }
 }
 
+void SketchCanvas::setEntityCenterline(int entityId, bool isCenterline)
+{
+    SketchEntity* entity = entityById(entityId);
+    if (entity) {
+        entity->isCenterline = isCenterline;
+        emit entityModified(entityId);
+        update();
+    }
+}
+
+void SketchCanvas::toggleSelectedConstruction()
+{
+    // While drawing, toggle the in-progress entity (like Fusion's X toggle)
+    if (m_isDrawing) {
+        m_pendingEntity.isConstruction = !m_pendingEntity.isConstruction;
+        update();
+        return;
+    }
+
+    if (m_selectedIds.isEmpty()) return;
+
+    std::vector<sketch::UndoCommand> subs;
+    for (int id : m_selectedIds) {
+        SketchEntity* ent = entityById(id);
+        if (!ent) continue;
+        sketch::Entity before = *ent;
+        ent->isConstruction = !ent->isConstruction;
+        subs.push_back(sketch::UndoCommand::modifyEntity(before, *ent,
+                                                         "Toggle construction"));
+        emit entityModified(id);
+    }
+    if (subs.empty()) return;
+
+    if (subs.size() == 1) {
+        pushUndoCommand(subs[0]);
+    } else {
+        pushUndoCommand(sketch::UndoCommand::compound(subs, "Toggle construction"));
+    }
+    m_profilesCacheDirty = true;
+    update();
+}
+
 void SketchCanvas::notifyEntityChanged(int entityId)
 {
     solveConstraints();
 
-    // Re-establish tangency for tangent arcs after solver
-    SketchEntity* ent = entityById(entityId);
-    if (ent && ent->type == SketchEntityType::Arc
-            && ent->tangentEntityId >= 0
-            && ent->points.size() >= 3) {
-        reestablishTangency(*ent);
-    }
-
-    // Sync sweep-angle construction lines and constraint value with arc geometry
-    if (ent && ent->type == SketchEntityType::Arc) {
-        int gid = findSweepAngleGroupForArc(entityId);
-        if (gid >= 0) {
-            syncSweepAngleConstructionLines(*ent);
-            // Update the Angle constraint value + anchorPoint
-            for (const auto& g : m_groups) {
-                if (g.id == gid) {
-                    for (int cid : g.constraintIds) {
-                        SketchConstraint* c = constraintById(cid);
-                        if (c && c->type == ConstraintType::Angle) {
-                            c->value = std::abs(ent->sweepAngle);
-                            c->supplementary = (std::abs(ent->sweepAngle) > 180.0);
-                            c->anchorPoint = ent->points[0];
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
+    syncArcAfterSolve(entityId);
 
     emit entityModified(entityId);
     update();
@@ -11941,34 +7746,7 @@ void SketchCanvas::notifyEntityPointChanged(int entityId, int pointIndex)
     solveConstraints();
     m_constraints.removeLast();  // Remove the temporary constraint
 
-    // Re-establish tangency for tangent arcs after solver
-    SketchEntity* ent = entityById(entityId);
-    if (ent && ent->type == SketchEntityType::Arc
-            && ent->tangentEntityId >= 0
-            && ent->points.size() >= 3) {
-        reestablishTangency(*ent);
-    }
-
-    // Sync sweep-angle construction lines and constraint value with arc geometry
-    if (ent && ent->type == SketchEntityType::Arc) {
-        int gid = findSweepAngleGroupForArc(entityId);
-        if (gid >= 0) {
-            syncSweepAngleConstructionLines(*ent);
-            for (const auto& g : m_groups) {
-                if (g.id == gid) {
-                    for (int cid : g.constraintIds) {
-                        SketchConstraint* c = constraintById(cid);
-                        if (c && c->type == ConstraintType::Angle) {
-                            c->value = std::abs(ent->sweepAngle);
-                            c->supplementary = (std::abs(ent->sweepAngle) > 180.0);
-                            c->anchorPoint = ent->points[0];
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
+    syncArcAfterSolve(entityId);
 
     emit entityModified(entityId);
     update();
@@ -11979,9 +7757,7 @@ void SketchCanvas::notifyEntityPointChanged(int entityId, int pointIndex)
 bool SketchCanvas::isSweepAngleGroup(int groupId) const
 {
     for (const auto& g : m_groups) {
-        if (g.id == groupId) {
-            return g.name.rfind("Sweep Angle", 0) == 0;  // starts with "Sweep Angle"
-        }
+        if (g.id == groupId) return sketch::isSweepAngleGroup(g);
     }
     return false;
 }
@@ -11989,9 +7765,7 @@ bool SketchCanvas::isSweepAngleGroup(int groupId) const
 int SketchCanvas::findSweepAngleGroupForArc(int arcId) const
 {
     for (const auto& g : m_groups) {
-        if (g.name.rfind("Sweep Angle", 0) == 0 && g.containsEntity(arcId)) {
-            return g.id;
-        }
+        if (sketch::isSweepAngleGroup(g) && g.containsEntity(arcId)) return g.id;
     }
     return -1;
 }
@@ -12004,10 +7778,7 @@ void SketchCanvas::syncSweepAngleConstructionLines(const SketchEntity& arc)
     if (gid < 0) return;
 
     // Find the group
-    const SketchGroup* group = nullptr;
-    for (const auto& g : m_groups) {
-        if (g.id == gid) { group = &g; break; }
-    }
+    const SketchGroup* group = groupById(gid);
     if (!group) return;
 
     // Find the 2 construction line entities in the group
@@ -12041,10 +7812,8 @@ void SketchCanvas::syncSweepAngleConstructionLines(const SketchEntity& arc)
             c->anchorPoint = center;
             // Reposition label at midpoint of sweep arc
             double midAngleRad = qDegreesToRadians(arc.startAngle + arc.sweepAngle / 2.0);
-            double labelDist = arc.radius + 15.0 / m_zoom;
-            c->labelPosition = {
-                center.x() + labelDist * std::cos(midAngleRad),
-                center.y() + labelDist * std::sin(midAngleRad)};
+            double labelDist = arc.radius + kRadiusLabelOffsetPx / m_zoom;
+            c->labelPosition = geometry::polarPoint(center, labelDist, midAngleRad);
         }
     }
 }
@@ -12083,14 +7852,7 @@ void SketchCanvas::ensureTextRotationHandle(SketchEntity& entity)
 
 void SketchCanvas::recomputeTextRotationHandle(SketchEntity& entity)
 {
-    if (entity.type != SketchEntityType::Text || entity.points.size() < 2)
-        return;
-    double dist = std::max(entity.fontSize * 2.0,
-                           entity.fontSize * static_cast<double>(entity.text.length()) * 0.6);
-    double rad = qDegreesToRadians(entity.textRotation);
-    QPointF anchor(entity.points[0]);
-    entity.points[1] = {anchor.x() + dist * std::cos(rad),
-                        anchor.y() + dist * std::sin(rad)};
+    sketch::resyncTextHandle(entity);
 }
 
 bool SketchCanvas::matchesBinding(const QString& actionId, QKeyEvent* event) const
@@ -12164,40 +7926,11 @@ SketchCanvas::TangentCircle SketchCanvas::calculate3TangentCircle(
 SketchCanvas::TangentArc SketchCanvas::calculateTangentArc(
     const SketchEntity& tangentEntity, const QPointF& tangentPoint, const QPointF& endPoint) const
 {
-    // Handle line tangency
-    if (tangentEntity.type == SketchEntityType::Line && tangentEntity.points.size() >= 2) {
-        return geometry::arcTangentToLine(
-            tangentEntity.points[0], tangentEntity.points[1],
-            tangentPoint, endPoint);
-    }
-
-    // Handle rectangle — find closest edge to tangent point
-    if (tangentEntity.type == SketchEntityType::Rectangle && tangentEntity.points.size() >= 2) {
-        QPointF corners[4];
-        if (tangentEntity.points.size() >= 4) {
-            for (int i = 0; i < 4; ++i)
-                corners[i] = tangentEntity.points[i];
-        } else {
-            corners[0] = tangentEntity.points[0];
-            corners[1] = QPointF(tangentEntity.points[1].x, tangentEntity.points[0].y);
-            corners[2] = tangentEntity.points[1];
-            corners[3] = QPointF(tangentEntity.points[0].x, tangentEntity.points[1].y);
-        }
-
-        double minDist = std::numeric_limits<double>::max();
-        QPointF closestEdgeStart, closestEdgeEnd;
-        for (int i = 0; i < 4; ++i) {
-            double dist = geometry::pointToLineDistance(tangentPoint, corners[i], corners[(i + 1) % 4]);
-            if (dist < minDist) {
-                minDist = dist;
-                closestEdgeStart = corners[i];
-                closestEdgeEnd = corners[(i + 1) % 4];
-            }
-        }
-
-        return geometry::arcTangentToLine(
-            closestEdgeStart, closestEdgeEnd,
-            tangentPoint, endPoint);
+    // A line is its own tangent edge; a rectangle lends the edge nearest the
+    // tangent point (library, segment distance).
+    Point2D a, b;
+    if (sketch::closestTangentHostEdge(tangentEntity, Point2D(tangentPoint), a, b)) {
+        return geometry::arcTangentToLine(QPointF(a), QPointF(b), tangentPoint, endPoint);
     }
 
     return {};
@@ -12214,31 +7947,28 @@ void SketchCanvas::finishConstraintCreation()
 }
 
 void SketchCanvas::createConstraint(ConstraintType type, double value, const QPointF& labelPos,
-                                     bool skipOverConstrainCheck, bool startEditing)
+                                     bool skipOverConstrainCheck, bool startEditing,
+                                     bool driving, bool supplementary)
 {
-    SketchConstraint constraint;
-    constraint.id = m_nextConstraintId++;
-    constraint.type = type;
-    constraint.entityIds = std::vector<int>(m_constraintTargetEntities.begin(), m_constraintTargetEntities.end());
-    constraint.value = value;
-    constraint.isDriving = true;
-    constraint.labelPosition = labelPos;
-    constraint.enabled = true;
-    constraint.satisfied = true;
-
-    // Determine which points on entities are constrained
+    // Which points on the entities are constrained: the nearest to each
+    // click (selection state, so resolved here).
+    std::vector<int> pointIndices;
     for (int i = 0; i < m_constraintTargetEntities.size(); ++i) {
         SketchEntity* entity = entityById(m_constraintTargetEntities[i]);
-        if (entity && i < m_constraintTargetPoints.size()) {
-            int pointIndex = findNearestPointIndex(entity, m_constraintTargetPoints[i]);
-            constraint.pointIndices.push_back(pointIndex);
-        }
+        if (entity && i < m_constraintTargetPoints.size())
+            pointIndices.push_back(findNearestPointIndex(entity, m_constraintTargetPoints[i]));
     }
+    const SketchEntity* first =
+        m_constraintTargetEntities.empty() ? nullptr : entityById(m_constraintTargetEntities[0]);
+    SketchConstraint constraint(sketch::makeDimensionConstraint(
+        m_nextConstraintId++, type,
+        std::vector<int>(m_constraintTargetEntities.begin(), m_constraintTargetEntities.end()),
+        pointIndices, value, labelPos, driving, supplementary, first));
 
     // Check if this constraint would over-constrain the sketch
     // (skipped for auto-created constraints from locked dimension fields,
     //  since the user explicitly typed a value and pressed Enter)
-    if (!skipOverConstrainCheck && SketchSolver::isAvailable()) {
+    if (driving && !skipOverConstrainCheck && SketchSolver::isAvailable()) {
         SketchSolver solver;
         OverConstraintInfo overConstraintInfo = solver.checkOverConstrain(m_entities, m_constraints, constraint);
 
@@ -12258,12 +7988,20 @@ void SketchCanvas::createConstraint(ConstraintType type, double value, const QPo
                 }
             }
 
-            // Offer to create a Driven dimension instead
+            // Offer to create a Driven dimension instead. The two kinds of
+            // over-constraint need different wording: a redundant dimension
+            // does not conflict with anything, it just measures something
+            // already determined, so saying "conflicts" would send the user
+            // hunting for a disagreement that does not exist.
+            const QString lead = overConstraintInfo.isRedundant
+                ? tr("This dimension is already implied by the existing "
+                     "constraints, so it would add nothing.")
+                : tr("This dimension would over-constrain the sketch.");
+
             QMessageBox::StandardButton reply = QMessageBox::question(
                 this,
                 tr("Over-Constrained"),
-                tr("This dimension would over-constrain the sketch.") +
-                conflictDetails +
+                lead + conflictDetails +
                 tr("\n\nCreate a Driven (reference) dimension instead?"),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::Yes
@@ -12311,32 +8049,7 @@ ConstraintType SketchCanvas::detectConstraintType(int entityId1, int entityId2) 
     const SketchEntity* e2 = entityById(entityId2);
 
     if (!e1 || !e2) return ConstraintType::Distance;
-
-    // NOTE: Cannot directly delegate to sketch::suggestConstraintType() because
-    // hobbycad::ConstraintType (project.h) and sketch::ConstraintType (constraint.h)
-    // are separate enums with different value sets (library has Concentric etc.).
-    // This function is specifically for dimension type detection, not general
-    // constraint suggestion.
-
-    // Point to point → Distance
-    if (e1->type == SketchEntityType::Point && e2->type == SketchEntityType::Point)
-        return ConstraintType::Distance;
-
-    // Point to line → Distance
-    if ((e1->type == SketchEntityType::Point && e2->type == SketchEntityType::Line) ||
-        (e1->type == SketchEntityType::Line && e2->type == SketchEntityType::Point))
-        return ConstraintType::Distance;
-
-    // Line to line → Angle
-    if (e1->type == SketchEntityType::Line && e2->type == SketchEntityType::Line)
-        return ConstraintType::Angle;
-
-    // Circle or Arc → Radius
-    if (e1->type == SketchEntityType::Circle || e1->type == SketchEntityType::Arc ||
-        e2->type == SketchEntityType::Circle || e2->type == SketchEntityType::Arc)
-        return ConstraintType::Radius;
-
-    return ConstraintType::Distance;
+    return sketch::suggestDimensionType(*e1, *e2);
 }
 
 QPointF SketchCanvas::findClosestPointOnEntity(const SketchEntity* entity, const QPointF& worldPos) const
@@ -12397,34 +8110,36 @@ int SketchCanvas::hitTestConstraintLabel(const QPointF& worldPos) const
                     dir1 = s1a - s1b;
                 if (QLineF(originScr, s2a).length() > QLineF(originScr, s2b).length())
                     dir2 = s2a - s2b;
-                double a1 = std::atan2(-dir1.y(), dir1.x());
-                double a2 = std::atan2(-dir2.y(), dir2.x());
-                double sweep = a2 - a1;
-                while (sweep > M_PI)  sweep -= 2.0 * M_PI;
-                while (sweep < -M_PI) sweep += 2.0 * M_PI;
-                if (c.supplementary) {
-                    if (sweep > 0) sweep -= 2.0 * M_PI;
-                    else sweep += 2.0 * M_PI;
+                const double a1 = std::atan2(-dir1.y(), dir1.x());
+                const double a2 = std::atan2(-dir2.y(), dir2.x());
+                // Match the DRAWN arc: bracket the label's sector (4 boundary
+                // rays a1, a1+pi, a2, a2+pi), same as drawAngleConstraint, so the
+                // clickable arc is exactly where the arc is rendered.
+                const QPointF labelScr = worldToScreen(c.labelPosition).toPointF();
+                const double al = std::atan2(-(labelScr.y() - originScr.y()),
+                                              labelScr.x() - originScr.x());
+                auto normPi = [](double a){ while (a > M_PI) a -= 2.0*M_PI; while (a < -M_PI) a += 2.0*M_PI; return a; };
+                const double rays[4] = { a1, a1 + M_PI, a2, a2 + M_PI };
+                double cw = -2.0*M_PI, ccw = 2.0*M_PI;
+                for (double r : rays) {
+                    const double d = normPi(r - al);
+                    if (d >= -geometry::kZeroEps && d < ccw) ccw = d;
+                    if (d <=  geometry::kZeroEps && d > cw)  cw  = d;
                 }
-                // Hit-test the arc curve (arcRadius=35 px)
-                double arcRadius = 35.0;
+                const double startAngle = al + cw;
+                const double sweepAngle = ccw - cw;   // >= 0
+                // Hit-test the arc where it is drawn: radius follows the label
+                // distance from the vertex (matches drawAngleConstraint).
+                double arcRadius = geometry::lineLength(originScr, labelScr);
+                if (arcRadius < 18.0) arcRadius = 18.0;
                 double arcTol = 8.0;
                 QPointF delta = screenPos - originScr;
-                double clickDist = std::sqrt(delta.x() * delta.x() + delta.y() * delta.y());
+                double clickDist = geometry::length(delta);
                 if (std::abs(clickDist - arcRadius) < arcTol) {
-                    double clickAngle = std::atan2(-delta.y(), delta.x());
-                    double relAngle = clickAngle - a1;
-                    if (sweep > 0) {
-                        while (relAngle < 0)        relAngle += 2.0 * M_PI;
-                        while (relAngle > 2.0*M_PI) relAngle -= 2.0 * M_PI;
-                        if (relAngle <= sweep)
-                            return c.id;
-                    } else {
-                        while (relAngle > 0)         relAngle -= 2.0 * M_PI;
-                        while (relAngle < -2.0*M_PI) relAngle += 2.0 * M_PI;
-                        if (relAngle >= sweep)
-                            return c.id;
-                    }
+                    double rel = normPi(std::atan2(-delta.y(), delta.x()) - startAngle);
+                    if (rel < 0) rel += 2.0 * M_PI;
+                    if (rel <= sweepAngle + geometry::kZeroEps)
+                        return c.id;
                 }
             }
         } else if ((c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter)
@@ -12436,10 +8151,10 @@ int SketchCanvas::hitTestConstraintLabel(const QPointF& worldPos) const
                 QPointF labelPt = worldToScreen(c.labelPosition).toPointF();
                 double radiusPx = re->radius * m_zoom;
                 QPointF along = labelPt - sc;
-                double alongLen = std::sqrt(along.x() * along.x() + along.y() * along.y());
-                if (alongLen >= 1e-6) {
-                    QPointF dir = along / alongLen;
-                    QPointF perp(-dir.y(), dir.x());
+                double alongLen = geometry::length(along);
+                if (alongLen >= geometry::kDegenerateLen) {
+                    QPointF dir = geometry::normalize(along);
+                    QPointF perp = geometry::perpendicular(dir);
                     QPointF edgePt = sc + dir * radiusPx;
                     // Hit-test the dimension line from center to edge
                     double lineTol = 8.0;
@@ -12454,7 +8169,7 @@ int SketchCanvas::hitTestConstraintLabel(const QPointF& worldPos) const
         }
 
         // Hit-test the label text position
-        auto pos = computeConstraintLabelPosition(c);
+        auto pos = m_constraintRenderer.computeConstraintLabelPosition(c);
         if (!pos.found) continue;
 
         double dist = QLineF(pos.textCenter, screenPos).length();
@@ -12474,101 +8189,195 @@ void SketchCanvas::editConstraintValue(int constraintId)
     beginInlineConstraintEdit(constraintId, /*isCreation=*/false);
 }
 
-void SketchCanvas::setConstraintValue(int constraintId, double newValue)
+// setConstraintValue, sweep-angle Angle constraint: applied directly to the
+// arc geometry. Returns true when it handled the edit.
+bool SketchCanvas::applySweepAngleValue(SketchConstraint* constraint, const SketchConstraint& oldConstraint,
+                                        int constraintId, double newValue)
 {
-    SketchConstraint* constraint = constraintById(constraintId);
-    if (!constraint || !constraint->isDriving) return;
-    if (qFuzzyCompare(newValue, constraint->value)) return;
-
-    // Capture before-state for undo
-    const SketchConstraint oldConstraint = *constraint;
-
-    constraint->value = newValue;
-
-    // Sweep-angle Angle constraint — apply directly to arc geometry
-    if (constraint->type == ConstraintType::Angle) {
-        for (const auto& g : m_groups) {
-            if (isSweepAngleGroup(g.id) && g.containsConstraint(constraintId)) {
-                int arcId = -1;
-                for (int eid : g.entityIds) {
-                    const SketchEntity* e = entityById(eid);
-                    if (e && e->type == SketchEntityType::Arc) { arcId = eid; break; }
-                }
-                if (arcId >= 0) {
-                    SketchEntity* arc = entityById(arcId);
-                    if (arc && arc->type == SketchEntityType::Arc
-                            && arc->points.size() >= 3) {
-                        const SketchEntity oldArc = *arc;
-                        double newSweep = (arc->sweepAngle >= 0) ? newValue : -newValue;
-                        arc->sweepAngle = newSweep;
-                        double endRad = qDegreesToRadians(arc->startAngle + newSweep);
-                        arc->points[2] = {
-                            arc->points[0].x + arc->radius * std::cos(endRad),
-                            arc->points[0].y + arc->radius * std::sin(endRad)};
-                        reestablishTangency(*arc);
-                        syncSweepAngleConstructionLines(*arc);
-                        constraint->supplementary = (std::abs(newSweep) > 180.0);
-                        constraint->anchorPoint = arc->points[0];
-
-                        // Push compound undo: constraint + arc
-                        std::vector<sketch::UndoCommand> subs;
-                        subs.push_back(sketch::UndoCommand::modifyConstraint(
-                            oldConstraint, *constraint));
-                        subs.push_back(sketch::UndoCommand::modifyEntity(
-                            oldArc, *arc));
-                        pushUndoCommand(sketch::UndoCommand::compound(
-                            subs, "Edit Sweep Angle"));
-                    }
-                }
-                emit constraintModified(constraintId);
-                update();
-                return;
+    for (const auto& g : m_groups) {
+        if (isSweepAngleGroup(g.id) && g.containsConstraint(constraintId)) {
+            int arcId = -1;
+            for (int eid : g.entityIds) {
+                const SketchEntity* e = entityById(eid);
+                if (e && e->type == SketchEntityType::Arc) { arcId = eid; break; }
             }
-        }
-    }
+            if (arcId >= 0) {
+                SketchEntity* arc = entityById(arcId);
+                if (arc && arc->type == SketchEntityType::Arc
+                        && arc->points.size() >= 3) {
+                    const SketchEntity oldArc = *arc;
+                    double newSweep = (arc->sweepAngle >= 0) ? newValue : -newValue;
+                    arc->sweepAngle = newSweep;
+                    double endRad = qDegreesToRadians(arc->startAngle + newSweep);
+                    arc->points[2] = {
+                        arc->points[0].x + arc->radius * std::cos(endRad),
+                        arc->points[0].y + arc->radius * std::sin(endRad)};
+                    reestablishTangency(*arc);
+                    syncSweepAngleConstructionLines(*arc);
+                    constraint->supplementary = (std::abs(newSweep) > 180.0);
+                    constraint->anchorPoint = arc->points[0];
 
-    // Radius/Diameter on a tangent arc — apply directly like sweep angle,
-    // because the solver treats arcs as circles and cannot update arc
-    // endpoints/angles after moving the center.
-    if ((constraint->type == ConstraintType::Radius
-         || constraint->type == ConstraintType::Diameter)
-        && !constraint->entityIds.empty()) {
-        SketchEntity* ent = entityById(constraint->entityIds[0]);
-        if (ent && ent->type == SketchEntityType::Arc
-            && ent->points.size() >= 3) {
-            const SketchEntity oldEntity = *ent;
-            double newRadius = (constraint->type == ConstraintType::Diameter)
-                               ? newValue / 2.0 : newValue;
-            ent->radius = newRadius;
-            reestablishTangency(*ent);
-            syncSweepAngleConstructionLines(*ent);
-            for (const auto& g : m_groups) {
-                if (isSweepAngleGroup(g.id) && g.containsEntity(ent->id)) {
-                    for (int cid : g.constraintIds) {
-                        SketchConstraint* ac = constraintById(cid);
-                        if (ac && ac->type == ConstraintType::Angle)
-                            ac->anchorPoint = ent->points[0];
-                    }
+                    // Push compound undo: constraint + arc
+                    pushConstraintAndEntityEdit(oldConstraint, *constraint, oldArc, *arc, "Edit Sweep Angle");
                 }
             }
-
-            // Push compound undo: constraint + entity
-            std::string desc = (constraint->type == ConstraintType::Radius)
-                               ? "Edit Radius" : "Edit Diameter";
-            std::vector<sketch::UndoCommand> subs;
-            subs.push_back(sketch::UndoCommand::modifyConstraint(
-                oldConstraint, *constraint));
-            subs.push_back(sketch::UndoCommand::modifyEntity(
-                oldEntity, *ent));
-            pushUndoCommand(sketch::UndoCommand::compound(subs, desc));
-
             emit constraintModified(constraintId);
             update();
-            return;
+            return true;
+        }
+    }
+    return false;
+}
+
+// setConstraintValue, TangentAngle: re-seed the anchor's handle(s) to the new
+// DIRECTED angle so the solver's parallel equation lands on the correct 0-360
+// side, then solve. Returns true when it handled the edit.
+bool SketchCanvas::applyTangentAngleValue(SketchConstraint* constraint, const SketchConstraint& oldConstraint,
+                                          int constraintId, double newValue)
+{
+    SketchEntity* e = entityById(constraint->entityIds[0]);
+    const int a = constraint->pointIndices.empty() ? -1 : constraint->pointIndices[0];
+    const int n = e ? static_cast<int>(e->points.size()) : 0;
+    if (e && e->type == SketchEntityType::Spline && e->splineBezier
+        && a >= 0 && a < n && a % 3 == 0) {
+        const SketchEntity oldEntity = *e;
+        const QPointF anchor(e->points[a]);
+        const double rad = qDegreesToRadians(newValue);
+        const QPointF u(std::cos(rad), std::sin(rad));
+        if (a + 1 < n) {
+            const double L = QLineF(anchor, QPointF(e->points[a+1])).length();
+            e->points[a+1] = anchor + u * L;
+        }
+        if (a - 1 >= 0) {
+            const double L = QLineF(anchor, QPointF(e->points[a-1])).length();
+            e->points[a-1] = anchor - u * L;
+        }
+        pushConstraintAndEntityEdit(oldConstraint, *constraint, oldEntity, *e, "Edit Tangent Angle");
+        solveConstraints();
+        emit constraintModified(constraintId);
+        update();
+        return true;
+    }
+    return false;
+}
+
+// setConstraintValue, Radius/Diameter applied to the geometry directly (a
+// 2-point circle, a 3-point circle, a tangent arc): the solver only knows the
+// center. Returns true when it handled the edit; false hands the value to
+// the solver path.
+bool SketchCanvas::applyRadialValueDirect(SketchConstraint* constraint, const SketchConstraint& oldConstraint,
+                                          int constraintId, double newValue)
+{
+// Radius/Diameter on a 2-point circle: keep p1 fixed, move p2 and center.
+// The solver only knows about the center so it would keep center fixed.
+    SketchEntity* ent = entityById(constraint->entityIds[0]);
+if (ent && ent->type == SketchEntityType::Circle
+    && ent->points.size() == 3) {
+    // 2-point circle: [center, p1, p2]
+    const SketchEntity oldEntity = *ent;
+    double newRadius = (constraint->type == ConstraintType::Diameter)
+                       ? newValue / 2.0 : newValue;
+    QPointF p1 = ent->points[1];
+    QPointF p2 = ent->points[2];
+    // Move p2 along the p1→p2 direction to achieve new diameter
+    QPointF dir = p2 - p1;
+    double len = geometry::length(dir);
+    if (len > geometry::kDegenerateLen) {
+        QPointF newP2 = p1 + dir * (newRadius * 2.0 / len);
+        ent->points[2] = newP2;
+        ent->points[0] = (p1 + newP2) / 2.0;  // center = midpoint
+    }
+    ent->radius = newRadius;
+
+    std::string desc = (constraint->type == ConstraintType::Radius)
+                       ? "Edit Radius" : "Edit Diameter";
+    pushConstraintAndEntityEdit(oldConstraint, *constraint, oldEntity, *ent, desc);
+
+    emit constraintModified(constraintId);
+    update();
+    return true;
+}
+
+// Radius/Diameter on a 3-point circle: keep p1 fixed, adjust center and
+// reposition p2/p3 on the new circle (same angular direction from center).
+if (ent && ent->type == SketchEntityType::Circle
+    && ent->points.size() == 4) {
+    // 3-point circle: [center, p1, p2, p3]
+    const SketchEntity oldEntity = *ent;
+    double newRadius = (constraint->type == ConstraintType::Diameter)
+                       ? newValue / 2.0 : newValue;
+
+    // Keep p1 fixed. Find new center on the line from p1 through old center,
+    // at distance newRadius from p1.
+    QPointF p1 = ent->points[1];
+    QPointF oldCenter = ent->points[0];
+    QPointF dir = oldCenter - p1;
+    double dirLen = geometry::length(dir);
+    QPointF newCenter;
+    if (dirLen > geometry::kDegenerateLen) {
+        newCenter = p1 + dir * (newRadius / dirLen);
+    } else {
+        newCenter = p1 + QPointF(newRadius, 0);
+    }
+    ent->points[0] = newCenter;
+    ent->radius = newRadius;
+
+    // Reposition p2 and p3: keep same angular direction from new center
+    for (int i = 2; i <= 3; ++i) {
+        QPointF ptDir = QPointF(ent->points[i]) - oldCenter;
+        double ptLen = geometry::length(ptDir);
+        if (ptLen > geometry::kDegenerateLen) {
+            ent->points[i] = newCenter + ptDir * (newRadius / ptLen);
         }
     }
 
-    // For other constraint types, use solver with temporary pin
+    std::string desc = (constraint->type == ConstraintType::Radius)
+                       ? "Edit Radius" : "Edit Diameter";
+    pushConstraintAndEntityEdit(oldConstraint, *constraint, oldEntity, *ent, desc);
+
+    emit constraintModified(constraintId);
+    update();
+    return true;
+}
+
+// Radius/Diameter on a tangent arc: apply directly like sweep angle,
+// because the solver treats arcs as circles and cannot update arc
+// endpoints/angles after moving the center.
+if (ent && ent->type == SketchEntityType::Arc
+    && ent->points.size() >= 3) {
+    const SketchEntity oldEntity = *ent;
+    double newRadius = (constraint->type == ConstraintType::Diameter)
+                       ? newValue / 2.0 : newValue;
+    ent->radius = newRadius;
+    reestablishTangency(*ent);
+    syncSweepAngleConstructionLines(*ent);
+    for (const auto& g : m_groups) {
+        if (isSweepAngleGroup(g.id) && g.containsEntity(ent->id)) {
+            for (int cid : g.constraintIds) {
+                SketchConstraint* ac = constraintById(cid);
+                if (ac && ac->type == ConstraintType::Angle)
+                    ac->anchorPoint = ent->points[0];
+            }
+        }
+    }
+
+    // Push compound undo: constraint + entity
+    std::string desc = (constraint->type == ConstraintType::Radius)
+                       ? "Edit Radius" : "Edit Diameter";
+    pushConstraintAndEntityEdit(oldConstraint, *constraint, oldEntity, *ent, desc);
+
+    emit constraintModified(constraintId);
+    update();
+    return true;
+}
+    return false;
+}
+
+// setConstraintValue, solver path: pin one end of a dimensioned line (both
+// ends for an angle) so the solver moves the other. Returns the pin count;
+// the caller removes them (ids <= -999) after solving.
+int SketchCanvas::addTemporaryValuePins(const SketchConstraint* constraint)
+{
     int pinsAdded = 0;
     if (constraint->type == ConstraintType::Distance
         && !constraint->entityIds.empty()) {
@@ -12607,6 +8416,54 @@ void SketchCanvas::setConstraintValue(int constraintId, double newValue)
             pinsAdded = 2;
         }
     }
+    return pinsAdded;
+}
+
+void SketchCanvas::setConstraintValue(int constraintId, double newValue)
+{
+    SketchConstraint* constraint = constraintById(constraintId);
+    if (!constraint || !constraint->isDriving) return;
+
+    // Refuse a value that would destroy the geometry, here rather than
+    // only in the widgets. The inline editor checks, the properties panel
+    // did not, and the CLI is a third door onto the same field; a rule
+    // enforced at one of them is not enforced. A zero length cannot be
+    // undone by typing a bigger number afterwards: the shape is gone by
+    // then, not merely small.
+    if (!sketch::isValidConstraintValue(constraint->type, newValue)) return;
+
+    if (qFuzzyCompare(newValue, constraint->value)) return;
+
+    // Capture before-state for undo
+    const SketchConstraint oldConstraint = *constraint;
+
+    constraint->value = newValue;
+
+    // Sweep-angle Angle constraint: applied directly to the arc geometry.
+    if (constraint->type == ConstraintType::Angle
+        && applySweepAngleValue(constraint, oldConstraint, constraintId, newValue)) {
+        return;
+    }
+
+    // TangentAngle: re-seed the anchor's handle(s) to the new DIRECTED angle so
+    // the solver's parallel equation lands on the correct 0-360 side, then solve.
+    if (constraint->type == ConstraintType::TangentAngle
+        && !constraint->entityIds.empty()
+        && applyTangentAngleValue(constraint, oldConstraint, constraintId, newValue)) {
+        return;
+    }
+
+    // Radius/Diameter on a 2-point circle, a 3-point circle or a tangent arc
+    // is applied to the geometry directly; the solver only knows the center.
+    if ((constraint->type == ConstraintType::Radius
+         || constraint->type == ConstraintType::Diameter)
+        && !constraint->entityIds.empty()
+        && applyRadialValueDirect(constraint, oldConstraint, constraintId, newValue)) {
+        return;
+    }
+
+    // For other constraint types, use solver with temporary pin
+    int pinsAdded = addTemporaryValuePins(constraint);
 
     solveConstraints();
 
@@ -12636,9 +8493,148 @@ void SketchCanvas::setConstraintValue(int constraintId, double newValue)
     update();
 }
 
+void SketchCanvas::setRedundantCandidates(const QVector<int>& ids)
+{
+    m_redundantCandidates.clear();
+    for (int id : ids) {
+        // The solver already refuses to offer a driven constraint: it
+        // "never entered the system in the first place, so removing one
+        // could not possibly change the result". This filter is therefore a
+        // second line rather than the safeguard, and exists because the
+        // coloring is what a person acts on: anything that did reach here
+        // wrongly would send them to delete the one constraint that cannot
+        // be the problem.
+        for (const auto& c : m_constraints) {
+            if (c.id == id && c.isDriving) {
+                m_redundantCandidates.append(id);
+                break;
+            }
+        }
+    }
+    update();
+}
+
+QVector<int> SketchCanvas::findRedundantConstraints() const
+{
+    QVector<int> out;
+    if (!SketchSolver::isAvailable()) {
+        return out;
+    }
+    // The library takes the Qt-free types; convert at the boundary as usual.
+    std::vector<sketch::Entity> libEntities(m_entities.begin(), m_entities.end());
+    std::vector<sketch::Constraint> libConstraints(m_constraints.begin(),
+                                                   m_constraints.end());
+    sketch::Solver solver;
+    for (int id : solver.findRedundantConstraints(libEntities, libConstraints)) {
+        out.append(id);
+    }
+    return out;
+}
+
+void SketchCanvas::solveConstraintsDragging(const std::vector<std::pair<int, int>>& draggedPoints)
+{
+    m_draggedPoints = draggedPoints;
+    solveConstraints();
+}
+
+void SketchCanvas::beginHandleDrag(int entityId, int handleIdx, const QPointF& worldPos, Qt::KeyboardModifiers mods)
+{
+    // Projected geometry is driven by its source; it cannot be edited here.
+    // Redirect the user to the source sketch rather than starting a drag.
+    if (const SketchEntity* pe = entityById(entityId)) {
+        if (pe->projectionSourceId >= 0) {
+            emit toolHintChanged(
+                tr("This is projected geometry, driven by its source sketch; "
+                   "edit it in the source sketch, not here."));
+            return;
+        }
+    }
+    if (isEntityLocked(entityId)) {
+        emit toolHintChanged(
+            tr("This entity is in a locked group; unlock the group to edit it."));
+        return;
+    }
+    if (entityId != m_selectedId) m_selectedId = entityId;
+    m_isDraggingHandle = true;
+    m_dragHandleIndex = handleIdx;
+    m_dragStartWorld = worldPos;
+    m_lastRawMouseWorld = worldPos;
+    m_shiftWasPressed = (mods & Qt::ShiftModifier);
+    m_ctrlWasPressed = (mods & Qt::ControlModifier);
+    SketchEntity* sel = entityById(entityId);
+    if (sel && handleIdx < sel->points.size()) {
+        m_dragHandleOriginal = sel->points[handleIdx];
+        if (sel->points.size() > 1) m_dragHandleOriginal2 = sel->points[1];
+        m_dragOriginalRadius = sel->radius;
+        m_dragOriginalEntity = *sel;
+        // Opening a full circle: it was split into one 360-degree arc whose
+        // two ends coincide at the cut. Grabbing an end and dragging shrinks
+        // it from 360 (see the drag branch + openFullArcByDrag).
+        m_openingFullArc = false;
+        if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3
+            && (handleIdx == 1 || handleIdx == 2)
+            && std::abs(std::abs(sel->sweepAngle) - 360.0) < 0.5
+            && QLineF(QPointF(sel->points[1]), QPointF(sel->points[2])).length() <= kSnapWeldEps) {
+            m_openingFullArc = true;
+            m_openArcPrevSweep = sel->sweepAngle;   // +/- 360, seeds continuity
+            m_openArcDraggedIndex = handleIdx;
+            const auto& c = sel->points[0];
+            m_openArcFixedAngle = radiansToDegrees(std::atan2(sel->points[1].y - c.y,
+                                             sel->points[1].x - c.x));
+        }
+        // The solver may move any member of the group (and anything else the
+        // constraints reach), so undo restores every member, not just the
+        // one whose handle was grabbed.
+        m_dragOriginalGroupEntities.clear();
+        m_dragOriginalGroupConstraints.clear();
+        if (sel->groupId >= 0) {
+            for (const auto& e : m_entities)
+                if (e.groupId == sel->groupId) m_dragOriginalGroupEntities.append(e);
+            for (const auto& g : m_groups) {
+                if (g.id != sel->groupId) continue;
+                for (int cid : g.constraintIds)
+                    if (const SketchConstraint* cc = constraintById(cid))
+                        m_dragOriginalGroupConstraints.append(*cc);
+                break;
+            }
+        }
+    }
+    setCursor(Qt::ArrowCursor);
+}
+
 void SketchCanvas::solveConstraints()
 {
-    if (m_constraints.isEmpty()) return;
+    // Parameters are the source of truth for any dimension entered as an
+    // expression: re-evaluate those against the current parameter values
+    // before solving, so a parameter change flows into the geometry (and
+    // undoing the parameter flows back) on the next solve.
+    if (!m_parameterValues.empty()) {
+        for (SketchConstraint& c : m_constraints) {
+            sketch::reevaluateConstraint(c, m_parameterValues);
+        }
+    }
+
+    // Helper: publish the constrained state and repaint if it changed.
+    auto publishState = [this](sketch::SketchState state, int dof) {
+        // `dof` is only a real count for the solvable states; otherwise it is
+        // whatever libslvs happened to leave behind, so it is not published.
+        const int reportedDof = sketch::sketchStateHasDof(state) ? dof : -1;
+        if (state != m_sketchState || reportedDof != m_sketchDof) {
+            m_sketchState = state;
+            m_sketchDof = reportedDof;
+            m_sketchFullyConstrained = (state == sketch::SketchState::FullyConstrained);
+            emit sketchConstraintStateChanged(state, reportedDof);
+            update();
+        }
+    };
+
+    // NOTE: there is deliberately no "no constraints, skip the solve"
+    // shortcut here. A sketch with geometry and no constraints is SOLVED
+    // (vacuously, there is nothing to violate); it is simply maximally
+    // under-constrained, and the solver reports its real degree-of-freedom
+    // count (4 for a lone line). The old shortcut published -1 for that case,
+    // which is the same value used for "the solve failed", so a perfectly
+    // healthy unconstrained sketch was indistinguishable from a broken one.
 
     if (!SketchSolver::isAvailable()) {
         // Show one-time warning that solver is not available
@@ -12653,7 +8649,20 @@ void SketchCanvas::solveConstraints()
     }
 
     SketchSolver solver;
+    if (!m_draggedPoints.empty()) solver.setDraggedPoints(m_draggedPoints);
+#if defined(SLVS_HAS_DRAG_WEIGHTS)
+    if (!m_dragWeightPoints.empty()) solver.setPointWeights(m_dragWeightPoints, m_dragWeightStiffness);
+#endif
     SolveResult result = solver.solve(m_entities, m_constraints);
+    m_draggedPoints.clear();
+    m_dragWeightPoints.clear();
+
+    // Under-constrained feedback from solver truth (when libslvs reports it).
+    m_freePoints = result.freePoints;
+    m_freePointsValid = result.freePointsValid;
+
+    // The solver classifies the system; the canvas does not re-derive it.
+    publishState(result.state, result.dof);
 
     if (result.success) {
         // Mark all driving constraints as satisfied
@@ -12662,6 +8671,31 @@ void SketchCanvas::solveConstraints()
                 c.satisfied = true;
             }
         }
+
+        // The solver only reads back center + radius for circles.
+        // Reproject all perimeter points onto the solved circle so
+        // handles stay consistent with the geometry.
+        for (SketchEntity& ent : m_entities) {
+            if (ent.type == SketchEntityType::Circle && ent.points.size() >= 2) {
+                QPointF center = ent.points[0];
+                double r = ent.radius;
+                for (int i = 1; i < static_cast<int>(ent.points.size()); ++i) {
+                    QPointF pt(ent.points[i]);
+                    QPointF dir = pt - center;
+                    double len = geometry::length(dir);
+                    if (len > geometry::kZeroEps) {
+                        ent.points[i] = center + dir * (r / len);
+                    }
+                }
+            }
+        }
+
+        // Associative offsets follow their parent through the solve, the way
+        // a slot follows its centerline: re-derive each offset copy from the
+        // (now solved) parent geometry.
+        updateAssociativeOffsets();
+        updateSlotsFromPaths();
+        updateProjectedEntities();
 
         // Update Driven dimension values to reflect actual geometry
         updateDrivenDimensions();
@@ -12672,8 +8706,8 @@ void SketchCanvas::solveConstraints()
 
         update();
     } else {
-        // Mark failed constraints visually (drawn in red) — no modal dialog.
-        // The user can see which constraints are unsatisfied from the colour,
+        // Mark failed constraints visually (drawn in red), no modal dialog.
+        // The user can see which constraints are unsatisfied from the color,
         // and can edit or delete them.
         for (SketchConstraint& c : m_constraints) {
             c.satisfied = std::find(result.failedConstraintIds.begin(), result.failedConstraintIds.end(), c.id) == result.failedConstraintIds.end();
@@ -12685,6 +8719,177 @@ void SketchCanvas::solveConstraints()
 
         update();
     }
+}
+
+// =====================================================================
+//  Staged placement constraints
+//
+//  Apply the locked dimension values for one tool/mode at the current stage,
+//  adjusting `snapped` in place.
+//
+//  These are each called from BOTH mousePressEvent and mouseReleaseEvent, and
+//  BOTH call sites are required. A staged mode accepts two input styles:
+//  clicking each point, and press-drag-release to drag THROUGH a stage
+//  (detected per stage by m_wasDragged at a 5 px threshold). Press places a
+//  point on click; release places the next one if the user dragged. Deleting
+//  either call site silently removes one input style; the other keeps
+//  working, so it looks correct in casual testing.
+//
+//  Keep these mode-scoped: they lift directly into per-tool handler classes
+//  when the tool dispatch is refactored.
+// =====================================================================
+
+// =====================================================================
+//  Tool handler registry
+//
+//  A tool with no handler falls through to the existing switch statements and
+//  behaves exactly as before; that is what keeps the migration incremental.
+// =====================================================================
+
+void SketchCanvas::beginDragDetection(const QPoint& screenPos)
+{
+    m_drawStartPos = screenPos;
+    m_wasDragged = false;
+}
+
+void SketchCanvas::clearConstraintTargets()
+{
+    m_constraintTargetEntities.clear();
+    m_constraintTargetPoints.clear();
+    m_dimensionReadyToPlace = false;
+}
+
+bool SketchCanvas::beginSingleEntityDimension(int entityId)
+{
+    const SketchEntity* entity = entityById(entityId);
+    if (!entity) {
+        return false;
+    }
+    if (entity->type == SketchEntityType::Line && entity->points.size() == 2) {
+        setConstraintTargetsForLine(entityId, entity->points[0], entity->points[1]);
+        m_pendingConstraintType = ConstraintType::Distance;
+        m_dimensionReadyToPlace = true;
+        return true;
+    }
+    if ((entity->type == SketchEntityType::Circle
+         || entity->type == SketchEntityType::Arc)
+        && !entity->points.empty()) {
+        setConstraintTargetsForRadial(entityId, entity->points[0]);
+        m_pendingConstraintType = ConstraintType::Radius;
+        m_dimensionReadyToPlace = true;
+        return true;
+    }
+    return false;
+}
+
+void SketchCanvas::addConstraintTarget(int entityId, const QPointF& worldPos)
+{
+    const SketchEntity* entity = entityById(entityId);
+    m_constraintTargetEntities.append(entityId);
+    m_constraintTargetPoints.append(findClosestPointOnEntity(entity, worldPos));
+
+    if (m_constraintTargetEntities.size() == 2) {
+        m_pendingConstraintType = detectConstraintType(m_constraintTargetEntities[0],
+                                                       m_constraintTargetEntities[1]);
+        m_dimensionReadyToPlace = true;
+    }
+}
+
+void SketchCanvas::placeDimensionLabel(const QPointF& labelPos)
+{
+    // Seed the dimension with whatever the geometry measures right now, then
+    // open it for editing. This was written out twice (once for the
+    // single-entity shortcut and once for the three-click path), which is
+    // why it lives here rather than in the tool handler.
+    std::vector<const sketch::Entity*> targetEntities;
+    targetEntities.reserve(m_constraintTargetEntities.size());
+    for (int eid : m_constraintTargetEntities) {
+        targetEntities.push_back(entityById(eid));
+    }
+    const double initialValue =
+        sketch::calculateConstraintValue(m_pendingConstraintType, targetEntities);
+
+    // Honor the pre-placement choice of driving vs driven (reference). A
+    // driven dimension only measures, so it is not opened for editing.
+    const bool driving = m_pendingDimensionDriven;
+    createConstraint(m_pendingConstraintType, initialValue, labelPos,
+                     /*skipOverConstrainCheck=*/false,
+                     /*startEditing=*/driving, /*driving=*/driving);
+    m_pendingDimensionDriven = true;   // reset to the default for the next one
+    clearConstraintTargets();
+}
+
+QPointF SketchCanvas::rawMouseWorld() const
+{
+    return screenToWorld(mapFromGlobal(QCursor::pos()));
+}
+
+bool SketchCanvas::allDimFieldsLocked() const
+{
+    return m_dimInput.allLocked();
+}
+
+void SketchCanvas::appendPlacementPoint(const QPointF& worldPos)
+{
+    if (m_snapEngine.hasActiveSnap()) {
+        m_placedSnaps.append(
+            {static_cast<int>(m_pendingEntity.points.size()), *m_snapEngine.activeSnap()});
+    }
+    m_pendingEntity.points.push_back(worldPos);
+    m_previewPoints.append(worldPos);
+}
+
+SketchToolHandler* SketchCanvas::handlerFor(SketchTool tool) const
+{
+    // Draw-then-constrain first, when that is the mode. A tool without one
+    // falls back to its placement-first handler, so the mode works from the
+    // first tool that has a variant rather than needing all of them.
+    if (m_interactionMode == InteractionMode::DrawThenConstrain) {
+        for (const auto& h : m_drawConstrainHandlers) {
+            if (h->tool() == tool) return h.get();
+        }
+    }
+    for (const auto& h : m_toolHandlers) {
+        if (h->tool() == tool) return h.get();
+    }
+    return nullptr;
+}
+
+bool SketchCanvas::setInteractionMode(InteractionMode mode)
+{
+    if (mode == m_interactionMode) return true;
+    // Mid-entity the two modes disagree about what the clicks already made
+    // meant, so there is no correct way to reinterpret them.
+    if (m_isDrawing) return false;
+
+    m_interactionMode = mode;
+    clearDimFields();
+    initDimFields();
+    update();
+    return true;
+}
+
+void SketchCanvas::addDimField(const QString& label, bool isAngle)
+{
+    m_dimInput.addField(label, isAngle);
+}
+
+QString SketchCanvas::currentToolHint() const
+{
+    const SketchToolHandler* h = activeHandler();
+    return h ? h->hint(*this) : QString();
+}
+
+void SketchCanvas::setSelectedConstraint(int constraintId)
+{
+    for (auto& c : m_constraints) {
+        c.selected = (c.id == constraintId);
+    }
+    m_selectedConstraintId = constraintId;
+
+    emit selectionChanged(-1);   // constraint selection clears entity selection
+    emit constraintSelectionChanged(constraintId);
+    update();
 }
 
 void SketchCanvas::deleteConstraintById(int constraintId)
@@ -12749,7 +8954,7 @@ void SketchCanvas::deleteConstraintById(int constraintId)
                            [sweepGroupId](const SketchGroup& g) { return g.id == sweepGroupId; }),
             m_groups.end());
     } else {
-        // Simple constraint deletion — push undo, then remove
+        // Simple constraint deletion: push undo, then remove
         pushUndoCommand(sketch::UndoCommand::deleteConstraint(*found));
 
         m_constraints.erase(
@@ -12771,7 +8976,7 @@ void SketchCanvas::deleteConstraintById(int constraintId)
 
 void SketchCanvas::refreshConstrainedFlags()
 {
-    // Delegate to library — computes which entities have driving constraints
+    // Delegate to library: computes which entities have driving constraints
     std::unordered_set<int> ids = sketch::getConstrainedEntityIds(
         toLibraryConstraints(m_constraints));
     for (SketchEntity& e : m_entities) {
@@ -12801,8 +9006,8 @@ void SketchCanvas::updateConstraintLabelPositions()
             if (getConstraintEndpoints(c, p1, p2)) {
                 QPointF mid = (p1 + p2) / 2.0;
                 QPointF dir = p2 - p1;
-                double len = std::sqrt(dir.x() * dir.x() + dir.y() * dir.y());
-                if (len > 1e-9) {
+                double len = geometry::length(dir);
+                if (len > geometry::kZeroEps) {
                     // Perpendicular offset (10 world units)
                     QPointF perp(-dir.y() / len, dir.x() / len);
                     c.labelPosition = mid + perp * 10.0;
@@ -12826,10 +9031,20 @@ void SketchCanvas::updateConstraintLabelPositions()
                         c.labelPosition = {
                             center.x() + labelDist * std::cos(midAngleRad),
                             center.y() + labelDist * std::sin(midAngleRad)};
-                    } else if (ent->points.size() > 1) {
-                        c.labelPosition = (center + ent->points[1]) / 2.0;
-                    } else {
-                        c.labelPosition = center + QPointF(ent->radius / 2.0, 0);
+                    } else if (ent->type == SketchEntityType::Circle) {
+                        // If a stored label angle exists, reposition the label
+                        // at that angle (preserving distance from center).
+                        // This keeps the label stable through solver runs.
+                        if (!std::isnan(c.labelAngle)) {
+                            QPointF oldLabel = c.labelPosition;
+                            QPointF offset = oldLabel - center;
+                            double labelDist = geometry::length(offset);
+                            if (labelDist < geometry::kDegenerateLen) labelDist = ent->radius / 2.0;
+                            c.labelPosition = {
+                                center.x() + labelDist * std::cos(c.labelAngle),
+                                center.y() + labelDist * std::sin(c.labelAngle)};
+                        }
+                        // else: no stored angle; label stays where it is
                     }
                 }
             }
@@ -12851,188 +9066,6 @@ bool SketchCanvas::getConstraintEndpoints(const SketchConstraint& constraint, QP
         p2 = QPointF(lp2.x, lp2.y);
     }
     return ok;
-}
-
-// ---- Constraint label position (shared by hitTest, inline edit overlay) ----
-
-SketchCanvas::ConstraintLabelPosition
-SketchCanvas::computeConstraintLabelPosition(const SketchConstraint& c) const
-{
-    ConstraintLabelPosition result;
-
-    if (c.type == ConstraintType::Distance) {
-        QPointF p1, p2;
-        if (!getConstraintEndpoints(c, p1, p2)) return result;
-
-        QPointF sp1 = worldToScreen(p1).toPointF();
-        QPointF sp2 = worldToScreen(p2).toPointF();
-        QPointF labelCenterPt = worldToScreen(c.labelPosition).toPointF();
-
-        QPointF along = sp2 - sp1;
-        double len = std::sqrt(along.x() * along.x() + along.y() * along.y());
-        if (len < 1.0) return result;
-
-        QPointF dir = along / len;
-        QPointF perp(-dir.y(), dir.x());
-
-        QPointF labelDelta = labelCenterPt - sp1;
-        double offset = labelDelta.x() * perp.x() + labelDelta.y() * perp.y();
-
-        QPointF d1 = sp1 + perp * offset;
-        QPointF d2 = sp2 + perp * offset;
-
-        // Check if text fits inside (compact mode check)
-        QString text = QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
-        if (!c.isDriving) text = QStringLiteral("(") + text + QStringLiteral(")");
-        QFontMetricsF fm(font());
-        double textWidth = fm.horizontalAdvance(text);
-        double halfText = textWidth / 2.0 + 3.0;
-        bool textFits = (halfText * 2.0 < len);
-
-        if (textFits) {
-            result.textCenter = (d1 + d2) / 2.0;
-        } else {
-            // Compact mode: text is outside past d2
-            double leaderLen = 12.0;
-            double textGap = 4.0;
-            QPointF leaderEnd = d2 + dir * leaderLen;
-            result.textCenter = leaderEnd + dir * (textWidth / 2.0 + textGap);
-        }
-        result.found = true;
-
-    } else if (c.type == ConstraintType::Angle) {
-        if (c.entityIds.size() < 2) return result;
-        const SketchEntity* ae1 = entityById(c.entityIds[0]);
-        const SketchEntity* ae2 = entityById(c.entityIds[1]);
-        if (!ae1 || !ae2
-                || ae1->type != SketchEntityType::Line
-                || ae2->type != SketchEntityType::Line
-                || ae1->points.size() < 2 || ae2->points.size() < 2)
-            return result;
-
-        QPointF intersection;
-        if (c.hasAnchorPoint()) {
-            intersection = c.anchorPoint;
-        } else {
-            QLineF l1(ae1->points[0], ae1->points[1]);
-            QLineF l2(ae2->points[0], ae2->points[1]);
-            if (l1.intersects(l2, &intersection) == QLineF::NoIntersection)
-                intersection = c.labelPosition;
-        }
-        QPointF originScr = worldToScreen(intersection).toPointF();
-
-        QPointF s1a = worldToScreen(ae1->points[0]).toPointF();
-        QPointF s1b = worldToScreen(ae1->points[1]).toPointF();
-        QPointF s2a = worldToScreen(ae2->points[0]).toPointF();
-        QPointF s2b = worldToScreen(ae2->points[1]).toPointF();
-        QPointF dir1 = s1b - s1a;
-        QPointF dir2 = s2b - s2a;
-        if (QLineF(originScr, s1a).length() > QLineF(originScr, s1b).length())
-            dir1 = s1a - s1b;
-        if (QLineF(originScr, s2a).length() > QLineF(originScr, s2b).length())
-            dir2 = s2a - s2b;
-
-        double a1 = std::atan2(-dir1.y(), dir1.x());
-        double a2 = std::atan2(-dir2.y(), dir2.x());
-        double sweep = a2 - a1;
-        while (sweep > M_PI)  sweep -= 2.0 * M_PI;
-        while (sweep < -M_PI) sweep += 2.0 * M_PI;
-        if (c.supplementary) {
-            if (sweep > 0) sweep -= 2.0 * M_PI;
-            else sweep += 2.0 * M_PI;
-        }
-
-        double midAngle = a1 + sweep / 2.0;
-        double textRadius = 35.0 + 14.0;
-        result.textCenter = QPointF(originScr.x() + textRadius * std::cos(midAngle),
-                                    originScr.y() - textRadius * std::sin(midAngle));
-
-        auto nudgeIt = m_labelNudgeOffsets.find(c.id);
-        if (nudgeIt != m_labelNudgeOffsets.end())
-            result.textCenter += *nudgeIt;
-        result.found = true;
-
-    } else if (c.type == ConstraintType::FixedAngle) {
-        // Single-entity fixed angle (angle from horizontal)
-        if (c.entityIds.empty()) return result;
-        const SketchEntity* e = entityById(c.entityIds[0]);
-        if (!e || e->type != SketchEntityType::Line || e->points.size() < 2)
-            return result;
-
-        QPointF anchor = c.hasAnchorPoint() ? c.anchorPoint : e->points[0];
-        QPointF originScr = worldToScreen(anchor).toPointF();
-
-        QPointF sa = worldToScreen(e->points[0]).toPointF();
-        QPointF sb = worldToScreen(e->points[1]).toPointF();
-        QPointF dir = sb - sa;
-        if (QLineF(originScr, sa).length() > QLineF(originScr, sb).length())
-            dir = sa - sb;
-
-        double aLine = std::atan2(-dir.y(), dir.x());
-        double sweep = aLine;  // sweep from horizontal (0) to line angle
-        while (sweep > M_PI)  sweep -= 2.0 * M_PI;
-        while (sweep < -M_PI) sweep += 2.0 * M_PI;
-
-        double midAngle = sweep / 2.0;
-        double textRadius = 35.0 + 14.0;
-        result.textCenter = QPointF(originScr.x() + textRadius * std::cos(midAngle),
-                                    originScr.y() - textRadius * std::sin(midAngle));
-
-        auto nudgeIt = m_labelNudgeOffsets.find(c.id);
-        if (nudgeIt != m_labelNudgeOffsets.end())
-            result.textCenter += *nudgeIt;
-        result.found = true;
-
-    } else if (c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter) {
-        result.prefix = (c.type == ConstraintType::Radius)
-            ? QStringLiteral("R") : QStringLiteral("Ø");
-        if (c.entityIds.empty()) return result;
-        const SketchEntity* re = entityById(c.entityIds[0]);
-        if (!re || (re->type != SketchEntityType::Circle && re->type != SketchEntityType::Arc))
-            return result;
-        if (re->points.empty()) return result;
-
-        QPointF sc = worldToScreen(re->points[0]).toPointF();
-        QPointF labelPt = worldToScreen(c.labelPosition).toPointF();
-        double radiusPx = re->radius * m_zoom;
-
-        QPointF along = labelPt - sc;
-        double alongLen = std::sqrt(along.x() * along.x() + along.y() * along.y());
-        if (alongLen < 1e-6) return result;
-
-        QPointF dir = along / alongLen;
-        QPointF edgePt = sc + dir * radiusPx;
-        QPointF dimMid = (sc + edgePt) / 2.0;
-
-        auto nudgeItR = m_labelNudgeOffsets.find(c.id);
-        if (nudgeItR != m_labelNudgeOffsets.end())
-            dimMid += *nudgeItR;
-
-        // Check if text fits inside (compact mode check)
-        QString rtext = result.prefix + QString::fromStdString(formatValueWithUnit(c.value, m_displayUnit));
-        if (!c.isDriving) rtext = QStringLiteral("(") + rtext + QStringLiteral(")");
-        QFontMetricsF fmR(font());
-        double rtextWidth = fmR.horizontalAdvance(rtext);
-        double rhalfText = rtextWidth / 2.0 + 3.0;
-        bool rtextFits = (rhalfText * 2.0 < radiusPx);
-
-        if (rtextFits) {
-            result.textCenter = dimMid;
-        } else {
-            double leaderLen = 12.0;
-            double textGap = 4.0;
-            QPointF leaderEnd = edgePt + dir * leaderLen;
-            result.textCenter = leaderEnd + dir * (rtextWidth / 2.0 + textGap);
-        }
-        result.found = true;
-
-    } else {
-        // Geometric constraints — use raw label position
-        result.textCenter = worldToScreen(c.labelPosition).toPointF();
-        result.found = true;
-    }
-
-    return result;
 }
 
 // ---- Constraint search helper ----
@@ -13084,6 +9117,362 @@ void SketchCanvas::setConstraintTargetsForRadial(int entityId, const QPointF& ce
 }
 
 // ---- Geometric Constraint Application ----
+
+// ---- Selection bookkeeping ------------------------------------------
+
+void SketchCanvas::selectAdd(int entityId)
+{
+    if (entityId < 0 || m_selectedIds.contains(entityId)) {
+        return;
+    }
+    m_selectedIds.insert(entityId);      // NOLINT: the helper owns the set
+    m_selectionOrder.append(entityId);
+}
+
+void SketchCanvas::selectRemove(int entityId)
+{
+    m_selectedIds.remove(entityId);      // NOLINT: the helper owns the set
+    m_selectionOrder.removeAll(entityId);
+}
+
+void SketchCanvas::selectClear()
+{
+    m_selectedIds.clear();               // NOLINT: the helper owns the set
+    m_selectionOrder.clear();
+}
+
+std::vector<int> SketchCanvas::selectedEntityList() const
+{
+    // m_selectionOrder is authoritative for order; fall back to the single
+    // selection so a plain click still works where nothing multi-selected.
+    if (!m_selectionOrder.isEmpty()) {
+        return std::vector<int>(m_selectionOrder.begin(), m_selectionOrder.end());
+    }
+    if (m_selectedId >= 0) {
+        return {m_selectedId};
+    }
+    return {};
+}
+
+/// Comma-separated constraint names, for telling the user what *would* work.
+static QString constraintListText(const std::vector<ConstraintType>& types)
+{
+    QStringList names;
+    for (ConstraintType t : types) {
+        if (sketch::isGeometricConstraint(t)) {
+            names << QString::fromUtf8(sketch::constraintTypeName(t));
+        }
+    }
+    return names.isEmpty() ? SketchCanvas::tr("(none)") : names.join(QStringLiteral(", "));
+}
+
+// ---- Constraints from the current selection -------------------------
+
+
+bool SketchCanvas::selectionHasFixedPoint() const
+{
+    for (int id : selectedEntityList())
+        for (const SketchConstraint& c : m_constraints)
+            if (c.type == ConstraintType::FixedPoint && !c.entityIds.empty()
+                && c.entityIds[0] == id)
+                return true;
+    return false;
+}
+
+void SketchCanvas::fixSelectedEntities()
+{
+    const std::vector<int> ids = selectedEntityList();
+    if (ids.empty()) return;
+    std::vector<sketch::UndoCommand> subs;
+    if (selectionHasFixedPoint()) {
+        // Unfix: remove every FixedPoint on the selected entities.
+        QSet<int> sel; for (int id : ids) sel.insert(id);
+        QVector<SketchConstraint> keep; keep.reserve(m_constraints.size());
+        for (const SketchConstraint& c : m_constraints) {
+            if (c.type == ConstraintType::FixedPoint && !c.entityIds.empty()
+                && sel.contains(c.entityIds[0])) {   // any point of a selected entity
+                subs.push_back(sketch::UndoCommand::deleteConstraint(c, "Unfix"));
+            } else {
+                keep.push_back(c);
+            }
+        }
+        m_constraints = keep;
+    } else {
+        // Fix: pin every point of every selected entity that is not already
+        // pinned. libslvs takes one FixedPoint per point.
+        for (int id : ids) {
+            const SketchEntity* e = entityById(id);
+            if (!e) continue;
+            for (int pi = 0; pi < e->points.size(); ++pi) {
+                bool already = false;
+                for (const SketchConstraint& c : m_constraints)
+                    if (sketch::isFixedPointOn(c, id, pi)) { already = true; break; }
+                if (already) continue;
+                const SketchConstraint fp(sketch::makeFixedPoint(m_nextConstraintId++, id, pi));
+                m_constraints.append(fp);
+                subs.push_back(sketch::UndoCommand::addConstraint(fp, "Fix"));
+            }
+        }
+    }
+    if (subs.size() == 1) pushUndoCommand(subs.front());
+    else if (!subs.empty()) pushUndoCommand(sketch::UndoCommand::compound(subs, "Fix"));
+    m_profilesCacheDirty = true;
+    solveConstraints();
+    emit constraintModified(-1);
+    update();
+}
+
+bool SketchCanvas::applyConstraintToSelection(ConstraintType type)
+{
+    // Tangent-angle DIMENSION on a single Bezier spline anchor.
+    if (type == ConstraintType::TangentAngle) {
+        if (m_selectedPoints.size() != 1) {
+            showStatus(tr("Select one Bezier spline anchor point, then apply Tangent Angle."));
+            return false;
+        }
+        const auto sp = m_selectedPoints[0];
+        SketchEntity* e = entityById(sp.first);
+        if (!e || e->type != SketchEntityType::Spline || !e->splineBezier) {
+            showStatus(tr("Tangent Angle applies to a Bezier spline anchor."));
+            return false;
+        }
+        const int a = sp.second;
+        const int n = static_cast<int>(e->points.size());
+        if (a < 0 || a >= n || a % 3 != 0) {
+            showStatus(tr("Select an ANCHOR point (every third control point), not a tangent handle."));
+            return false;
+        }
+        const int lastCp = n - 1;
+        const QPointF anchor(e->points[a]);
+        const QPointF fwd = (a < lastCp) ? (QPointF(e->points[a+1]) - anchor)
+                                         : (anchor - QPointF(e->points[a-1]));
+        double cur = geometry::vectorAngle(fwd);
+        if (cur < 0) cur += 360.0;
+        bool ok = false;
+        const double ang = QInputDialog::getDouble(this, tr("Tangent Angle"),
+            tr("Directed tangent angle (0-360 deg):"), cur, 0.0, 360.0, 2, &ok);
+        if (!ok) return false;
+        const double rad = qDegreesToRadians(ang);
+        const QPointF u(std::cos(rad), std::sin(rad));
+        if (a + 1 < n) {
+            const double L = QLineF(anchor, QPointF(e->points[a+1])).length();
+            e->points[a+1] = anchor + u * L;
+        }
+        if (a - 1 >= 0) {
+            const double L = QLineF(anchor, QPointF(e->points[a-1])).length();
+            e->points[a-1] = anchor - u * L;
+        }
+        m_constraintTargetEntities.clear(); m_constraintTargetPoints.clear();
+        m_constraintTargetEntities.append(sp.first);
+        m_constraintTargetPoints.append(anchor);
+        createConstraint(ConstraintType::TangentAngle, ang, anchor + QPointF(0, -12),
+                         false, false);
+        m_constraintTargetEntities.clear(); m_constraintTargetPoints.clear();
+        m_selectedPoints.clear();
+        return true;
+    }
+
+    // A point together with a circle or arc: Coincident means the point lies on
+    // the PERIMETER (a Point-On-Circle constraint), NOT the center; this is the
+    // Fusion/SolidWorks convention. To coincide a point with the CENTER, select
+    // the center POINT itself and use a point-to-point coincidence. Handles both
+    // selection styles: a picked point (an endpoint or the tangent-contact dot's
+    // circle, Ctrl-clicked with a line endpoint) and a standalone Point entity.
+    // Also the explicit Point-On-Circle constraint routes here. (Aaron)
+    if (type == ConstraintType::Coincident || type == ConstraintType::PointOnCircle) {
+        int circleId = -1;
+        for (int id : selectedEntityList()) {
+            const SketchEntity* e = entityById(id);
+            if (e && (e->type == SketchEntityType::Circle
+                      || e->type == SketchEntityType::Arc)) { circleId = id; break; }
+        }
+        int ptEntity = -1, ptIndex = -1;
+        if (m_selectedPoints.size() == 1) {
+            ptEntity = m_selectedPoints[0].first;
+            ptIndex  = m_selectedPoints[0].second;
+        } else if (m_selectedPoints.isEmpty()) {
+            for (int id : selectedEntityList()) {
+                const SketchEntity* e = entityById(id);
+                if (e && e->type == SketchEntityType::Point) { ptEntity = id; ptIndex = 0; break; }
+            }
+        }
+        if (circleId >= 0 && ptEntity >= 0 && ptEntity != circleId) {
+            const SketchEntity* pe = entityById(ptEntity);
+            const SketchEntity* ce = entityById(circleId);
+            if (pe && ce && ptIndex >= 0 && ptIndex < static_cast<int>(pe->points.size())
+                && !ce->points.empty()) {
+                const QPointF pPos(pe->points[ptIndex]);
+                m_constraintTargetEntities.clear();
+                m_constraintTargetPoints.clear();
+                m_constraintTargetEntities.append(ptEntity);
+                m_constraintTargetPoints.append(pPos);
+                m_constraintTargetEntities.append(circleId);
+                m_constraintTargetPoints.append(QPointF(ce->points[0]));
+                createConstraint(ConstraintType::PointOnCircle, 0.0,
+                                 pPos + QPointF(0, -10),
+                                 /*skipOverConstrainCheck=*/false,
+                                 /*startEditing=*/false);
+                m_constraintTargetEntities.clear();
+                m_constraintTargetPoints.clear();
+                m_selectedPoints.clear();
+                return true;
+            }
+        }
+    }
+
+    // A selected midpoint grip (line/arc) plus one picked point: pin the point
+    // to that midpoint. Lines use the Midpoint constraint (SLVS_C_AT_MIDPOINT);
+    // arcs need the arc-aware midpoint constraint (patch 0019, pending); say so
+    // rather than create a wrong line-style midpoint on an arc. (Aaron)
+    if ((type == ConstraintType::Coincident || type == ConstraintType::Midpoint)
+        && m_selectedMidpointEntity >= 0 && m_selectedPoints.size() == 1) {
+        const SketchEntity* me = entityById(m_selectedMidpointEntity);
+        const auto psel = m_selectedPoints[0];
+        const SketchEntity* pe = entityById(psel.first);
+        if (me && pe && psel.second < static_cast<int>(pe->points.size())
+            && (me->type == SketchEntityType::Line
+                || me->type == SketchEntityType::Arc)) {
+            // Both use ConstraintType::Midpoint; the solver wrapper routes a LINE
+            // to SLVS_C_AT_MIDPOINT and an ARC to SLVS_C_ARC_MIDPOINT (0019).
+            const QPointF pPos(pe->points[psel.second]);
+            QPointF mid; entityMidpoint(*me, mid);
+            m_constraintTargetEntities.clear();
+            m_constraintTargetPoints.clear();
+            m_constraintTargetEntities.append(psel.first);
+            m_constraintTargetPoints.append(pPos);
+            m_constraintTargetEntities.append(m_selectedMidpointEntity);
+            m_constraintTargetPoints.append(mid);
+            createConstraint(ConstraintType::Midpoint, 0.0, mid + QPointF(0, -10),
+                             /*skipOverConstrainCheck=*/false, /*startEditing=*/false);
+            m_constraintTargetEntities.clear();
+            m_constraintTargetPoints.clear();
+            m_selectedMidpointEntity = -1;
+            m_selectedPoints.clear();
+            return true;
+        }
+    }
+
+    // Two individually selected points -> a point-to-point constraint on those
+    // exact endpoints (the "select points, then constrain" flow).
+    if (m_selectedPoints.size() >= 2) {
+        const auto a = m_selectedPoints[0];
+        const auto b = m_selectedPoints[1];
+        const SketchEntity* ea = entityById(a.first);
+        const SketchEntity* eb = entityById(b.first);
+        if (!ea || !eb || a.second >= ea->points.size() || b.second >= eb->points.size())
+            return false;
+        const QPointF pa(ea->points[a.second]);
+        const QPointF pb(eb->points[b.second]);
+        m_constraintTargetEntities.clear();
+        m_constraintTargetPoints.clear();
+        m_constraintTargetEntities.append(a.first); m_constraintTargetPoints.append(pa);
+        m_constraintTargetEntities.append(b.first); m_constraintTargetPoints.append(pb);
+        const QPointF labelPos = (pa + pb) / 2.0 + QPointF(0, -10);
+        createConstraint(type, 0.0, labelPos, /*skipOverConstrainCheck=*/false, /*startEditing=*/false);
+        m_constraintTargetEntities.clear();
+        m_constraintTargetPoints.clear();
+        m_selectedPoints.clear();   // consumed
+        return true;
+    }
+
+    const std::vector<int> ids = selectedEntityList();
+    const int needed = sketch::requiredEntityCount(type);
+    const QString name = QString::fromUtf8(sketch::constraintTypeName(type));
+
+    if (static_cast<int>(ids.size()) < needed) {
+        showStatus(tr("%1 needs %n entity(s); %2 selected. Select them "
+                      "(Ctrl to add), then apply.", "", needed)
+                       .arg(name).arg(ids.size()));
+        return false;
+    }
+
+    // Take the first `needed` in selection order: for Midpoint and Symmetric
+    // the roles are positional, so the order the user clicked is the answer.
+    std::vector<int> chosen(ids.begin(), ids.begin() + needed);
+
+    // Check the library actually considers this combination meaningful,
+    // rather than handing the solver something it will reject or, worse,
+    // satisfy in a way the user did not intend.
+    if (needed == 2) {
+        const SketchEntity* a = entityById(chosen[0]);
+        const SketchEntity* b = entityById(chosen[1]);
+        if (a && b) {
+            const std::vector<ConstraintType> ok =
+                sketch::suggestConstraints(*a, *b);
+            if (std::find(ok.begin(), ok.end(), type) == ok.end()) {
+                showStatus(tr("%1 does not apply to those two entities. "
+                              "Applicable here: %2")
+                               .arg(name).arg(constraintListText(ok)));
+                return false;
+            }
+        }
+    }
+
+    m_constraintTargetEntities.clear();
+    for (int id : chosen) {
+        m_constraintTargetEntities.append(id);
+    }
+    createGeometricConstraint(type);
+    m_constraintTargetEntities.clear();
+    return true;
+}
+
+void SketchCanvas::applyInferredConstraint()
+{
+    // Two selected points infer a Coincident (the point-to-point constraint).
+    if (m_selectedPoints.size() >= 2) {
+        applyConstraintToSelection(ConstraintType::Coincident);
+        return;
+    }
+    const std::vector<int> ids = selectedEntityList();
+    if (ids.empty()) {
+        QMessageBox::information(this, tr("Constrain"),
+            tr("Select one or two entities first, then apply a constraint."));
+        return;
+    }
+
+    std::vector<ConstraintType> options;
+    if (ids.size() >= 2) {
+        const SketchEntity* a = entityById(ids[0]);
+        const SketchEntity* b = entityById(ids[1]);
+        if (a && b) {
+            options = sketch::suggestConstraints(*a, *b);
+        }
+    } else if (const SketchEntity* only = entityById(ids[0])) {
+        options = sketch::suggestConstraints(*only);
+    }
+
+    // Only geometric ones: a dimensional constraint needs a value, which is
+    // the Dimension tool's job rather than this one's.
+    options.erase(std::remove_if(options.begin(), options.end(),
+                                 [](ConstraintType t) {
+                                     return !sketch::isGeometricConstraint(t);
+                                 }),
+                  options.end());
+
+    if (options.empty()) {
+        QMessageBox::information(this, tr("Constrain"),
+            tr("No geometric constraint applies to that selection."));
+        return;
+    }
+    if (options.size() == 1) {
+        applyConstraintToSelection(options.front());
+        return;
+    }
+
+    // More than one is possible, so ask rather than guess. Guessing here is
+    // what makes a constraint tool feel unpredictable.
+    QMenu menu(this);
+    for (ConstraintType t : options) {
+        QAction* act = menu.addAction(
+            QString::fromUtf8(sketch::constraintTypeName(t)));
+        act->setData(static_cast<int>(t));
+    }
+    if (QAction* picked = menu.exec(QCursor::pos())) {
+        applyConstraintToSelection(
+            static_cast<ConstraintType>(picked->data().toInt()));
+    }
+}
 
 void SketchCanvas::createGeometricConstraint(ConstraintType type)
 {
@@ -13147,116 +9536,79 @@ void SketchCanvas::applyVerticalConstraint()
 
 void SketchCanvas::applyParallelConstraint()
 {
-    // Need two lines selected - for now, use a simple approach
-    // In the future, this could use a multi-select mode
-    if (m_selectedId < 0) return;
-
-    SketchEntity* entity = entityById(m_selectedId);
-    if (!entity || entity->type != SketchEntityType::Line) return;
-
-    // For now, show a message that this requires two lines
-    // TODO: Implement proper two-entity selection workflow
-    QMessageBox::information(this, tr("Parallel Constraint"),
-        tr("Parallel constraint requires selecting two lines.\n\n"
-           "This feature will be enhanced in a future update."));
+    applyConstraintToSelection(ConstraintType::Parallel);
 }
 
 void SketchCanvas::applyPerpendicularConstraint()
 {
-    // Need two lines selected
-    if (m_selectedId < 0) return;
-
-    SketchEntity* entity = entityById(m_selectedId);
-    if (!entity || entity->type != SketchEntityType::Line) return;
-
-    // For now, show a message that this requires two lines
-    QMessageBox::information(this, tr("Perpendicular Constraint"),
-        tr("Perpendicular constraint requires selecting two lines.\n\n"
-           "This feature will be enhanced in a future update."));
+    applyConstraintToSelection(ConstraintType::Perpendicular);
 }
 
 void SketchCanvas::applyCoincidentConstraint()
 {
-    // Need two points selected
-    if (m_selectedId < 0) return;
-
-    SketchEntity* entity = entityById(m_selectedId);
-    if (!entity || entity->type != SketchEntityType::Point) return;
-
-    QMessageBox::information(this, tr("Coincident Constraint"),
-        tr("Coincident constraint requires selecting two points.\n\n"
-           "This feature will be enhanced in a future update."));
+    applyConstraintToSelection(ConstraintType::Coincident);
 }
 
 void SketchCanvas::applyTangentConstraint()
 {
-    // Need a line and circle/arc, or two circles/arcs
-    if (m_selectedId < 0) return;
-
-    QMessageBox::information(this, tr("Tangent Constraint"),
-        tr("Tangent constraint requires selecting a line and circle/arc,\n"
-           "or two circles/arcs.\n\n"
-           "This feature will be enhanced in a future update."));
+    applyConstraintToSelection(ConstraintType::Tangent);
 }
 
 void SketchCanvas::applyEqualConstraint()
 {
-    // Need two entities of same type (two lines or two circles)
-    if (m_selectedId < 0) return;
-
-    QMessageBox::information(this, tr("Equal Constraint"),
-        tr("Equal constraint requires selecting two entities of the same type\n"
-           "(two lines for equal length, or two circles for equal radius).\n\n"
-           "This feature will be enhanced in a future update."));
+    applyConstraintToSelection(ConstraintType::Equal);
 }
 
 void SketchCanvas::applyMidpointConstraint()
 {
-    // Need a point and a line - the point will be constrained to the line's midpoint
-    if (m_selectedId < 0) return;
-
-    SketchEntity* entity = entityById(m_selectedId);
-    if (!entity) return;
-
-    // Check if selected entity is a point
-    if (entity->type == SketchEntityType::Point) {
-        QMessageBox::information(this, tr("Midpoint Constraint"),
-            tr("Midpoint constraint requires a point and a line.\n"
-               "After selecting a point, select the line whose midpoint\n"
-               "the point should coincide with.\n\n"
-               "This feature will be enhanced in a future update."));
-        return;
-    }
-
-    // Check if selected entity is a line
-    if (entity->type == SketchEntityType::Line) {
-        QMessageBox::information(this, tr("Midpoint Constraint"),
-            tr("Midpoint constraint requires a point and a line.\n"
-               "Select a point first, then the line whose midpoint\n"
-               "the point should coincide with.\n\n"
-               "This feature will be enhanced in a future update."));
-        return;
-    }
-
-    QMessageBox::information(this, tr("Midpoint Constraint"),
-        tr("Midpoint constraint requires selecting a point and a line.\n\n"
-           "This feature will be enhanced in a future update."));
+    applyConstraintToSelection(ConstraintType::Midpoint);
 }
 
 void SketchCanvas::applySymmetricConstraint()
 {
-    // Need two entities and a symmetry line
-    if (m_selectedId < 0) return;
+    applyConstraintToSelection(ConstraintType::Symmetric);
+}
 
-    SketchEntity* entity = entityById(m_selectedId);
-    if (!entity) return;
+void SketchCanvas::applyConcentricConstraint()
+{
+    applyConstraintToSelection(ConstraintType::Concentric);
+}
 
-    QMessageBox::information(this, tr("Symmetric Constraint"),
-        tr("Symmetric constraint requires selecting two entities\n"
-           "and a line of symmetry.\n\n"
-           "The two entities will be constrained to be symmetric\n"
-           "about the symmetry line.\n\n"
-           "This feature will be enhanced in a future update."));
+void SketchCanvas::applyCollinearConstraint()
+{
+    applyConstraintToSelection(ConstraintType::Collinear);
+}
+
+void SketchCanvas::applyFixConstraint()
+{
+    fixSelectedEntities();
+}
+
+void SketchCanvas::autoConstrainSketch()
+{
+    std::vector<sketch::Entity> es = toLibraryEntities(m_entities);
+    std::vector<sketch::Constraint> cs = toLibraryConstraints(m_constraints);
+    int nextId = m_nextConstraintId;
+    std::vector<sketch::Constraint> added = sketch::autoConstrain(es, cs, nextId);
+    if (added.empty()) {
+        emit toolHintChanged(tr("Auto Constrain: nothing to add."));
+        return;
+    }
+    std::vector<sketch::UndoCommand> subs;
+    for (const auto& c : added) {
+        SketchConstraint gc(c);
+        m_constraints.append(gc);
+        subs.push_back(sketch::UndoCommand::addConstraint(gc));
+        for (int eid : c.entityIds)
+            if (SketchEntity* e = entityById(eid)) e->constrained = true;
+    }
+    m_nextConstraintId = nextId;
+    pushUndoCommand(sketch::UndoCommand::compound(subs, "Auto Constrain"));
+    m_profilesCacheDirty = true;
+    solveConstraints();
+    emit selectionChanged(m_selectedId);
+    emit toolHintChanged(tr("Auto Constrain: added %1 constraint(s).").arg(added.size()));
+    update();
 }
 
 // ============================================================================
@@ -13271,49 +9623,78 @@ QVector<SketchCanvas::Intersection> SketchCanvas::findAllIntersections() const
     return hobbycad::toGuiIntersections(libIntersections);
 }
 
-bool SketchCanvas::trimEntityAt(int entityId, const QPointF& clickPoint)
+bool SketchCanvas::trimEntityAt(int entityId, const QPointF& clickPoint,
+                                bool deleteIfNoIntersection)
 {
     SketchEntity* entity = entityById(entityId);
     if (!entity) return false;
+    const SketchEntity original = *entity;   // copy for undo before any change
 
-    // Find intersections involving this entity using library
+    // Find the intersection points that lie on this entity.
     std::vector<sketch::Entity> libEntities = hobbycad::toLibraryEntities(m_entities);
     sketch::Entity libEntity = hobbycad::toLibraryEntity(*entity);
-
     std::vector<sketch::Intersection> allIntersections = sketch::findAllIntersections(libEntities);
+    std::vector<Point2D> intersectionPoints =
+        sketch::intersectionPointsTouching(allIntersections, entityId);
 
-    // Extract intersection points for this entity
-    std::vector<Point2D> intersectionPoints;
-    for (const sketch::Intersection& inter : allIntersections) {
-        if (inter.entityId1 == entityId || inter.entityId2 == entityId) {
-            intersectionPoints.push_back(inter.point);
+    // Gather the constraints that named the original: their removal is recorded
+    // here, and the carryable ones are re-anchored onto the pieces below so a
+    // cut re-homes what it can rather than dropping every one.
+    std::vector<sketch::UndoCommand> subs;
+    std::vector<sketch::Constraint> origRefs;
+    for (const SketchConstraint& c : m_constraints) {
+        for (int eid : c.entityIds) {
+            if (eid == entityId) {
+                subs.push_back(sketch::UndoCommand::deleteConstraint(c, "Trim"));
+                origRefs.push_back(c);
+                break;
+            }
         }
     }
 
-    if (intersectionPoints.empty()) return false;
-
-    // Use library trim function
-    Point2D clickPt{clickPoint.x(), clickPoint.y()};
-    sketch::TrimResult result = sketch::trimEntity(
-        libEntity, intersectionPoints, clickPt,
-        [this]() { return m_nextId++; });
-
-    if (!result.success) return false;
-
-    // Remove original entity
-    m_entities.erase(std::remove_if(m_entities.begin(), m_entities.end(),
-                     [entityId](const SketchEntity& e) { return e.id == entityId; }),
-                     m_entities.end());
-
-    // Add new entities from trim result
-    for (const sketch::Entity& newEntity : result.newEntities) {
-        SketchEntity guiEntity = hobbycad::toGuiEntity(newEntity);
-        m_entities.append(guiEntity);
-        emit entityCreated(guiEntity.id);
+    std::vector<SketchEntity> pieces;
+    if (intersectionPoints.empty()) {
+        // Fusion: with no intersection to trim to, Trim deletes the geometry.
+        // (No new pieces; the entity simply goes away.) A drag-through pass
+        // asks NOT to delete here, so a mere brush across an unbounded curve
+        // does not wipe it; only a deliberate click does.
+        if (!deleteIfNoIntersection) return false;
+    } else {
+        const Point2D clickPt{clickPoint.x(), clickPoint.y()};
+        const sketch::TrimResult result = sketch::trimEntity(
+            libEntity, intersectionPoints, clickPt, [this]() { return m_nextId++; });
+        if (!result.success) return false;   // could not resolve a segment: leave it be
+        for (const sketch::Entity& ne : result.newEntities)
+            pieces.push_back(hobbycad::toGuiEntity(ne));
     }
 
-    m_profilesCacheDirty = true;
-    update();
+    // One compound: drop the referencing constraints, remove the original,
+    // add whatever pieces remain. Push before mutating, as elsewhere.
+    subs.push_back(sketch::UndoCommand::deleteEntity(original, "Trim"));
+    for (const SketchEntity& piece : pieces)
+        subs.push_back(sketch::UndoCommand::addEntity(piece, "Trim"));
+
+    // Tie each trimmed endpoint onto the cutting edge (point-on-object). Same
+    // library rule the CLI will use; boundaries are every other entity.
+    {
+        std::vector<sketch::Entity> pieceLib, others;
+        for (const SketchEntity& p : pieces) pieceLib.push_back(hobbycad::toLibraryEntity(p));
+        for (const SketchEntity& e : m_entities)
+            if (e.id != entityId) others.push_back(hobbycad::toLibraryEntity(e));
+        recordAddedConstraints(sketch::computeCutConstraints(
+            pieceLib, others, intersectionPoints,
+            [this]() { return m_nextConstraintId++; }), subs);
+        // Carry the original's own constraints onto the surviving piece(s) where
+        // they still hold, instead of dropping every constraint that named it.
+        recordAddedConstraints(sketch::remapCutConstraints(
+            origRefs, hobbycad::toLibraryEntity(original), pieceLib,
+            [this]() { return m_nextConstraintId++; }), subs);
+    }
+
+    pushCompoundOrSingle(subs, "Trim");
+
+    // Apply: remove the original entity and its referencing constraints.
+    replaceEntityWithPieces(entityId, pieces);
     return true;
 }
 
@@ -13332,15 +9713,118 @@ bool SketchCanvas::extendEntityTo(int entityId, const QPointF& clickPoint)
     auto result = sketch::extendEntity(
         toLibraryEntity(*entity), boundaries, /*extendEnd=*/-1, clickPoint);
 
-    if (result.success) {
-        entity->points = result.entity.points;
-        m_profilesCacheDirty = true;
-        emit entityModified(entityId);
-        update();
-        return true;
+    // Fail-safe (Fusion F-64): with no boundary in the extension direction,
+    // there is nothing to extend to, so leave the geometry untouched. The
+    // caller reports the quiet no-op; no dialog interrupts the flow.
+    if (!result.success) return false;
+
+    const SketchEntity before = *entity;
+    entity->points = result.entity.points;
+
+    // Extend is undoable: record the point change, and tie the newly-extended
+    // endpoint onto the boundary curve it now meets (point-on-object) via the
+    // shared library rule.
+    std::vector<sketch::UndoCommand> subs;
+    subs.push_back(sketch::UndoCommand::modifyEntity(before, *entity, "Extend"));
+    {
+        std::vector<sketch::Entity> pieceLib{ hobbycad::toLibraryEntity(*entity) }, others;
+        for (const SketchEntity& e : m_entities)
+            if (e.id != entityId) others.push_back(hobbycad::toLibraryEntity(e));
+        std::vector<Point2D> junc;
+        for (int i = 0; i < static_cast<int>(entity->points.size()); ++i) {
+            const QPointF pnow(entity->points[i]);
+            if (i < static_cast<int>(before.points.size())
+                && QLineF(pnow, QPointF(before.points[i])).length() <= kSnapWeldEps)
+                continue;   // this endpoint did not move
+            junc.push_back({ pnow.x(), pnow.y() });
+        }
+        recordAddedConstraints(sketch::computeCutConstraints(
+            pieceLib, others, junc, [this]() { return m_nextConstraintId++; }), subs);
+    }
+    pushCompoundOrSingle(subs, "Extend");
+    m_profilesCacheDirty = true;
+    emit entityModified(entityId);
+    solveConstraints();
+    update();
+    return true;
+}
+
+void SketchCanvas::recordAddedConstraints(
+        const std::vector<sketch::Constraint>& cs,
+        std::vector<sketch::UndoCommand>& subs)
+{
+    for (const sketch::Constraint& c : cs) {
+        SketchConstraint sc(c);
+        subs.push_back(sketch::UndoCommand::addConstraint(sc));
+        m_constraints.append(sc);
+        for (int eid : sc.entityIds)
+            if (SketchEntity* e = entityById(eid)) e->constrained = true;
+    }
+}
+
+QVector<int> SketchCanvas::applySplitPieces(
+        int entityId, const std::vector<sketch::Entity>& newLibEntities,
+        const QVector<QPointF>& junctionPoints, const QString& desc)
+{
+    QVector<int> newIds;
+    const SketchEntity* origPtr = entityById(entityId);
+    if (!origPtr) return newIds;
+    const SketchEntity original = *origPtr;      // copy for undo before any change
+    const std::string tag = desc.toStdString();
+
+    std::vector<SketchEntity> pieces;
+    pieces.reserve(newLibEntities.size());
+    for (const sketch::Entity& ne : newLibEntities) {
+        pieces.push_back(hobbycad::toGuiEntity(ne));
+        newIds.append(pieces.back().id);
     }
 
-    return false;
+    // One compound so the whole split is a single undo step (previously split
+    // mutated the model directly and could not be undone at all): record the
+    // original's referencing constraints for removal (the carryable ones are
+    // re-anchored onto the pieces below), remove it, add the pieces, then join
+    // the pieces at each split point so the halves stay connected rather than
+    // drifting apart.
+    std::vector<sketch::UndoCommand> subs;
+    std::vector<sketch::Constraint> origRefs;
+    for (const SketchConstraint& c : m_constraints) {
+        for (int eid : c.entityIds) {
+            if (eid == entityId) {
+                subs.push_back(sketch::UndoCommand::deleteConstraint(c, tag));
+                origRefs.push_back(c);
+                break;
+            }
+        }
+    }
+    subs.push_back(sketch::UndoCommand::deleteEntity(original, tag));
+    for (const SketchEntity& piece : pieces)
+        subs.push_back(sketch::UndoCommand::addEntity(piece, tag));
+
+    // Join the pieces at each split point. The rule lives in the library so
+    // the CLI can reuse it verbatim; a split passes no boundaries (join only).
+    // A circle opened into one 360-degree arc keeps BOTH ends free: the tie to
+    // an entity at the cut is decided later, at drag time (the end left in place
+    // ties, the end dragged away stays free), not here where the two ends
+    // overlap and neither has moved.
+    {
+        std::vector<sketch::Entity> pieceLib;
+        for (const SketchEntity& p : pieces) pieceLib.push_back(hobbycad::toLibraryEntity(p));
+        std::vector<Point2D> junc;
+        for (const QPointF& q : junctionPoints) junc.push_back({ q.x(), q.y() });
+        recordAddedConstraints(sketch::computeCutConstraints(
+            pieceLib, {}, junc, [this]() { return m_nextConstraintId++; }), subs);
+        // Carry the original's own constraints onto the pieces where they still
+        // hold (point anchors follow their piece; line orientation replicates).
+        recordAddedConstraints(sketch::remapCutConstraints(
+            origRefs, hobbycad::toLibraryEntity(original), pieceLib,
+            [this]() { return m_nextConstraintId++; }), subs);
+    }
+
+    pushCompoundOrSingle(subs, tag);
+
+    // Apply.
+    replaceEntityWithPieces(entityId, pieces);
+    return newIds;
 }
 
 QVector<int> SketchCanvas::splitEntityAtIntersections(int entityId)
@@ -13357,12 +9841,8 @@ QVector<int> SketchCanvas::splitEntityAtIntersections(int entityId)
     std::vector<sketch::Intersection> allIntersections = sketch::findAllIntersections(libEntities);
 
     // Extract intersection points for this entity
-    std::vector<Point2D> intersectionPoints;
-    for (const sketch::Intersection& inter : allIntersections) {
-        if (inter.entityId1 == entityId || inter.entityId2 == entityId) {
-            intersectionPoints.push_back(inter.point);
-        }
-    }
+    std::vector<Point2D> intersectionPoints =
+        sketch::intersectionPointsTouching(allIntersections, entityId);
 
     if (intersectionPoints.empty()) return newIds;
 
@@ -13373,22 +9853,9 @@ QVector<int> SketchCanvas::splitEntityAtIntersections(int entityId)
 
     if (!result.success) return newIds;
 
-    // Remove original entity
-    m_entities.erase(std::remove_if(m_entities.begin(), m_entities.end(),
-                     [entityId](const SketchEntity& e) { return e.id == entityId; }),
-                     m_entities.end());
-
-    // Add new entities from split result
-    for (const sketch::Entity& newEntity : result.newEntities) {
-        SketchEntity guiEntity = hobbycad::toGuiEntity(newEntity);
-        m_entities.append(guiEntity);
-        newIds.append(guiEntity.id);
-        emit entityCreated(guiEntity.id);
-    }
-
-    m_profilesCacheDirty = true;
-    update();
-    return newIds;
+    QVector<QPointF> junctions;
+    for (const Point2D& p : intersectionPoints) junctions.append(QPointF(p.x, p.y));
+    return applySplitPieces(entityId, result.newEntities, junctions, tr("Split"));
 }
 
 QVector<int> SketchCanvas::splitEntityAt(int entityId, const QPointF& splitPoint)
@@ -13407,22 +9874,26 @@ QVector<int> SketchCanvas::splitEntityAt(int entityId, const QPointF& splitPoint
 
     if (!result.success) return newIds;
 
-    // Remove original entity
-    m_entities.erase(std::remove_if(m_entities.begin(), m_entities.end(),
-                     [entityId](const SketchEntity& e) { return e.id == entityId; }),
-                     m_entities.end());
+    return applySplitPieces(entityId, result.newEntities,
+                            QVector<QPointF>{ splitPoint }, tr("Split"));
+}
 
-    // Add new entities from split result
-    for (const sketch::Entity& newEntity : result.newEntities) {
-        SketchEntity guiEntity = hobbycad::toGuiEntity(newEntity);
-        m_entities.append(guiEntity);
-        newIds.append(guiEntity.id);
-        emit entityCreated(guiEntity.id);
-    }
+QVector<int> SketchCanvas::splitEntityAtPoints(int entityId, const QVector<QPointF>& points)
+{
+    QVector<int> newIds;
+    SketchEntity* entity = entityById(entityId);
+    if (!entity || points.isEmpty()) return newIds;
 
-    m_profilesCacheDirty = true;
-    update();
-    return newIds;
+    sketch::Entity libEntity = hobbycad::toLibraryEntity(*entity);
+    std::vector<Point2D> pts;
+    pts.reserve(points.size());
+    for (const QPointF& p : points) pts.push_back({ p.x(), p.y() });
+
+    sketch::SplitResult result = sketch::splitEntityAtIntersections(
+        libEntity, pts, [this]() { return m_nextId++; });
+    if (!result.success) return newIds;
+
+    return applySplitPieces(entityId, result.newEntities, points, tr("Split"));
 }
 
 // ---------------------------------------------------------------------------
@@ -13439,52 +9910,11 @@ QVector<int> SketchCanvas::splitEntityNearClick(int entityId, const QPointF& cli
     if (entity->type != SketchEntityType::Line || entity->points.size() < 2)
         return newIds;
 
-    const QPointF& p0 = entity->points[0];
-    const QPointF& p1 = entity->points[1];
-
-    // Gather all intersections involving this entity
+    // The nearest crossing on either side of the click: the library's rule.
     std::vector<sketch::Entity> libEntities = hobbycad::toLibraryEntities(m_entities);
-    std::vector<sketch::Intersection> allIntersections = sketch::findAllIntersections(libEntities);
-
-    // Compute parameter (0-1) along the line for each intersection point
-    QVector<QPair<double, QPointF>> paramPts;   // (t, point)
-    for (const auto& inter : allIntersections) {
-        if (inter.entityId1 != entityId && inter.entityId2 != entityId)
-            continue;
-        double t = geometry::projectPointOnLine(inter.point, p0, p1);
-        if (t > 0.001 && t < 0.999)
-            paramPts.append({t, inter.point});
-    }
-
-    if (paramPts.isEmpty()) return newIds;
-
-    // Parameter of the click position on the line
-    double clickT = geometry::projectPointOnLine(clickPoint, p0, p1);
-
-    // Find the nearest intersection before and after the click
-    double bestBefore = -1.0;
-    QPointF ptBefore;
-    double bestAfter = 2.0;
-    QPointF ptAfter;
-
-    for (const auto& [t, pt] : paramPts) {
-        if (t <= clickT && t > bestBefore) {
-            bestBefore = t;
-            ptBefore = pt;
-        }
-        if (t >= clickT && t < bestAfter) {
-            bestAfter = t;
-            ptAfter = pt;
-        }
-    }
-
-    // Build the filtered list of split points
-    std::vector<Point2D> splitPoints;
-    if (bestBefore >= 0.0)
-        splitPoints.push_back({ptBefore.x(), ptBefore.y()});
-    if (bestAfter <= 1.0 && qAbs(bestAfter - bestBefore) > 0.001)
-        splitPoints.push_back({ptAfter.x(), ptAfter.y()});
-
+    const std::vector<sketch::Intersection> allIntersections = sketch::findAllIntersections(libEntities);
+    const std::vector<Point2D> splitPoints =
+        sketch::bracketingSplitPoints(*entity, allIntersections, clickPoint);
     if (splitPoints.empty()) return newIds;
 
     // Use the library's multi-point split with only the bracketing points
@@ -13495,22 +9925,9 @@ QVector<int> SketchCanvas::splitEntityNearClick(int entityId, const QPointF& cli
 
     if (!result.success) return newIds;
 
-    // Remove original entity
-    m_entities.erase(std::remove_if(m_entities.begin(), m_entities.end(),
-                     [entityId](const SketchEntity& e) { return e.id == entityId; }),
-                     m_entities.end());
-
-    // Add new segments
-    for (const sketch::Entity& ne : result.newEntities) {
-        SketchEntity guiEntity = hobbycad::toGuiEntity(ne);
-        m_entities.append(guiEntity);
-        newIds.append(guiEntity.id);
-        emit entityCreated(guiEntity.id);
-    }
-
-    m_profilesCacheDirty = true;
-    update();
-    return newIds;
+    QVector<QPointF> junctions;
+    for (const Point2D& p : splitPoints) junctions.append(QPointF(p.x, p.y));
+    return applySplitPieces(entityId, result.newEntities, junctions, tr("Split"));
 }
 
 // ---------------------------------------------------------------------------
@@ -13532,29 +9949,15 @@ int SketchCanvas::rejoinCollinearSegments()
         selectedEntities.push_back(toLibraryEntity(*e));
     }
 
-    auto rejoin = sketch::validateCollinearRejoin(selectedEntities);
+    // The library checks collinearity, contiguity, and that nothing else is
+    // attached at an interior junction (rejoining would break it).
+    int attachedId = -1;
+    auto rejoin = sketch::validateCollinearRejoin(selectedEntities, toLibraryEntities(m_entities),
+                                                  &attachedId);
     if (!rejoin.success) {
         QMessageBox::warning(this, tr("Rejoin"),
             tr(rejoin.errorMessage.c_str()));
         return -1;
-    }
-
-    // Check junction points for attached entities (GUI-specific connectivity check)
-    const double endpointTol = 1e-4;
-    for (const auto& jp : rejoin.junctionPoints) {
-        for (const auto& e : m_entities) {
-            if (m_selectedIds.contains(e.id)) continue;
-            for (const auto& ep : e.points) {
-                double dx = ep.x - jp.x;
-                double dy = ep.y - jp.y;
-                if (dx * dx + dy * dy < endpointTol * endpointTol) {
-                    QMessageBox::warning(this, tr("Rejoin"),
-                        tr("Another entity is attached at an interior junction point.\n"
-                           "Cannot rejoin without breaking connectivity."));
-                    return -1;
-                }
-            }
-        }
     }
 
     // --- Perform the rejoin ---
@@ -13677,6 +10080,186 @@ void SketchCanvas::drawProfiles(QPainter& painter) const
 // =====================================================================
 
 
+void SketchCanvas::updateAssociativeOffsets()
+{
+    for (SketchEntity& child : m_entities) {
+        if (child.offsetParentId < 0) continue;
+        const SketchEntity* parent = entityById(child.offsetParentId);
+        if (!parent) continue;   // parent deleted: leave the copy frozen
+        sketch::Entity libChild = hobbycad::toLibraryEntity(child);
+        const sketch::Entity libParent = hobbycad::toLibraryEntity(*parent);
+        if (sketch::updateOffsetFromParent(libChild, libParent)) {
+            const SketchEntity updated = hobbycad::toGuiEntity(libChild);
+            // Preserve identity and the offset link; refresh only geometry.
+            child.type = updated.type;
+            child.points = updated.points;
+            child.radius = updated.radius;
+            child.startAngle = updated.startAngle;
+            child.sweepAngle = updated.sweepAngle;
+        }
+    }
+    m_profilesCacheDirty = true;
+}
+
+void SketchCanvas::updateSlotsFromPaths()
+{
+    // A slot follows its centerline: after the solve moved the centerline, each
+    // slot that names one re-derives its shape from where the path ended up.
+    // This is the GUI counterpart of the CLI's post-solve pass, and the sibling
+    // of updateAssociativeOffsets. Dirty-checked: a slot is only re-derived when
+    // its path actually moved, so large sketches full of slots pay nothing on
+    // a solve that did not touch them (Aaron). Cost of a re-derive scales with
+    // the path's complexity, uniform for a single segment or a whole tree.
+    for (SketchEntity& slot : m_entities) {
+        if (slot.type != SketchEntityType::Slot) continue;
+
+        // Multi-segment slot (a chain, loop, or branching tree, >1 segment):
+        // its shape is the swept OUTLINE of the whole path, re-derived from every
+        // segment. A single segment falls through to the capsule path below.
+        if (slot.pathEntityIds.size() > 1) {
+            QVector<QPointF> sig;
+            bool missing = false;
+            for (int pid : slot.pathEntityIds) {
+                const SketchEntity* seg = entityById(pid);
+                if (!seg) { missing = true; break; }
+                for (const auto& pnt : seg->points) sig.append(QPointF(pnt));
+                sig.append(QPointF(seg->radius, seg->startAngle));
+                sig.append(QPointF(seg->sweepAngle, static_cast<double>(seg->type)));
+            }
+            if (missing) continue;   // a segment was deleted: leave the slot frozen
+            sig.append(QPointF(slot.radius, static_cast<double>(slot.pathEntityIds.size())));
+            auto cit = m_slotPathCache.find(slot.id);
+            if (cit != m_slotPathCache.end() && cit.value() == sig) continue;
+            m_slotPathCache.insert(slot.id, sig);
+
+            sketch::Entity libSlot = hobbycad::toLibraryEntity(slot);
+            const std::vector<sketch::Entity> libAll =
+                hobbycad::toLibraryEntities(m_entities);
+            if (sketch::updateSlotOutlineFromPaths(libSlot, libAll))
+                slot.outlineCache = libSlot.outlineCache;
+            continue;
+        }
+
+        if (slot.pathEntityIds.size() != 1) continue;
+        const SketchEntity* path = entityById(slot.pathEntityIds[0]);
+        if (!path) continue;   // path deleted: leave the slot frozen
+
+        QVector<QPointF> sig;
+        sig.reserve(static_cast<int>(path->points.size()) + 2);
+        for (const auto& pnt : path->points) sig.append(QPointF(pnt));
+        // An arc path's sweep/radius can change without its points moving, so
+        // fold them into the dirty signature too; otherwise a re-derive that
+        // only changes the sweep (e.g. crossing 180 degrees) is wrongly skipped.
+        sig.append(QPointF(path->radius, path->startAngle));
+        sig.append(QPointF(path->sweepAngle, path->arcFlipped ? 1.0 : 0.0));
+        auto it = m_slotPathCache.find(slot.id);
+        if (it != m_slotPathCache.end() && it.value() == sig) continue;  // unchanged
+        m_slotPathCache.insert(slot.id, sig);
+
+        sketch::Entity libSlot = hobbycad::toLibraryEntity(slot);
+        const sketch::Entity libPath = hobbycad::toLibraryEntity(*path);
+        if (sketch::updateSlotFromPath(libSlot, libPath)) {
+            const SketchEntity updated = hobbycad::toGuiEntity(libSlot);
+            slot.points = updated.points;
+            slot.radius = updated.radius;
+            slot.startAngle = updated.startAngle;
+            slot.sweepAngle = updated.sweepAngle;
+            slot.arcFlipped = updated.arcFlipped;   // carry >180 direction, else render takes the short way
+        }
+    }
+    m_profilesCacheDirty = true;
+}
+
+int SketchCanvas::addImportedEntities(const QVector<SketchEntity>& entities)
+{
+    int added = 0;
+    for (SketchEntity e : entities) {
+        e.id = m_nextId++;               // a fresh id in this sketch
+        m_entities.append(e);
+        pushUndoCommand(sketch::UndoCommand::addEntity(e));
+        emit entityCreated(e.id);
+        ++added;
+    }
+    if (added > 0) {
+        m_profilesCacheDirty = true;
+        update();
+    }
+    return added;
+}
+
+int SketchCanvas::createProjection(int sourceSketchId, int sourceEntityId)
+{
+    // Resolve the source (it lives in another sketch); the host resolver hands
+    // back the source entity, its plane and its offset.
+    if (!m_projectionResolver) return -1;
+    SketchEntity source;
+    SketchPlane sp = SketchPlane::XY;
+    double so = 0.0;
+    if (!m_projectionResolver(sourceSketchId, sourceEntityId, source, sp, so))
+        return -1;
+
+    const hobbycad::PlaneBasis srcBasis = hobbycad::planeBasisFor(sp, so);
+    const hobbycad::PlaneBasis tgtBasis = hobbycad::planeBasisFor(m_plane);
+
+    const sketch::Entity libSource = hobbycad::toLibraryEntity(source);
+    sketch::Entity libChild;
+    const int newId = m_nextId++;
+    if (!sketch::makeProjectionChild(libChild, libSource, sourceSketchId, newId,
+                                     srcBasis, tgtBasis)) {
+        return -1;   // unprojectable type (the id gap is harmless)
+    }
+
+    SketchEntity child = hobbycad::toGuiEntity(libChild);
+    m_entities.append(child);
+    pushUndoCommand(sketch::UndoCommand::addEntity(child));
+    emit entityCreated(child.id);
+    updateProjectedEntities();     // seed it immediately so it draws at once
+    m_profilesCacheDirty = true;
+    update();
+    return child.id;
+}
+
+void SketchCanvas::updateProjectedEntities()
+{
+    // Re-derive each projected entity from its source at solve time. The source
+    // usually lives in ANOTHER sketch on a differently-angled plane; the host's
+    // resolver looks it up (entity + plane + offset). A same-sketch source
+    // falls back to local lookup. The projection is source plane -> this plane,
+    // so any relative angle between them (on any axis) is handled by the two
+    // bases (see updateProjectionFromSource).
+    const hobbycad::PlaneBasis tgtBasis = hobbycad::planeBasisFor(m_plane);
+    for (SketchEntity& child : m_entities) {
+        if (child.projectionSourceId < 0) continue;
+
+        SketchEntity source;
+        hobbycad::PlaneBasis srcBasis;
+        bool resolved = false;
+        if (child.projectionSourceSketchId >= 0 && m_projectionResolver) {
+            SketchPlane sp = SketchPlane::XY; double so = 0.0;
+            if (m_projectionResolver(child.projectionSourceSketchId,
+                                     child.projectionSourceId, source, sp, so)) {
+                srcBasis = hobbycad::planeBasisFor(sp, so);
+                resolved = true;
+            }
+        }
+        if (!resolved) {
+            const SketchEntity* s = entityById(child.projectionSourceId);
+            if (!s) continue;   // source unresolved: leave the projection frozen
+            source = *s;
+            srcBasis = tgtBasis;   // same sketch, same plane
+        }
+
+        sketch::Entity libChild = hobbycad::toLibraryEntity(child);
+        const sketch::Entity libSource = hobbycad::toLibraryEntity(source);
+        if (sketch::updateProjectionFromSource(libChild, libSource, srcBasis, tgtBasis)) {
+            const SketchEntity updated = hobbycad::toGuiEntity(libChild);
+            child.type = updated.type;
+            child.points = updated.points;
+        }
+    }
+    m_profilesCacheDirty = true;
+}
+
 void SketchCanvas::offsetEntity(int entityId, double distance, const QPointF& clickPos)
 {
     SketchEntity* entity = entityById(entityId);
@@ -13688,9 +10271,14 @@ void SketchCanvas::offsetEntity(int entityId, double distance, const QPointF& cl
 
     if (!result.success) return;
 
-    // Convert result back to GUI entity
+    // Convert result back to GUI entity, and record the associative link so a
+    // later solve re-derives it from its parent (Fusion's associative offset).
     SketchEntity newEntity = hobbycad::toGuiEntity(result.entity);
+    newEntity.offsetParentId = entityId;
+    newEntity.offsetDistance = distance;
+    newEntity.offsetSide = result.side;
     m_entities.append(newEntity);
+    pushUndoCommand(sketch::UndoCommand::addEntity(newEntity));
     emit entityCreated(newEntity.id);
     m_profilesCacheDirty = true;
     update();
@@ -13815,23 +10403,7 @@ void SketchCanvas::createRectangularPattern()
         return;
     }
 
-    // Add new entities to canvas
-    QVector<int> newIds;
-    for (const sketch::Entity& libEntity : result.entities) {
-        SketchEntity guiEntity = toGuiEntity(libEntity);
-        m_entities.append(guiEntity);
-        newIds.append(guiEntity.id);
-        emit entityCreated(guiEntity.id);
-    }
-    m_nextId = nextId;
-
-    // Select the new copies
-    for (int id : newIds) {
-        selectEntity(id, true);
-    }
-
-    m_profilesCacheDirty = true;
-    update();
+    commitPatternEntities(result.entities, nextId);
 }
 
 void SketchCanvas::createCircularPattern()
@@ -13882,23 +10454,7 @@ void SketchCanvas::createCircularPattern()
         return;
     }
 
-    // Add new entities to canvas
-    QVector<int> newIds;
-    for (const sketch::Entity& libEntity : result.entities) {
-        SketchEntity guiEntity = toGuiEntity(libEntity);
-        m_entities.append(guiEntity);
-        newIds.append(guiEntity.id);
-        emit entityCreated(guiEntity.id);
-    }
-    m_nextId = nextId;
-
-    // Select the new copies
-    for (int id : newIds) {
-        selectEntity(id, true);
-    }
-
-    m_profilesCacheDirty = true;
-    update();
+    commitPatternEntities(result.entities, nextId);
 }
 
 // =====================================================================
@@ -13994,6 +10550,7 @@ void SketchCanvas::setBackgroundEditMode(bool enabled)
 
 void SketchCanvas::setBackgroundCalibrationMode(bool enabled)
 {
+    if (enabled) cancelTransformPick();
     if (m_backgroundCalibrationMode == enabled) return;
 
     m_backgroundCalibrationMode = enabled;
@@ -14019,6 +10576,7 @@ void SketchCanvas::setBackgroundCalibrationMode(bool enabled)
 
 void SketchCanvas::setCalibrationEntitySelectionMode(bool enabled)
 {
+    if (enabled) cancelTransformPick();
     if (m_calibrationEntitySelectionMode == enabled) return;
 
     m_calibrationEntitySelectionMode = enabled;
@@ -14105,7 +10663,7 @@ SketchCanvas::BackgroundHandle SketchCanvas::hitTestBackgroundHandle(const QPoin
 {
     if (!m_backgroundImage.enabled) return BackgroundHandle::None;
 
-    const double handleSize = 10.0 / m_zoom;  // Handle size in world units
+    const double handleSize = kBgHandleSizePx / m_zoom;  // Handle size in world units
 
     QPointF tl = m_backgroundImage.position;
     QPointF br(tl.x() + m_backgroundImage.width, tl.y() + m_backgroundImage.height);
@@ -14190,6 +10748,220 @@ void SketchCanvas::pushUndoCommand(const sketch::UndoCommand& cmd)
     updateUndoRedoState();
 }
 
+// One compound undo for an edit that changed a constraint and the entity it
+// drives together (a radius, a sweep angle, a tangent angle).
+void SketchCanvas::pushConstraintAndEntityEdit(const SketchConstraint& oldConstraint, const SketchConstraint& newConstraint,
+                                               const SketchEntity& oldEntity, const SketchEntity& newEntity,
+                                               const std::string& description)
+{
+    std::vector<sketch::UndoCommand> subs;
+    subs.push_back(sketch::UndoCommand::modifyConstraint(oldConstraint, newConstraint));
+    subs.push_back(sketch::UndoCommand::modifyEntity(oldEntity, newEntity));
+    pushUndoCommand(sketch::UndoCommand::compound(subs, description));
+}
+
+// A lone command goes on the stack as itself; several become one compound.
+void SketchCanvas::pushCompoundOrSingle(std::vector<sketch::UndoCommand>& subs, const std::string& description)
+{
+    if (subs.size() == 1) pushUndoCommand(subs.front());
+    else pushUndoCommand(sketch::UndoCommand::compound(subs, description));
+}
+
+// After a solve moved an arc: keep a tangent arc tangent and its sweep-angle
+// construction lines and Angle constraint in step with the geometry.
+void SketchCanvas::syncArcAfterSolve(int entityId)
+{
+    SketchEntity* ent = entityById(entityId);
+    if (ent && ent->type == SketchEntityType::Arc
+            && ent->tangentEntityId >= 0
+            && ent->points.size() >= 3) {
+        reestablishTangency(*ent);
+    }
+    if (ent && ent->type == SketchEntityType::Arc) {
+        const int gid = findSweepAngleGroupForArc(entityId);
+        if (gid >= 0) {
+            syncSweepAngleConstructionLines(*ent);
+            if (const SketchGroup* g = groupById(gid)) {
+                for (int cid : g->constraintIds) {
+                    SketchConstraint* c = constraintById(cid);
+                    if (c && c->type == ConstraintType::Angle) {
+                        c->value = std::abs(ent->sweepAngle);
+                        c->supplementary = (std::abs(ent->sweepAngle) > 180.0);
+                        c->anchorPoint = ent->points[0];
+                    }
+                }
+            }
+        }
+    }
+}
+
+// The common tail of undo() and redo(): re-solve, re-derive tangent arcs and
+// sweep-angle construction lines, and tell the properties panel.
+void SketchCanvas::finishUndoRedo(const sketch::UndoCommand& cmd)
+{
+    dropStaleEnteredGroup();
+
+    updateUndoRedoState();
+    pruneOrphanedConstraints();
+    solveConstraints();
+
+    for (auto& entity : m_entities) {
+        if (entity.type == SketchEntityType::Arc
+                && entity.tangentEntityId >= 0
+                && entity.points.size() >= 3) {
+            reestablishTangency(entity);
+        }
+    }
+    // Restored arcs: the dashed helper lines and angle label follow the
+    // restored geometry rather than staying at stale positions.
+    for (auto& entity : m_entities) {
+        if (entity.type == SketchEntityType::Arc
+                && entity.points.size() >= 3) {
+            syncSweepAngleConstructionLines(entity);
+        }
+    }
+
+    emit entityModified(cmd.entity.id);
+    update();
+}
+
+void SketchCanvas::finishUndoRedoMultiple()
+{
+    updateUndoRedoState();
+    pruneOrphanedConstraints();
+    solveConstraints();
+    for (auto& entity : m_entities) {
+        if (entity.type == SketchEntityType::Arc && entity.points.size() >= 3) {
+            if (entity.tangentEntityId >= 0)
+                reestablishTangency(entity);
+            syncSweepAngleConstructionLines(entity);
+        }
+    }
+    update();
+}
+
+// Undo of an add (or redo of a delete): the entity goes, and so does any
+// selection state pointing at it.
+void SketchCanvas::removeEntityForUndo(int entityId)
+{
+    for (int i = 0; i < m_entities.size(); ++i) {
+        if (m_entities[i].id == entityId) {
+            m_entities.removeAt(i);
+            break;
+        }
+    }
+    selectRemove(entityId);
+    if (m_selectedId == entityId) {
+        m_selectedId = -1;
+    }
+    m_profilesCacheDirty = true;
+}
+
+void SketchCanvas::removeConstraintForUndo(int constraintId)
+{
+    for (int i = 0; i < m_constraints.size(); ++i) {
+        if (m_constraints[i].id == constraintId) {
+            m_constraints.removeAt(i);
+            break;
+        }
+    }
+    if (m_selectedConstraintId == constraintId) {
+        m_selectedConstraintId = -1;
+    }
+}
+
+// The radius a driving Radius or Diameter constraint pins an entity to, or -1.
+double SketchCanvas::lockedRadiusFor(int entityId) const
+{
+    for (const auto& c : m_constraints) {
+        if ((c.type == ConstraintType::Radius
+                || c.type == ConstraintType::Diameter)
+                && c.isDriving && c.enabled
+                && !c.entityIds.empty()
+                && c.entityIds[0] == entityId) {
+            return (c.type == ConstraintType::Diameter) ? c.value / 2.0 : c.value;
+        }
+    }
+    return -1.0;
+}
+
+// Clamp an arc slot's sweep to the furthest the library allows at all
+// (absoluteMaxArcSlotSweepDegrees: the caps may overlap and free the center
+// piece, the case Aaron asked for; the drag limit was lifted on purpose to
+// match the tool). Past it the START end is moved back onto the circle of
+// `radius`.
+void SketchCanvas::clampArcSlotSweep(SketchEntity* sel, const QPointF& center, double radius)
+{
+    const double maxSweep =
+        degreesToRadians(sketch::absoluteMaxArcSlotSweepDegrees(radius, sel->radius));
+    const double startAng = std::atan2(sel->points[1].y - center.y(),
+                                       sel->points[1].x - center.x());
+    const double endAng = std::atan2(sel->points[2].y - center.y(),
+                                     sel->points[2].x - center.x());
+    double sweep = endAng - startAng;
+    if (sel->arcFlipped) sweep = hobbycad::geometry::oppositeSweepRad(sweep);
+    else sweep = hobbycad::geometry::wrapSweepRad(sweep);
+    if (std::abs(sweep) > maxSweep) {
+        const double clampedSweep = (sweep > 0) ? maxSweep : -maxSweep;
+        const double newStartAng = endAng - clampedSweep;
+        sel->points[1] = center + QPointF(radius * std::cos(newStartAng),
+                                          radius * std::sin(newStartAng));
+    }
+}
+
+// The copies a pattern produced become canvas entities and the selection.
+void SketchCanvas::commitPatternEntities(const std::vector<sketch::Entity>& entities, int nextId)
+{
+    QVector<int> newIds;
+    for (const sketch::Entity& libEntity : entities) {
+        SketchEntity guiEntity = toGuiEntity(libEntity);
+        m_entities.append(guiEntity);
+        newIds.append(guiEntity.id);
+        emit entityCreated(guiEntity.id);
+    }
+    m_nextId = nextId;
+    for (int id : newIds) {
+        selectEntity(id, true);
+    }
+    m_profilesCacheDirty = true;
+    update();
+}
+
+// Trim / extend / split: the original and every constraint that names it go,
+// the pieces come in, and the sketch re-solves (its degrees of freedom changed).
+void SketchCanvas::replaceEntityWithPieces(int entityId, const std::vector<SketchEntity>& pieces)
+{
+    m_entities.erase(std::remove_if(m_entities.begin(), m_entities.end(),
+                     [entityId](const SketchEntity& e) { return e.id == entityId; }),
+                     m_entities.end());
+    m_constraints.erase(std::remove_if(m_constraints.begin(), m_constraints.end(),
+                     [entityId](const SketchConstraint& c) {
+                         for (int eid : c.entityIds) if (eid == entityId) return true;
+                         return false;
+                     }), m_constraints.end());
+    for (const SketchEntity& piece : pieces) {
+        m_entities.append(piece);
+        emit entityCreated(piece.id);
+    }
+    m_profilesCacheDirty = true;
+    solveConstraints();
+    update();
+}
+
+// A temporary FixedPoint (reserved negative id) pinning one point for the
+// duration of a drag solve; the caller removes them by id afterwards.
+void SketchCanvas::appendTempFixedPoint(int entityId, int pointIndex, std::vector<int>& tempIds)
+{
+    SketchConstraint fx;
+    fx.id = -1000000 - static_cast<int>(tempIds.size());   // reserved temp ids
+    fx.type = ConstraintType::FixedPoint;
+    fx.entityIds = { entityId };
+    fx.pointIndices = { pointIndex };
+    fx.isDriving = true; fx.enabled = true; fx.satisfied = true;
+    m_constraints.append(fx);
+    tempIds.push_back(fx.id);
+}
+
 void SketchCanvas::updateUndoRedoState()
 {
     emit undoAvailabilityChanged(m_libUndoStack.canUndo());
@@ -14219,18 +10991,7 @@ void SketchCanvas::undoMultiple(int levels)
     auto cmds = m_libUndoStack.undoMultiple(levels);
     for (const auto& cmd : cmds)
         undoSingleCommand(cmd);
-    updateUndoRedoState();
-    solveConstraints();
-
-    // Sync tangent arcs and sweep-angle construction lines
-    for (auto& entity : m_entities) {
-        if (entity.type == SketchEntityType::Arc && entity.points.size() >= 3) {
-            if (entity.tangentEntityId >= 0)
-                reestablishTangency(entity);
-            syncSweepAngleConstructionLines(entity);
-        }
-    }
-    update();
+    finishUndoRedoMultiple();
 }
 
 void SketchCanvas::redoMultiple(int levels)
@@ -14239,18 +11000,7 @@ void SketchCanvas::redoMultiple(int levels)
     auto cmds = m_libUndoStack.redoMultiple(levels);
     for (const auto& cmd : cmds)
         redoSingleCommand(cmd);
-    updateUndoRedoState();
-    solveConstraints();
-
-    // Sync tangent arcs and sweep-angle construction lines
-    for (auto& entity : m_entities) {
-        if (entity.type == SketchEntityType::Arc && entity.points.size() >= 3) {
-            if (entity.tangentEntityId >= 0)
-                reestablishTangency(entity);
-            syncSweepAngleConstructionLines(entity);
-        }
-    }
-    update();
+    finishUndoRedoMultiple();
 }
 
 void SketchCanvas::undoSingleCommand(const sketch::UndoCommand& cmd)
@@ -14258,17 +11008,7 @@ void SketchCanvas::undoSingleCommand(const sketch::UndoCommand& cmd)
     switch (cmd.type) {
     case sketch::CommandType::AddEntity:
         // Undo add = delete the entity
-        for (int i = 0; i < m_entities.size(); ++i) {
-            if (m_entities[i].id == cmd.entity.id) {
-                m_entities.removeAt(i);
-                break;
-            }
-        }
-        m_selectedIds.remove(cmd.entity.id);
-        if (m_selectedId == cmd.entity.id) {
-            m_selectedId = -1;
-        }
-        m_profilesCacheDirty = true;
+        removeEntityForUndo(cmd.entity.id);
         break;
 
     case sketch::CommandType::DeleteEntity:
@@ -14294,15 +11034,7 @@ void SketchCanvas::undoSingleCommand(const sketch::UndoCommand& cmd)
 
     case sketch::CommandType::AddConstraint:
         // Undo add = delete the constraint
-        for (int i = 0; i < m_constraints.size(); ++i) {
-            if (m_constraints[i].id == cmd.constraint.id) {
-                m_constraints.removeAt(i);
-                break;
-            }
-        }
-        if (m_selectedConstraintId == cmd.constraint.id) {
-            m_selectedConstraintId = -1;
-        }
+        removeConstraintForUndo(cmd.constraint.id);
         break;
 
     case sketch::CommandType::DeleteConstraint:
@@ -14321,7 +11053,8 @@ void SketchCanvas::undoSingleCommand(const sketch::UndoCommand& cmd)
         break;
 
     case sketch::CommandType::AddGroup:
-        // Undo add = remove the group
+        // Undo add = remove the group, and the members' back-pointers with it
+        syncGroupMembership(cmd.group, -1);
         m_groups.erase(
             std::remove_if(m_groups.begin(), m_groups.end(),
                            [&cmd](const SketchGroup& g) { return g.id == cmd.group.id; }),
@@ -14329,15 +11062,18 @@ void SketchCanvas::undoSingleCommand(const sketch::UndoCommand& cmd)
         break;
 
     case sketch::CommandType::DeleteGroup:
-        // Undo delete = restore the group
+        // Undo delete = restore the group and its members' back-pointers
         m_groups.append(cmd.group);
+        syncGroupMembership(cmd.group, cmd.group.id);
         break;
 
     case sketch::CommandType::ModifyGroup:
-        // Undo modify = restore previous group state
+        // Undo modify = restore previous group state (membership included)
         for (int i = 0; i < m_groups.size(); ++i) {
             if (m_groups[i].id == cmd.group.id) {
+                syncGroupMembership(cmd.group, -1);
                 m_groups[i] = cmd.previousGroup;
+                syncGroupMembership(cmd.previousGroup, cmd.previousGroup.id);
                 break;
             }
         }
@@ -14363,17 +11099,7 @@ void SketchCanvas::redoSingleCommand(const sketch::UndoCommand& cmd)
 
     case sketch::CommandType::DeleteEntity:
         // Redo delete = delete the entity again
-        for (int i = 0; i < m_entities.size(); ++i) {
-            if (m_entities[i].id == cmd.entity.id) {
-                m_entities.removeAt(i);
-                break;
-            }
-        }
-        m_selectedIds.remove(cmd.entity.id);
-        if (m_selectedId == cmd.entity.id) {
-            m_selectedId = -1;
-        }
-        m_profilesCacheDirty = true;
+        removeEntityForUndo(cmd.entity.id);
         break;
 
     case sketch::CommandType::ModifyEntity:
@@ -14398,15 +11124,7 @@ void SketchCanvas::redoSingleCommand(const sketch::UndoCommand& cmd)
 
     case sketch::CommandType::DeleteConstraint:
         // Redo delete = delete the constraint again
-        for (int i = 0; i < m_constraints.size(); ++i) {
-            if (m_constraints[i].id == cmd.constraint.id) {
-                m_constraints.removeAt(i);
-                break;
-            }
-        }
-        if (m_selectedConstraintId == cmd.constraint.id) {
-            m_selectedConstraintId = -1;
-        }
+        removeConstraintForUndo(cmd.constraint.id);
         break;
 
     case sketch::CommandType::ModifyConstraint:
@@ -14420,12 +11138,14 @@ void SketchCanvas::redoSingleCommand(const sketch::UndoCommand& cmd)
         break;
 
     case sketch::CommandType::AddGroup:
-        // Redo add = add the group back
+        // Redo add = add the group back, members pointing at it again
         m_groups.append(cmd.group);
+        syncGroupMembership(cmd.group, cmd.group.id);
         break;
 
     case sketch::CommandType::DeleteGroup:
-        // Redo delete = remove the group again
+        // Redo delete = remove the group again and clear the back-pointers
+        syncGroupMembership(cmd.group, -1);
         m_groups.erase(
             std::remove_if(m_groups.begin(), m_groups.end(),
                            [&cmd](const SketchGroup& g) { return g.id == cmd.group.id; }),
@@ -14433,10 +11153,12 @@ void SketchCanvas::redoSingleCommand(const sketch::UndoCommand& cmd)
         break;
 
     case sketch::CommandType::ModifyGroup:
-        // Redo modify = apply the modification again
+        // Redo modify = apply the modification again (membership included)
         for (int i = 0; i < m_groups.size(); ++i) {
             if (m_groups[i].id == cmd.group.id) {
+                syncGroupMembership(cmd.previousGroup, -1);
                 m_groups[i] = cmd.group;
+                syncGroupMembership(cmd.group, cmd.group.id);
                 break;
             }
         }
@@ -14457,32 +11179,7 @@ void SketchCanvas::undo()
 
     sketch::UndoCommand cmd = m_libUndoStack.undo();
     undoSingleCommand(cmd);
-
-    updateUndoRedoState();
-    solveConstraints();
-
-    // Re-establish tangency for any tangent arcs after solver
-    for (auto& entity : m_entities) {
-        if (entity.type == SketchEntityType::Arc
-                && entity.tangentEntityId >= 0
-                && entity.points.size() >= 3) {
-            reestablishTangency(entity);
-        }
-    }
-
-    // Sync sweep-angle construction lines for any arcs whose geometry
-    // was restored, so the dashed helper lines and angle label track
-    // the restored arc position rather than staying at stale positions.
-    for (auto& entity : m_entities) {
-        if (entity.type == SketchEntityType::Arc
-                && entity.points.size() >= 3) {
-            syncSweepAngleConstructionLines(entity);
-        }
-    }
-
-    // Notify properties panel so it refreshes to match the restored state
-    emit entityModified(cmd.entity.id);
-    update();
+    finishUndoRedo(cmd);
 }
 
 void SketchCanvas::redo()
@@ -14491,32 +11188,7 @@ void SketchCanvas::redo()
 
     sketch::UndoCommand cmd = m_libUndoStack.redo();
     redoSingleCommand(cmd);
-
-    updateUndoRedoState();
-    solveConstraints();
-
-    // Re-establish tangency for any tangent arcs after solver
-    for (auto& entity : m_entities) {
-        if (entity.type == SketchEntityType::Arc
-                && entity.tangentEntityId >= 0
-                && entity.points.size() >= 3) {
-            reestablishTangency(entity);
-        }
-    }
-
-    // Sync sweep-angle construction lines for any arcs whose geometry
-    // was restored, so the dashed helper lines and angle label track
-    // the restored arc position rather than staying at stale positions.
-    for (auto& entity : m_entities) {
-        if (entity.type == SketchEntityType::Arc
-                && entity.points.size() >= 3) {
-            syncSweepAngleConstructionLines(entity);
-        }
-    }
-
-    // Notify properties panel so it refreshes to match the restored state
-    emit entityModified(cmd.entity.id);
-    update();
+    finishUndoRedo(cmd);
 }
 
 // ---- Inline constraint value editing ----------------------------------------
@@ -14560,7 +11232,7 @@ void SketchCanvas::commitInlineConstraintEdit()
     double newValue = m_inlineEditOriginalValue;  // Default: keep original
 
     if (m_inlineEditSelectAll) {
-        // User pressed Enter without typing — keep the original value
+        // User pressed Enter without typing: keep the original value
         // (the constraint was already created with this value)
     } else if (!m_inlineEditBuffer.isEmpty()) {
         // Parse the buffer
@@ -14608,6 +11280,20 @@ void SketchCanvas::commitInlineConstraintEdit()
         }
     }
 
+    // Capture the source expression when it references a parameter, so the
+    // dimension re-evaluates if that parameter later changes. A plain number
+    // clears any prior parametric link. (Detected as in the CLI: the bare
+    // form fails or differs from the parameter-aware form.)
+    std::string exprToStore;
+    if (!m_inlineEditSelectAll && !m_inlineEditBuffer.isEmpty()
+        && !m_parameterValues.empty()) {
+        const std::string b = m_inlineEditBuffer.toStdString();
+        if (hobbycad::expressionUsesParameters(b, m_parameterValues)) exprToStore = b;
+    }
+    if (SketchConstraint* ec = constraintById(m_inlineEditConstraintId)) {
+        ec->expression = exprToStore;   // set or clear the parametric link
+    }
+
     // Apply if different from original
     if (!qFuzzyCompare(newValue, m_inlineEditOriginalValue)) {
         setConstraintValue(m_inlineEditConstraintId, newValue);
@@ -14650,74 +11336,46 @@ void SketchCanvas::cancelInlineConstraintEdit()
     update();
 }
 
-void SketchCanvas::drawInlineConstraintEdit(QPainter& painter, const QPointF& position,
-                                             const QString& prefix)
+
+// ---- Theme (light / dark) --------------------------------------------
+bool SketchCanvas::isDarkContext() const
 {
-    painter.save();
+    if (m_themeMode == ThemeMode::Dark) return true;
+    if (m_themeMode == ThemeMode::Light) return false;
+    // Auto: an explicit app-wide flag wins (main.cpp sets it when a dark
+    // widget theme is loaded), otherwise judge by the application window
+    // color's luminance so an OS/Qt dark palette is followed automatically.
+    const QVariant flag = qApp ? qApp->property("hobbycad_dark_theme") : QVariant();
+    if (flag.isValid()) return flag.toBool();
+    const QColor w = (qApp ? qApp->palette() : palette()).color(QPalette::Window);
+    const double lum = (0.299 * w.red() + 0.587 * w.green() + 0.114 * w.blue()) / 255.0;
+    return lum < 0.5;
+}
 
-    QFont font = painter.font();
-    font.setPointSize(9);
-    painter.setFont(font);
-    QFontMetricsF fm(font);
+void SketchCanvas::applyTheme()
+{
+    const bool dark = isDarkContext();
+    m_theme = dark ? SketchTheme::dark() : SketchTheme::light();
+    applySketchThemeOverrides(m_theme, dark);   // user recolors, if any
+    // Keep the historical fully-constrained member in sync so existing
+    // callers/accessors still work; renderers read the rest from m_theme.
+    m_fullyConstrainedColor = m_theme.fullyConstrained;
+    QPalette pal = palette();
+    pal.setColor(QPalette::Window, m_theme.background);
+    setPalette(pal);
+    update();
+}
 
-    QString displayText;
-    QColor bgColor;
-    QColor textColor;
-    QColor borderColor;
-
-    if (m_inlineEditSelectAll) {
-        // Show formatted value with blue selection highlight
-        const SketchConstraint* c = constraintById(m_inlineEditConstraintId);
-        double val = c ? c->value : m_inlineEditOriginalValue;
-        if (m_inlineEditIsAngle) {
-            displayText = QString::fromStdString(hobbycad::formatValue(val));
-        } else {
-            displayText = QString::fromStdString(
-                hobbycad::formatValue(hobbycad::mmToUnit(val, m_displayUnit)));
-        }
-        bgColor = QColor(51, 153, 255);      // selection blue
-        textColor = Qt::white;
-        borderColor = QColor(30, 100, 200);
-    } else if (!m_inlineEditBuffer.isEmpty()) {
-        // Typing mode: yellow with cursor
-        int safePos = qBound(0, m_inlineEditCursorPos, m_inlineEditBuffer.length());
-        displayText = m_inlineEditBuffer;
-        displayText.insert(safePos, QStringLiteral("\u2502"));
-        bgColor = QColor(255, 235, 160);
-        textColor = Qt::black;
-        borderColor = QColor(210, 170, 50);
-    } else {
-        // Empty buffer (shouldn't normally happen)
-        displayText = QStringLiteral("0");
-        bgColor = Qt::white;
-        textColor = Qt::black;
-        borderColor = QColor(100, 100, 100);
+void SketchCanvas::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    // Only react to APPLICATION palette/theme changes; reacting to our own
+    // PaletteChange would recurse (applyTheme calls setPalette).
+    if (m_themeMode == ThemeMode::Auto &&
+        (event->type() == QEvent::ApplicationPaletteChange ||
+         event->type() == QEvent::ThemeChange)) {
+        applyTheme();
     }
-
-    if (!prefix.isEmpty()) {
-        displayText = prefix + displayText;
-    }
-
-    QRectF textBounds = fm.boundingRect(displayText);
-
-    painter.translate(position);
-
-    QRectF labelRect(-textBounds.width() / 2.0 - 5,
-                     -textBounds.height() / 2.0 - 2,
-                     textBounds.width() + 10,
-                     textBounds.height() + 4);
-    painter.fillRect(labelRect, bgColor);
-
-    if (borderColor.isValid()) {
-        painter.setPen(QPen(borderColor, 1));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(labelRect);
-    }
-
-    painter.setPen(textColor);
-    painter.drawText(labelRect, Qt::AlignCenter, displayText);
-
-    painter.restore();
 }
 
 }  // namespace hobbycad

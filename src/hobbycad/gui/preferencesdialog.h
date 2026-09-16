@@ -9,7 +9,7 @@
 //  Currently implemented pages:
 //    - Navigation   (mouse bindings, rotation defaults, animation)
 //    - Bindings     (keyboard shortcuts and mouse bindings)
-//    - General      (grid, startup behavior — placeholder)
+//    - General      (grid, startup behavior; placeholder)
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //
@@ -69,8 +69,10 @@ private:
     // General page controls
     QCheckBox*      m_showGridOnStart  = nullptr;
     QCheckBox*      m_restoreSession   = nullptr;
+    QSpinBox*       m_cliScrollback    = nullptr;  ///< Terminal scrollback, in lines
     QCheckBox*      m_zUpOrientation   = nullptr;
     QCheckBox*      m_orbitSelected    = nullptr;
+    QCheckBox*      m_showCursorHints  = nullptr;  ///< Cursor-trailing tool hints
 };
 
 }  // namespace hobbycad

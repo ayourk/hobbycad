@@ -14,6 +14,7 @@
 #define HOBBYCAD_GEOMETRY_UTILS_H
 
 #include "types.h"
+#include "../math_constants.h"
 
 namespace hobbycad {
 namespace geometry {
@@ -73,6 +74,145 @@ HOBBYCAD_EXPORT Point2D rotatePointAround(
 /// Compute the length of a line segment
 HOBBYCAD_EXPORT double lineLength(const Point2D& p1, const Point2D& p2);
 
+/// The point `distance` from `center` in direction `angleRad` (polar to
+/// Cartesian): a radial dimension label, a handle on a circle, an arc end.
+HOBBYCAD_EXPORT Point2D polarPoint(const Point2D& center, double distance, double angleRad);
+
+/// The nearest grid intersection to `p` for a square grid of `spacing`.
+HOBBYCAD_EXPORT Point2D snapToGrid(const Point2D& p, double spacing);
+
+// =====================================================================
+//  Sketch placement helpers
+// =====================================================================
+//
+//  These were hand-rolled inside the sketch canvas (repeatedly, and with no
+//  library equivalent), which meant a second front-end would have to
+//  reimplement them. They are pure functions of their inputs and carry no UI
+//  state.
+
+/// The frame of a chord: its midpoint, unit direction and unit perpendicular.
+/// Used for arc/circle construction from two points.
+struct ChordFrame {
+    bool    valid = false;   ///< false when the two points coincide
+    Point2D midpoint;
+    Point2D direction;       ///< unit vector from start to end
+    Point2D normal;          ///< unit perpendicular (direction rotated +90 deg)
+    double  length = 0.0;    ///< full chord length (not half)
+};
+
+/// Build the chord frame for a segment. `valid` is false when the points are
+/// closer together than `tolerance`, in which case direction/normal are unset.
+HOBBYCAD_EXPORT ChordFrame chordFrame(const Point2D& start,
+                                      const Point2D& end,
+                                      double tolerance = 1e-3);
+
+/// An arc center placed on the perpendicular bisector of a chord.
+struct ArcCenterFromChord {
+    bool    valid = false;      ///< false when the chord endpoints coincide
+    Point2D center;
+    double  radius = 0.0;
+    double  projection = 0.0;   ///< signed distance of the center along the chord normal
+};
+
+/// The distance floor arcCenterOnBisector keeps a center off its chord
+/// (ChordFloor::MinPerpDistance), in millimeters. A rule for geometry PLACED
+/// by a tool, so a dragged center cannot land on the chord and lose the
+/// arc's side; the slot tool's Ends mode uses half of it (Aaron) and then
+/// its own end-separation rule. Geometry PROJECTED from another sketch is
+/// exempt: it arrives with a rotation, and its restriction lives with the
+/// source sketch.
+constexpr double kChordPerpFloor = 0.1;
+
+/// How arcCenterOnBisector keeps the arc from degenerating.
+enum class ChordFloor {
+    MinRadius,        ///< push the center out until radius >= 1.01x the half-chord
+    MinPerpDistance,  ///< keep |center-offset from the chord| >= minPerpDistance
+};
+
+/// Place an arc center on the perpendicular bisector of chord (start,end) at the
+/// projection of `target` onto that bisector. `semicircle` forces the center to
+/// the chord midpoint (an exact 180-degree arc); `flip` mirrors it to the far
+/// side. The `floor` keeps the arc non-degenerate: MinRadius (the default, unless
+/// `semicircle`) pushes the center out to 1.01x the half-chord; MinPerpDistance
+/// only keeps the center at least `minPerpDistance` off the chord (used by the
+/// endpoint drag, which resizes rather than places).
+HOBBYCAD_EXPORT ArcCenterFromChord arcCenterOnBisector(
+    const Point2D& start, const Point2D& end, const Point2D& target,
+    bool semicircle, bool flip,
+    ChordFloor floor = ChordFloor::MinRadius, double minPerpDistance = kChordPerpFloor);
+
+/// The two circle centers of a given radius passing through both points.
+/// A radius smaller than half the chord admits no solution, and the two
+/// centers coincide when the radius is exactly half the chord.
+struct ChordCenters {
+    bool    valid = false;   ///< false when radius is too small, or points coincide
+    Point2D first;           ///< midpoint + normal * offset
+    Point2D second;          ///< midpoint - normal * offset
+};
+
+HOBBYCAD_EXPORT ChordCenters circleCentersThroughPoints(const Point2D& a,
+                                                        const Point2D& b,
+                                                        double radius,
+                                                        double tolerance = 1e-9);
+
+/// Place a point relative to `from`, honoring optionally locked polar values.
+///
+/// Sentinels match the sketch UI's dimension fields: a `lockedLength` of zero
+/// or less means "use the length implied by `to`", and a `lockedAngleDegrees`
+/// of exactly -1.0 means "use the angle implied by `to`". With neither locked
+/// this returns `to` unchanged.
+HOBBYCAD_EXPORT Point2D applyPolarLock(const Point2D& from,
+                                       const Point2D& to,
+                                       double lockedLength,
+                                       double lockedAngleDegrees);
+
+/// Place the end of a second edge p2 -> p3 from `toward` (the cursor),
+/// honoring a locked length and a locked INSIDE angle between the edges
+/// p2 -> p1 and p2 -> p3, on whichever side of the first edge the cursor
+/// is. Sentinels as applyPolarLock: length <= 0 and angle == -1.0 mean
+/// "from the cursor". A degenerate length returns `toward` unchanged.
+HOBBYCAD_EXPORT Point2D applyInsideAngleLock(const Point2D& p1, const Point2D& p2,
+                                             const Point2D& toward,
+                                             double lockedLength, double lockedAngleDegrees);
+
+/// Of the two circle centers of `radius` through `a` and `b`, the one on
+/// `toward`'s side. False when the radius is too small for the chord (or
+/// the points coincide).
+HOBBYCAD_EXPORT bool lockedRadiusCenterToward(const Point2D& a, const Point2D& b, double radius,
+                                              const Point2D& toward, Point2D& center);
+
+/// End point of a locked-sweep arc: on the circle through `start` about
+/// `center`, `lockedSweepDeg` away from `start` toward the side `toward` lies
+/// on (the short way round, or the long way when `flip`).
+HOBBYCAD_EXPORT Point2D pointAtLockedSweep(const Point2D& center, const Point2D& start,
+                                           const Point2D& toward, double lockedSweepDeg, bool flip);
+
+/// Center of the arc through `start` and `end` whose sweep is `lockedSweepDeg`:
+/// on the perpendicular bisector, on the side of the chord where `toward` lies.
+/// A degenerate chord returns `toward` unchanged.
+HOBBYCAD_EXPORT Point2D arcCenterFromChordAndSweep(const Point2D& start, const Point2D& end,
+                                                   const Point2D& toward, double lockedSweepDeg);
+
+/// Wrap a sweep to [-180, 180] degrees / [-pi, pi] radians, ends inclusive.
+/// Not normalizeAngle180(): that maps an exact half turn to -180, and the two
+/// half circles of +180 and -180 are different arcs, so a sweep keeps its sign.
+inline double wrapSweepDeg(double sweep)
+{
+    while (sweep > 180.0) sweep -= 360.0;
+    while (sweep < -180.0) sweep += 360.0;
+    return sweep;
+}
+inline double wrapSweepRad(double sweep)
+{
+    while (sweep > M_PI) sweep -= 2.0 * M_PI;
+    while (sweep < -M_PI) sweep += 2.0 * M_PI;
+    return sweep;
+}
+
+/// The same two endpoints the long way round: a sweep and its complement.
+inline double oppositeSweepDeg(double sweep) { return sweep > 0 ? sweep - 360.0 : sweep + 360.0; }
+inline double oppositeSweepRad(double sweep) { return sweep > 0 ? sweep - 2.0 * M_PI : sweep + 2.0 * M_PI; }
+
 /// Compute the midpoint of a line segment
 HOBBYCAD_EXPORT Point2D lineMidpoint(const Point2D& p1, const Point2D& p2);
 
@@ -86,6 +226,12 @@ HOBBYCAD_EXPORT Point2D pointOnLine(const Point2D& p1, const Point2D& p2, double
 HOBBYCAD_EXPORT double projectPointOnLine(
     const Point2D& point,
     const Point2D& lineStart, const Point2D& lineEnd);
+
+/// Closest point on the SEGMENT [a,b] to `point`: the projection parameter
+/// clamped to [0,1]. Unlike projectPointOnLine (infinite line, unclamped t),
+/// this never returns a point beyond the endpoints.
+HOBBYCAD_EXPORT Point2D closestPointOnSegment(
+    const Point2D& point, const Point2D& a, const Point2D& b);
 
 /// Check if two line segments are parallel
 HOBBYCAD_EXPORT bool linesParallel(
@@ -203,6 +349,16 @@ HOBBYCAD_EXPORT Point2D polygonCentroid(const std::vector<Point2D>& polygon);
 
 /// Compute the bounding box of a polygon
 HOBBYCAD_EXPORT BoundingBox polygonBounds(const std::vector<Point2D>& polygon);
+
+/// Vertices of a regular N-gon, in order. When `circumscribed` is false the
+/// polygon is inscribed (vertices sit on the circle of the given `radius`);
+/// when true, `radius` is the apothem (edge midpoints on the circle) and the
+/// polygon is rotated a half-step so an edge midpoint faces `startAngle`.
+/// `startAngle` (radians) is the direction of the first vertex. Returns empty
+/// for sides < 3 or radius <= 0.
+HOBBYCAD_EXPORT std::vector<Point2D> regularPolygonVertices(
+    const Point2D& center, double radius, int sides,
+    double startAngle, bool circumscribed);
 
 // =====================================================================
 //  Tangent Circle/Arc Construction

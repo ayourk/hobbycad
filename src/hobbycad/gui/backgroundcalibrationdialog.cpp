@@ -9,6 +9,8 @@
 
 #include "backgroundcalibrationdialog.h"
 #include "sketchcanvas.h"
+#include <hobbycad/units.h>
+#include <hobbycad/geometry/utils.h>
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -108,11 +110,12 @@ void BackgroundCalibrationDialog::setupUi()
     distanceLayout->addWidget(m_realDistanceSpinBox);
 
     m_unitComboBox = new QComboBox;
-    m_unitComboBox->addItem(tr("mm"), 1.0);
-    m_unitComboBox->addItem(tr("cm"), 10.0);
-    m_unitComboBox->addItem(tr("m"), 1000.0);
-    m_unitComboBox->addItem(tr("in"), 25.4);
-    m_unitComboBox->addItem(tr("ft"), 304.8);
+    // Item data is the unit's mm-per-unit factor from the library table.
+    m_unitComboBox->addItem(tr("mm"), unitScale(LengthUnit::Millimeters));
+    m_unitComboBox->addItem(tr("cm"), unitScale(LengthUnit::Centimeters));
+    m_unitComboBox->addItem(tr("m"), unitScale(LengthUnit::Meters));
+    m_unitComboBox->addItem(tr("in"), unitScale(LengthUnit::Inches));
+    m_unitComboBox->addItem(tr("ft"), unitScale(LengthUnit::Feet));
     m_unitComboBox->setToolTip(tr("Unit of measurement"));
     connect(m_unitComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &BackgroundCalibrationDialog::updatePreview);
@@ -483,7 +486,7 @@ void BackgroundCalibrationDialog::updatePreview()
     // Calculate current distance between points (in sketch coords = mm)
     double dx = m_point2.x() - m_point1.x();
     double dy = m_point2.y() - m_point1.y();
-    double currentDistance = qSqrt(dx * dx + dy * dy);
+    double currentDistance = hobbycad::geometry::length({dx, dy});
 
     // Calculate angle of the line between points using library function
     Point2D pt1{m_point1.x(), m_point1.y()};
@@ -587,9 +590,7 @@ void BackgroundCalibrationDialog::updatePointDisplay()
 
     // Show measured distance
     if (m_hasPoint1 && m_hasPoint2) {
-        double dx = m_point2.x() - m_point1.x();
-        double dy = m_point2.y() - m_point1.y();
-        double distance = qSqrt(dx * dx + dy * dy);
+        double distance = hobbycad::geometry::lineLength(m_point1, m_point2);
         m_measuredDistanceLabel->setText(tr("%.2f mm").arg(distance));
     } else {
         m_measuredDistanceLabel->setText(tr("--"));

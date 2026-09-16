@@ -6,9 +6,14 @@
 #include "clihistory.h"
 #include "cliengine.h"
 
-#include <QDir>
-#include <QDirIterator>
-#include <QFileInfo>
+#include <hobbycad/strutil.h>
+
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <iostream>
 #include <cstdio>
@@ -28,6 +33,12 @@
 #endif
 
 namespace hobbycad {
+
+#if defined(_WIN32)
+static constexpr char kPathSep = '\\';   // what QDir::separator() gave
+#else
+static constexpr char kPathSep = '/';
+#endif
 
 // ---- Key codes / escape identifiers ---------------------------------
 
@@ -93,7 +104,7 @@ bool TerminalInput::isInteractive() const
     return m_isTty;
 }
 
-void TerminalInput::setCommands(const QStringList& commands)
+void TerminalInput::setCommands(const std::vector<std::string>& commands)
 {
     m_commands = commands;
 }
@@ -273,11 +284,41 @@ int TerminalInput::terminalWidth() const
     }
     return 80;
 #else
-    struct winsize ws;
+    struct winsize ws{};
     if (::ioctl(STDOUT_FD, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
         return ws.ws_col;
     }
     return 80;
+#endif
+}
+
+int TerminalInput::readKey()
+{
+    if (!isInteractive()) {
+        return -1;   // never block a pipe waiting for a key
+    }
+    if (!enterRawMode()) {
+        return -1;
+    }
+    const int c = readByte();
+    exitRawMode();
+    return c;
+}
+
+int TerminalInput::terminalHeight() const
+{
+#if defined(_WIN32)
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi)) {
+        return csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    }
+    return 24;
+#else
+    struct winsize ws{};
+    if (::ioctl(STDOUT_FD, TIOCGWINSZ, &ws) == 0 && ws.ws_row > 0) {
+        return ws.ws_row;
+    }
+    return 24;
 #endif
 }
 
@@ -287,9 +328,9 @@ void TerminalInput::refreshLine()
     // reposition cursor
     std::string buf;
     buf += '\r';                                  // Carriage return
-    buf += m_prompt.toStdString();                // Prompt
-    buf += m_line.toStdString();                  // Buffer
-    buf += "\033[0K";                             // Clear to end of line
+    buf += m_prompt;                // Prompt
+    buf += m_line;                  // Buffer
+    buf += "\033[0K";             // Clear to end of line
 
     // Reposition cursor: carriage return + forward to prompt + cursor
     buf += '\r';
@@ -312,35 +353,65 @@ void TerminalInput::clearScreen()
 //  Line editing
 // =====================================================================
 
-void TerminalInput::insertChar(QChar ch)
+namespace {
+
+// The edit buffer is UTF-8 now that it is a std::string, so a cursor
+// that moved one byte would land inside a multi-byte character and the
+// redraw would split it. These step whole characters, as the QString
+// cursor did.
+int utf8Prev(const std::string& s, int i)
 {
-    m_line.insert(m_cursor, ch);
+    if (i <= 0) return 0;
+    --i;
+    while (i > 0 && (static_cast<unsigned char>(s[i]) & 0xC0) == 0x80) --i;
+    return i;
+}
+
+int utf8Next(const std::string& s, int i)
+{
+    const int n = static_cast<int>(s.size());
+    if (i >= n) return n;
+    ++i;
+    while (i < n && (static_cast<unsigned char>(s[i]) & 0xC0) == 0x80) ++i;
+    return i;
+}
+
+}  // namespace
+
+void TerminalInput::insertChar(char ch)
+{
+    m_line.insert(static_cast<size_t>(m_cursor), 1, ch);
     m_cursor++;
 }
 
 void TerminalInput::deleteCharBack()
 {
     if (m_cursor > 0) {
-        m_line.remove(m_cursor - 1, 1);
-        m_cursor--;
+        const int prev = utf8Prev(m_line, m_cursor);
+        m_line.erase(static_cast<size_t>(prev),
+                     static_cast<size_t>(m_cursor - prev));
+        m_cursor = prev;
     }
 }
 
 void TerminalInput::deleteCharForward()
 {
-    if (m_cursor < m_line.length()) {
-        m_line.remove(m_cursor, 1);
+    if (m_cursor < static_cast<int>(m_line.size())) {
+        const int next = utf8Next(m_line, m_cursor);
+        m_line.erase(static_cast<size_t>(m_cursor),
+                     static_cast<size_t>(next - m_cursor));
     }
 }
 
 void TerminalInput::moveCursorLeft()
 {
-    if (m_cursor > 0) m_cursor--;
+    if (m_cursor > 0) m_cursor = utf8Prev(m_line, m_cursor);
 }
 
 void TerminalInput::moveCursorRight()
 {
-    if (m_cursor < m_line.length()) m_cursor++;
+    if (m_cursor < static_cast<int>(m_line.size()))
+        m_cursor = utf8Next(m_line, m_cursor);
 }
 
 void TerminalInput::moveToStart()
@@ -357,32 +428,34 @@ void TerminalInput::moveWordForward()
 {
     int len = m_line.length();
     // Skip current word characters
-    while (m_cursor < len && !m_line[m_cursor].isSpace()) m_cursor++;
+    while (m_cursor < len
+           && !std::isspace(static_cast<unsigned char>(m_line[m_cursor])))
+        m_cursor++;
     // Skip whitespace
-    while (m_cursor < len && m_line[m_cursor].isSpace()) m_cursor++;
+    while (m_cursor < len && std::isspace(static_cast<unsigned char>(m_line[m_cursor]))) m_cursor++;
 }
 
 void TerminalInput::moveWordBackward()
 {
     // Skip whitespace behind cursor
-    while (m_cursor > 0 && m_line[m_cursor - 1].isSpace()) m_cursor--;
+    while (m_cursor > 0 && std::isspace(static_cast<unsigned char>(m_line[m_cursor - 1]))) m_cursor--;
     // Skip word characters
-    while (m_cursor > 0 && !m_line[m_cursor - 1].isSpace()) m_cursor--;
+    while (m_cursor > 0 && !std::isspace(static_cast<unsigned char>(m_line[m_cursor - 1]))) m_cursor--;
 }
 
 void TerminalInput::killToEnd()
 {
-    if (m_cursor < m_line.length()) {
-        m_killRing = m_line.mid(m_cursor);
-        m_line.truncate(m_cursor);
+    if (m_cursor < static_cast<int>(m_line.length())) {
+        m_killRing = m_line.substr(m_cursor);
+        m_line.resize(m_cursor);
     }
 }
 
 void TerminalInput::killToStart()
 {
     if (m_cursor > 0) {
-        m_killRing = m_line.left(m_cursor);
-        m_line.remove(0, m_cursor);
+        m_killRing = m_line.substr(0, m_cursor);
+        m_line.erase(0, m_cursor);
         m_cursor = 0;
     }
 }
@@ -393,12 +466,12 @@ void TerminalInput::killWordForward()
     int len = m_line.length();
     int end = m_cursor;
     // Skip whitespace
-    while (end < len && m_line[end].isSpace()) end++;
+    while (end < len && std::isspace(static_cast<unsigned char>(m_line[end]))) end++;
     // Skip word
-    while (end < len && !m_line[end].isSpace()) end++;
+    while (end < len && !std::isspace(static_cast<unsigned char>(m_line[end]))) end++;
     if (end > start) {
-        m_killRing = m_line.mid(start, end - start);
-        m_line.remove(start, end - start);
+        m_killRing = m_line.substr(start, end - start);
+        m_line.erase(start, end - start);
     }
 }
 
@@ -407,19 +480,19 @@ void TerminalInput::killWordBackward()
     int end = m_cursor;
     int start = m_cursor;
     // Skip whitespace behind cursor
-    while (start > 0 && m_line[start - 1].isSpace()) start--;
+    while (start > 0 && std::isspace(static_cast<unsigned char>(m_line[start - 1]))) start--;
     // Skip word characters
-    while (start > 0 && !m_line[start - 1].isSpace()) start--;
+    while (start > 0 && !std::isspace(static_cast<unsigned char>(m_line[start - 1]))) start--;
     if (start < end) {
-        m_killRing = m_line.mid(start, end - start);
-        m_line.remove(start, end - start);
+        m_killRing = m_line.substr(start, end - start);
+        m_line.erase(start, end - start);
         m_cursor = start;
     }
 }
 
 void TerminalInput::yank()
 {
-    if (!m_killRing.isEmpty()) {
+    if (!m_killRing.empty()) {
         m_line.insert(m_cursor, m_killRing);
         m_cursor += m_killRing.length();
     }
@@ -427,15 +500,15 @@ void TerminalInput::yank()
 
 void TerminalInput::transposeChars()
 {
-    if (m_cursor > 0 && m_line.length() >= 2) {
+    if (m_cursor > 0 && static_cast<int>(m_line.length()) >= 2) {
         // If at end, transpose the two characters before cursor
         // Otherwise, transpose char at cursor with char before it
-        int pos = (m_cursor == m_line.length()) ? m_cursor - 1 : m_cursor;
+        int pos = (m_cursor == static_cast<int>(m_line.length())) ? m_cursor - 1 : m_cursor;
         if (pos > 0) {
-            QChar tmp = m_line[pos];
+            char tmp = m_line[pos];
             m_line[pos] = m_line[pos - 1];
             m_line[pos - 1] = tmp;
-            if (m_cursor < m_line.length()) m_cursor++;
+            if (m_cursor < static_cast<int>(m_line.length())) m_cursor++;
         }
     }
 }
@@ -447,7 +520,7 @@ void TerminalInput::transposeChars()
 void TerminalInput::historyPrev()
 {
     const auto& entries = m_history.entries();
-    if (entries.isEmpty()) return;
+    if (entries.empty()) return;
 
     if (m_historyIndex == -1) {
         // First time pressing up: save current input
@@ -469,7 +542,7 @@ void TerminalInput::historyNext()
 
     const auto& entries = m_history.entries();
 
-    if (m_historyIndex < entries.size() - 1) {
+    if (m_historyIndex < static_cast<int>(entries.size()) - 1) {
         m_historyIndex++;
         m_line = entries[m_historyIndex];
     } else {
@@ -484,11 +557,11 @@ void TerminalInput::historyNext()
 void TerminalInput::startIncrementalSearch()
 {
     const auto& entries = m_history.entries();
-    if (entries.isEmpty()) return;
+    if (entries.empty()) return;
 
-    QString searchTerm;
+    std::string searchTerm;
     int matchIndex = -1;
-    QString origLine = m_line;
+    std::string origLine = m_line;
     int origCursor = m_cursor;
 
     while (true) {
@@ -496,10 +569,10 @@ void TerminalInput::startIncrementalSearch()
         std::string display;
         display += '\r';
         display += "(reverse-i-search)`";
-        display += searchTerm.toStdString();
+        display += searchTerm;
         display += "': ";
-        if (matchIndex >= 0 && matchIndex < entries.size()) {
-            display += entries[matchIndex].toStdString();
+        if (matchIndex >= 0 && matchIndex < static_cast<int>(entries.size())) {
+            display += entries[matchIndex];
         }
         display += "\033[0K";  // Clear to end of line
 
@@ -520,7 +593,7 @@ void TerminalInput::startIncrementalSearch()
 
         if (ch == KEY_ENTER || ch == '\n') {
             // Accept the found entry
-            if (matchIndex >= 0 && matchIndex < entries.size()) {
+            if (matchIndex >= 0 && matchIndex < static_cast<int>(entries.size())) {
                 m_line = entries[matchIndex];
                 m_cursor = m_line.length();
                 m_historyIndex = matchIndex;
@@ -532,8 +605,7 @@ void TerminalInput::startIncrementalSearch()
             // Search further back
             if (matchIndex > 0) {
                 for (int i = matchIndex - 1; i >= 0; --i) {
-                    if (entries[i].contains(searchTerm,
-                            Qt::CaseInsensitive)) {
+                    if (contains(entries[i], searchTerm)) {
                         matchIndex = i;
                         break;
                     }
@@ -543,21 +615,20 @@ void TerminalInput::startIncrementalSearch()
         }
 
         if (ch == KEY_BACKSPACE || ch == 8) {
-            if (!searchTerm.isEmpty()) {
-                searchTerm.chop(1);
+            if (!searchTerm.empty()) {
+                searchTerm.resize(searchTerm.size() - 1);
             }
         } else if (ch >= 32 && ch < 127) {
-            searchTerm += QChar(ch);
+            searchTerm += static_cast<char>(ch);
         } else {
             continue;  // Ignore other control characters
         }
 
         // Search for the term
         matchIndex = -1;
-        if (!searchTerm.isEmpty()) {
-            for (int i = entries.size() - 1; i >= 0; --i) {
-                if (entries[i].contains(searchTerm,
-                        Qt::CaseInsensitive)) {
+        if (!searchTerm.empty()) {
+            for (int i = static_cast<int>(entries.size()) - 1; i >= 0; --i) {
+                if (contains(entries[i], searchTerm)) {
                     matchIndex = i;
                     break;
                 }
@@ -573,86 +644,87 @@ void TerminalInput::startIncrementalSearch()
 void TerminalInput::handleTab()
 {
     // Determine what we're completing
-    QString beforeCursor = m_line.left(m_cursor);
-    QStringList tokens = beforeCursor.split(
-        QChar(' '), Qt::SkipEmptyParts);
+    std::string beforeCursor = m_line.substr(0, m_cursor);
+    // Qt::SkipEmptyParts in the original: a doubled or trailing space
+    // must not produce empty tokens, or the completion miscounts them.
+    std::vector<std::string> tokens = split(beforeCursor, ' ', false);
 
-    QStringList completions;
-    QString prefix;
-    bool isArgumentCompletion = false;
+    std::vector<std::string> completions;
+    std::string prefix;
 
-    if (tokens.isEmpty() || (beforeCursor.endsWith(' ') && !tokens.isEmpty())) {
+    if (tokens.empty() || (endsWith(beforeCursor, ' ') && !tokens.empty())) {
         // Completing a new token at the start of the next word
-        if (beforeCursor.trimmed().isEmpty()) {
+        if (trim(beforeCursor).empty()) {
             // Complete commands
-            prefix = QString();
+            prefix.clear();
             completions = completeCommands(prefix);
         } else {
             // After a command, try argument completion first
-            prefix = QString();
-            isArgumentCompletion = true;
+            prefix.clear();
             if (m_engine) {
                 completions = m_engine->completeArguments(tokens, prefix);
             }
             // If no argument completions, try filenames
-            if (completions.isEmpty()) {
+            if (completions.empty()) {
                 completions = completeFilenames(prefix);
-                isArgumentCompletion = false;
             }
         }
-    } else if (tokens.size() == 1 && !beforeCursor.endsWith(' ')) {
+    } else if (static_cast<int>(tokens.size()) == 1 && !endsWith(beforeCursor, ' ')) {
         // First token, not finished: complete commands
-        prefix = tokens.last();
+        prefix = tokens.back();
         completions = completeCommands(prefix);
         // Also try filenames in case it's a path
-        completions += completeFilenames(prefix);
-        completions.removeDuplicates();
+        {
+            const auto files = completeFilenames(prefix);
+            completions.insert(completions.end(), files.begin(), files.end());
+        }
+        std::sort(completions.begin(), completions.end());
+        completions.erase(std::unique(completions.begin(), completions.end()),
+                          completions.end());
     } else {
         // Subsequent token: try argument completion first
-        prefix = tokens.last();
-        isArgumentCompletion = true;
+        prefix = tokens.back();
         if (m_engine) {
             // Pass all but the last token (the prefix being completed)
-            QStringList prevTokens = tokens.mid(0, tokens.size() - 1);
+            std::vector<std::string> prevTokens = slice(tokens, 0, static_cast<int>(tokens.size()) - 1);
             completions = m_engine->completeArguments(prevTokens, prefix);
         }
         // If no argument completions, try filenames
-        if (completions.isEmpty()) {
+        if (completions.empty()) {
             completions = completeFilenames(prefix);
-            isArgumentCompletion = false;
         }
     }
 
     // Check if we got a hint message (starts with '?')
-    if (completions.size() == 1 && completions.first().startsWith('?')) {
+    if (static_cast<int>(completions.size()) == 1 && startsWith(completions.front(), '?')) {
         // Display the hint message Cisco-style
-        QString hint = completions.first().mid(1);  // Remove the '?' prefix
+        std::string hint = completions.front().substr(1);  // Remove the '?' prefix
         std::string display = "\r\n  ";
-        display += hint.toStdString();
+        display += hint;
         display += "\r\n";
         ::write(STDOUT_FD, display.c_str(), display.size());
         // Prompt and line will be redrawn by refreshLine
         return;
     }
 
-    if (completions.isEmpty()) {
-        // No matches — beep
+    if (completions.empty()) {
+        // No matches: beep
         const char beep = '\a';
         ::write(STDOUT_FD, &beep, 1);
         return;
     }
 
-    if (completions.size() == 1) {
-        // Unique match — insert the remaining characters
-        QString completion = completions.first();
-        QString suffix = completion.mid(prefix.length());
+    if (static_cast<int>(completions.size()) == 1) {
+        // Unique match: insert the remaining characters
+        std::string completion = completions.front();
+        std::string suffix = completion.substr(prefix.length());
 
         // If it's a directory, append separator; otherwise space
-        QFileInfo fi(completion);
-        if (fi.isDir()) {
-            suffix += QDir::separator();
+        std::error_code ec;
+        if (std::filesystem::is_directory(completion, ec)) {
+            suffix += kPathSep;
         } else {
-            suffix += QChar(' ');
+            suffix += ' ';
         }
 
         m_line.insert(m_cursor, suffix);
@@ -660,25 +732,25 @@ void TerminalInput::handleTab()
         return;
     }
 
-    // Multiple matches — find the longest common prefix
-    QString common = completions.first();
-    for (int i = 1; i < completions.size(); ++i) {
-        int len = qMin(common.length(), completions[i].length());
+    // Multiple matches: find the longest common prefix
+    std::string common = completions.front();
+    for (int i = 1; i < static_cast<int>(completions.size()); ++i) {
+        int len = std::min(common.length(), completions[i].length());
         int j = 0;
         while (j < len && common[j] == completions[i][j]) j++;
-        common.truncate(j);
+        common.resize(j);
     }
 
-    if (common.length() > prefix.length()) {
+    if (static_cast<int>(common.length()) > static_cast<int>(prefix.length())) {
         // Can extend the input with the common prefix
-        QString suffix = common.mid(prefix.length());
+        std::string suffix = common.substr(prefix.length());
         m_line.insert(m_cursor, suffix);
         m_cursor += suffix.length();
     } else {
         // Show all matches (like zsh)
         std::string display = "\r\n";
         for (const auto& c : completions) {
-            display += c.toStdString();
+            display += c;
             display += "  ";
         }
         display += "\r\n";
@@ -687,53 +759,51 @@ void TerminalInput::handleTab()
     }
 }
 
-QStringList TerminalInput::completeFilenames(const QString& prefix) const
+std::vector<std::string> TerminalInput::completeFilenames(
+    const std::string& prefix) const
 {
-    QStringList results;
+    namespace fs = std::filesystem;
+    std::vector<std::string> results;
 
-    QString dir;
-    QString base;
+    const bool hasPath = contains(prefix, kPathSep) || contains(prefix, '/');
 
-    if (prefix.contains(QDir::separator()) || prefix.contains('/')) {
-        QFileInfo fi(prefix);
-        dir  = fi.absolutePath();
-        base = fi.fileName();
+    std::string dir;
+    std::string base;
+    std::error_code ec;
+
+    if (hasPath) {
+        const fs::path p(prefix);
+        dir  = fs::absolute(p, ec).parent_path().string();
+        base = p.filename().string();
     } else {
-        dir  = QDir::currentPath();
+        dir  = fs::current_path(ec).string();
         base = prefix;
     }
 
-    QDir d(dir);
-    if (!d.exists()) return results;
+    if (ec || !fs::is_directory(dir, ec)) return results;
 
-    QStringList entries = d.entryList(
-        QDir::AllEntries | QDir::NoDotAndDotDot);
-
-    for (const auto& entry : entries) {
-        if (entry.startsWith(base, Qt::CaseSensitive)) {
-            if (prefix.contains(QDir::separator()) || prefix.contains('/')) {
-                // Preserve the path prefix the user typed
-                QFileInfo fi(prefix);
-                results.append(fi.absolutePath() + QDir::separator() + entry);
-            } else {
-                results.append(entry);
-            }
-        }
+    // QDir::AllEntries with NoDotAndDotDot: every name in the directory,
+    // and directory_iterator never yields "." or ".." to begin with.
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        const std::string name = entry.path().filename().string();
+        if (!startsWith(name, base)) continue;       // Qt::CaseSensitive
+        results.push_back(hasPath ? dir + std::string(1, kPathSep) + name : name);
     }
 
-    results.sort();
+    std::sort(results.begin(), results.end());
     return results;
 }
 
-QStringList TerminalInput::completeCommands(const QString& prefix) const
+std::vector<std::string> TerminalInput::completeCommands(
+    const std::string& prefix) const
 {
-    QStringList results;
+    std::vector<std::string> results;
     for (const auto& cmd : m_commands) {
-        if (cmd.startsWith(prefix, Qt::CaseInsensitive)) {
-            results.append(cmd);
+        if (startsWithIgnoreCase(cmd, prefix)) {
+            results.push_back(cmd);
         }
     }
-    results.sort();
+    std::sort(results.begin(), results.end());
     return results;
 }
 
@@ -741,66 +811,66 @@ QStringList TerminalInput::completeCommands(const QString& prefix) const
 //  Bang expansion
 // =====================================================================
 
-QString TerminalInput::expandBangs(const QString& line) const
+std::string TerminalInput::expandBangs(const std::string& line) const
 {
     const auto& entries = m_history.entries();
-    if (entries.isEmpty()) return line;
+    if (entries.empty()) return line;
 
-    QString result = line;
+    std::string result = line;
 
-    // !! — repeat last command
-    if (result.contains(QLatin1String("!!"))) {
-        result.replace(QLatin1String("!!"), entries.last());
+    // !!: repeat last command
+    if (contains(result, "!!")) {
+        result = replaceAll(result, "!!", entries.back());
     }
 
-    // !<prefix> — most recent command starting with <prefix>
-    // !<n> — command at history index n
+    // !<prefix>: most recent command starting with <prefix>
+    // !<n>: command at history index n
     // Process from right to left to preserve indices
     int i = result.length() - 1;
     while (i >= 0) {
-        if (result[i] == '!' && i + 1 < result.length()) {
+        if (result[i] == '!' && i + 1 < static_cast<int>(result.length())) {
             // Don't expand if preceded by backslash
             if (i > 0 && result[i - 1] == '\\') {
                 // Remove the backslash (literal !)
-                result.remove(i - 1, 1);
+                result.erase(i - 1, 1);
                 i -= 2;
                 continue;
             }
 
-            QChar next = result[i + 1];
+            char next = result[i + 1];
             if (next == '!') {
                 // Already handled above
                 i--;
                 continue;
             }
 
-            if (next.isDigit()) {
-                // !n — command at index n (1-based)
+            if (std::isdigit(static_cast<unsigned char>(next))) {
+                // !n: command at index n (1-based)
                 int numStart = i + 1;
                 int numEnd = numStart;
-                while (numEnd < result.length() && result[numEnd].isDigit())
+                while (numEnd < static_cast<int>(result.length()) && std::isdigit(static_cast<unsigned char>(result[numEnd])))
                     numEnd++;
                 bool ok = false;
-                int idx = result.mid(numStart, numEnd - numStart).toInt(&ok);
-                if (ok && idx >= 1 && idx <= entries.size()) {
+                int idx = toInt(result.substr(numStart, numEnd - numStart), &ok);
+                if (ok && idx >= 1 && idx <= static_cast<int>(entries.size())) {
                     result.replace(i, numEnd - i, entries[idx - 1]);
                 }
                 i--;
                 continue;
             }
 
-            if (next.isLetter()) {
-                // !prefix — most recent command starting with prefix
+            if (std::isalpha(static_cast<unsigned char>(next))) {
+                // !prefix: most recent command starting with prefix
                 int prefixStart = i + 1;
                 int prefixEnd = prefixStart;
-                while (prefixEnd < result.length()
-                       && !result[prefixEnd].isSpace())
+                while (prefixEnd < static_cast<int>(result.length())
+                       && !std::isspace(static_cast<unsigned char>(result[prefixEnd])))
                     prefixEnd++;
-                QString pfx = result.mid(prefixStart, prefixEnd - prefixStart);
+                std::string pfx = result.substr(prefixStart, prefixEnd - prefixStart);
 
                 // Search history backward for a match
-                for (int j = entries.size() - 1; j >= 0; --j) {
-                    if (entries[j].startsWith(pfx)) {
+                for (int j = static_cast<int>(entries.size()) - 1; j >= 0; --j) {
+                    if (startsWith(entries[j], pfx)) {
                         result.replace(i, prefixEnd - i, entries[j]);
                         break;
                     }
@@ -819,28 +889,29 @@ QString TerminalInput::expandBangs(const QString& line) const
 //  Main readLine loop
 // =====================================================================
 
-QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
+std::optional<std::string> TerminalInput::readLine(const std::string& prompt,
+                                                   bool* canceled)
 {
-    if (cancelled) *cancelled = false;
+    if (canceled) *canceled = false;
 
     // Non-interactive: fall back to std::getline
     if (!m_isTty) {
         std::string line;
         if (!std::getline(std::cin, line)) {
-            return QString();  // EOF
+            return std::nullopt;  // EOF
         }
-        return QString::fromStdString(line);
+        return line;
     }
 
     // Enter raw mode
     if (!enterRawMode()) {
-        // Raw mode failed — fall back
+        // Raw mode failed: fall back
         std::string line;
-        std::cout << prompt.toStdString() << std::flush;
+        std::cout << prompt << std::flush;
         if (!std::getline(std::cin, line)) {
-            return QString();
+            return std::nullopt;
         }
-        return QString::fromStdString(line);
+        return line;
     }
 
     m_prompt = prompt;
@@ -856,7 +927,7 @@ QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
         if (ch == -1) {
             // EOF
             exitRawMode();
-            return QString();
+            return std::nullopt;
         }
 
         switch (ch) {
@@ -871,12 +942,12 @@ QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
             exitRawMode();
 
             // Expand bangs before returning
-            QString result = m_line;
-            if (result.contains('!') && !m_history.entries().isEmpty()) {
-                QString expanded = expandBangs(result);
+            std::string result = m_line;
+            if (contains(result, '!') && !m_history.entries().empty()) {
+                std::string expanded = expandBangs(result);
                 if (expanded != result) {
                     // Print the expanded form like zsh does
-                    std::cout << expanded.toStdString() << std::endl;
+                    std::cout << expanded << std::endl;
                     result = expanded;
                 }
             }
@@ -892,14 +963,14 @@ QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
                 ::write(STDOUT_FD, msg, 3);
             }
             exitRawMode();
-            if (cancelled) *cancelled = true;
-            return QString();
+            if (canceled) *canceled = true;
+            return std::nullopt;
 
         case KEY_CTRL_D:
-            if (m_line.isEmpty()) {
+            if (m_line.empty()) {
                 // EOF on empty line
                 exitRawMode();
-                return QString();  // null QString = EOF
+                return std::nullopt;  // nothing at all = EOF
             }
             deleteCharForward();
             refreshLine();
@@ -994,7 +1065,7 @@ QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
                 case KEY_ALT_B:       moveWordBackward(); break;
                 case KEY_ALT_F:       moveWordForward();  break;
                 case KEY_ALT_D:       killWordForward();  break;
-                default: break;  // Unknown escape — ignore
+                default: break;  // Unknown escape: ignore
             }
             refreshLine();
             break;
@@ -1004,11 +1075,11 @@ QString TerminalInput::readLine(const QString& prompt, bool* cancelled)
             // Printable character
             if (ch >= 32 && ch < 127) {
                 // '?' at end of line triggers help (like Tab)
-                if (ch == '?' && m_cursor == m_line.length()) {
+                if (ch == '?' && m_cursor == static_cast<int>(m_line.length())) {
                     handleTab();
                     refreshLine();
                 } else {
-                    insertChar(QChar(ch));
+                    insertChar(static_cast<char>(ch));
                     refreshLine();
                 }
             }

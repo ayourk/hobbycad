@@ -249,10 +249,6 @@
     void Document::clear()
         Remove all shapes. Marks document as modified.
 
-    void Document::createTestSolid()
-        Create a default test solid (a box) for initial display.
-        Clears existing shapes and adds a single box.
-
 
   3.3  File I/O
   --------------
@@ -856,32 +852,57 @@
 
     Sketch File Format:
 
+        Enumerations are written as integers in declaration order:
+        "plane" is SketchPlane (0 XY, 1 XZ, 2 YZ, 3 Custom), an entity's
+        "type" is EntityType (0 Point, 1 Line, ...), and a constraint's
+        "type" is ConstraintType (0 Distance, ...). Points are [x, y],
+        with a third value only when z is not zero. A constraint names
+        each point it uses by entity id and point index (a line's start
+        is 0 and its end 1; an arc's center is 0, start 1, end 2), and
+        entity id -1000 with point index 0 is the sketch origin.
+        "rotation_axis" and "rotation_angle" appear only for a Custom
+        plane that does not reference a construction plane, and
+        "group_id" only on entities that belong to a group.
+
         {
+            "feature_id": 1,
+            "design_id": 1,
             "name": "Sketch1",
-            "plane": "XY",
-            "plane_offset": 0.0,
-            "rotation_axis": "X",
-            "rotation_angle": 0.0,
+            "plane": 0,
             "construction_plane_id": -1,
+            "plane_offset": 0.0,
             "grid_spacing": 10.0,
             "entities": [
                 {
                     "id": 1,
-                    "type": "Line",
+                    "type": 1,
                     "points": [[0, 0], [100, 0]],
-                    "is_construction": false
+                    "constrained": true,
+                    "is_construction": false,
+                    "is_centerline": false,
+                    "color": -1,
+                    "offset_parent_id": -1,
+                    "projection_source_id": -1,
+                    "projection_source_sketch_id": -1,
+                    "offset_distance": 0.0,
+                    "offset_side": 0
                 }
             ],
             "constraints": [
                 {
                     "id": 1,
-                    "type": "Distance",
-                    "entity_ids": [1],
+                    "type": 0,
+                    "entity_ids": [1, 1],
+                    "point_indices": [0, 1],
                     "value": 100.0,
                     "is_driving": true,
-                    "label_position": [50, 10]
+                    "label_x": 50.0,
+                    "label_y": 10.0,
+                    "label_visible": true,
+                    "enabled": true
                 }
-            ]
+            ],
+            "groups": []
         }
 
     Construction Plane File Format:
@@ -2039,7 +2060,7 @@
             Quadrant        2.0       Circle/ellipse axis points
             ArcEndCenter    2.0       Slot end arc centers
             AxisX / AxisY   1.25      Nearest point on X or Y axis
-            Nearest         1.0       Weakest — perimeter snap
+            Nearest         1.0       Weakest: perimeter snap
 
             Formula: effectiveDist = rawDist / weight
 
@@ -2176,10 +2197,10 @@
 
     Example Usage (in SketchCanvas):
 
-        // Profile detection — library types used directly
+        // Profile detection: library types used directly
         auto profiles = sketch::detectProfilesWithHoles(m_entities);
 
-        // Pattern creation — result entities used directly
+        // Pattern creation: result entities used directly
         sketch::RectPatternResult result =
             sketch::createRectangularPattern(source, params, idGen);
         for (const sketch::Entity& e : result.entities) {
@@ -2216,7 +2237,7 @@
       - Base64 encoding:     hobbycad/base64.h (header-only utility)
       - File I/O:            std::filesystem + std::fstream (C++17)
 
-    The existing Qt code paths remain untouched — all fallback code lives
+    The existing Qt code paths remain untouched; all fallback code lives
     in #else branches, selected at compile time.
 
   14.1  HOBBYCAD_HAS_QT Macro
@@ -2323,10 +2344,10 @@
     EGL PROBING SEQUENCE:
       1. eglGetDisplay(EGL_DEFAULT_DISPLAY)
       2. eglInitialize()
-      3. eglBindAPI(EGL_OPENGL_API)  — desktop GL, not GL ES
+      3. eglBindAPI(EGL_OPENGL_API): desktop GL, not GL ES
       4. eglChooseConfig() with EGL_PBUFFER_BIT + EGL_OPENGL_BIT
-      5. eglCreatePbufferSurface() — 1x1 pixel
-      6. eglCreateContext() — try 3.3 Core, fallback to unconstrained
+      5. eglCreatePbufferSurface(): 1x1 pixel
+      6. eglCreateContext(): try 3.3 Core, fallback to unconstrained
       7. glGetString(GL_VERSION / GL_RENDERER / GL_VENDOR / GL_GLSL)
       8. Parse major.minor from version string
       9. Cleanup: destroy context, surface, terminate display
@@ -2357,7 +2378,7 @@
 
     Translation is a GUI-only concern:
       - All tr() calls are in src/hobbycad/ (the application)
-      - Translation files (.ts) live in translations/
+      - Translation files (.ts) live in resources/translations/
       - CMake target: hobbycad_lupdate (Qt LinguistTools)
       - Runtime loading via QTranslator in main.cpp
 
@@ -2409,10 +2430,10 @@
 
     CMake will report:
 
-      -- libhobbycad: Qt not found — building with nlohmann/json fallback
+      -- libhobbycad: Qt not found, building with nlohmann/json fallback
 
     REQUIRED DEPENDENCIES (without Qt):
-      - OpenCASCADE 7.9+
+      - OpenCASCADE 7.6.3 or newer (8.0.1 recommended, the pinned version)
       - nlohmann-json (header-only)
       - libslvs (constraint solver)
 
@@ -2441,21 +2462,21 @@
     with optional WebP support from libwebp.
 
     COMPILE-TIME MACROS:
-      - HOBBYCAD_HAS_STB_IMAGE  — defined to 1 when stb_image is found
+      - HOBBYCAD_HAS_STB_IMAGE:  defined to 1 when stb_image is found
         by CMake.  Guards all stb-dependent code paths.
-      - HOBBYCAD_HAS_WEBP       — defined to 1 when libwebp is found
+      - HOBBYCAD_HAS_WEBP:       defined to 1 when libwebp is found
         by pkg-config.  Enables WebP decoding as a fallback after
         stb_image in loadImageFromMemory()/queryImageDimensionsFromMemory().
 
     FILES:
-      - hobbycad/image_buffer.h  — ImageBuffer struct (RGBA8 pixel buffer)
+      - hobbycad/image_buffer.h:   ImageBuffer struct (RGBA8 pixel buffer)
                                    and loading/manipulation function
                                    declarations
-      - image_buffer.cpp         — stb_image-based implementation
+      - image_buffer.cpp:          stb_image-based implementation
                                    (#define STB_IMAGE_IMPLEMENTATION),
                                    with #if HOBBYCAD_HAS_WEBP fallback
                                    using WebPDecodeRGBA()/WebPGetInfo()
-      - sketch/background.cpp    — Non-Qt #elif blocks using ImageBuffer
+      - sketch/background.cpp:     Non-Qt #elif blocks using ImageBuffer
 
     ImageBuffer TYPE:
       A simple RGBA8 pixel buffer with direct channel accessors:

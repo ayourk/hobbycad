@@ -1,5 +1,5 @@
 ================================================================================
-  tools/ -- Build and Packaging Tools
+  tools/ — Build and Packaging Tools
 ================================================================================
 
   Platform-specific build scripts, environment setup scripts, and
@@ -22,4 +22,14 @@
                   setup-env.csh       Automated Homebrew setup (tcsh/csh)
                   build-dev.sh        Developer build with logging
 
+  Files in this directory
+  ------------------------
+
+    render-icons.cpp    Renders resources/icons/hobbycad.svg into the PNG
+                        sizes, the Windows .ico and the Debian menu XPM
+                        the packages install.
+                        Built and run by cmake/GenerateIcons.cmake with the
+                        Qt the GUI already requires (Gui + Svg), so no
+                        rsvg-convert, icotool or ImageMagick is needed on
+                        any build host. No generated icon is committed.
   See docs/dev_environment_setup.txt for full platform instructions.

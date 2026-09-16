@@ -1,0 +1,19 @@
+HobbyCAD is a 3D CAD application aimed at hobbyist use, built on the
+OpenCASCADE modeling kernel with a Qt6 interface and the SolveSpace
+constraint solver (libslvs) for sketching.
+
+STATUS OF THIS PORT
+
+It is not submittable to dports as written. Two dependencies are missing:
+
+  cad/opencascade   dports carries 7.8.1; HobbyCAD needs 8.0.1, and 8.0.1
+                    does not build on any BSD without the consolidated
+                    platform fixes carried in the 8.0.1+p1 tarball.
+
+  cad/libslvs       no port exists. SolveSpace ships libslvs only as part
+                    of the application; HobbyCAD uses the 3.2p1 snapshot
+                    with a fatal-error handler added.
+
+Both would have to land before this port means anything.
+
+WWW: https://github.com/ayourk/HobbyCAD

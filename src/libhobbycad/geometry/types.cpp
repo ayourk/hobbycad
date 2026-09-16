@@ -8,13 +8,12 @@
 // =====================================================================
 
 #include <hobbycad/geometry/types.h>
+#include <hobbycad/units.h>
 
 #include <algorithm>
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace geometry {
@@ -25,61 +24,46 @@ namespace geometry {
 
 bool Arc::containsAngle(double angle) const
 {
-    // Normalize angles to [0, 360)
-    double normStart = startAngle;
-    while (normStart < 0) normStart += 360.0;
-    while (normStart >= 360.0) normStart -= 360.0;
-
-    double normAngle = angle;
-    while (normAngle < 0) normAngle += 360.0;
-    while (normAngle >= 360.0) normAngle -= 360.0;
-
-    if (std::abs(sweepAngle) >= 360.0 - 1e-12) {
+    if (std::abs(sweepAngle) >= 360.0 - kExactEps) {
         return true;  // Full circle
     }
-
-    double sweep = sweepAngle;
-    if (sweep < 0) {
-        // Negative sweep: going clockwise
-        double endAngle = normStart + sweep;
-        while (endAngle < 0) endAngle += 360.0;
-
-        if (normStart > endAngle) {
-            // Arc crosses 0°
-            return normAngle <= normStart && normAngle >= endAngle;
-        } else {
-            return normAngle >= endAngle && normAngle <= normStart;
-        }
-    } else {
-        // Positive sweep: going counter-clockwise
-        double endAngle = normStart + sweep;
-        while (endAngle >= 360.0) endAngle -= 360.0;
-
-        if (normStart < endAngle) {
-            return normAngle >= normStart && normAngle <= endAngle;
-        } else {
-            // Arc crosses 360°
-            return normAngle >= normStart || normAngle <= endAngle;
-        }
+    auto norm = [](double a) {
+        a = std::fmod(a, 360.0);
+        if (a < 0) a += 360.0;
+        return a;
+    };
+    const double start = norm(startAngle);
+    const double a = norm(angle);
+    // Offset of `a` from the start, measured IN the sweep direction, in [0,360).
+    // This handles the 0/360 seam uniformly for both sweep signs. The old
+    // split-by-"which side of 0 does it cross" logic got the negative-sweep case
+    // wrong: an arc with sweep < 0 that spans across 0 (one hugging the +X axis)
+    // reported a dead-on click as "not on the arc", so it could not be selected.
+    const double eps = 1e-9;
+    if (sweepAngle >= 0.0) {
+        const double off = norm(a - start);          // CCW distance from the start
+        return off <= sweepAngle + eps;
     }
+    const double off = norm(start - a);              // CW distance from the start
+    return off <= -sweepAngle + eps;
 }
 
 Point2D Arc::startPoint() const
 {
-    double rad = startAngle * M_PI / 180.0;
+    double rad = degreesToRadians(startAngle);
     return center + Point2D(radius * std::cos(rad), radius * std::sin(rad));
 }
 
 Point2D Arc::endPoint() const
 {
-    double rad = (startAngle + sweepAngle) * M_PI / 180.0;
+    double rad = degreesToRadians(startAngle + sweepAngle);
     return center + Point2D(radius * std::cos(rad), radius * std::sin(rad));
 }
 
 Point2D Arc::pointAt(double t) const
 {
     double angle = startAngle + t * sweepAngle;
-    double rad = angle * M_PI / 180.0;
+    double rad = degreesToRadians(angle);
     return center + Point2D(radius * std::cos(rad), radius * std::sin(rad));
 }
 
@@ -185,7 +169,7 @@ Transform2D Transform2D::translation(double dx, double dy)
 
 Transform2D Transform2D::rotation(double angleDegrees)
 {
-    double rad = angleDegrees * M_PI / 180.0;
+    double rad = degreesToRadians(angleDegrees);
     double c = std::cos(rad);
     double s = std::sin(rad);
 

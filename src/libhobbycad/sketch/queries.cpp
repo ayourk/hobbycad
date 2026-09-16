@@ -8,6 +8,9 @@
 // =====================================================================
 
 #include <hobbycad/sketch/queries.h>
+#include <hobbycad/units.h>
+#include <hobbycad/sketch/operations.h>
+#include <cstdlib>
 #include <hobbycad/sketch/profiles.h>
 #include <hobbycad/sketch/solver.h>
 #include <hobbycad/geometry/utils.h>
@@ -18,9 +21,7 @@
 #include <unordered_set>
 #include <map>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -65,15 +66,8 @@ double distanceToEntity(const Point2D& point, const Entity& entity)
         break;
 
     case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            Point2D p1 = entity.points[0];
-            Point2D p2 = entity.points[1];
-            Point2D corners[4] = {
-                p1,
-                Point2D(p2.x, p1.y),
-                p2,
-                Point2D(p1.x, p2.y)
-            };
+    case EntityType::Parallelogram:
+        if (Point2D corners[4]; quadCorners(entity, corners)) {
             double minDist = std::numeric_limits<double>::max();
             for (int i = 0; i < 4; ++i) {
                 double d = pointToLineDistance(point, corners[i], corners[(i+1)%4]);
@@ -128,6 +122,10 @@ double distanceToEntity(const Point2D& point, const Entity& entity)
             }
             return minDist;
         }
+        break;
+
+    case EntityType::Dimension:
+        // A dimension is an annotation the GUI draws, never stored geometry.
         break;
 
     case EntityType::Text:
@@ -294,7 +292,8 @@ std::vector<std::pair<int, int>> findControlPointsAtPoint(
 
 ValidationResult validateSketch(
     const std::vector<Entity>& entities,
-    const std::vector<Constraint>& constraints)
+    const std::vector<Constraint>& constraints,
+    const std::vector<Group>& groups)
 {
     ValidationResult result;
 
@@ -329,19 +328,136 @@ ValidationResult validateSketch(
         }
     }
 
-    // Check for degenerate entities
+    // Group integrity: a group must not reference entities, constraints, or
+    // child groups that do not exist (a dangling member is corruption; it is
+    // how a deleted entity leaves an orphaned reference behind).
+    if (!groups.empty()) {
+        std::unordered_set<int> groupIds;
+        for (const Group& g : groups) {
+            if (groupIds.count(g.id) > 0) {
+                result.errors.push_back("Duplicate group ID: " + std::to_string(g.id));
+                result.valid = false;
+            }
+            groupIds.insert(g.id);
+        }
+        for (const Group& g : groups) {
+            for (int eid : g.entityIds)
+                if (entityIds.count(eid) == 0) {
+                    result.errors.push_back("Group " + std::to_string(g.id) +
+                        " references non-existent entity " + std::to_string(eid));
+                    result.valid = false;
+                }
+            for (int cid : g.constraintIds)
+                if (constraintIds.count(cid) == 0) {
+                    result.errors.push_back("Group " + std::to_string(g.id) +
+                        " references non-existent constraint " + std::to_string(cid));
+                    result.valid = false;
+                }
+            for (int gid : g.childGroupIds)
+                if (groupIds.count(gid) == 0) {
+                    result.errors.push_back("Group " + std::to_string(g.id) +
+                        " references non-existent child group " + std::to_string(gid));
+                    result.valid = false;
+                }
+            if (g.parentGroupId >= 0 && groupIds.count(g.parentGroupId) == 0) {
+                result.errors.push_back("Group " + std::to_string(g.id) +
+                    " has non-existent parent group " + std::to_string(g.parentGroupId));
+                result.valid = false;
+            }
+        }
+
+        // Relational group checks (the references above all exist by now).
+        std::map<int, const Group*> byId;
+        for (const Group& g : groups) byId[g.id] = &g;
+
+        for (const Group& g : groups) {
+            // Self-reference: a group cannot be its own parent or child.
+            if (g.parentGroupId == g.id) {
+                result.errors.push_back("Group " + std::to_string(g.id) +
+                    " is its own parent");
+                result.valid = false;
+            }
+            if (std::find(g.childGroupIds.begin(), g.childGroupIds.end(), g.id)
+                    != g.childGroupIds.end()) {
+                result.errors.push_back("Group " + std::to_string(g.id) +
+                    " is its own child");
+                result.valid = false;
+            }
+
+            // Parent/child links are stored on both ends; the two must agree.
+            for (int cid : g.childGroupIds) {
+                auto it = byId.find(cid);
+                if (it != byId.end() && it->second->parentGroupId != g.id) {
+                    result.errors.push_back("Group " + std::to_string(g.id) +
+                        " lists child group " + std::to_string(cid) +
+                        " but that group's parent is " +
+                        std::to_string(it->second->parentGroupId));
+                    result.valid = false;
+                }
+            }
+            if (g.parentGroupId >= 0) {
+                auto it = byId.find(g.parentGroupId);
+                if (it != byId.end() &&
+                    std::find(it->second->childGroupIds.begin(),
+                              it->second->childGroupIds.end(), g.id)
+                        == it->second->childGroupIds.end()) {
+                    result.errors.push_back("Group " + std::to_string(g.id) +
+                        " names parent " + std::to_string(g.parentGroupId) +
+                        " but that group does not list it as a child");
+                    result.valid = false;
+                }
+            }
+        }
+
+        // A cycle in the parent chain is corruption: tree traversal would
+        // never terminate. Walk each group's ancestry; reaching the start (or a
+        // repeat) means a loop. Self-parent is already reported above.
+        for (const Group& g : groups) {
+            if (g.parentGroupId == g.id) continue;
+            std::unordered_set<int> seen{g.id};
+            int cur = g.parentGroupId;
+            while (cur >= 0) {
+                if (cur == g.id || seen.count(cur) > 0) {
+                    result.errors.push_back("Group " + std::to_string(g.id) +
+                        " is part of a parent-group cycle");
+                    result.valid = false;
+                    break;
+                }
+                seen.insert(cur);
+                auto it = byId.find(cur);
+                if (it == byId.end()) break;
+                cur = it->second->parentGroupId;
+            }
+        }
+    }
+
+    // Degenerate entities are ERRORS, not warnings.
+    //
+    // A primitive reduced to zero has become a POINT. That is not a small
+    // line or a tiny circle; it is an entity whose stored type no longer
+    // describes what it is, which is a different and worse thing than
+    // being out of tolerance. It is also why the state cannot be undone by
+    // dragging: a zero-length line has no direction, so nothing records
+    // which line it used to be, and no later edit can put that back.
+    //
+    // These were warnings with valid = true, which said the sketch was
+    // fine. It is not fine: it contains an entity lying about its type.
     for (const Entity& e : entities) {
         switch (e.type) {
         case EntityType::Line:
             if (e.points.size() >= 2 &&
                 std::hypot(e.points[0].x - e.points[1].x, e.points[0].y - e.points[1].y) < POINT_TOLERANCE) {
-                result.warnings.push_back("Line " + std::to_string(e.id) + " has zero length");
+                result.errors.push_back("Line " + std::to_string(e.id) +
+                    " has zero length: it is a point, not a line");
+                result.valid = false;
             }
             break;
         case EntityType::Circle:
         case EntityType::Arc:
             if (e.radius < POINT_TOLERANCE) {
-                result.warnings.push_back("Circle/Arc " + std::to_string(e.id) + " has zero radius");
+                result.errors.push_back("Circle/Arc " + std::to_string(e.id) +
+                    " has zero radius: it is a point, not a curve");
+                result.valid = false;
             }
             break;
         default:
@@ -457,6 +573,18 @@ double sketchLength(const std::vector<Entity>& entities)
     return total;
 }
 
+int nearestCircleOrArc(const std::vector<Entity>& entities, const Point2D& pos)
+{
+    int best = -1;
+    double bestErr = std::numeric_limits<double>::max();
+    for (const Entity& e : entities) {
+        if ((e.type != EntityType::Circle && e.type != EntityType::Arc) || e.points.empty()) continue;
+        const double err = std::abs(geometry::lineLength(e.points[0], pos) - e.radius);
+        if (err < bestErr) { bestErr = err; best = e.id; }
+    }
+    return best;
+}
+
 BoundingBox sketchBounds(const std::vector<Entity>& entities)
 {
     BoundingBox bounds;
@@ -495,13 +623,18 @@ double entityLength(const Entity& entity)
         return 2.0 * M_PI * entity.radius;
 
     case EntityType::Arc:
-        return std::abs(entity.sweepAngle * M_PI / 180.0) * entity.radius;
+        return std::abs(degreesToRadians(entity.sweepAngle)) * entity.radius;
 
     case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            double w = std::abs(entity.points[1].x - entity.points[0].x);
-            double h = std::abs(entity.points[1].y - entity.points[0].y);
-            return 2.0 * (w + h);
+    case EntityType::Parallelogram:
+        if (Point2D c[4]; quadCorners(entity, c)) {
+            // From the corners, not the first two points: a rotated
+            // rectangle stores four corners and a parallelogram's sides are
+            // not axis-aligned.
+            double perimeter = 0.0;
+            for (int i = 0; i < 4; ++i)
+                perimeter += std::hypot(c[i].x - c[(i + 1) % 4].x, c[i].y - c[(i + 1) % 4].y);
+            return perimeter;
         }
         break;
 
@@ -541,6 +674,10 @@ double entityLength(const Entity& entity)
             return len;
         }
 
+    case EntityType::Dimension:
+        // A dimension is an annotation the GUI draws, never stored geometry.
+        break;
+
     case EntityType::Text:
         return 0.0;
     }
@@ -577,8 +714,8 @@ Point2D pointAtParameter(const Entity& entity, double t)
 
     case EntityType::Arc:
         if (!entity.points.empty()) {
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double sweepRad = entity.sweepAngle * M_PI / 180.0;
+            double startRad = degreesToRadians(entity.startAngle);
+            double sweepRad = degreesToRadians(entity.sweepAngle);
             double angle = startRad + t * sweepRad;
             return entity.points[0] + Point2D(
                 entity.radius * std::cos(angle),
@@ -588,17 +725,14 @@ Point2D pointAtParameter(const Entity& entity, double t)
         break;
 
     case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            // Traverse rectangle perimeter
-            Point2D p1 = entity.points[0];
-            Point2D p2 = entity.points[1];
-            Point2D corners[4] = {
-                p1,
-                Point2D(p2.x, p1.y),
-                p2,
-                Point2D(p1.x, p2.y)
-            };
-            double perimeter = 2.0 * (std::abs(p2.x - p1.x) + std::abs(p2.y - p1.y));
+    case EntityType::Parallelogram:
+        if (Point2D corners[4]; quadCorners(entity, corners)) {
+            // Traverse the perimeter
+            double perimeter = 0.0;
+            for (int i = 0; i < 4; ++i) {
+                const Point2D& q = corners[(i + 1) % 4];
+                perimeter += std::hypot(corners[i].x - q.x, corners[i].y - q.y);
+            }
             double dist = t * perimeter;
             double accumulated = 0.0;
             for (int i = 0; i < 4; ++i) {
@@ -670,7 +804,7 @@ double parameterAtPoint(const Entity& entity, const Point2D& point)
     case EntityType::Arc:
         if (!entity.points.empty()) {
             Point2D rel = point - entity.points[0];
-            double angle = std::atan2(rel.y, rel.x) * 180.0 / M_PI;
+            double angle = radiansToDegrees(std::atan2(rel.y, rel.x));
             double startAngle = entity.startAngle;
             double sweepAngle = entity.sweepAngle;
 
@@ -718,8 +852,8 @@ Point2D tangentAtParameter(const Entity& entity, double t)
 
     case EntityType::Arc:
         if (!entity.points.empty()) {
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double sweepRad = entity.sweepAngle * M_PI / 180.0;
+            double startRad = degreesToRadians(entity.startAngle);
+            double sweepRad = degreesToRadians(entity.sweepAngle);
             double angle = startRad + t * sweepRad;
             double sign = (sweepRad >= 0) ? 1.0 : -1.0;
             return Point2D(-sign * std::sin(angle), sign * std::cos(angle));
@@ -754,7 +888,13 @@ Point2D normalAtParameter(const Entity& entity, double t)
 //  Tessellation
 // =====================================================================
 
-std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
+namespace {
+// Shared body of the two tessellate() overloads. The policy decides how many
+// segments a curve gets: from a tolerance, or a fixed count.
+enum class TessCurve { Circular, Ellipse, SlotCap };
+
+template <typename SegmentsFor>
+std::vector<Point2D> tessellateWith(const Entity& entity, SegmentsFor segmentsFor)
 {
     std::vector<Point2D> points;
 
@@ -777,11 +917,8 @@ std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
         {
             double sweepRad = (entity.type == EntityType::Circle)
                               ? 2.0 * M_PI
-                              : std::abs(entity.sweepAngle) * M_PI / 180.0;
-            // Number of segments based on tolerance
-            int segments = std::max(8, static_cast<int>(
-                std::ceil(sweepRad * entity.radius / tolerance)
-            ));
+                              : degreesToRadians(std::abs(entity.sweepAngle));
+            const int segments = segmentsFor(TessCurve::Circular, sweepRad * entity.radius);
             for (int i = 0; i <= segments; ++i) {
                 double t = static_cast<double>(i) / segments;
                 points.push_back(pointAtParameter(entity, t));
@@ -790,19 +927,18 @@ std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
         break;
 
     case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            Point2D p1 = entity.points[0];
-            Point2D p2 = entity.points[1];
-            points.push_back(p1);
-            points.push_back(Point2D(p2.x, p1.y));
-            points.push_back(p2);
-            points.push_back(Point2D(p1.x, p2.y));
-            points.push_back(p1);  // Close
+    case EntityType::Parallelogram:
+        {
+            Point2D c[4];
+            if (quadCorners(entity, c)) {
+                points.assign(c, c + 4);
+                points.push_back(c[0]);  // Close
+            }
         }
         break;
 
     case EntityType::Polygon:
-        points = entity.points;
+        points.assign(entity.points.begin(), entity.points.end());
         if (!points.empty() && !(points.front().x == points.back().x && points.front().y == points.back().y)) {
             points.push_back(points.front());
         }
@@ -814,7 +950,7 @@ std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
             double a = entity.majorRadius;
             double b = entity.minorRadius;
             double approxCircum = M_PI * (a + b);
-            int segments = std::max(16, static_cast<int>(std::ceil(approxCircum / tolerance)));
+            const int segments = segmentsFor(TessCurve::Ellipse, approxCircum);
             for (int i = 0; i <= segments; ++i) {
                 double angle = 2.0 * M_PI * i / segments;
                 if (!entity.points.empty()) {
@@ -832,12 +968,11 @@ std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
             // Two semicircles connected by lines
             Point2D p1 = entity.points[0];
             Point2D p2 = entity.points[1];
+            if (length(p2 - p1) <= geometry::kDegenerateLen) break;   // no axis, no outline
             Point2D dir = normalize(p2 - p1);
             Point2D perp = perpendicular(dir);
 
-            int arcSegments = std::max(8, static_cast<int>(
-                std::ceil(M_PI * entity.radius / tolerance)
-            ));
+            const int arcSegments = segmentsFor(TessCurve::SlotCap, M_PI * entity.radius);
 
             // First semicircle
             double baseAngle = std::atan2(perp.y, perp.x);
@@ -856,10 +991,15 @@ std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
         }
         break;
 
-    case EntityType::Spline:
-        // For now, just use control points
-        // TODO: Proper spline evaluation
-        points = entity.points;
+    case EntityType::Spline: {
+        // Smooth Catmull-Rom curve through the control points.
+        const std::vector<Point3> t = tessellateSpline(entity.points, 12, entity.splineBezier);
+        points.assign(t.begin(), t.end());
+        break;
+    }
+
+    case EntityType::Dimension:
+        // A dimension is an annotation the GUI draws, never stored geometry.
         break;
 
     case EntityType::Text:
@@ -868,6 +1008,22 @@ std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
     }
 
     return points;
+}
+}  // namespace
+
+std::vector<Point2D> tessellate(const Entity& entity, double tolerance)
+{
+    return tessellateWith(entity, [tolerance](TessCurve kind, double arcLength) {
+        const int minimum = (kind == TessCurve::Ellipse) ? 16 : 8;
+        return std::max(minimum, static_cast<int>(std::ceil(arcLength / tolerance)));
+    });
+}
+
+std::vector<Point2D> tessellate(const Entity& entity, int segments)
+{
+    return tessellateWith(entity, [segments](TessCurve kind, double) {
+        return kind == TessCurve::SlotCap ? segments / 2 : segments;
+    });
 }
 
 std::vector<std::pair<Point2D, Point2D>> tessellateToLines(const std::vector<Entity>& entities, double tolerance)
@@ -882,6 +1038,57 @@ std::vector<std::pair<Point2D, Point2D>> tessellateToLines(const std::vector<Ent
     }
 
     return lines;
+}
+
+// =====================================================================
+//  Tangency that touches off the drawn segment
+// =====================================================================
+
+std::optional<Point2D> offSegmentTangentPoint(const Entity& line,
+                                              const Entity& circle)
+{
+    if (line.type != EntityType::Line || circle.type != EntityType::Circle)
+        return std::nullopt;
+    if (line.points.size() < 2 || circle.points.empty())
+        return std::nullopt;
+
+    const Point2D a = line.points[0];
+    const Point2D b = line.points[1];
+    const Point2D c = circle.points[0];
+
+    const double dx = b.x - a.x;
+    const double dy = b.y - a.y;
+    const double len2 = dx * dx + dy * dy;
+    if (len2 < geometry::kExactEps) return std::nullopt;      // zero-length line
+
+    // Where the foot of the perpendicular from the center falls along the
+    // segment. 0 is the start, 1 the end; anything outside that is on the
+    // line's extension, which is not drawn.
+    const double t = ((c.x - a.x) * dx + (c.y - a.y) * dy) / len2;
+    if (t >= 0.0 && t <= 1.0) return std::nullopt;
+
+    const double fx = a.x + t * dx;
+    const double fy = a.y + t * dy;
+    double vx = fx - c.x;
+    double vy = fy - c.y;
+    const double vlen = std::sqrt(vx * vx + vy * vy);
+    if (vlen < geometry::kExactEps) return std::nullopt;      // center on the line: not tangent
+
+    // The touch point is on the PERIMETER, along the perpendicular. Because
+    // the perpendicular distance equals the radius, the line grazes the
+    // circle at this one point and never enters it, so the marker always
+    // lands on the edge, never inside.
+    const double r = std::fabs(circle.radius);
+    return Point2D{ c.x + r * vx / vlen, c.y + r * vy / vlen };
+}
+
+bool debugModeEnabled()
+{
+    static const bool on = [] {
+        const char* v = std::getenv("HOBBYCAD_DEBUG");
+        return v && v[0] == '1';
+    }();
+    return on;
 }
 
 }  // namespace sketch

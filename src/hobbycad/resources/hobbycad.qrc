@@ -13,13 +13,13 @@
 <RCC>
     <qresource prefix="/">
         <!-- Built-in themes -->
-        <file>themes/default.qss</file>
-        <file>themes/darkmode.qss</file>
+        <file alias="themes/default.qss">../../../resources/themes/default.qss</file>
+        <file alias="themes/darkmode.qss">../../../resources/themes/darkmode.qss</file>
 
         <!-- Application icon (references the single copy in resources/) -->
         <file alias="icons/hobbycad.svg">../../../resources/icons/hobbycad.svg</file>
 
-        <!-- Compiled translations (.qm) — add as they are created -->
+        <!-- Compiled translations (.qm): add as they are created -->
         <!-- <file>translations/hobbycad_de.qm</file> -->
         <!-- <file>translations/hobbycad_fr.qm</file> -->
         <!-- <file>translations/hobbycad_pirate.qm</file> -->

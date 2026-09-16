@@ -3,6 +3,15 @@
 // =====================================================================
 
 #include "parametersdialog.h"
+#include "editinplace.h"
+#include "erroroutlinedelegate.h"
+#include <functional>
+#include <QTimer>
+#include <QStyledItemDelegate>
+#include <QPropertyAnimation>
+#include <QPainter>
+
+#include <hobbycad/parameters.h>
 #include "formulaedit.h"
 
 #include <cctype>
@@ -19,11 +28,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
 namespace hobbycad {
+
+
 
 ParametersDialog::ParametersDialog(QWidget* parent)
     : QDialog(parent)
@@ -77,6 +89,22 @@ void ParametersDialog::setupUi()
     m_table->setColumnWidth(ColValue, 100);
 
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+
+    
+
+    // F2 edits the parameter's NAME wherever the cursor is on the row, the
+
+    // same convention as the objects and properties trees.
+
+    bindEditInPlace(m_table, ColName);
+
+    m_outlineDelegate = new ErrorOutlineDelegate(
+        [this](const QModelIndex& index) {
+            return m_errorCells.contains(index.row())
+                   && m_errorCells[index.row()].contains(index.column());
+        },
+        m_table);
+    m_table->setItemDelegate(m_outlineDelegate);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setAlternatingRowColors(true);
     m_table->verticalHeader()->setVisible(false);
@@ -89,6 +117,11 @@ void ParametersDialog::setupUi()
     m_addButton = new QPushButton(tr("+ Add"), this);
     m_addButton->setToolTip(tr("Add a new user parameter"));
     buttonLayout->addWidget(m_addButton);
+
+    m_addReferenceButton = new QPushButton(tr("+ Reference"), this);
+    m_addReferenceButton->setToolTip(
+        tr("Add a reference parameter measured from the sketch geometry"));
+    buttonLayout->addWidget(m_addReferenceButton);
 
     m_deleteButton = new QPushButton(tr("Delete"), this);
     m_deleteButton->setToolTip(tr("Delete the selected parameter"));
@@ -137,6 +170,8 @@ void ParametersDialog::setupUi()
 
     connect(m_addButton, &QPushButton::clicked,
             this, &ParametersDialog::onAddParameter);
+    connect(m_addReferenceButton, &QPushButton::clicked,
+            this, &ParametersDialog::onAddReferenceParameter);
     connect(m_deleteButton, &QPushButton::clicked,
             this, &ParametersDialog::onDeleteParameter);
 
@@ -256,11 +291,21 @@ void ParametersDialog::refreshTable()
             m_table->setItem(row, ColUnit, unitItem);
         }
 
-        // Expression
-        auto* exprItem = new QTableWidgetItem(QString::fromStdString(param.expression));
+        // Expression: for a reference parameter this cell holds the
+        // measurement source ("distance <id>.<pt> <id>.<pt>"), not a formula.
+        QString exprText = param.isReference
+            ? QString::fromStdString(param.referenceSource)
+            : QString::fromStdString(param.expression);
+        auto* exprItem = new QTableWidgetItem(exprText);
         if (!param.isUserParam) {
             exprItem->setFlags(exprItem->flags() & ~Qt::ItemIsEditable);
             exprItem->setForeground(QColor(100, 100, 100));
+        } else if (param.isReference) {
+            // Editable (the source can be changed) but tinted so it is not
+            // mistaken for a formula; the value comes from the geometry.
+            exprItem->setForeground(QColor(0, 110, 150));
+            exprItem->setToolTip(
+                tr("Reference: value measured from the sketch (%1)").arg(exprText));
         }
         m_table->setItem(row, ColExpression, exprItem);
 
@@ -269,7 +314,9 @@ void ParametersDialog::refreshTable()
         valueItem->setFlags(valueItem->flags() & ~Qt::ItemIsEditable);
         valueItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-        double val = evaluateExpression(QString::fromStdString(param.expression));
+        double val = param.isReference
+            ? param.value
+            : evaluateExpression(QString::fromStdString(param.expression));
         if (std::isnan(val)) {
             valueItem->setText(tr("Error"));
             valueItem->setForeground(Qt::red);
@@ -322,6 +369,67 @@ void ParametersDialog::onAddParameter()
     int newRow = m_table->rowCount() - 1;
     m_table->selectRow(newRow);
     m_table->editItem(m_table->item(newRow, ColName));
+}
+
+void ParametersDialog::onAddReferenceParameter()
+{
+    // A reference parameter is measured from the solved geometry rather than
+    // typed. Ask for a name and a measurement source; the value is filled in on
+    // the next solve (recomputeReferenceParameters() in the main window).
+    bool ok = false;
+
+    QString suggested;
+    int num = 1;
+    do {
+        suggested = QStringLiteral("ref") + QString::number(num++);
+    } while (std::any_of(m_parameters.begin(), m_parameters.end(),
+             [&suggested](const Parameter& p) {
+                 return QString::fromStdString(p.name) == suggested;
+             }));
+
+    const QString name = QInputDialog::getText(
+        this, tr("Add Reference Parameter"), tr("Name:"),
+        QLineEdit::Normal, suggested, &ok).trimmed();
+    if (!ok || name.isEmpty()) return;
+    if (!hobbycad::ParameterEngine::isValidName(name.toStdString())) {
+        QMessageBox::warning(this, tr("Invalid Name"),
+            tr("'%1' is not a valid parameter name.").arg(name));
+        return;
+    }
+    if (std::any_of(m_parameters.begin(), m_parameters.end(),
+        [&name](const Parameter& p) {
+            return QString::fromStdString(p.name) == name;
+        })) {
+        QMessageBox::warning(this, tr("Duplicate Name"),
+            tr("A parameter named '%1' already exists.").arg(name));
+        return;
+    }
+
+    const QString source = QInputDialog::getText(
+        this, tr("Add Reference Parameter"),
+        tr("Measurement source (e.g. distance <id>.<pt> <id>.<pt>):"),
+        QLineEdit::Normal, QStringLiteral("distance "), &ok).trimmed();
+    if (!ok || source.isEmpty()) return;
+
+    Parameter param;
+    param.name = name.toStdString();
+    param.expression.clear();
+    param.value = 0.0;                         // measured on the next solve
+    param.unit = QStringLiteral("mm").toStdString();
+    param.comment = tr("measured from geometry").toStdString();
+    param.isUserParam = true;
+    param.isReference = true;
+    param.referenceSource = source.toStdString();
+
+    m_parameters.append(param);
+    refreshTable();
+    if (m_statusLabel) {
+        m_statusLabel->setText(
+            tr("Added reference '%1' (measured on the next solve)").arg(name));
+    }
+
+    int newRow = m_table->rowCount() - 1;
+    m_table->selectRow(newRow);
 }
 
 void ParametersDialog::onDeleteParameter()
@@ -383,9 +491,52 @@ void ParametersDialog::onCellChanged(int row, int column)
         QString newName = nameItem->text().trimmed();
         validateNameCell(row, newName);
 
-        // Only update param name if valid
-        if (!m_errorCells.contains(row) || !m_errorCells[row].contains(ColName)) {
-            param.name = newName.toStdString();
+        const bool rejected = m_errorCells.contains(row)
+                              && m_errorCells[row].contains(ColName);
+        if (rejected) {
+            // Duplicates are the case worth being loud about: a second
+            // parameter named "width" would shadow the first, and every
+            // expression using the name would silently resolve to whichever
+            // one happened to be found first.
+            rejectNameEdit(row);
+            break;
+        }
+
+        {
+            const std::string oldName = param.name;
+            const std::string wanted = newName.toStdString();
+            param.name = wanted;
+
+            // Carry every reference along. Renaming without this leaves
+            // each expression using the old name pointing at nothing or,
+            // once some other parameter takes the freed name, silently
+            // pointing at the wrong one. Whole-identifier matching lives in
+            // the library so the sketch of it is not repeated here.
+            if (oldName != wanted && !oldName.empty()) {
+                int rewritten = 0;
+                for (int i = 0; i < m_parameters.size(); ++i) {
+                    if (i == paramIdx) {
+                        continue;   // its own expression cannot name itself
+                    }
+                    const std::string before = m_parameters[i].expression;
+                    const std::string after =
+                        renameIdentifierInExpression(before, oldName, wanted);
+                    if (after != before) {
+                        m_parameters[i].expression = after;
+                        ++rewritten;
+                    }
+                }
+                if (rewritten > 0) {
+                    // The table still shows the old expressions.
+                    refreshTable();
+                    if (m_statusLabel) {
+                        m_statusLabel->setText(
+                            tr("Renamed '%1' and updated %n expression(s)", "",
+                               rewritten)
+                                .arg(QString::fromStdString(oldName)));
+                    }
+                }
+            }
         }
         break;
     }
@@ -395,6 +546,16 @@ void ParametersDialog::onCellChanged(int row, int column)
         if (!item) return;
 
         QString newExpr = item->text().trimmed();
+
+        if (param.isReference) {
+            // The cell holds a measurement source, not a formula. Store it; the
+            // value is (re)measured on the next solve, so the shown value stays.
+            param.referenceSource = newExpr.toStdString();
+            param.expression.clear();
+            clearError(row, ColExpression);
+            break;
+        }
+
         param.expression = newExpr.toStdString();
 
         // Re-evaluate value
@@ -556,11 +717,24 @@ bool ParametersDialog::isValidParameterName(const QString& name) const
     return !reserved.contains(name.toLower());
 }
 
+void ParametersDialog::rejectNameEdit(int row)
+{
+    auto* item = m_table->item(row, ColName);
+    if (!item) {
+        return;
+    }
+    m_table->setCurrentCell(row, ColName);
+    reopenRejectedEdit(m_table, m_table->model()->index(row, ColName),
+                       m_outlineDelegate);
+}
+
 void ParametersDialog::showError(int row, int column, const QString& message)
 {
     auto* item = m_table->item(row, column);
     if (item) {
-        item->setBackground(QColor(255, 180, 180));  // Red background
+        // Tint AND outline: the outline is drawn by ErrorOutlineDelegate
+        // and survives row selection, which the tint alone does not.
+        item->setBackground(QColor(255, 180, 180));
         item->setToolTip(message);
     }
 

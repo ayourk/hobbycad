@@ -4,7 +4,7 @@
 
   Canonical source for all platform-specific icon formats.
   PNGs, .ico, and .icns are generated at build time from this
-  file by cmake/GenerateIcons.cmake (requires rsvg-convert).
+  file by cmake/GenerateIcons.cmake (rendered with Qt by tools/render-icons.cpp).
 
   Design: Yellow #2 pencil over a cyan speed square,
   pencil tip resting in the right-angle corner.
@@ -75,7 +75,7 @@
     <!-- Wood taper -->
     <polygon points="60,114 64,130.5 68,114" fill="#d2a679" stroke="#b8875f" stroke-width="0.5"/>
 
-    <!-- Graphite core — sharp point -->
+    <!-- Graphite core: sharp point -->
     <polygon points="62.5,125 64,130.5 65.5,125" fill="#424242"/>
   </g>
 </svg>

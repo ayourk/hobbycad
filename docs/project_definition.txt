@@ -260,7 +260,7 @@
   4.7  End-User System Requirements
   -----------------------------------
 
-  HobbyCAD targets hobby-level hardware — the kind of desktop or
+  HobbyCAD targets hobby-level hardware: the kind of desktop or
   laptop a typical maker, hobbyist, or student already owns. It
   does not require a workstation-class GPU or large amounts of RAM
   for typical use. Complex assemblies and FEM analysis (future
@@ -445,7 +445,7 @@
 
   A HobbyCAD project is a plain directory on disk. The directory
   name is the project name (no extension). Inside the directory
-  root, a project_name.hcad file serves as the project manifest —
+  root, a project_name.hcad file serves as the project manifest:
   a JSON file that identifies the directory as a HobbyCAD project,
   lists all dependent files, and stores project-level properties.
 
@@ -493,7 +493,7 @@
   LICENSE, etc.) are optional. They are present only when the
   project is under version control. HobbyCAD treats these as
   part of the project directory but ignores them for project
-  loading — the manifest lists exactly which files belong to the
+  loading; the manifest lists exactly which files belong to the
   CAD project, so any additional files (git metadata, READMEs,
   CI configs, etc.) coexist without conflict.
 
@@ -587,7 +587,7 @@
 
   This applies to all coordinate values, dimensions, and lengths
   in the project files (sketches, geometry, constraints, etc.).
-  The "units" field is purely a display preference — changing it
+  The "units" field is purely a display preference; changing it
   does not modify any stored values, only how they are shown to
   the user. This design ensures:
     - Lossless unit switching (no rounding errors)
@@ -608,7 +608,7 @@
   when a project is first pushed to a remote (via the version
   control panel or File → Export to GitHub). Fields:
     - "remote_url": The primary git remote URL. This is the URL
-      actively used for push/pull. Can be HTTPS or SSH — the
+      actively used for push/pull. Can be HTTPS or SSH; the
       protocol is encoded in the URL itself:
         HTTPS:  https://github.com/user/repo.git
         SSH:    git@github.com:user/repo.git
@@ -632,7 +632,7 @@
 
   The "autorun" field is optional. It specifies a Python script
   to execute automatically when the project is opened. This
-  field is purely informational — it declares the project
+  field is purely informational; it declares the project
   author's intent, but execution is always gated by the user's
   script execution security preferences. By default, script
   execution is set to "manual only" and autorun scripts are
@@ -657,7 +657,7 @@
   A trailing slash means "this directory and everything inside it,
   recursively." A trailing /* means "only the immediate children
   of this directory." A path without a trailing slash or /* means
-  a single file. This keeps the format simple — no full glob
+  a single file. This keeps the format simple: no full glob
   engine required, just three cases to handle.
 
   HobbyCAD manages certain foreign_files entries automatically:
@@ -780,7 +780,7 @@
       }
     }
 
-  The "project_files" category is implicit — it applies to all
+  The "project_files" category is implicit; it applies to all
   CAD files listed in the manifest (geometry, sketches, features,
   scripts, metadata, assemblies) and does not need to be set on
   individual entries. It always exists even if category_definitions
@@ -797,7 +797,7 @@
 
   The "category_definitions" object is optional. If absent,
   HobbyCAD uses the built-in defaults shown above. If present,
-  it is merged with the defaults — user entries override built-in
+  it is merged with the defaults: user entries override built-in
   entries with the same key, and new entries are added. This means
   users can:
     - Reorder built-in categories (change priority numbers)
@@ -814,19 +814,19 @@
 
     The tree view in the project files browser (Phase 1) groups
     and sorts entries by their category priority:
-      1. Project files (category: "project_files", priority 1)
-         — sorted alphabetically by directory then filename
-      2. Version control (category: "version_control", priority 2)
-         — sorted alphabetically
-      3. Documentation (category: "documentation", priority 3)
-         — sorted alphabetically
-      4. Build (category: "build", priority 4)
-         — sorted alphabetically
-      5. Reference (category: "reference", priority 5)
-         — sorted alphabetically
+      1. Project files (category: "project_files", priority 1),
+         sorted alphabetically by directory then filename
+      2. Version control (category: "version_control", priority 2),
+         sorted alphabetically
+      3. Documentation (category: "documentation", priority 3),
+         sorted alphabetically
+      4. Build (category: "build", priority 4),
+         sorted alphabetically
+      5. Reference (category: "reference", priority 5),
+         sorted alphabetically
       ...additional user-defined categories by priority...
-      N. Uncategorized foreign files — sorted alphabetically
-      N+1. Untracked files — muted style, sorted alphabetically
+      N. Uncategorized foreign files, sorted alphabetically
+      N+1. Untracked files (muted style), sorted alphabetically
 
     Within each group, entries are sorted alphabetically by
     directory then filename. Multi-category entries appear under
@@ -840,7 +840,7 @@
       repository data is not meaningful outside a working tree
     - Shown in the project files browser and version control
       panel's file status list
-    - Left untouched by HobbyCAD — never modified or deleted
+    - Left untouched by HobbyCAD: never modified or deleted
       unless the user explicitly removes them
 
   The manifest serves multiple purposes:
@@ -878,7 +878,7 @@
     .gitignore, and related files. All HobbyCAD project files
     are text-based and version-control friendly:
       - JSON files are fully diff-able and merge-able
-      - BREP files are OCCT's text serialization — diffs show
+      - BREP files are OCCT's text serialization; diffs show
         when geometry has changed (though not always human-
         readable for complex changes)
       - PPM thumbnails are text-based
@@ -930,7 +930,7 @@
 
   For distribution, sharing, and download, HobbyCAD projects can
   be packed into a standard ZIP archive. This is a secondary
-  format — not the default working format.
+  format, not the default working format.
 
   A packed project places the manifest in the root of the ZIP,
   with all project files alongside it (not nested in a
@@ -966,7 +966,7 @@
   if exactly one manifest is found, it is used; if more than
   one is found, the user is prompted to select which project
   to open (same behavior as opening a directory). This means
-  the ZIP format mirrors the directory layout exactly — it is
+  the ZIP format mirrors the directory layout exactly; it is
   just a compressed snapshot of the project directory contents.
 
   ZIP packing includes:
@@ -986,7 +986,7 @@
   directory is excluded from ZIP archives, the project will
   have a "repository" object but no .git/ directory. The
   "Synchronize with version control" feature (see Section 5.5,
-  Version control panel) handles this case — offering to clone
+  Version control panel) handles this case, offering to clone
   from the stored remote, initialize a fresh repo, or remove
   the repository object.
 
@@ -1028,7 +1028,7 @@
       3. Opens the project
 
     This also works with any git remote (GitLab, Bitbucket,
-    self-hosted Gitea, bare SSH repos, etc.) — GitHub is just
+    self-hosted Gitea, bare SSH repos, etc.); GitHub is just
     the most common case.
 
   Export to GitHub:
@@ -1085,7 +1085,7 @@
               c) Remove the "repository" object from the manifest
                  (project is no longer under version control)
 
-    This is intentionally minimal — not a full git GUI. Power
+    This is intentionally minimal, not a full git GUI. Power
     users can use their preferred git tools (CLI, GitKraken,
     VS Code, etc.) alongside HobbyCAD since the project is
     just a normal directory with a normal git repository.
@@ -1101,7 +1101,7 @@
     GitHub API integration (creating repos, authentication)
     uses GitHub's REST API v3 or the gh CLI tool if available.
     OAuth device flow or personal access tokens are used for
-    authentication — HobbyCAD never stores GitHub passwords.
+    authentication; HobbyCAD never stores GitHub passwords.
 
     The .gitignore file is auto-generated on first git init.
     By default, binary files are added to .gitignore:
@@ -1296,7 +1296,7 @@
     - No object grouping or hierarchy
     - No metadata (author, creation date, etc.)
     - Duplicate vertices at shared edges (no vertex sharing)
-    - Cannot represent curves — all geometry is triangulated
+    - Cannot represent curves; all geometry is triangulated
     - 3MF is the modern replacement addressing all these limitations
 
   8.2  HOBBYMESH DEFAULT STL FORMAT
@@ -1389,7 +1389,7 @@
 
     PNG:      Primary raster format (via Qt's QImage or libpng)
     JPEG:     Common photograph format (via Qt's QImage or libjpeg)
-    PPM/PNM:  Netpbm portable pixmap format — text-based image format
+    PPM/PNM:  Netpbm portable pixmap format, a text-based image format
               that is easily convertible to/from PNG using standard
               tools (pnmtopng / pngtopam). PPM is human-readable in
               its ASCII variant, making it useful for programmatic
@@ -1450,7 +1450,7 @@
   ------------------------------
 
   HobbyCAD and HobbyMesh are licensed under the GNU General Public
-  License version 3.0 only — not "or any later version." This is a
+  License version 3.0 only, not "or any later version." This is a
   deliberate choice to lock the project to a known, well-understood
   license and avoid delegating future licensing decisions to the FSF.
 
@@ -1458,7 +1458,7 @@
 
     Permissions:
       - Commercial use, distribution, modification, patent grant,
-        private use — all permitted
+        private use (all permitted)
 
     Conditions (copyleft):
       - Source code must be disclosed when distributing
@@ -1507,7 +1507,7 @@
       CGAL (GPL 3.0+) would still be usable
     - The slicer library integration (Section 9.7 of
       cad_use_case_document.txt) is AGPL 3.0 from OrcaSlicer/
-      PrusaSlicer — if HobbyCAD were AGPL, the slicer plugin could
+      PrusaSlicer; if HobbyCAD were AGPL, the slicer plugin could
       be directly linked rather than kept as a separate process
     - Stronger copyleft protection aligns with project goals
 
@@ -1520,7 +1520,7 @@
       contributors
 
   This decision is not time-bound. The project will launch under
-  GPL 3.0, and a switch to AGPL 3.0 may happen at any point —
+  GPL 3.0, and a switch to AGPL 3.0 may happen at any point,
   before or after public release. The copyright assignment policy
   (Section 12.5) preserves the ability to make this change
   unilaterally.
@@ -1552,7 +1552,7 @@
 
   Note: Using HobbyCAD commercially (e.g., a business using it
   internally for design work) does NOT require a commercial license.
-  The commercial license applies only to redistribution — charging
+  The commercial license applies only to redistribution: charging
   others for access to HobbyCAD or a derivative.
 
   12.4  TRADEMARK POLICY
@@ -1588,7 +1588,7 @@
   from the submitter to the project author. This applies to all
   code, documentation, and other creative works that are merged
   into the main repository and shipped as part of the official
-  distribution — whether submitted via pull requests, patches,
+  distribution, whether submitted via pull requests, patches,
   or other contribution mechanisms.
 
   If a contributor explicitly states that they do not wish to
@@ -1674,14 +1674,19 @@
     - Set up CMake build system with OCCT and Qt 6.4.2+ dependencies
       (GUI auto-disabled if Qt < 6.4.2; library builds Qt-free)
     - Create main application window with Qt 6.4.2+
-    - Embed OCCT AIS viewer in a QOpenGLWidget
+    - Embed OCCT AIS viewer in a plain QWidget with
+      Qt::WA_PaintOnScreen (NOT QOpenGLWidget, which conflicts
+      with the Qt 6 RHI; OCCT creates and owns the GL context).
+      Consequence: OCCT owns the context, so Qt child widgets
+      cannot overlay the viewport: all viewport overlays must
+      be OCCT AIS objects.
     - Tiered startup based on OpenGL capability (see below)
     - Implement BREP file read/write (native format)
     - Display a test solid (e.g., a box) in the viewport
     - Basic camera controls (rotate, pan, zoom)
     - Application skeleton: menu bar, status bar, empty side panels
     - Unsaved changes prompt on exit (Close Without Saving / Save
-      and Close / Cancel) — triggered by File > Quit, window close
+      and Close / Cancel), triggered by File > Quit, window close
       button, terminal "exit" command, File > New, and File > Open
     - Window geometry and dock state persistence via QSettings
       (saved to ~/.config/HobbyCAD/HobbyCAD.conf on Linux)
@@ -1707,7 +1712,7 @@
       non-visual features remain fully functional:
         - BREP / STEP / IGES / STL / OBJ file import and export
         - Format conversion (e.g., STEP to STL, IGES to BREP)
-        - Feature tree operations (extrude, boolean, fillet — all
+        - Feature tree operations (extrude, boolean, fillet; all
           CPU-side geometry kernel operations)
         - 2D sketch editing via QPainter/QGraphicsScene (Phase 1+;
           the sketch editor is GPU-independent by design)
@@ -1745,7 +1750,7 @@
         - A "Continue in Reduced Mode" button to dismiss
         - An "Exit" button to quit the application
 
-    Command-Line Mode (stretch goal — no GUI):
+    Command-Line Mode (stretch goal, no GUI):
       HobbyCAD runs as a command-line tool with no window at all.
       Useful for headless servers, CI/CD pipelines, and batch
       processing. Can be invoked in two ways:
@@ -1810,7 +1815,7 @@
 
     - 2D sketch editor on a selected plane (default sketch mode)
     - Sketch rendering via QPainter/QGraphicsScene (2D widget),
-      not dependent on OpenGL — works in both Full and Reduced
+      not dependent on OpenGL; works in both Full and Reduced
       Mode. In Full Mode, the sketch plane is also shown in the
       3D viewport for context (orientation, reference geometry),
       but all interactive sketch editing happens in the 2D view.
@@ -1865,7 +1870,7 @@
     The QPainter-based 2D sketch editor provides Reduced Mode
     users with meaningful modeling capability: they can create
     and edit constrained sketches, apply extrude/revolve/boolean
-    operations via the feature tree, and export results — all
+    operations via the feature tree, and export results, all
     without a 3D-capable GPU. The 3D result is computed by the
     OCCT geometry kernel on the CPU; it simply cannot be
     visualized interactively until the file is opened on a
@@ -2162,9 +2167,9 @@
       (background/foreground collision rejection), and platform
       notes.
 
-    themes/sample.qss
-      Reference Qt stylesheet listing every widget ID with its
-      default values.  Starting point for custom themes.
+    resources/themes/default.qss, darkmode.qss
+      The built-in Qt stylesheets, listing every widget ID with its
+      value.  Compiled in; the starting point for custom themes.
 
     AUTHORS
       Project author and contributor listing with dates and areas

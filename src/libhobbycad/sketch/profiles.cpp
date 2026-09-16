@@ -8,6 +8,9 @@
 // =====================================================================
 
 #include <hobbycad/sketch/profiles.h>
+#include <hobbycad/units.h>
+#include <hobbycad/sketch/operations.h>
+#include <hobbycad/sketch/queries.h>
 #include <hobbycad/geometry/utils.h>
 
 #include <algorithm>
@@ -17,9 +20,7 @@
 #include <string>
 #include <unordered_set>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -32,140 +33,23 @@ using namespace geometry;
 
 namespace {
 
-/// Find entity by ID in a vector
-const Entity* findEntityById(const std::vector<Entity>& entities, int id)
-{
-    for (const Entity& e : entities) {
-        if (e.id == id) {
-            return &e;
-        }
-    }
-    return nullptr;
-}
-
 /// Get endpoints of an entity (returns 0, 1, or 2 points)
 std::vector<Point2D> getEndpoints(const Entity& entity)
 {
     return entity.endpoints();
 }
 
-/// Discretize an entity into a series of points
+/// Discretize an entity into an OPEN run of points for profile building:
+/// tessellate() with a fixed segment count, minus the closing point it adds to
+/// rectangles and slots (the profile code closes loops itself).
 std::vector<Point2D> discretizeEntity(const Entity& entity, int segments)
 {
-    std::vector<Point2D> points;
-
-    switch (entity.type) {
-    case EntityType::Point:
-        if (!entity.points.empty()) {
-            points.push_back(entity.points[0]);
-        }
-        break;
-
-    case EntityType::Line:
-        if (entity.points.size() >= 2) {
-            points.push_back(entity.points[0]);
-            points.push_back(entity.points[1]);
-        }
-        break;
-
-    case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            Point2D p1 = entity.points[0];
-            Point2D p2 = entity.points[1];
-            points.push_back(p1);
-            points.push_back(Point2D(p2.x, p1.y));
-            points.push_back(p2);
-            points.push_back(Point2D(p1.x, p2.y));
-        }
-        break;
-
-    case EntityType::Circle:
-        if (!entity.points.empty()) {
-            for (int i = 0; i <= segments; ++i) {
-                double angle = 2.0 * M_PI * i / segments;
-                double x = entity.points[0].x + entity.radius * std::cos(angle);
-                double y = entity.points[0].y + entity.radius * std::sin(angle);
-                points.push_back(Point2D(x, y));
-            }
-        }
-        break;
-
-    case EntityType::Arc:
-        if (!entity.points.empty()) {
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double sweepRad = entity.sweepAngle * M_PI / 180.0;
-            for (int i = 0; i <= segments; ++i) {
-                double t = static_cast<double>(i) / segments;
-                double angle = startRad + t * sweepRad;
-                double x = entity.points[0].x + entity.radius * std::cos(angle);
-                double y = entity.points[0].y + entity.radius * std::sin(angle);
-                points.push_back(Point2D(x, y));
-            }
-        }
-        break;
-
-    case EntityType::Polygon:
-        points = entity.points;
-        if (!points.empty() && !(points.front() == points.back())) {
-            points.push_back(points.front());
-        }
-        break;
-
-    case EntityType::Spline:
-        // For splines, use the control points as approximation
-        // A proper implementation would evaluate the spline
-        points = entity.points;
-        break;
-
-    case EntityType::Ellipse:
-        if (!entity.points.empty()) {
-            for (int i = 0; i <= segments; ++i) {
-                double angle = 2.0 * M_PI * i / segments;
-                double x = entity.points[0].x + entity.majorRadius * std::cos(angle);
-                double y = entity.points[0].y + entity.minorRadius * std::sin(angle);
-                points.push_back(Point2D(x, y));
-            }
-        }
-        break;
-
-    case EntityType::Slot:
-        // Slot is two semicircles connected by lines
-        if (entity.points.size() >= 2) {
-            Point2D p1 = entity.points[0];
-            Point2D p2 = entity.points[1];
-            Point2D dir = p2 - p1;
-            double len = length(dir);
-            if (len > DEFAULT_TOLERANCE) {
-                dir = dir / len;
-                Point2D perp(-dir.y, dir.x);
-
-                // First semicircle around p1
-                double baseAngle = std::atan2(perp.y, perp.x) * 180.0 / M_PI;
-                for (int i = 0; i <= segments / 2; ++i) {
-                    double t = static_cast<double>(i) / (segments / 2);
-                    double angle = (baseAngle + 180 * t) * M_PI / 180.0;
-                    double x = p1.x + entity.radius * std::cos(angle);
-                    double y = p1.y + entity.radius * std::sin(angle);
-                    points.push_back(Point2D(x, y));
-                }
-
-                // Second semicircle around p2
-                for (int i = 0; i <= segments / 2; ++i) {
-                    double t = static_cast<double>(i) / (segments / 2);
-                    double angle = (baseAngle + 180 + 180 * t) * M_PI / 180.0;
-                    double x = p2.x + entity.radius * std::cos(angle);
-                    double y = p2.y + entity.radius * std::sin(angle);
-                    points.push_back(Point2D(x, y));
-                }
-            }
-        }
-        break;
-
-    case EntityType::Text:
-        // Text doesn't contribute to profiles
-        break;
+    std::vector<Point2D> points = tessellate(entity, segments);
+    if ((entity.type == EntityType::Rectangle || entity.type == EntityType::Parallelogram
+         || entity.type == EntityType::Slot)
+        && points.size() > 1 && points.front() == points.back()) {
+        points.pop_back();
     }
-
     return points;
 }
 
@@ -303,8 +187,9 @@ ConnectivityGraph buildConnectivityGraph(
 
     // Build nodes and edges
     for (const Entity& entity : entities) {
-        // Skip construction geometry
-        if (entity.isConstruction) {
+        // Skip construction and centerline geometry: both are reference
+        // linework, not part of a closed profile boundary.
+        if (entity.isConstruction || entity.isCenterline) {
             continue;
         }
 
@@ -429,7 +314,7 @@ std::vector<Profile> detectProfiles(
     // Filter entities
     std::vector<Entity> filteredEntities;
     for (const Entity& e : entities) {
-        if (options.excludeConstruction && e.isConstruction) {
+        if (options.excludeConstruction && (e.isConstruction || e.isCenterline)) {
             continue;
         }
         filteredEntities.push_back(e);
@@ -456,6 +341,10 @@ std::vector<Profile> detectProfiles(
 
         case EntityType::Rectangle:
             isClosed = true;
+            break;
+
+        case EntityType::Parallelogram:
+            isClosed = entity.points.size() >= 4;
             break;
 
         default:

@@ -1,13 +1,17 @@
 Source: hobbycad
 Section: graphics
 Priority: optional
-Maintainer: Aaron Yourk <ayourk@users.launchpad.net>
+Maintainer: Aaron Yourk <ayourk@gmail.com>
 Build-Depends:
  debhelper-compat (= 13),
  cmake (>= 3.20),
  ninja-build,
  pkg-config,
- qt6-base-dev (>= 6.2),
+# 6.4.2, not 6.2: HOBBYCAD_MIN_QT_VERSION in the root CMakeLists is 6.4.2,
+# and a >= 6.2 constraint is satisfied by jammy's stock 6.2.4, which then
+# fails at configure. That mismatch is why the Qt 6.4.2 backport exists in
+# the PPA; the dependency has to say so.
+ qt6-base-dev (>= 6.4.2),
  qt6-base-dev-tools,
  libqt6opengl6-dev,
  libqt6openglwidgets6,
@@ -23,11 +27,35 @@ Build-Depends:
  libglu1-mesa-dev,
  libegl-dev,
  libxkbcommon-dev,
+# Pulled in through the OpenCASCADE visualization link interface; the
+# link fails without it on a system where nothing else supplies it.
+ libfontconfig-dev,
  libzip-dev,
  libgit2-dev,
- librsvg2-bin,
- icoutils
-Standards-Version: 4.6.2
+ libslvs-dev,
+# Provides Qt 6's lrelease, which compiles resources/translations/*.ts into the .qm
+# catalogs embedded in the binary. The CMake side looks it up with
+# find_program rather than requiring LinguistTools, so that a third party
+# without Qt Linguist can still build HobbyCAD, but the result is an
+# English-only binary with no error at any stage. Declaring it here is what
+# guarantees the *packaged* build actually ships the translations.
+# Note this is NOT qt6-tools-dev-tools: on Debian and Ubuntu the Qt 6
+# lrelease/lupdate binaries live in qt6-l10n-tools, and /usr/bin/lrelease is
+# a qtchooser symlink that resolves to Qt 5.
+ qt6-l10n-tools,
+ nlohmann-json3-dev (>= 3.12.0),
+# Optional at configure time, but their absence silently disables
+# background-image loading and WebP support in the built package.
+ libstb-dev,
+ libwebp-dev
+# Debian Policy 9.6 forbids shipping a .desktop file and a Debian menu file in
+# the same package from Standards-Version 3.9.6 onwards. This package ships
+# both: usr/share/applications/hobbycad.desktop for XDG desktops, and
+# usr/share/menu/hobbycad because fluxbox reads only the classic Debian menu
+# pipeline. Pinned below 3.9.6 so the declaration is truthful, the same
+# workaround ClaudeQt used. Drop the pin and the menu file together once
+# fluxbox consumes desktop entries.
+Standards-Version: 3.9.5
 Homepage: https://github.com/ayourk/hobbycad
 Vcs-Git: https://github.com/ayourk/hobbycad.git
 Vcs-Browser: https://github.com/ayourk/hobbycad
@@ -52,3 +80,26 @@ Description: Open-source parametric 3D CAD for hobbyists
  Full Mode (OpenGL 3.3+), Reduced Mode (no GPU required for
  file conversion and geometry operations), and Command-Line
  Mode (headless batch processing).
+
+Package: libhobbycad-dev
+Section: libdevel
+Architecture: any
+# The public headers include OpenCASCADE headers (TopoDS_Shape.hxx and
+# TopoDS_Face.hxx from modeling-data; Standard_Failure.hxx,
+# Standard_Version.hxx and Poly_Triangulation.hxx from foundation), and
+# without Qt they include <nlohmann/json.hpp> as well. Without these a
+# consumer installs headers it cannot compile: the include fails on
+# TopoDS_Shape.hxx before anything of ours is reached. Only the two OCCT
+# packages the HEADERS need are listed; the others in Build-Depends are
+# for building the library itself.
+Depends:
+ libocct-foundation-dev,
+ libocct-modeling-data-dev,
+ nlohmann-json3-dev (>= 3.12.0),
+ ${misc:Depends}
+Description: Development files for the HobbyCAD core library
+ The static library and the public headers of libhobbycad, the Qt-free
+ core behind HobbyCAD: geometry, sketch entities and constraints, the
+ constraint solver, the document model, file I/O, units and parsing.
+ Third-party tools and plugins build against this; the application
+ package does not need it.

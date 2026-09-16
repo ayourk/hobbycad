@@ -23,6 +23,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -36,21 +39,14 @@ jobs:
 
     env:
       BUILD_TYPE: Release
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install build tools
-        run: brew install ninja autoconf autoconf-archive automake libtool librsvg
-
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+        run: brew install ninja autoconf autoconf-archive automake libtool
 
       - name: Setup vcpkg
         run: |
@@ -62,6 +58,26 @@ jobs:
       # ── Install dependencies for both architectures ─────────────
       - name: Clear vcpkg registry cache
         run: rm -rf ~/.cache/vcpkg/registries
+
+      # vcpkg stores every package it builds as an archive in vcpkg-bincache
+      # (the files provider in VCPKG_BINARY_SOURCES), and that directory is kept
+      # in the GitHub Actions cache. vcpkg hashes each package's inputs itself,
+      # so restoring an older cache is safe: unchanged packages come from it and
+      # only changed ones build. The runner image is in the key because an image
+      # update can change the compiler and with it those hashes.
+      - name: vcpkg binary cache key
+        id: vcpkg-key
+        run: |
+          mkdir -p vcpkg-bincache
+          echo "image=$ImageVersion" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-arm64-x64-osx-static-2026.02.27-${{ steps.vcpkg-key.outputs.image }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-custom-triplets/**') }}
+          restore-keys: vcpkg-arm64-x64-osx-static-2026.02.27-
 
       - name: Install arm64 dependencies via vcpkg
         run: |
@@ -76,6 +92,13 @@ jobs:
             --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets \
             --x-install-root=vcpkg_installed \
             --clean-buildtrees-after-build
+
+      - name: Save vcpkg binary cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       # ── Build arm64 ─────────────────────────────────────────────
       - name: Build arm64
@@ -128,7 +151,7 @@ jobs:
           # Verify the binary is universal
           # Check both possible locations (bundle and non-bundle)
           if [ -d "install-universal/HobbyCAD.app" ]; then
-            exe="install-universal/HobbyCAD.app/Contents/MacOS/hobbycad"
+            exe="install-universal/HobbyCAD.app/Contents/MacOS/HobbyCAD"
           else
             exe="install-universal/bin/hobbycad"
           fi
@@ -136,10 +159,21 @@ jobs:
           file "$exe"
           echo "Size: $(du -h "$exe" | cut -f1)"
 
+      - name: Create DMG
+        run: tools/macos/make-dmg.sh install-universal/HobbyCAD.app universal dist
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: hobbycad-macos-universal-dmg
+          path: dist/*.dmg
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hobbycad-macos-universal
           path: install-universal/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

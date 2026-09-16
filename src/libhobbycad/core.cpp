@@ -1,5 +1,5 @@
 // =====================================================================
-//  src/libhobbycad/core.cpp -- Library initialization
+//  src/libhobbycad/core.cpp — Library initialization
 // =====================================================================
 //
 //  Part of libhobbycad.
@@ -8,6 +8,7 @@
 // =====================================================================
 
 #include "hobbycad/core.h"
+#include <hobbycad/sketch/solver.h>
 
 // OCCT kernel headers
 #include <Standard_Version.hxx>
@@ -21,7 +22,12 @@ const char* version()
 
 bool initialize()
 {
-    // Phase 0: no library-wide state to set up yet.
+    // Give the constraint solver somewhere to report a fatal condition.
+    // Without this a fault inside libslvs ends the process with its
+    // diagnostic written to a stderr the application never reads.
+    sketch::installSolverFatalHandler();
+
+    // Phase 0: no other library-wide state to set up yet.
     // Future phases will register OCCT XDE drivers, initialize
     // the plugin system, etc.
     return true;

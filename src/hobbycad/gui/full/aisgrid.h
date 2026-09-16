@@ -26,9 +26,9 @@ public:
     /// @param extent     Half-size of the grid (grid spans -extent to +extent)
     /// @param minorStep  Spacing between minor grid lines
     /// @param majorStep  Spacing between major (emphasized) grid lines
-    AisGrid(Standard_Real extent = 100.0,
-            Standard_Real minorStep = 10.0,
-            Standard_Real majorStep = 100.0);
+    AisGrid(double extent = 100.0,
+            double minorStep = 10.0,
+            double majorStep = 100.0);
 
     /// Set the minor grid line color.
     void SetMinorColor(const Quantity_Color& color);
@@ -37,30 +37,30 @@ public:
     void SetMajorColor(const Quantity_Color& color);
 
     /// Set the grid extent (half-size).
-    void SetExtent(Standard_Real extent);
+    void SetExtent(double extent);
 
     /// Set the minor line spacing.
-    void SetMinorStep(Standard_Real step);
+    void SetMinorStep(double step);
 
     /// Set the major line spacing.
-    void SetMajorStep(Standard_Real step);
+    void SetMajorStep(double step);
 
     DEFINE_STANDARD_RTTIEXT(AisGrid, AIS_InteractiveObject)
 
 protected:
     void Compute(const Handle(PrsMgr_PresentationManager)& thePrsMgr,
                  const Handle(Prs3d_Presentation)& thePrs,
-                 const Standard_Integer theMode) override;
+                 const int theMode) override;
 
     void ComputeSelection(const Handle(SelectMgr_Selection)& theSel,
-                          const Standard_Integer theMode) override;
+                          const int theMode) override;
 
 private:
     void buildGrid(const Handle(Prs3d_Presentation)& prs);
 
-    Standard_Real   m_extent;
-    Standard_Real   m_minorStep;
-    Standard_Real   m_majorStep;
+    double   m_extent;
+    double   m_minorStep;
+    double   m_majorStep;
     Quantity_Color  m_minorColor;
     Quantity_Color  m_majorColor;
 };

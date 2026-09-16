@@ -12,9 +12,10 @@
 #include "navhomebutton.h"
 
 #include <cmath>
+#include <hobbycad/geometry/utils.h>
 
 namespace {
-    // Home icon position — at the vertex of a right angle where:
+    // Home icon position is at the vertex of a right angle where:
     //   vertical line up → tangent to green (Y) arrows
     //   horizontal line right → tangent to red (X) arrows
     constexpr double kHomeX = -61.0;
@@ -51,8 +52,11 @@ void NavHomeButton::onPaint()
     double right  = kHomeX + kHalfW;
 
     Quantity_Color white(Quantity_NOC_WHITE);
-    Quantity_Color red(1.0, 0.2, 0.2, Quantity_TOC_RGB);
-    Quantity_Color doorCol(0.855, 0.647, 0.125, Quantity_TOC_RGB); // #DAA520
+    // sRGB on purpose: these are the SVG's colors (#DAA520 and a strong
+    // red). Quantity_TOC_RGB is linear and OCCT gamma-encodes it on output,
+    // which lifted the door to a pale yellow and the roof to pink.
+    Quantity_Color red(1.0, 0.2, 0.2, Quantity_TOC_sRGB);
+    Quantity_Color doorCol(0.855, 0.647, 0.125, Quantity_TOC_sRGB); // #DAA520
     Quantity_Color black(0.0, 0.0, 0.0, Quantity_TOC_RGB);
 
     // ---- Rectangle body (two triangles) ----
@@ -82,7 +86,7 @@ void NavHomeButton::onPaint()
     // Left edge unit: from (left,eaveY) → (kHomeX,peakY)
     double ldx = kHomeX - left;
     double ldy = peakY - eaveY;
-    double llen = std::sqrt(ldx * ldx + ldy * ldy);
+    double llen = hobbycad::geometry::length({ldx, ldy});
     double lux = ldx / llen;
     double luy = ldy / llen;
 
@@ -93,7 +97,7 @@ void NavHomeButton::onPaint()
     // Right edge unit: from (kHomeX,peakY) → (right,eaveY)
     double rdx = right - kHomeX;
     double rdy = eaveY - peakY;
-    double rlen = std::sqrt(rdx * rdx + rdy * rdy);
+    double rlen = hobbycad::geometry::length({rdx, rdy});
     double rux = rdx / rlen;
     double ruy = rdy / rlen;
 

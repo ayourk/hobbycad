@@ -39,6 +39,94 @@ ToolbarButton* ModelToolbar::createToolButton(const QIcon& icon,
     return btn;
 }
 
+namespace {
+
+/// Every label and tooltip this toolbar shows for a tool, keyed by the tool.
+///
+/// One table rather than the same strings spelled out in createTools(), in
+/// each dropdown handler, and again in retranslate(). All three need the same
+/// answer: the handlers set a button caption when a tool is picked, and
+/// retranslate() has to re-derive whichever caption is currently showing.
+/// Separate copies drift, and the copy that drifts is the one only seen after
+/// a language switch.
+///
+/// QT_TRANSLATE_NOOP marks the strings for lupdate, which parses source and
+/// does not run it: tr(table[i].label) on its own extracts nothing. The
+/// symptom of getting that wrong is silent in both directions: the strings
+/// vanish from the next .ts, every catalog marks them obsolete, lrelease
+/// drops obsolete entries, and a translated build shows English with no
+/// warning at any stage. The context has to match what tr() looks up at
+/// runtime, which for a member function is the fully-qualified class name.
+struct ToolText {
+    ModelTool tool{};
+    const char* label = nullptr;
+    const char* tip = nullptr;
+};
+
+
+const ToolText kToolText[] = {
+    {ModelTool::Sketch,       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Sketch"),             QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create sketch on a plane")},
+    {ModelTool::SketchOnFace, QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Sketch on\nFace"),    QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create sketch on existing face")},
+
+    {ModelTool::ConstructionPlane, QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Construction\nPlane"), QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a construction plane")},
+
+    {ModelTool::Extrude,     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Extrude"),      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Extrude to add material")},
+    {ModelTool::CutExtrude,  QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Cut\nExtrude"), QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Extrude to remove material")},
+    {ModelTool::Revolve,     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Revolve"),      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Revolve to add material")},
+    {ModelTool::CutRevolve,  QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Cut\nRevolve"), QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Revolve to remove material")},
+    {ModelTool::Loft,        QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Loft"),         QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Loft to add material")},
+    {ModelTool::CutLoft,     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Cut\nLoft"),    QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Loft to remove material")},
+    {ModelTool::Sweep,       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Sweep"),        QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Sweep to add material")},
+    {ModelTool::CutSweep,    QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Cut\nSweep"),   QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Sweep to remove material")},
+    {ModelTool::Box,         QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Box"),          QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a box")},
+    {ModelTool::Cylinder,    QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Cylinder"),     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a cylinder")},
+    {ModelTool::Sphere,      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Sphere"),       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a sphere")},
+    {ModelTool::Torus,       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Torus"),        QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a torus")},
+    {ModelTool::Coil,        QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Coil"),         QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a coil/helix")},
+    {ModelTool::Pipe,        QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Pipe"),         QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a pipe along a path")},
+
+    {ModelTool::Fillet,      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Fillet"),       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Round edges")},
+    {ModelTool::Chamfer,     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Chamfer"),      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Bevel edges")},
+
+    {ModelTool::SimpleHole,   QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Simple\nHole"),     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a simple hole")},
+    {ModelTool::Counterbore,  QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Counter-\nbore"),   QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a counterbore hole")},
+    {ModelTool::Countersink,  QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Counter-\nsink"),   QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a countersink hole")},
+    {ModelTool::ThreadedHole, QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Threaded\nHole"),   QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create a threaded hole")},
+
+    {ModelTool::MoveCopy,    QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Move/\nCopy"),  QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Move or copy objects")},
+    {ModelTool::Align,       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Align"),        QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Align objects")},
+
+    {ModelTool::Mirror,      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Mirror"),       QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Mirror bodies or features")},
+    {ModelTool::Pattern,     QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Pattern"),      QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Create rectangular or circular pattern")},
+
+    {ModelTool::Parameters,  QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Change\nParameters"), QT_TRANSLATE_NOOP("hobbycad::ModelToolbar", "Edit document parameters")},
+};
+
+
+const ToolText* findToolText(ModelTool tool)
+{
+    for (const ToolText& entry : kToolText) {
+        if (entry.tool == tool) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+}  // namespace
+
+QString ModelToolbar::toolLabel(ModelTool tool)
+{
+    const ToolText* entry = findToolText(tool);
+    return entry ? tr(entry->label) : QString();
+}
+
+QString ModelToolbar::toolTip(ModelTool tool)
+{
+    const ToolText* entry = findToolText(tool);
+    return entry ? tr(entry->tip) : QString();
+}
+
 void ModelToolbar::createTools()
 {
     auto addSeparator = [this]() {
@@ -52,20 +140,18 @@ void ModelToolbar::createTools()
     // ===== SKETCH button (default-first: Sketch) =====
     m_defaultSketchIcon = QIcon::fromTheme(QStringLiteral("draw-freehand"),
                                            style()->standardIcon(QStyle::SP_FileDialogDetailedView));
-    m_defaultSketchText = tr("Sketch");
-    m_sketchBtn = createToolButton(m_defaultSketchIcon, m_defaultSketchText,
-                                   tr("Create a 2D sketch"));
+    m_sketchBtn = createToolButton(m_defaultSketchIcon, QString(), QString());
 
     auto* sketchDrop = m_sketchBtn->dropdown();
     sketchDrop->setIconSize(16);
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-freehand"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Sketch"), tr("Create sketch on a plane"));
+        QString(), QString());
     sketchDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-polygon"),
                          style()->standardIcon(QStyle::SP_FileDialogContentsView)),
-        tr("Sketch on\nFace"), tr("Create sketch on existing face"));
+        QString(), QString());
 
     connect(sketchDrop, &ToolbarDropdown::buttonClicked,
             this, &ModelToolbar::onSketchDropdownClicked);
@@ -73,16 +159,14 @@ void ModelToolbar::createTools()
     // ===== PLANE button (default-first: Construction Plane) =====
     m_defaultPlaneIcon = QIcon::fromTheme(QStringLiteral("draw-rectangle"),
                                           style()->standardIcon(QStyle::SP_FileDialogListView));
-    m_defaultPlaneText = tr("Plane");
-    m_planeBtn = createToolButton(m_defaultPlaneIcon, m_defaultPlaneText,
-                                  tr("Create construction plane"));
+    m_planeBtn = createToolButton(m_defaultPlaneIcon, QString(), QString());
 
     auto* planeDrop = m_planeBtn->dropdown();
     planeDrop->setIconSize(16);
     planeDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-rectangle"),
                          style()->standardIcon(QStyle::SP_FileDialogListView)),
-        tr("Construction\nPlane"), tr("Create a construction plane"));
+        QString(), QString());
     // Future: Surface creation
     // planeDrop->addButton(..., tr("Surface"), tr("Create a surface"));
 
@@ -94,9 +178,7 @@ void ModelToolbar::createTools()
     // ===== SOLID button (default-first: Extrude) - combines Extrude, Revolve, Loft, Sweep, Primitives =====
     m_defaultSolidIcon = QIcon::fromTheme(QStringLiteral("go-up"),
                                           style()->standardIcon(QStyle::SP_ArrowUp));
-    m_defaultSolidText = tr("Solid");
-    m_solidBtn = createToolButton(m_defaultSolidIcon, m_defaultSolidText,
-                                  tr("Create solid geometry"));
+    m_solidBtn = createToolButton(m_defaultSolidIcon, QString(), QString());
 
     auto* solidDrop = m_solidBtn->dropdown();
     solidDrop->setIconSize(16);
@@ -104,67 +186,67 @@ void ModelToolbar::createTools()
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("go-up"),
                          style()->standardIcon(QStyle::SP_ArrowUp)),
-        tr("Extrude"), tr("Extrude to add material"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("go-down"),
                          style()->standardIcon(QStyle::SP_ArrowDown)),
-        tr("Cut\nExtrude"), tr("Extrude to remove material"));
+        QString(), QString());
     solidDrop->addSeparator();
     // Revolve operations
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("object-rotate-right"),
                          style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Revolve"), tr("Revolve to add material"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("object-rotate-left"),
                          style()->standardIcon(QStyle::SP_BrowserStop)),
-        tr("Cut\nRevolve"), tr("Revolve to remove material"));
+        QString(), QString());
     solidDrop->addSeparator();
     // Loft operations
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-bezier-curves"),
                          style()->standardIcon(QStyle::SP_DesktopIcon)),
-        tr("Loft"), tr("Loft to add material"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("edit-cut"),
                          style()->standardIcon(QStyle::SP_DialogNoButton)),
-        tr("Cut\nLoft"), tr("Loft to remove material"));
+        QString(), QString());
     solidDrop->addSeparator();
     // Sweep operations
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-path"),
                          style()->standardIcon(QStyle::SP_ArrowForward)),
-        tr("Sweep"), tr("Sweep to add material"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-eraser"),
                          style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Cut\nSweep"), tr("Sweep to remove material"));
+        QString(), QString());
     solidDrop->addSeparator();
     // Primitives
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-cube"),
                          style()->standardIcon(QStyle::SP_ComputerIcon)),
-        tr("Box"), tr("Create a box"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-cylinder"),
                          style()->standardIcon(QStyle::SP_DriveHDIcon)),
-        tr("Cylinder"), tr("Create a cylinder"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-sphere"),
                          style()->standardIcon(QStyle::SP_DialogHelpButton)),
-        tr("Sphere"), tr("Create a sphere"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-donut"),
                          style()->standardIcon(QStyle::SP_DialogResetButton)),
-        tr("Torus"), tr("Create a torus"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-spiral"),
                          style()->standardIcon(QStyle::SP_BrowserReload)),
-        tr("Coil"), tr("Create a coil/helix"));
+        QString(), QString());
     solidDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-path"),
                          style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Pipe"), tr("Create a pipe along a path"));
+        QString(), QString());
 
     connect(solidDrop, &ToolbarDropdown::buttonClicked,
             this, &ModelToolbar::onSolidDropdownClicked);
@@ -174,20 +256,18 @@ void ModelToolbar::createTools()
     // ===== FILLET button (default-first: Fillet) =====
     m_defaultFilletIcon = QIcon::fromTheme(QStringLiteral("format-stroke-color"),
                                            style()->standardIcon(QStyle::SP_DialogApplyButton));
-    m_defaultFilletText = tr("Fillet");
-    m_filletBtn = createToolButton(m_defaultFilletIcon, m_defaultFilletText,
-                                   tr("Round or bevel edges"));
+    m_filletBtn = createToolButton(m_defaultFilletIcon, QString(), QString());
 
     auto* filletDrop = m_filletBtn->dropdown();
     filletDrop->setIconSize(16);
     filletDrop->addButton(
         QIcon::fromTheme(QStringLiteral("format-stroke-color"),
                          style()->standardIcon(QStyle::SP_DialogApplyButton)),
-        tr("Fillet"), tr("Round edges"));
+        QString(), QString());
     filletDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-line"),
                          style()->standardIcon(QStyle::SP_DialogOkButton)),
-        tr("Chamfer"), tr("Bevel edges"));
+        QString(), QString());
 
     connect(filletDrop, &ToolbarDropdown::buttonClicked,
             this, &ModelToolbar::onFilletDropdownClicked);
@@ -195,28 +275,26 @@ void ModelToolbar::createTools()
     // ===== HOLE button (default-first: Simple Hole) =====
     m_defaultHoleIcon = QIcon::fromTheme(QStringLiteral("draw-circle"),
                                          style()->standardIcon(QStyle::SP_DialogDiscardButton));
-    m_defaultHoleText = tr("Simple\nHole");
-    m_holeBtn = createToolButton(m_defaultHoleIcon, m_defaultHoleText,
-                                 tr("Create a simple hole"));
+    m_holeBtn = createToolButton(m_defaultHoleIcon, QString(), QString());
 
     auto* holeDrop = m_holeBtn->dropdown();
     holeDrop->setIconSize(16);
     holeDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-circle"),
                          style()->standardIcon(QStyle::SP_DialogDiscardButton)),
-        tr("Simple\nHole"), tr("Create a simple hole"));
+        QString(), QString());
     holeDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-ellipse"),
                          style()->standardIcon(QStyle::SP_DialogNoButton)),
-        tr("Counter-\nbore"), tr("Create a counterbore hole"));
+        QString(), QString());
     holeDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-polygon"),
                          style()->standardIcon(QStyle::SP_DialogYesButton)),
-        tr("Counter-\nsink"), tr("Create a countersink hole"));
+        QString(), QString());
     holeDrop->addButton(
         QIcon::fromTheme(QStringLiteral("draw-spiral"),
                          style()->standardIcon(QStyle::SP_DialogSaveButton)),
-        tr("Threaded\nHole"), tr("Create a threaded hole"));
+        QString(), QString());
 
     connect(holeDrop, &ToolbarDropdown::buttonClicked,
             this, &ModelToolbar::onHoleDropdownClicked);
@@ -226,20 +304,18 @@ void ModelToolbar::createTools()
     // ===== MOVE button (default-first: Move/Copy) =====
     m_defaultMoveIcon = QIcon::fromTheme(QStringLiteral("transform-move"),
                                          style()->standardIcon(QStyle::SP_ArrowRight));
-    m_defaultMoveText = tr("Move");
-    m_moveBtn = createToolButton(m_defaultMoveIcon, m_defaultMoveText,
-                                 tr("Transform objects"));
+    m_moveBtn = createToolButton(m_defaultMoveIcon, QString(), QString());
 
     auto* moveDrop = m_moveBtn->dropdown();
     moveDrop->setIconSize(16);
     moveDrop->addButton(
         QIcon::fromTheme(QStringLiteral("transform-move"),
                          style()->standardIcon(QStyle::SP_ArrowRight)),
-        tr("Move/\nCopy"), tr("Move or copy objects"));
+        QString(), QString());
     moveDrop->addButton(
         QIcon::fromTheme(QStringLiteral("align-horizontal-center"),
                          style()->standardIcon(QStyle::SP_ToolBarHorizontalExtensionButton)),
-        tr("Align"), tr("Align objects"));
+        QString(), QString());
 
     connect(moveDrop, &ToolbarDropdown::buttonClicked,
             this, &ModelToolbar::onMoveDropdownClicked);
@@ -247,20 +323,18 @@ void ModelToolbar::createTools()
     // ===== MIRROR button (default-first: Mirror) =====
     m_defaultMirrorIcon = QIcon::fromTheme(QStringLiteral("object-flip-horizontal"),
                                            style()->standardIcon(QStyle::SP_ArrowBack));
-    m_defaultMirrorText = tr("Mirror");
-    m_mirrorBtn = createToolButton(m_defaultMirrorIcon, m_defaultMirrorText,
-                                   tr("Mirror or pattern objects"));
+    m_mirrorBtn = createToolButton(m_defaultMirrorIcon, QString(), QString());
 
     auto* mirrorDrop = m_mirrorBtn->dropdown();
     mirrorDrop->setIconSize(16);
     mirrorDrop->addButton(
         QIcon::fromTheme(QStringLiteral("object-flip-horizontal"),
                          style()->standardIcon(QStyle::SP_ArrowBack)),
-        tr("Mirror"), tr("Mirror bodies or features"));
+        QString(), QString());
     mirrorDrop->addButton(
         QIcon::fromTheme(QStringLiteral("edit-copy"),
                          style()->standardIcon(QStyle::SP_FileDialogDetailedView)),
-        tr("Pattern"), tr("Create rectangular or circular pattern"));
+        QString(), QString());
 
     connect(mirrorDrop, &ToolbarDropdown::buttonClicked,
             this, &ModelToolbar::onMirrorDropdownClicked);
@@ -271,17 +345,22 @@ void ModelToolbar::createTools()
     m_paramsBtn = createToolButton(
         QIcon::fromTheme(QStringLiteral("document-properties"),
                          style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Params"), tr("Manage parameters"));
+        QString(), QString());
 
     auto* paramsDrop = m_paramsBtn->dropdown();
     paramsDrop->setIconSize(16);
     paramsDrop->addButton(
         QIcon::fromTheme(QStringLiteral("document-properties"),
                          style()->standardIcon(QStyle::SP_FileDialogInfoView)),
-        tr("Change\nParameters"), tr("Edit document parameters"));
+        QString(), QString());
 
     // Params button just emits signal directly
     connect(m_paramsBtn, &ToolbarButton::clicked, this, [this]() {
+        emit parametersClicked();
+    });
+    // Its single dropdown row does the same thing. Without this the row is
+    // inert: modeltoolbar connects dropdownClicked for no other button.
+    connect(m_paramsBtn, &ToolbarButton::dropdownClicked, this, [this](int) {
         emit parametersClicked();
     });
 
@@ -291,6 +370,10 @@ void ModelToolbar::createTools()
     m_holeBtn->setEnabled(false);
     m_moveBtn->setEnabled(false);
     m_mirrorBtn->setEnabled(false);
+
+    // Every caption and tooltip above is applied here, and only here, so a
+    // new string has to be added in one place rather than two.
+    retranslate();
 }
 
 void ModelToolbar::onToolClicked()
@@ -339,11 +422,11 @@ void ModelToolbar::onToolClicked()
 void ModelToolbar::onSketchDropdownClicked(int index)
 {
     static const ModelTool tools[] = { ModelTool::Sketch, ModelTool::SketchOnFace };
-    static const char* names[] = { "Sketch", "Sketch on\nFace" };
 
     if (index >= 0 && index < 2) {
         m_lastSketchTool = tools[index];
-        m_sketchBtn->setText(tr(names[index]));
+        m_sketchBtn->setText(toolLabel(tools[index]));
+        m_captionSketch = tools[index];
         setActiveToolInternal(tools[index], m_sketchBtn);
 
         // Emit specific signals
@@ -358,11 +441,11 @@ void ModelToolbar::onSketchDropdownClicked(int index)
 void ModelToolbar::onPlaneDropdownClicked(int index)
 {
     static const ModelTool tools[] = { ModelTool::ConstructionPlane };
-    static const char* names[] = { "Construction\nPlane" };
 
     if (index >= 0 && index < 1) {
         m_lastPlaneTool = tools[index];
-        m_planeBtn->setText(tr(names[index]));
+        m_planeBtn->setText(toolLabel(tools[index]));
+        m_captionPlane = tools[index];
         setActiveToolInternal(tools[index], m_planeBtn);
 
         if (tools[index] == ModelTool::ConstructionPlane) {
@@ -383,17 +466,11 @@ void ModelToolbar::onSolidDropdownClicked(int index)
         ModelTool::Box, ModelTool::Cylinder, ModelTool::Sphere,
         ModelTool::Torus, ModelTool::Coil, ModelTool::Pipe
     };
-    static const char* names[] = {
-        "Extrude", "Cut\nExtrude",
-        "Revolve", "Cut\nRevolve",
-        "Loft", "Cut\nLoft",
-        "Sweep", "Cut\nSweep",
-        "Box", "Cylinder", "Sphere", "Torus", "Coil", "Pipe"
-    };
 
     if (index >= 0 && index < 14) {
         m_lastSolidTool = tools[index];
-        m_solidBtn->setText(tr(names[index]));
+        m_solidBtn->setText(toolLabel(tools[index]));
+        m_captionSolid = tools[index];
         setActiveToolInternal(tools[index], m_solidBtn);
     }
 }
@@ -401,11 +478,11 @@ void ModelToolbar::onSolidDropdownClicked(int index)
 void ModelToolbar::onFilletDropdownClicked(int index)
 {
     static const ModelTool tools[] = { ModelTool::Fillet, ModelTool::Chamfer };
-    static const char* names[] = { "Fillet", "Chamfer" };
 
     if (index >= 0 && index < 2) {
         m_lastFilletTool = tools[index];
-        m_filletBtn->setText(tr(names[index]));
+        m_filletBtn->setText(toolLabel(tools[index]));
+        m_captionFillet = tools[index];
         setActiveToolInternal(tools[index], m_filletBtn);
     }
 }
@@ -416,11 +493,11 @@ void ModelToolbar::onHoleDropdownClicked(int index)
         ModelTool::SimpleHole, ModelTool::Counterbore,
         ModelTool::Countersink, ModelTool::ThreadedHole
     };
-    static const char* names[] = { "Simple\nHole", "Counter-\nbore", "Counter-\nsink", "Threaded\nHole" };
 
     if (index >= 0 && index < 4) {
         m_lastHoleTool = tools[index];
-        m_holeBtn->setText(tr(names[index]));
+        m_holeBtn->setText(toolLabel(tools[index]));
+        m_captionHole = tools[index];
         setActiveToolInternal(tools[index], m_holeBtn);
     }
 }
@@ -428,11 +505,11 @@ void ModelToolbar::onHoleDropdownClicked(int index)
 void ModelToolbar::onMoveDropdownClicked(int index)
 {
     static const ModelTool tools[] = { ModelTool::MoveCopy, ModelTool::Align };
-    static const char* names[] = { "Move/\nCopy", "Align" };
 
     if (index >= 0 && index < 2) {
         m_lastMoveTool = tools[index];
-        m_moveBtn->setText(tr(names[index]));
+        m_moveBtn->setText(toolLabel(tools[index]));
+        m_captionMove = tools[index];
         setActiveToolInternal(tools[index], m_moveBtn);
     }
 }
@@ -440,11 +517,11 @@ void ModelToolbar::onMoveDropdownClicked(int index)
 void ModelToolbar::onMirrorDropdownClicked(int index)
 {
     static const ModelTool tools[] = { ModelTool::Mirror, ModelTool::Pattern };
-    static const char* names[] = { "Mirror", "Pattern" };
 
     if (index >= 0 && index < 2) {
         m_lastMirrorTool = tools[index];
-        m_mirrorBtn->setText(tr(names[index]));
+        m_mirrorBtn->setText(toolLabel(tools[index]));
+        m_captionMirror = tools[index];
         setActiveToolInternal(tools[index], m_mirrorBtn);
     }
 }
@@ -476,33 +553,134 @@ void ModelToolbar::setActiveTool(ModelTool tool)
     // (simplified - in practice would need to map tool to button group)
 }
 
+// ---- Retranslation --------------------------------------------------
+
+void ModelToolbar::retranslate()
+{
+    // Group defaults. These are the captions a button shows before anything
+    // has been picked from its dropdown, and they name the group rather than
+    // any one tool, so they are not in kToolText.
+    m_defaultSketchText = tr("Sketch");
+    m_defaultPlaneText  = tr("Plane");
+    m_defaultSolidText  = tr("Solid");
+    m_defaultFilletText = tr("Fillet");
+    m_defaultHoleText   = tr("Simple\nHole");
+    m_defaultMoveText   = tr("Move");
+    m_defaultMirrorText = tr("Mirror");
+
+    // A caption is rebuilt from the tool currently on the button, not
+    // restored from a remembered string: the user may have picked something
+    // from the dropdown since the last time this ran, and ModelTool::None
+    // means the group default is showing.
+    const struct {
+        ToolbarButton* button;
+        ModelTool caption;
+        const QString& defaultText;
+        const char* defaultTip;
+    } groups[] = {
+        {m_sketchBtn, m_captionSketch, m_defaultSketchText, QT_TR_NOOP("Create a 2D sketch")},
+        {m_planeBtn,  m_captionPlane,  m_defaultPlaneText,  QT_TR_NOOP("Create construction plane")},
+        {m_solidBtn,  m_captionSolid,  m_defaultSolidText,  QT_TR_NOOP("Create solid geometry")},
+        {m_filletBtn, m_captionFillet, m_defaultFilletText, QT_TR_NOOP("Round or bevel edges")},
+        {m_holeBtn,   m_captionHole,   m_defaultHoleText,   QT_TR_NOOP("Create a simple hole")},
+        {m_moveBtn,   m_captionMove,   m_defaultMoveText,   QT_TR_NOOP("Transform objects")},
+        {m_mirrorBtn, m_captionMirror, m_defaultMirrorText, QT_TR_NOOP("Mirror or pattern objects")},
+    };
+    for (const auto& group : groups) {
+        if (!group.button) {
+            continue;
+        }
+        group.button->setText(group.caption == ModelTool::None
+                                  ? group.defaultText
+                                  : toolLabel(group.caption));
+        group.button->setToolTip(group.caption == ModelTool::None
+                                     ? tr(group.defaultTip)
+                                     : toolTip(group.caption));
+    }
+
+    if (m_paramsBtn) {
+        m_paramsBtn->setText(tr("Params"));
+        m_paramsBtn->setToolTip(tr("Manage parameters"));
+        // The dropdown row is added with an empty caption; addButton() is the
+        // only way text gets in, so it has to be set here like every other
+        // row. ModelTool::Parameters already carries the strings.
+        if (m_paramsBtn->dropdown()) {
+            m_paramsBtn->dropdown()->setButtonText(
+                0, toolLabel(ModelTool::Parameters),
+                toolTip(ModelTool::Parameters));
+        }
+    }
+
+    // Dropdown rows. Order matches the tools[] arrays in the handlers, which
+    // is the order they were added; separators do not take an index.
+    static const ModelTool sketchTools[] = {ModelTool::Sketch, ModelTool::SketchOnFace};
+    static const ModelTool planeTools[]  = {ModelTool::ConstructionPlane};
+    static const ModelTool solidTools[]  = {
+        ModelTool::Extrude, ModelTool::CutExtrude, ModelTool::Revolve,
+        ModelTool::CutRevolve, ModelTool::Loft, ModelTool::CutLoft,
+        ModelTool::Sweep, ModelTool::CutSweep, ModelTool::Box,
+        ModelTool::Cylinder, ModelTool::Sphere, ModelTool::Torus,
+        ModelTool::Coil, ModelTool::Pipe};
+    static const ModelTool filletTools[] = {ModelTool::Fillet, ModelTool::Chamfer};
+    static const ModelTool holeTools[]   = {
+        ModelTool::SimpleHole, ModelTool::Counterbore,
+        ModelTool::Countersink, ModelTool::ThreadedHole};
+    static const ModelTool moveTools[]   = {ModelTool::MoveCopy, ModelTool::Align};
+    static const ModelTool mirrorTools[] = {ModelTool::Mirror, ModelTool::Pattern};
+
+    const auto relabel = [this](ToolbarButton* button, const ModelTool* tools,
+                                int count) {
+        if (!button || !button->dropdown()) {
+            return;
+        }
+        for (int i = 0; i < count; ++i) {
+            button->dropdown()->setButtonText(i, toolLabel(tools[i]),
+                                              toolTip(tools[i]));
+        }
+    };
+    relabel(m_sketchBtn, sketchTools, 2);
+    relabel(m_planeBtn,  planeTools,  1);
+    relabel(m_solidBtn,  solidTools,  14);
+    relabel(m_filletBtn, filletTools, 2);
+    relabel(m_holeBtn,   holeTools,   4);
+    relabel(m_moveBtn,   moveTools,   2);
+    relabel(m_mirrorBtn, mirrorTools, 2);
+}
+
 void ModelToolbar::resetAllButtons()
 {
     // Reset default-first buttons to their default tool
+    m_captionSketch = ModelTool::None;
     m_lastSketchTool = ModelTool::Sketch;
     m_sketchBtn->setIcon(m_defaultSketchIcon);
     m_sketchBtn->setText(m_defaultSketchText);
 
+    m_captionSolid = ModelTool::None;
     m_lastSolidTool = ModelTool::Extrude;
     m_solidBtn->setIcon(m_defaultSolidIcon);
     m_solidBtn->setText(m_defaultSolidText);
 
+    m_captionFillet = ModelTool::None;
     m_lastFilletTool = ModelTool::Fillet;
     m_filletBtn->setIcon(m_defaultFilletIcon);
     m_filletBtn->setText(m_defaultFilletText);
 
+    m_captionMove = ModelTool::None;
     m_lastMoveTool = ModelTool::MoveCopy;
     m_moveBtn->setIcon(m_defaultMoveIcon);
     m_moveBtn->setText(m_defaultMoveText);
 
+    m_captionMirror = ModelTool::None;
     m_lastMirrorTool = ModelTool::Mirror;
     m_mirrorBtn->setIcon(m_defaultMirrorIcon);
     m_mirrorBtn->setText(m_defaultMirrorText);
 
+    m_captionPlane = ModelTool::None;
     m_lastPlaneTool = ModelTool::ConstructionPlane;
     m_planeBtn->setIcon(m_defaultPlaneIcon);
     m_planeBtn->setText(m_defaultPlaneText);
 
+    m_captionHole = ModelTool::None;
     m_lastHoleTool = ModelTool::SimpleHole;
     m_holeBtn->setIcon(m_defaultHoleIcon);
     m_holeBtn->setText(m_defaultHoleText);

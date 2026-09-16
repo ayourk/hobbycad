@@ -8,9 +8,14 @@
 // =====================================================================
 
 #include <hobbycad/sketch/export.h>
+#include <hobbycad/units.h>
 #include <hobbycad/sketch/queries.h>
 #include <hobbycad/geometry/types.h>
 #include <hobbycad/format.h>
+#include <hobbycad/geometry/utils.h>
+
+#include <cctype>
+#include <cstdio>
 
 #include <algorithm>
 #include <cmath>
@@ -22,9 +27,7 @@
 #include <vector>
 #include <functional>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -76,8 +79,8 @@ std::string entityToSVGPath(const Entity& entity, double scale)
             double cx = entity.points[0].x;
             double cy = entity.points[0].y;
             double r = entity.radius;
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double endRad = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
+            double startRad = degreesToRadians(entity.startAngle);
+            double endRad = degreesToRadians(entity.startAngle + entity.sweepAngle);
 
             double x1 = (cx + r * std::cos(startRad)) * scale;
             double y1 = -(cy + r * std::sin(startRad)) * scale;
@@ -94,13 +97,13 @@ std::string entityToSVGPath(const Entity& entity, double scale)
         break;
 
     case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            double x1 = entity.points[0].x * scale;
-            double y1 = -entity.points[0].y * scale;
-            double x2 = entity.points[1].x * scale;
-            double y2 = -entity.points[1].y * scale;
+    case EntityType::Parallelogram:
+        if (Point2D c[4]; quadCorners(entity, c)) {
+            // From the corners: a rotated rectangle or a parallelogram is not
+            // the axis-aligned box of its first two points.
             path = hobbycad::format("M %g %g L %g %g L %g %g L %g %g Z",
-                                    x1, y1, x2, y1, x2, y2, x1, y2);
+                                    c[0].x * scale, -c[0].y * scale, c[1].x * scale, -c[1].y * scale,
+                                    c[2].x * scale, -c[2].y * scale, c[3].x * scale, -c[3].y * scale);
         }
         break;
 
@@ -159,6 +162,10 @@ std::string entityToSVGPath(const Entity& entity, double scale)
                 }
             }
         }
+        break;
+
+    case EntityType::Dimension:
+        // A dimension is an annotation the GUI draws, never stored geometry.
         break;
 
     case EntityType::Text:
@@ -349,12 +356,19 @@ void writeDXFEntity(std::ostream& out, const Entity& entity, const DXFExportOpti
     const std::string& layer = entity.isConstruction ? options.constructionLayer : options.layerName;
     int color = entity.isConstruction ? options.constructionColorIndex : options.colorIndex;
 
+    // The ACI index (62) keeps the layer/construction color for viewers that
+    // ignore true color; when the entity carries an explicit RGB, add a true-
+    // color group (420) too, which overrides the index on readback.
+    std::string colorGroup = "62\n" + std::to_string(color) + "\n";
+    if (entity.color >= 0) colorGroup += "420\n" + std::to_string(entity.color) + "\n";
+
+    const std::streampos before = out.tellp();
     switch (entity.type) {
     case EntityType::Point:
         if (!entity.points.empty()) {
             out << "0\nPOINT\n";
             out << "8\n" << layer << "\n";
-            out << "62\n" << color << "\n";
+            out << colorGroup;
             out << "10\n" << entity.points[0].x << "\n";
             out << "20\n" << entity.points[0].y << "\n";
             out << "30\n0\n";
@@ -365,7 +379,7 @@ void writeDXFEntity(std::ostream& out, const Entity& entity, const DXFExportOpti
         if (entity.points.size() >= 2) {
             out << "0\nLINE\n";
             out << "8\n" << layer << "\n";
-            out << "62\n" << color << "\n";
+            out << colorGroup;
             out << "10\n" << entity.points[0].x << "\n";
             out << "20\n" << entity.points[0].y << "\n";
             out << "30\n0\n";
@@ -379,7 +393,7 @@ void writeDXFEntity(std::ostream& out, const Entity& entity, const DXFExportOpti
         if (!entity.points.empty()) {
             out << "0\nCIRCLE\n";
             out << "8\n" << layer << "\n";
-            out << "62\n" << color << "\n";
+            out << colorGroup;
             out << "10\n" << entity.points[0].x << "\n";
             out << "20\n" << entity.points[0].y << "\n";
             out << "30\n0\n";
@@ -391,7 +405,7 @@ void writeDXFEntity(std::ostream& out, const Entity& entity, const DXFExportOpti
         if (!entity.points.empty()) {
             out << "0\nARC\n";
             out << "8\n" << layer << "\n";
-            out << "62\n" << color << "\n";
+            out << colorGroup;
             out << "10\n" << entity.points[0].x << "\n";
             out << "20\n" << entity.points[0].y << "\n";
             out << "30\n0\n";
@@ -405,47 +419,75 @@ void writeDXFEntity(std::ostream& out, const Entity& entity, const DXFExportOpti
         if (!entity.points.empty()) {
             out << "0\nELLIPSE\n";
             out << "8\n" << layer << "\n";
-            out << "62\n" << color << "\n";
+            out << colorGroup;
             out << "10\n" << entity.points[0].x << "\n";
             out << "20\n" << entity.points[0].y << "\n";
             out << "30\n0\n";
-            // Major axis endpoint relative to center
-            out << "11\n" << entity.majorRadius << "\n";
-            out << "21\n0\n";
+            // Major axis endpoint relative to center, rotated by the ellipse angle
+            const double th = degreesToRadians(entity.ellipseRotation);
+            out << "11\n" << (entity.majorRadius * std::cos(th)) << "\n";
+            out << "21\n" << (entity.majorRadius * std::sin(th)) << "\n";
             out << "31\n0\n";
             // Ratio of minor to major
             out << "40\n" << (entity.minorRadius / entity.majorRadius) << "\n";
-            out << "41\n0\n";           // Start parameter
-            out << "42\n6.283185\n";    // End parameter (2*PI)
+            const double eStartRad = degreesToRadians(entity.ellipseStart);
+            const double eEndRad = eStartRad + degreesToRadians(entity.ellipseSweep);
+            out << "41\n" << eStartRad << "\n";   // Start parameter (radians)
+            out << "42\n" << eEndRad << "\n";     // End parameter (radians)
         }
         break;
 
     case EntityType::Rectangle:
+    case EntityType::Parallelogram:
     case EntityType::Polygon:
     case EntityType::Slot:
     case EntityType::Spline:
-        // Use LWPOLYLINE for complex shapes
-        if (options.usePolylines) {
+        {
             std::vector<Point2D> points = tessellate(entity, 0.5);
-            if (!points.empty()) {
+            // Closed only when the outline returns to its start: an open
+            // spline flagged closed gained a chord between its ends. A closed
+            // outline's repeated last vertex is dropped, since flag 70 closes it.
+            const bool closed = points.size() > 2 && points.front() == points.back();
+            if (closed) points.pop_back();
+            if (points.size() < 2) break;
+            if (options.usePolylines) {
+                // LWPOLYLINE for complex shapes
                 out << "0\nLWPOLYLINE\n";
                 out << "8\n" << layer << "\n";
-                out << "62\n" << color << "\n";
+                out << colorGroup;
                 out << "90\n" << points.size() << "\n";
-                out << "70\n1\n";  // Closed polyline
+                out << "70\n" << (closed ? 1 : 0) << "\n";
                 for (const Point2D& p : points) {
                     out << "10\n" << p.x << "\n";
                     out << "20\n" << p.y << "\n";
                 }
+            } else {
+                // Without polylines, one LINE per segment; the shape used to be
+                // left out of the file entirely.
+                const size_t n = points.size();
+                const size_t segments = closed ? n : n - 1;
+                for (size_t i = 0; i < segments; ++i) {
+                    const Point2D& a = points[i];
+                    const Point2D& b = points[(i + 1) % n];
+                    out << "0\nLINE\n";
+                    out << "8\n" << layer << "\n";
+                    out << colorGroup;
+                    out << "10\n" << a.x << "\n20\n" << a.y << "\n30\n0\n";
+                    out << "11\n" << b.x << "\n21\n" << b.y << "\n31\n0\n";
+                }
             }
         }
+        break;
+
+    case EntityType::Dimension:
+        // A dimension is an annotation the GUI draws, never stored geometry.
         break;
 
     case EntityType::Text:
         if (!entity.points.empty()) {
             out << "0\nTEXT\n";
             out << "8\n" << layer << "\n";
-            out << "62\n" << color << "\n";
+            out << colorGroup;
             out << "10\n" << entity.points[0].x << "\n";
             out << "20\n" << entity.points[0].y << "\n";
             out << "30\n0\n";
@@ -456,6 +498,16 @@ void writeDXFEntity(std::ostream& out, const Entity& entity, const DXFExportOpti
             out << "1\n" << entity.text << "\n";
         }
         break;
+    }
+
+    // OCS extrusion: when the sketch plane's normal is not +Z, tag the
+    // entity (its stored coords are the OCS (u,v) of this normal, since
+    // the plane basis equals arbitraryAxisBasis(normal)). A reader then
+    // recovers the plane. +Z writes nothing, keeping flat XY files clean.
+    const Vec3& n = options.extrusion;
+    if (out.tellp() != before &&
+        (std::fabs(n.x) > 1e-9f || std::fabs(n.y) > 1e-9f || std::fabs(n.z - 1.0f) > 1e-9f)) {
+        out << "210\n" << n.x << "\n220\n" << n.y << "\n230\n" << n.z << "\n";
     }
 }
 
@@ -611,7 +663,7 @@ void svgArcToCenterParams(
         return;
     }
 
-    double phiRad = phi * M_PI / 180.0;
+    double phiRad = degreesToRadians(phi);
     double cosPhi = std::cos(phiRad);
     double sinPhi = std::sin(phiRad);
 
@@ -666,8 +718,8 @@ void svgArcToCenterParams(
     double vx = (-x1p - cxp) / rx;
     double vy = (-y1p - cyp) / ry;
 
-    startAngle = angle(1, 0, ux, uy) * 180.0 / M_PI;
-    sweepAngle = angle(ux, uy, vx, vy) * 180.0 / M_PI;
+    startAngle = radiansToDegrees(angle(1, 0, ux, uy));
+    sweepAngle = radiansToDegrees(angle(ux, uy, vx, vy));
 
     if (!sweep && sweepAngle > 0) {
         sweepAngle -= 360;
@@ -984,7 +1036,7 @@ SVGImportResult importSVGPath(
 
                 for (int i = 1; i <= segments; ++i) {
                     double t = static_cast<double>(i) / segments;
-                    double angle = (startAngle + t * sweepAngle) * M_PI / 180.0;
+                    double angle = degreesToRadians(startAngle + t * sweepAngle);
                     double px = cx + rx * std::cos(angle);
                     double py = cy + ry * std::sin(angle);
                     currentPath.push_back(Point2D(px, py));
@@ -1008,10 +1060,7 @@ SVGImportResult importSVGPath(
     result.success = true;
     result.entityCount = static_cast<int>(result.entities.size());
 
-    // Calculate bounds
-    for (const Entity& e : result.entities) {
-        result.bounds.include(e.boundingBox());
-    }
+    result.bounds = sketchBounds(result.entities);
 
     return result;
 }
@@ -1127,10 +1176,7 @@ SVGImportResult importSVGString(
     result.success = true;
     result.entityCount = static_cast<int>(result.entities.size());
 
-    // Calculate bounds
-    for (const Entity& e : result.entities) {
-        result.bounds.include(e.boundingBox());
-    }
+    result.bounds = sketchBounds(result.entities);
 
     if (result.entityCount == 0) {
         result.errorMessage = "No supported elements found in SVG";
@@ -1140,643 +1186,241 @@ SVGImportResult importSVGString(
 }
 
 // =====================================================================
-//  DXF Import
+//  DXF Import moved to sketch/dxf_import.{h,cpp} (purpose-built parser)
+// =====================================================================
+
+// =====================================================================
+//  Command script
 // =====================================================================
 
 namespace {
 
-/// DXF group code and value pair
-struct DXFPair {
-    int code;
-    std::string value;
-};
-
-/// Helper to trim whitespace from a string
-static std::string trimString(const std::string& s)
+std::string joinStrings(const std::vector<std::string>& parts, char sep)
 {
-    size_t start = s.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) return "";
-    size_t end = s.find_last_not_of(" \t\r\n");
-    return s.substr(start, end - start + 1);
+    std::string out;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i) out += sep;
+        out += parts[i];
+    }
+    return out;
 }
 
-/// Split a string by a delimiter character
-static std::vector<std::string> splitString(const std::string& s, char delim)
+std::string idList(const std::vector<int>& v)
 {
-    std::vector<std::string> result;
-    std::istringstream stream(s);
-    std::string item;
-    while (std::getline(stream, item, delim)) {
-        result.push_back(item);
-    }
-    return result;
+    std::vector<std::string> s;
+    s.reserve(v.size());
+    for (int i : v) s.push_back(std::to_string(i));
+    return joinStrings(s, ',');
 }
 
-/// Read next group code/value pair from DXF content
-bool readDXFPair(const std::vector<std::string>& lines, int& lineIndex, DXFPair& pair)
+std::string exactDouble(double v)
 {
-    if (lineIndex + 1 >= static_cast<int>(lines.size())) return false;
-
-    try {
-        pair.code = std::stoi(trimString(lines[lineIndex]));
-    } catch (...) {
-        return false;
-    }
-
-    pair.value = trimString(lines[lineIndex + 1]);
-    lineIndex += 2;
-    return true;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.17g", v);
+    return buf;
 }
 
-/// Skip to next entity or section in DXF
-void skipToNext(const std::vector<std::string>& lines, int& lineIndex)
+}  // namespace
+
+std::vector<std::string> sketchToScript(const std::string& name,
+                                        const std::vector<Entity>& entities,
+                                        const std::vector<Constraint>& constraints,
+                                        const std::vector<Group>& groups,
+                                        int precision, int* skippedOut)
 {
-    DXFPair pair;
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (readDXFPair(lines, lineIndex, pair)) {
-            if (pair.code == 0) {
-                // Found next entity or section marker
-                lineIndex = savedIndex;  // Restore so caller sees the 0 code
-                return;
-            }
-        } else {
-            ++lineIndex;
-        }
-    }
-}
+    // Every line must be a command the parser accepts. That is not
+    // automatic: this emitter once wrote "arc <pt> <pt> <pt>", which the
+    // arc command rejects, and it tested arcs for three points when a CLI
+    // arc has one, so arcs were both mis-spelled and silently skipped. The
+    // round-trip test in tests/cli/ keeps that from recurring.
+    std::vector<std::string> out;
+    out.push_back("create sketch \"" + name + "\"");
 
-/// Parse a LINE entity
-Entity parseDXFLine(const std::vector<std::string>& lines, int& lineIndex, int id,
-                    double scale, const Point2D& offset)
-{
-    double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-    DXFPair pair;
+    auto num = [precision](double v) { return formatDouble(v, precision); };
+    auto pt = [&num](const Point2D& p) { return num(p.x) + "," + num(p.y); };
 
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
+    int skipped = 0;
+    for (const Entity& e : entities) {
+        std::string line;
+        switch (e.type) {
+        case EntityType::Line:
+            if (e.points.size() >= 2)
+                line = "line from " + pt(e.points[0]) + " to " + pt(e.points[1]);
             break;
-        }
-
-        switch (pair.code) {
-        case 10: x1 = std::stod(pair.value) * scale + offset.x; break;
-        case 20: y1 = std::stod(pair.value) * scale + offset.y; break;
-        case 11: x2 = std::stod(pair.value) * scale + offset.x; break;
-        case 21: y2 = std::stod(pair.value) * scale + offset.y; break;
-        }
-    }
-
-    return createLine(id, Point2D(x1, y1), Point2D(x2, y2));
-}
-
-/// Parse a CIRCLE entity
-Entity parseDXFCircle(const std::vector<std::string>& lines, int& lineIndex, int id,
-                      double scale, const Point2D& offset)
-{
-    double cx = 0, cy = 0, r = 0;
-    DXFPair pair;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
+        case EntityType::Circle:
+            if (!e.points.empty())
+                line = "circle at " + pt(e.points[0]) + " radius " + num(e.radius);
             break;
-        }
-
-        switch (pair.code) {
-        case 10: cx = std::stod(pair.value) * scale + offset.x; break;
-        case 20: cy = std::stod(pair.value) * scale + offset.y; break;
-        case 40: r = std::stod(pair.value) * scale; break;
-        }
-    }
-
-    return createCircle(id, Point2D(cx, cy), r);
-}
-
-/// Parse an ARC entity
-Entity parseDXFArc(const std::vector<std::string>& lines, int& lineIndex, int id,
-                   double scale, const Point2D& offset)
-{
-    double cx = 0, cy = 0, r = 0;
-    double startAngle = 0, endAngle = 360;
-    DXFPair pair;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
-            break;
-        }
-
-        switch (pair.code) {
-        case 10: cx = std::stod(pair.value) * scale + offset.x; break;
-        case 20: cy = std::stod(pair.value) * scale + offset.y; break;
-        case 40: r = std::stod(pair.value) * scale; break;
-        case 50: startAngle = std::stod(pair.value); break;
-        case 51: endAngle = std::stod(pair.value); break;
-        }
-    }
-
-    // DXF arcs are always CCW, angles in degrees
-    double sweep = endAngle - startAngle;
-    if (sweep <= 0) sweep += 360;
-
-    return createArc(id, Point2D(cx, cy), r, startAngle, sweep);
-}
-
-/// Parse an ELLIPSE entity
-Entity parseDXFEllipse(const std::vector<std::string>& lines, int& lineIndex, int id,
-                       double scale, const Point2D& offset)
-{
-    double cx = 0, cy = 0;
-    double majorX = 1, majorY = 0;  // Major axis endpoint relative to center
-    double ratio = 1.0;              // Minor/major ratio
-    DXFPair pair;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
-            break;
-        }
-
-        switch (pair.code) {
-        case 10: cx = std::stod(pair.value) * scale + offset.x; break;
-        case 20: cy = std::stod(pair.value) * scale + offset.y; break;
-        case 11: majorX = std::stod(pair.value) * scale; break;
-        case 21: majorY = std::stod(pair.value) * scale; break;
-        case 40: ratio = std::stod(pair.value); break;
-        }
-    }
-
-    double majorRadius = std::sqrt(majorX * majorX + majorY * majorY);
-    double minorRadius = majorRadius * ratio;
-
-    return createEllipse(id, Point2D(cx, cy), majorRadius, minorRadius);
-}
-
-/// Parse a POINT entity
-Entity parseDXFPoint(const std::vector<std::string>& lines, int& lineIndex, int id,
-                     double scale, const Point2D& offset)
-{
-    double x = 0, y = 0;
-    DXFPair pair;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
-            break;
-        }
-
-        switch (pair.code) {
-        case 10: x = std::stod(pair.value) * scale + offset.x; break;
-        case 20: y = std::stod(pair.value) * scale + offset.y; break;
-        }
-    }
-
-    return createPoint(id, Point2D(x, y));
-}
-
-/// Parse a LWPOLYLINE entity
-std::vector<Entity> parseDXFLWPolyline(const std::vector<std::string>& lines, int& lineIndex, int& nextId,
-                                    double scale, const Point2D& offset)
-{
-    std::vector<Entity> entities;
-    std::vector<Point2D> vertices;
-    std::vector<double> bulges;
-    bool closed = false;
-    DXFPair pair;
-
-    double currentX = 0, currentY = 0, currentBulge = 0;
-    bool hasVertex = false;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
-            break;
-        }
-
-        switch (pair.code) {
-        case 70:  // Flags
-            closed = (std::stoi(pair.value) & 1) != 0;
-            break;
-        case 10:  // X coordinate
-            if (hasVertex) {
-                vertices.push_back(Point2D(currentX, currentY));
-                bulges.push_back(currentBulge);
-                currentBulge = 0;
-            }
-            currentX = std::stod(pair.value) * scale + offset.x;
-            hasVertex = true;
-            break;
-        case 20:  // Y coordinate
-            currentY = std::stod(pair.value) * scale + offset.y;
-            break;
-        case 42:  // Bulge
-            currentBulge = std::stod(pair.value);
-            break;
-        }
-    }
-
-    // Add last vertex
-    if (hasVertex) {
-        vertices.push_back(Point2D(currentX, currentY));
-        bulges.push_back(currentBulge);
-    }
-
-    if (vertices.size() < 2) return entities;
-
-    // Convert to lines and arcs
-    int numSegments = closed ? static_cast<int>(vertices.size()) : static_cast<int>(vertices.size()) - 1;
-    for (int i = 0; i < numSegments; ++i) {
-        int nextIdx = (i + 1) % static_cast<int>(vertices.size());
-        double bulge = bulges[i];
-
-        if (std::abs(bulge) < 1e-10) {
-            // Straight line
-            entities.push_back(createLine(nextId++, vertices[i], vertices[nextIdx]));
-        } else {
-            // Arc (bulge = tan(angle/4))
-            Point2D p1 = vertices[i];
-            Point2D p2 = vertices[nextIdx];
-            Point2D mid = (p1 + p2) / 2;
-            Point2D chord = p2 - p1;
-            double chordLen = std::sqrt(chord.x * chord.x + chord.y * chord.y);
-
-            // Perpendicular direction
-            Point2D perp(-chord.y / chordLen, chord.x / chordLen);
-
-            // Sagitta (distance from chord midpoint to arc)
-            double sagitta = bulge * chordLen / 2;
-
-            // Center of arc
-            double radius = (chordLen * chordLen / 4 + sagitta * sagitta) / (2 * std::abs(sagitta));
-            double centerDist = radius - std::abs(sagitta);
-            if (bulge < 0) centerDist = -centerDist;
-
-            Point2D center = mid + perp * centerDist;
-
-            // Calculate angles
-            double startAngle = std::atan2(p1.y - center.y, p1.x - center.x) * 180.0 / M_PI;
-            double endAngle = std::atan2(p2.y - center.y, p2.x - center.x) * 180.0 / M_PI;
-
-            double sweep = endAngle - startAngle;
-            if (bulge > 0) {
-                if (sweep < 0) sweep += 360;
-            } else {
-                if (sweep > 0) sweep -= 360;
-            }
-
-            entities.push_back(createArc(nextId++, center, radius, startAngle, sweep));
-        }
-    }
-
-    return entities;
-}
-
-/// Parse a SPLINE entity (approximate as polyline)
-std::vector<Entity> parseDXFSpline(const std::vector<std::string>& lines, int& lineIndex, int& nextId,
-                                double scale, const Point2D& offset, double tolerance)
-{
-    std::vector<Entity> entities;
-    std::vector<Point2D> controlPoints;
-    std::vector<Point2D> fitPoints;
-    int degree = 3;
-    DXFPair pair;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
-            break;
-        }
-
-        static double tempX = 0, tempY = 0;
-        static bool isFitPoint = false;
-
-        switch (pair.code) {
-        case 71: degree = std::stoi(pair.value); break;
-        case 10:  // Control point X
-            tempX = std::stod(pair.value) * scale + offset.x;
-            isFitPoint = false;
-            break;
-        case 20:  // Control point Y
-            tempY = std::stod(pair.value) * scale + offset.y;
-            if (!isFitPoint) {
-                controlPoints.push_back(Point2D(tempX, tempY));
+        case EntityType::Rectangle:
+        case EntityType::Parallelogram:
+            if (e.type == EntityType::Rectangle && e.points.size() == 2) {
+                line = "rectangle from " + pt(e.points[0]) + " to " + pt(e.points[1]);
+            } else if (Point2D c[4]; quadCorners(e, c)) {
+                // No command draws a rotated rectangle or a parallelogram, and
+                // "rectangle from" would replay the axis-aligned box of two of
+                // its corners. Four lines replay the outline itself.
+                const std::string tail = e.isConstruction ? " construction" : "";
+                for (int i = 0; i < 3; ++i)
+                    out.push_back("  line from " + pt(c[i]) + " to " + pt(c[i + 1]) + tail);
+                line = "line from " + pt(c[3]) + " to " + pt(c[0]);
             }
             break;
-        case 11:  // Fit point X
-            tempX = std::stod(pair.value) * scale + offset.x;
-            isFitPoint = true;
+        case EntityType::Arc:
+            // Center, radius and two angles: the form the arc command parses.
+            if (!e.points.empty())
+                line = "arc at " + pt(e.points[0]) + " radius " + num(e.radius) +
+                       " angle " + num(e.startAngle) + " to " + num(e.startAngle + e.sweepAngle);
             break;
-        case 21:  // Fit point Y
-            tempY = std::stod(pair.value) * scale + offset.y;
-            fitPoints.push_back(Point2D(tempX, tempY));
+        case EntityType::Point:
+            if (!e.points.empty())
+                line = "point " + pt(e.points[0]);
             break;
-        }
-    }
-
-    // Use fit points if available, otherwise control points
-    const std::vector<Point2D>& points = fitPoints.empty() ? controlPoints : fitPoints;
-
-    if (points.size() >= 2) {
-        // Create as a spline entity if we have control points
-        if (!controlPoints.empty()) {
-            Entity spline;
-            spline.id = nextId++;
-            spline.type = EntityType::Spline;
-            spline.points = controlPoints;
-            entities.push_back(spline);
-        } else {
-            // Approximate as line segments
-            for (size_t i = 0; i < points.size() - 1; ++i) {
-                entities.push_back(createLine(nextId++, points[i], points[i + 1]));
+        case EntityType::Polygon:
+            if (!e.points.empty())
+                line = "polygon at " + pt(e.points[0]) + " radius " + num(e.radius) +
+                       " sides " + std::to_string(e.sides);
+            break;
+        case EntityType::Ellipse:
+            if (!e.points.empty())
+                line = "ellipse at " + pt(e.points[0]) + " major " + num(e.majorRadius) +
+                       " minor " + num(e.minorRadius);
+            break;
+        case EntityType::Slot:
+            // A slot that follows a path replays as "slot along": the path has
+            // already been emitted above, and the geometric forms would build
+            // a SECOND centerline on top of the one in the script.
+            if (e.pathEntityIds.size() == 1) {
+                line = "slot along " + std::to_string(e.pathEntityIds[0]) +
+                       " width " + num(e.radius * 2.0);
+            } else if (e.points.size() == 2) {
+                line = "slot from " + pt(e.points[0]) + " to " + pt(e.points[1]) +
+                       " width " + num(e.radius * 2.0);
+            } else if (e.points.size() == 3) {
+                // The cap-center form: it is what is stored, so nothing has to
+                // survive a trip through angles and back.
+                const Point2D c(e.points[0]), st(e.points[1]), en(e.points[2]);
+                line = "slot arc at " + pt(c) + " radius " + num(geometry::lineLength(c, st)) +
+                       " from " + pt(st) + " to " + pt(en) + " width " + num(e.radius * 2.0);
+                // Two cap centers describe both ways round; without this the
+                // long way replays as the short one.
+                if (e.arcFlipped) line += " long";
             }
+            break;
+        case EntityType::Spline:
+            if (e.splineBezier) {
+                // As `bezier` (anchors + angle/length handles) so replay
+                // recreates the handle-spline, not a Catmull-Rom reading of
+                // the control points.
+                const std::vector<Point2D> poly(e.points.begin(), e.points.end());
+                const std::vector<BezierAnchor> anchors = bezierAnchorsFromControlPolygon(poly);
+                if (!anchors.empty()) {
+                    std::vector<std::string> toks;
+                    for (const BezierAnchor& a : anchors) {
+                        toks.push_back(num(a.pos.x) + "," + num(a.pos.y));
+                        auto emitH = [&](const char* kw, BezierHandleSide side) {
+                            double ang = 0.0, len = 0.0;
+                            if (!anchorHandlePolar(a, side, ang, len)) return;   // coincident: a corner
+                            toks.push_back(kw);
+                            toks.push_back(num(ang));
+                            toks.push_back(num(len));
+                        };
+                        emitH("in",  BezierHandleSide::In);
+                        emitH("out", BezierHandleSide::Out);
+                    }
+                    line = "bezier " + joinStrings(toks, ' ');
+                }
+            } else if (e.points.size() >= 2) {
+                std::vector<std::string> pts;
+                for (const auto& p : e.points) pts.push_back(pt(p));
+                line = "spline through " + joinStrings(pts, ' ');
+            }
+            break;
+        case EntityType::Text: {
+            if (e.points.empty() || e.text.empty()) break;
+            // Quote unconditionally, and escape what would end the quote. A
+            // caption containing a space replays as two arguments otherwise,
+            // which is a wrong drawing rather than an error.
+            std::string content;
+            for (char ch : e.text) {
+                if (ch == '\\' || ch == '"') content += '\\';
+                content += ch;
+            }
+            line = "text \"" + content + "\" at " + pt(e.points[0]) + " size " + num(e.fontSize);
+            if (e.textRotation != 0.0) line += " rotation " + num(e.textRotation);
+            break;
         }
-    }
-
-    return entities;
-}
-
-/// Parse TEXT or MTEXT entity (as text annotation)
-Entity parseDXFText(const std::vector<std::string>& lines, int& lineIndex, int id,
-                    double scale, const Point2D& offset)
-{
-    double x = 0, y = 0;
-    double textHeight = 12.0;   // Default height in mm (DXF group 40)
-    double rotation = 0.0;      // Rotation angle in degrees (DXF group 50)
-    std::string textContent;
-    std::string styleName;          // DXF text style name (group 7)
-    DXFPair pair;
-
-    while (lineIndex < static_cast<int>(lines.size())) {
-        int savedIndex = lineIndex;
-        if (!readDXFPair(lines, lineIndex, pair)) break;
-
-        if (pair.code == 0) {
-            lineIndex = savedIndex;
+        default:
             break;
         }
 
-        switch (pair.code) {
-        case 10: x = std::stod(pair.value) * scale + offset.x; break;
-        case 20: y = std::stod(pair.value) * scale + offset.y; break;
-        case 40: textHeight = std::stod(pair.value) * scale; break;  // Text height
-        case 50: rotation = std::stod(pair.value); break;            // Rotation angle
-        case 7: styleName = pair.value; break;                       // Text style name
-        case 1: textContent = pair.value; break;                     // TEXT content
-        case 3: textContent += pair.value; break;                    // MTEXT continuation
-        }
-    }
-
-    // Create text with parsed properties
-    // Note: DXF text styles would need TABLES section parsing for full font info
-    // For now, leave fontFamily empty (use default) and just import size/rotation
-    return createText(id, Point2D(x, y), textContent, std::string(), textHeight,
-                      false, false, rotation);
-}
-
-/// Case-insensitive string comparison helper
-static bool containsCaseInsensitive(const std::vector<std::string>& vec, const std::string& str)
-{
-    for (const auto& item : vec) {
-        if (item.size() != str.size()) continue;
-        bool match = true;
-        for (size_t i = 0; i < item.size(); ++i) {
-            if (std::tolower(static_cast<unsigned char>(item[i])) !=
-                std::tolower(static_cast<unsigned char>(str[i]))) {
-                match = false;
-                break;
-            }
-        }
-        if (match) return true;
-    }
-    return false;
-}
-
-/// Convert string to uppercase
-static std::string toUpper(const std::string& s)
-{
-    std::string result = s;
-    for (auto& c : result) {
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    }
-    return result;
-}
-
-/// Check if string starts with a prefix (case-sensitive)
-static bool startsWith(const std::string& s, const std::string& prefix)
-{
-    return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
-}
-
-}  // anonymous namespace
-
-DXFImportResult importDXFString(
-    const std::string& dxfContent,
-    int startId,
-    const DXFImportOptions& options)
-{
-    DXFImportResult result;
-    result.success = false;
-
-    if (dxfContent.empty()) {
-        result.errorMessage = "Empty DXF content";
-        return result;
-    }
-
-    std::vector<std::string> lines = splitString(dxfContent, '\n');
-    int lineIndex = 0;
-    int nextId = startId;
-
-    std::string currentLayer;
-    bool inEntitiesSection = false;
-
-    DXFPair pair;
-    while (lineIndex < static_cast<int>(lines.size())) {
-        if (!readDXFPair(lines, lineIndex, pair)) {
-            ++lineIndex;
+        if (line.empty()) {
+            // Say so rather than silently dropping it. A script that is
+            // quietly incomplete is worse than one that admits a gap.
+            ++skipped;
             continue;
         }
-
-        // Track sections
-        if (pair.code == 0 && pair.value == "SECTION") {
-            if (readDXFPair(lines, lineIndex, pair) && pair.code == 2) {
-                inEntitiesSection = (pair.value == "ENTITIES");
-            }
-            continue;
-        }
-
-        if (pair.code == 0 && pair.value == "ENDSEC") {
-            inEntitiesSection = false;
-            continue;
-        }
-
-        if (pair.code == 0 && pair.value == "EOF") {
-            break;
-        }
-
-        if (!inEntitiesSection) continue;
-
-        // Parse entities
-        if (pair.code == 0) {
-            std::string entityType = toUpper(pair.value);
-
-            // Read layer for filtering
-            int peekIndex = lineIndex;
-            DXFPair peekPair;
-            currentLayer = "0";
-            while (peekIndex < static_cast<int>(lines.size()) - 10) {
-                if (readDXFPair(lines, peekIndex, peekPair)) {
-                    if (peekPair.code == 0) break;
-                    if (peekPair.code == 8) {
-                        currentLayer = peekPair.value;
-                        break;
-                    }
-                }
-            }
-
-            // Check layer filter
-            if (!options.layerFilter.empty() &&
-                !containsCaseInsensitive(options.layerFilter, currentLayer)) {
-                skipToNext(lines, lineIndex);
-                continue;
-            }
-
-            // Check construction layer filter
-            if (options.ignoreConstructionLayers) {
-                std::string layerUpper = toUpper(currentLayer);
-                if (layerUpper == "DEFPOINTS" || layerUpper == "CONSTRUCTION" ||
-                    startsWith(layerUpper, "CONSTR")) {
-                    skipToNext(lines, lineIndex);
-                    continue;
-                }
-            }
-
-            // Track layers found
-            if (!containsCaseInsensitive(result.layers, currentLayer)) {
-                result.layers.push_back(currentLayer);
-            }
-
-            // Parse entity by type
-            if (entityType == "LINE") {
-                result.entities.push_back(parseDXFLine(lines, lineIndex, nextId++,
-                                                     options.scale, options.offset));
-            }
-            else if (entityType == "CIRCLE") {
-                result.entities.push_back(parseDXFCircle(lines, lineIndex, nextId++,
-                                                       options.scale, options.offset));
-            }
-            else if (entityType == "ARC") {
-                result.entities.push_back(parseDXFArc(lines, lineIndex, nextId++,
-                                                    options.scale, options.offset));
-            }
-            else if (entityType == "ELLIPSE") {
-                result.entities.push_back(parseDXFEllipse(lines, lineIndex, nextId++,
-                                                        options.scale, options.offset));
-            }
-            else if (entityType == "POINT") {
-                result.entities.push_back(parseDXFPoint(lines, lineIndex, nextId++,
-                                                      options.scale, options.offset));
-            }
-            else if (entityType == "LWPOLYLINE") {
-                auto polyEntities = parseDXFLWPolyline(lines, lineIndex, nextId,
-                                                       options.scale, options.offset);
-                result.entities.insert(result.entities.end(),
-                                       polyEntities.begin(), polyEntities.end());
-            }
-            else if (entityType == "POLYLINE") {
-                // Old-style polyline - similar to LWPOLYLINE but different structure
-                // For now, skip to SEQEND
-                while (lineIndex < static_cast<int>(lines.size())) {
-                    if (readDXFPair(lines, lineIndex, pair)) {
-                        if (pair.code == 0 && pair.value == "SEQEND") break;
-                    }
-                }
-            }
-            else if (entityType == "SPLINE") {
-                auto splineEntities = parseDXFSpline(lines, lineIndex, nextId,
-                                                       options.scale, options.offset,
-                                                       options.splineTolerance);
-                result.entities.insert(result.entities.end(),
-                                       splineEntities.begin(), splineEntities.end());
-            }
-            else if (entityType == "TEXT" || entityType == "MTEXT") {
-                result.entities.push_back(parseDXFText(lines, lineIndex, nextId++,
-                                                     options.scale, options.offset));
-            }
-            else if (entityType == "INSERT" && options.importBlocks) {
-                // Block reference - would need to expand from BLOCKS section
-                // For now, just record the block name
-                while (lineIndex < static_cast<int>(lines.size())) {
-                    if (readDXFPair(lines, lineIndex, pair)) {
-                        if (pair.code == 0) {
-                            lineIndex -= 2;  // Back up
-                            break;
-                        }
-                        if (pair.code == 2 && !containsCaseInsensitive(result.blocks, pair.value)) {
-                            result.blocks.push_back(pair.value);
-                        }
-                    }
-                }
-            }
-            else {
-                // Unknown entity type - skip
-                skipToNext(lines, lineIndex);
-            }
-        }
+        // Construction geometry is a property of the entity, not a separate
+        // type; dropping it would replay reference lines as real edges.
+        if (e.isConstruction) line += " construction";
+        out.push_back("  " + line);
+    }
+    if (skipped > 0) {
+        out.push_back("  # " + std::to_string(skipped) +
+                      " entity/entities have no CLI command yet and are NOT in this script");
     }
 
-    result.success = true;
-    result.entityCount = static_cast<int>(result.entities.size());
-
-    // Calculate bounds
-    for (const Entity& e : result.entities) {
-        result.bounds.include(e.boundingBox());
+    // Constraints after ALL the geometry: every one names entities by id,
+    // and an id has to exist before it can be constrained.
+    for (const Constraint& c : constraints) {
+        std::vector<std::string> refs;
+        for (size_t i = 0; i < c.entityIds.size(); ++i) {
+            refs.push_back(i < c.pointIndices.size()
+                               ? std::to_string(c.entityIds[i]) + "." + std::to_string(c.pointIndices[i])
+                               : std::to_string(c.entityIds[i]));
+        }
+        std::string typeName;
+        for (const char* p = constraintTypeName(c.type); *p; ++p) {
+            if (*p == ' ') continue;
+            typeName += static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+        }
+        std::string line = "  constrain " + typeName + " " + joinStrings(refs, ' ');
+        if (isDimensionalConstraint(c.type)) line += " " + num(c.value);
+        if (!c.isDriving) line += " reference";
+        out.push_back(line);
     }
 
-    if (result.entityCount == 0) {
-        result.errorMessage = "No supported entities found in DXF";
+    // Groups last: every one names entities, constraints or other groups by
+    // id. Ids are emitted explicitly rather than left to fall out of
+    // creation order: a group's identity is referenced by its children's
+    // parentGroupId and by name lookups, so it has to come back the same.
+    for (const Group& g : groups) {
+        // Skip the group a slot makes for itself (kind Slot, holding a slot
+        // that follows a path): "slot along" recreates it on replay, and
+        // emitting it too would collide on the name.
+        bool autoSlotGroup = false;
+        if (g.kind == GroupKind::Slot) {
+            for (int eid : g.entityIds) {
+                const Entity* e = findEntityById(entities, eid);
+                if (e && e->type == EntityType::Slot && !e->pathEntityIds.empty()) {
+                    autoSlotGroup = true;
+                    break;
+                }
+            }
+        }
+        if (autoSlotGroup) continue;
+
+        std::string line = "  group \"" + g.name + "\" id=" + std::to_string(g.id);
+        if (!g.entityIds.empty())     line += " entities " + idList(g.entityIds);
+        if (!g.constraintIds.empty()) line += " constraints " + idList(g.constraintIds);
+        if (!g.childGroupIds.empty()) line += " groups " + idList(g.childGroupIds);
+        if (g.locked) line += " locked";
+        if (g.kind == GroupKind::SweepAngle) line += " sweep";
+        if (g.hasPivot) line += " pivot " + exactDouble(g.pivot.x) + "," + exactDouble(g.pivot.y);
+        out.push_back(line);
     }
-
-    return result;
-}
-
-DXFImportResult importDXFFile(
-    const std::string& filePath,
-    int startId,
-    const DXFImportOptions& options)
-{
-    DXFImportResult result;
-
-    std::ifstream file(filePath);
-    if (!file) {
-        result.errorMessage = "Cannot open file: " + filePath;
-        return result;
-    }
-
-    std::string content((std::istreambuf_iterator<char>(file)), {});
-
-    return importDXFString(content, startId, options);
+    out.push_back("finish");
+    if (skippedOut) *skippedOut = skipped;
+    return out;
 }
 
 }  // namespace sketch

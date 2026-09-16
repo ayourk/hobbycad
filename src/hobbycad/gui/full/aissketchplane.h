@@ -16,6 +16,7 @@
 #include <hobbycad/project.h>
 
 #include <AIS_InteractiveObject.hxx>
+#include <gp_Ax3.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
 #include <Quantity_Color.hxx>
@@ -35,6 +36,11 @@ public:
 
     /// Set a custom angled plane.
     void setCustomPlane(PlaneRotationAxis axis, double angleDeg, double offset = 0.0);
+
+    /// Set the plane from a complete frame (origin, normal, X direction).
+    /// Used for construction planes, whose two rotations, roll, center and
+    /// offset are folded into one frame by the caller.
+    void setFrame(const gp_Ax3& frame);
 
     /// Set the plane fill color.
     void setFillColor(const Quantity_Color& color);
@@ -56,13 +62,15 @@ public:
 protected:
     void Compute(const Handle(PrsMgr_PresentationManager)& thePrsMgr,
                  const Handle(Prs3d_Presentation)& thePrs,
-                 const Standard_Integer theMode) override;
+                 const int theMode) override;
 
     void ComputeSelection(const Handle(SelectMgr_Selection)& theSel,
-                          const Standard_Integer theMode) override;
+                          const int theMode) override;
 
 private:
     void buildPlane(const Handle(Prs3d_Presentation)& prs);
+    struct Frame { gp_Dir normal, xDir, yDir; gp_Pnt center; gp_Pnt corner[4]; };
+    Frame frame() const;
     void updatePlaneGeometry();
 
     gp_Pln m_basePlane;          ///< The plane geometry

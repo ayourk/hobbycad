@@ -8,10 +8,12 @@
 // =====================================================================
 
 #include <hobbycad/sketch/constraint.h>
+#include "hobbycad/parameters.h"
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/geometry/utils.h>
 
 #include <cmath>
+#include <string>
 #include <algorithm>
 #include <unordered_set>
 
@@ -32,6 +34,8 @@ bool isDimensionalConstraint(ConstraintType type)
     case ConstraintType::Diameter:
     case ConstraintType::Angle:
     case ConstraintType::FixedAngle:
+    case ConstraintType::CurvatureDimension:
+    case ConstraintType::TangentAngle:
         return true;
     default:
         return false;
@@ -53,6 +57,8 @@ int requiredEntityCount(ConstraintType type)
     case ConstraintType::Diameter:
     case ConstraintType::FixedPoint:
     case ConstraintType::FixedAngle:
+    case ConstraintType::CurvatureDimension:
+    case ConstraintType::TangentAngle:
         return 1;
 
     // Two entity constraints
@@ -67,10 +73,15 @@ int requiredEntityCount(ConstraintType type)
     case ConstraintType::Collinear:
     case ConstraintType::PointOnLine:
     case ConstraintType::PointOnCircle:
+    // Midpoint pins a point to the midpoint of a line: point + line, two
+    // entities. The solver realizes it with SLVS_C_AT_MIDPOINT, which takes
+    // exactly those two. (It was listed as three, so the CLI demanded a
+    // third id the solver ignored, and the redundancy check then fired on a
+    // malformed constraint: the "already implied" misreport, B7.)
+    case ConstraintType::Midpoint:
         return 2;
 
     // Three entity constraints
-    case ConstraintType::Midpoint:
     case ConstraintType::Symmetric:
         return 3;
 
@@ -92,6 +103,7 @@ const char* constraintTypeName(ConstraintType type)
     case ConstraintType::Perpendicular: return "Perpendicular";
     case ConstraintType::Coincident:    return "Coincident";
     case ConstraintType::Tangent:       return "Tangent";
+    case ConstraintType::Curvature:     return "Curvature";
     case ConstraintType::Equal:         return "Equal";
     case ConstraintType::Midpoint:      return "Midpoint";
     case ConstraintType::Symmetric:     return "Symmetric";
@@ -99,10 +111,94 @@ const char* constraintTypeName(ConstraintType type)
     case ConstraintType::Collinear:     return "Collinear";
     case ConstraintType::PointOnLine:   return "Point On Line";
     case ConstraintType::PointOnCircle: return "Point On Circle";
+    case ConstraintType::PointOnSpline: return "Point On Spline";
+    case ConstraintType::CurvatureDimension: return "Radius Of Curvature";
+    case ConstraintType::TangentAngle: return "Tangent Angle";
     case ConstraintType::FixedPoint:    return "Fixed Point";
     case ConstraintType::FixedAngle:    return "Fixed Angle";
     default:                            return "Unknown";
     }
+}
+
+std::vector<ConstraintType> allConstraintTypes()
+{
+    return {
+        ConstraintType::Distance,      ConstraintType::Radius,
+        ConstraintType::Diameter,      ConstraintType::Angle,
+        ConstraintType::Horizontal,    ConstraintType::Vertical,
+        ConstraintType::Parallel,      ConstraintType::Perpendicular,
+        ConstraintType::Coincident,    ConstraintType::Tangent,
+        ConstraintType::Curvature,     ConstraintType::Equal,
+        ConstraintType::Midpoint,
+        ConstraintType::Symmetric,     ConstraintType::Concentric,
+        ConstraintType::Collinear,     ConstraintType::PointOnLine,
+        ConstraintType::PointOnCircle, ConstraintType::PointOnSpline,
+        ConstraintType::CurvatureDimension, ConstraintType::FixedPoint,
+        ConstraintType::FixedAngle,   ConstraintType::TangentAngle,
+    };
+}
+
+namespace {
+
+/// Lower-case, and drop spaces and underscores.
+std::string normalizeTypeName(const std::string& in)
+{
+    std::string out;
+    out.reserve(in.size());
+    for (char c : in) {
+        if (c == ' ' || c == '_' || c == '-') continue;
+        out += static_cast<char>(
+            std::tolower(static_cast<unsigned char>(c)));
+    }
+    return out;
+}
+
+}  // namespace
+
+bool parseConstraintTypeName(const std::string& name, ConstraintType* out)
+{
+    if (!out) return false;
+    const std::string want = normalizeTypeName(name);
+    if (want.empty()) return false;
+
+    // The canonical names first, so an alias can never shadow one.
+    for (ConstraintType t : allConstraintTypes()) {
+        if (normalizeTypeName(constraintTypeName(t)) == want) {
+            *out = t;
+            return true;
+        }
+    }
+
+    // Short forms, for the names that are a nuisance to type in full.
+    struct Alias { const char* text; ConstraintType type; };
+    static const Alias kAliases[] = {
+        {"horiz",     ConstraintType::Horizontal},
+        {"vert",      ConstraintType::Vertical},
+        {"perp",      ConstraintType::Perpendicular},
+        {"dia",       ConstraintType::Diameter},
+        {"rad",       ConstraintType::Radius},
+        {"coincide",  ConstraintType::Coincident},
+        {"tan",       ConstraintType::Tangent},
+        {"dist",      ConstraintType::Distance},
+        {"pointonline",   ConstraintType::PointOnLine},
+        {"pointoncircle", ConstraintType::PointOnCircle},
+    };
+    for (const Alias& a : kAliases) {
+        if (want == a.text) {
+            *out = a.type;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isAngularConstraint(ConstraintType type)
+{
+    // Every constraint whose value is in degrees (constraintUnit returns the
+    // degree sign for the same three).
+    return type == ConstraintType::Angle ||
+           type == ConstraintType::FixedAngle ||
+           type == ConstraintType::TangentAngle;
 }
 
 const char* constraintUnit(ConstraintType type)
@@ -111,9 +207,11 @@ const char* constraintUnit(ConstraintType type)
     case ConstraintType::Distance:
     case ConstraintType::Radius:
     case ConstraintType::Diameter:
+    case ConstraintType::CurvatureDimension:
         return "mm";
     case ConstraintType::Angle:
     case ConstraintType::FixedAngle:
+    case ConstraintType::TangentAngle:
         return "\xC2\xB0";
     default:
         return "";
@@ -174,7 +272,23 @@ std::vector<ConstraintType> suggestConstraints(const Entity& e1, const Entity& e
              ((e1.type == EntityType::Circle || e1.type == EntityType::Arc) &&
               e2.type == EntityType::Point)) {
         suggestions.push_back(ConstraintType::PointOnCircle);
-        suggestions.push_back(ConstraintType::Coincident);  // Coincident with center
+        // Coincident on a point + a whole circle/arc means ON THE PERIMETER
+        // (handled as Point-On-Circle in the GUI). Coinciding with the CENTER is
+        // done by selecting the center POINT and using a point-to-point
+        // coincidence, so Coincident is not offered for the point+curve pair.
+    }
+
+    // Bezier spline G2 and point-on-spline (solver enforces the Bezier form)
+    else if (e1.type == EntityType::Spline && e2.type == EntityType::Spline) {
+        suggestions.push_back(ConstraintType::Curvature);
+    }
+    else if ((e1.type == EntityType::Spline && e2.type == EntityType::Arc) ||
+             (e1.type == EntityType::Arc && e2.type == EntityType::Spline)) {
+        suggestions.push_back(ConstraintType::Curvature);
+    }
+    else if ((e1.type == EntityType::Point && e2.type == EntityType::Spline) ||
+             (e1.type == EntityType::Spline && e2.type == EntityType::Point)) {
+        suggestions.push_back(ConstraintType::PointOnSpline);
     }
 
     // Always suggest distance as fallback
@@ -330,14 +444,155 @@ ConstraintType suggestConstraintType(const Entity& e1, const Entity& e2)
     return ConstraintType::Distance;
 }
 
-const Entity* findEntityById(const std::vector<Entity>& entities, int id)
+bool isFixedPointOn(const Constraint& c, int entityId, int pointIndex)
 {
-    for (const Entity& e : entities) {
-        if (e.id == id) {
-            return &e;
+    return c.type == ConstraintType::FixedPoint && !c.entityIds.empty()
+        && c.entityIds[0] == entityId
+        && (c.pointIndices.empty() ? 0 : c.pointIndices[0]) == pointIndex;
+}
+
+Constraint makeFixedPoint(int id, int entityId, int pointIndex)
+{
+    Constraint fp;
+    fp.id = id;
+    fp.type = ConstraintType::FixedPoint;
+    fp.entityIds = {entityId};
+    fp.pointIndices = {pointIndex};
+    fp.enabled = true; fp.isDriving = true; fp.satisfied = true;
+    fp.labelVisible = false;
+    return fp;
+}
+
+Constraint makeDimensionConstraint(int id, ConstraintType type,
+                                   const std::vector<int>& entityIds,
+                                   const std::vector<int>& pointIndices,
+                                   double value, const Point2D& labelPos,
+                                   bool driving, bool supplementary,
+                                   const Entity* firstEntity)
+{
+    Constraint c;
+    c.id = id;
+    c.type = type;
+    c.entityIds = entityIds;
+    c.pointIndices = pointIndices;
+    c.value = value;
+    c.isDriving = driving;
+    c.labelPosition = labelPos;
+    c.supplementary = supplementary;
+    c.enabled = true;
+    c.satisfied = true;
+    if ((type == ConstraintType::Radius || type == ConstraintType::Diameter)
+        && firstEntity && firstEntity->type == EntityType::Circle && !firstEntity->points.empty()) {
+        const Point2D dir = labelPos - Point2D(firstEntity->points[0]);
+        c.labelAngle = std::atan2(dir.y, dir.x);
+    }
+    return c;
+}
+
+bool isCoincidentBetween(const Constraint& c, int e1, int i1, int e2, int i2)
+{
+    if (c.type != ConstraintType::Coincident || c.entityIds.size() < 2 || c.pointIndices.size() < 2)
+        return false;
+    const bool a = (c.entityIds[0] == e1 && c.pointIndices[0] == i1 &&
+                    c.entityIds[1] == e2 && c.pointIndices[1] == i2);
+    const bool b = (c.entityIds[0] == e2 && c.pointIndices[0] == i2 &&
+                    c.entityIds[1] == e1 && c.pointIndices[1] == i1);
+    return a || b;
+}
+
+AngleDimensionProblem angleDimensionBetweenLines(const Entity& la, const Entity& lb, AngleDimension& out)
+{
+    if (la.type != EntityType::Line || lb.type != EntityType::Line
+        || la.points.size() < 2 || lb.points.size() < 2)
+        return AngleDimensionProblem::NotTwoLines;
+    const Point2D a0(la.points[0]), a1(la.points[1]);
+    const Point2D b0(lb.points[0]), b1(lb.points[1]);
+    const Point2D da = a1 - a0, db = b1 - b0;
+    const double na = geometry::length(da), nb = geometry::length(db);
+    if (na < geometry::kZeroEps || nb < geometry::kZeroEps) return AngleDimensionProblem::Degenerate;
+    constexpr double kParallelSin = 1.7e-3;   // about a tenth of a degree
+    if (std::abs(geometry::cross(da, db)) / (na * nb) < kParallelSin)
+        return AngleDimensionProblem::Parallel;
+
+    const double raw = geometry::angleBetween(da, db);
+    auto nr = [](const Point2D& p, const Point2D& q) {
+        return geometry::lineLength(p, q) < geometry::kDegenerateLen;
+    };
+    out.vertex = (a0 + b0) / 2.0;
+    Point2D aOther, bOther;
+    out.sharedVertex = true;
+    if      (nr(a0, b0)) { out.vertex = a0; aOther = a1; bOther = b1; }
+    else if (nr(a0, b1)) { out.vertex = a0; aOther = a1; bOther = b0; }
+    else if (nr(a1, b0)) { out.vertex = a1; aOther = a0; bOther = b1; }
+    else if (nr(a1, b1)) { out.vertex = a1; aOther = a0; bOther = b0; }
+    else                 { out.sharedVertex = false; }
+
+    out.value = raw;
+    out.supplementary = false;
+    out.hasBisector = false;
+    if (out.sharedVertex) {
+        const Point2D wa = aOther - out.vertex, wb = bOther - out.vertex;
+        const double lwa = geometry::length(wa), lwb = geometry::length(wb);
+        if (lwa > geometry::kZeroEps && lwb > geometry::kZeroEps) {
+            const double interior = geometry::angleBetween(wa, wb);
+            out.value = interior;
+            out.supplementary = std::abs(interior - raw) > 0.5;
+            const Point2D bis = wa / lwa + wb / lwb;
+            const double bl = geometry::length(bis);
+            if (bl > geometry::kZeroEps) { out.bisector = bis / bl; out.hasBisector = true; }
         }
     }
-    return nullptr;
+    return AngleDimensionProblem::None;
+}
+
+bool angleFromLabelSide(const Entity& e1, const Entity& e2, const Point2D& vertex,
+                        const Point2D& labelPos, double& value, bool& supplementary)
+{
+    if (e1.type != EntityType::Line || e2.type != EntityType::Line
+        || e1.points.size() < 2 || e2.points.size() < 2) return false;
+    auto away = [&](const Entity& e) {
+        const Point2D p0(e.points[0]), p1(e.points[1]);
+        return (geometry::lineLength(vertex, p0) > geometry::lineLength(vertex, p1)) ? (p0 - vertex)
+                                                                                     : (p1 - vertex);
+    };
+    const Point2D w1 = away(e1), w2 = away(e2);
+    const double l1n = geometry::length(w1), l2n = geometry::length(w2);
+    if (l1n < geometry::kZeroEps || l2n < geometry::kZeroEps) return false;
+    const double theta = geometry::angleBetween(w1, w2);
+    const Point2D d1 = Point2D(e1.points[1]) - Point2D(e1.points[0]);
+    const Point2D d2 = Point2D(e2.points[1]) - Point2D(e2.points[0]);
+    const double raw = geometry::angleBetween(d1, d2);
+    const double p1 = std::atan2(w1.y, w1.x);
+    const double p2 = std::atan2(w2.y, w2.x);
+    const double rays[4] = { p1, p1 + M_PI, p2, p2 + M_PI };
+    const Point2D lv = labelPos - vertex;
+    const double rl = std::atan2(lv.y, lv.x);
+    double cw = -2.0 * M_PI, ccw = 2.0 * M_PI;
+    for (double r : rays) {
+        const double d = geometry::wrapSweepRad(r - rl);
+        if (d >= -geometry::kZeroEps && d < ccw) ccw = d;
+        if (d <=  geometry::kZeroEps && d > cw)  cw  = d;
+    }
+    double v = radiansToDegrees(ccw - cw);
+    if (v < geometry::kAngleEpsDeg) v = theta;
+    value = v;
+    supplementary = std::abs(v - raw) > 0.5;
+    return true;
+}
+
+ConstraintType suggestDimensionType(const Entity& e1, const Entity& e2)
+{
+    if (e1.type == EntityType::Point && e2.type == EntityType::Point)
+        return ConstraintType::Distance;
+    if ((e1.type == EntityType::Point && e2.type == EntityType::Line) ||
+        (e1.type == EntityType::Line && e2.type == EntityType::Point))
+        return ConstraintType::Distance;
+    if (e1.type == EntityType::Line && e2.type == EntityType::Line)
+        return ConstraintType::Angle;
+    if (e1.type == EntityType::Circle || e1.type == EntityType::Arc ||
+        e2.type == EntityType::Circle || e2.type == EntityType::Arc)
+        return ConstraintType::Radius;
+    return ConstraintType::Distance;
 }
 
 // ---- Helper: resolve a point index on an entity ----
@@ -357,17 +612,17 @@ static Point2D resolveEntityPoint(const Entity* e, int idx)
     }
     if (idx >= 0 && idx < static_cast<int>(e->points.size()))
         return e->points[idx];
-    return e->points.empty() ? Point2D() : e->points[std::min(idx, static_cast<int>(e->points.size()) - 1)];
+    return e->points.empty() ? Point3() : e->points[std::min(idx, static_cast<int>(e->points.size()) - 1)];
 }
 
 // ---- Helper: resolve a Distance endpoint for one entity ----
 static Point2D resolveDistancePoint(const Entity* e, int pointIndex)
 {
     if (e->type == EntityType::Point) {
-        return e->points.empty() ? Point2D() : e->points[0];
+        return e->points.empty() ? Point3() : e->points[0];
     }
     if (e->type == EntityType::Circle || e->type == EntityType::Arc) {
-        return e->points.empty() ? Point2D() : e->points[0];  // center
+        return e->points.empty() ? Point3() : e->points[0];  // center
     }
     return resolveEntityPoint(e, pointIndex);
 }
@@ -587,6 +842,137 @@ double computeDrivenValue(const Constraint& constraint,
     return computeDrivenValue(
         constraint,
         [&entities](int id) -> const Entity* { return findEntityById(entities, id); });
+}
+
+bool isValidConstraintValue(ConstraintType type, double value)
+{
+    if (!std::isfinite(value)) return false;
+    if (!isDimensionalConstraint(type)) return true;
+    switch (type) {
+    case ConstraintType::Angle:
+        return true;                 // zero degrees is parallel, and legal
+    case ConstraintType::Distance:
+    case ConstraintType::Radius:
+    case ConstraintType::Diameter:
+        return geometry::isPositiveLength(value);   // zero at the length precision
+    default:
+        return true;
+    }
+}
+
+std::string constraintOperandError(ConstraintType type,
+                                   const std::vector<EntityType>& t)
+{
+    auto isLine  = [](EntityType e) { return e == EntityType::Line; };
+    auto isCurve = [](EntityType e) { return e == EntityType::Circle || e == EntityType::Arc; };
+    auto isSpline = [](EntityType e) { return e == EntityType::Spline; };
+    auto need = [&](bool ok, const char* msg) -> std::string {
+        return ok ? std::string() : std::string(msg);
+    };
+    switch (type) {
+    case ConstraintType::Radius:
+    case ConstraintType::Diameter:
+        if (t.empty()) return {};
+        return need(isCurve(t[0]), "Radius/Diameter applies to a circle or arc.");
+    case ConstraintType::Horizontal:
+    case ConstraintType::Vertical:
+    case ConstraintType::FixedAngle:
+        if (t.empty()) return {};
+        return need(isLine(t[0]), "That applies to a line.");
+    case ConstraintType::Angle:
+        if (t.size() < 2) return {};
+        return need(isLine(t[0]) && isLine(t[1]), "Angle is between two lines.");
+    case ConstraintType::Parallel:
+    case ConstraintType::Perpendicular:
+    case ConstraintType::Collinear:
+        if (t.size() < 2) return {};
+        return need(isLine(t[0]) && isLine(t[1]), "That applies to two lines.");
+    case ConstraintType::Concentric:
+        if (t.size() < 2) return {};
+        return need(isCurve(t[0]) && isCurve(t[1]), "Concentric applies to two circles or arcs.");
+    case ConstraintType::Tangent:
+        if (t.size() < 2) return {};
+        return need((isCurve(t[0]) || isCurve(t[1])) && (isLine(t[0]) || isCurve(t[0]))
+                    && (isLine(t[1]) || isCurve(t[1])),
+                    "Tangent needs a circle or arc and a line, or two curves.");
+    case ConstraintType::Equal:
+        if (t.size() < 2) return {};
+        return need((isLine(t[0]) && isLine(t[1])) || (isCurve(t[0]) && isCurve(t[1])),
+                    "Equal applies to two lines, or two circles/arcs.");
+    case ConstraintType::Curvature: {
+        if (t.size() < 2) return {};
+        auto g2ok = [&](EntityType e){ return isSpline(e) || e == EntityType::Arc; };
+        return need(g2ok(t[0]) && g2ok(t[1]) && (isSpline(t[0]) || isSpline(t[1])),
+                    "Curvature (G2) applies to two Bezier splines, or a Bezier spline and an arc.");
+    }
+    case ConstraintType::Midpoint:
+        if (t.size() < 2) return {};
+        return need(isLine(t[1]), "Midpoint: the second entity must be a line.");
+    case ConstraintType::PointOnLine:
+        if (t.size() < 2) return {};
+        return need(isLine(t[1]), "Point on line: the second entity must be a line.");
+    case ConstraintType::PointOnCircle:
+        if (t.size() < 2) return {};
+        return need(isCurve(t[1]), "Point on circle: the second entity must be a circle or arc.");
+    case ConstraintType::PointOnSpline:
+        if (t.size() < 2) return {};
+        return need(isSpline(t[0]) || isSpline(t[1]),
+                    "Point on spline: one operand must be a Bezier spline.");
+    case ConstraintType::CurvatureDimension:
+        if (t.empty()) return {};
+        return need(isSpline(t[0]), "Radius of curvature applies to a Bezier spline.");
+    case ConstraintType::TangentAngle:
+        if (t.empty()) return {};
+        return need(isSpline(t[0]), "Tangent angle applies to a Bezier spline anchor.");
+    // Distance, Coincident, Midpoint, Symmetric, FixedPoint: point/index based,
+    // no entity-kind restriction here.
+    default:
+        return {};
+    }
+}
+
+bool reevaluateConstraint(Constraint& c, const std::map<std::string, double>& parameters)
+{
+    if (c.expression.empty()) return false;
+    double result = 0.0;
+    if (!hobbycad::evaluateExpression(c.expression, result, parameters)) return false;
+    if (result == c.value) return false;
+    c.value = result;
+    return true;
+}
+
+int reevaluateConstraints(std::vector<Constraint>& constraints,
+                          const std::map<std::string, double>& parameters)
+{
+    int changed = 0;
+    for (auto& c : constraints)
+        if (reevaluateConstraint(c, parameters)) ++changed;
+    return changed;
+}
+
+const Constraint* findConstraintById(const std::vector<Constraint>& constraints, int id)
+{
+    for (const Constraint& c : constraints) {
+        if (c.id == id) return &c;
+    }
+    return nullptr;
+}
+
+Constraint* findConstraintById(std::vector<Constraint>& constraints, int id)
+{
+    for (Constraint& c : constraints) {
+        if (c.id == id) return &c;
+    }
+    return nullptr;
+}
+
+int nextFreeConstraintId(const std::vector<Constraint>& constraints)
+{
+    int next = 1;
+    for (const Constraint& c : constraints) {
+        if (c.id >= next) next = c.id + 1;
+    }
+    return next;
 }
 
 }  // namespace sketch

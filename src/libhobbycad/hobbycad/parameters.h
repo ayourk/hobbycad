@@ -47,7 +47,22 @@ namespace hobbycad {
 // =====================================================================
 
 /// Represents a parametric value that can be a number, parameter, or formula.
-/// Pure computation — no GUI dependencies.
+/// Pure computation: no GUI dependencies.
+/// Rewrite whole-identifier occurrences of @p from to @p to in @p expr.
+///
+/// Used when a parameter is renamed: every expression that referenced it
+/// must follow, or the rename silently breaks them or, worse, repoints
+/// them at a different parameter that later takes the freed name.
+///
+/// Matching is on identifier boundaries, not substrings. Renaming "w" to
+/// "wide" turns `w * 2` into `wide * 2` while leaving `width` and `w2`
+/// untouched. A naive find-and-replace corrupts those silently, producing
+/// an expression that still parses and evaluates to the wrong thing.
+HOBBYCAD_EXPORT std::string renameIdentifierInExpression(
+    const std::string& expr,
+    const std::string& from,
+    const std::string& to);
+
 class HOBBYCAD_EXPORT ParametricValue {
 public:
     enum class Type {
@@ -113,6 +128,13 @@ struct Parameter {
     bool isValid = true;                ///< Expression evaluated successfully
     std::string errorMessage;           ///< Error description if invalid
     std::vector<std::string> dependencies;  ///< Parameters this depends on
+    bool isReference = false;            ///< Value is MEASURED from the solved
+                                         ///< model (set via setReferenceValue
+                                         ///< after each solve), not authored.
+                                         ///< Read-only; usable in other
+                                         ///< parameters' expressions.
+    std::string referenceSource;         ///< App-defined descriptor of what
+                                         ///< geometry it measures (opaque here).
 };
 
 /// Result of parameter evaluation
@@ -145,6 +167,20 @@ public:
     /// Remove a parameter
     void removeParameter(const std::string& name);
 
+    /// Add or update a REFERENCE parameter: its value is measured from the
+    /// solved model (pushed via setReferenceValue after each solve), not
+    /// authored. It has no expression, is read-only, and may be used in other
+    /// parameters' expressions like any leaf value.
+    void setReferenceParameter(const std::string& name,
+                               const std::string& referenceSource = {},
+                               const std::string& unit = {},
+                               const std::string& comment = {});
+
+    /// Set a reference parameter's measured value (call after each solve, then
+    /// evaluate() to propagate into dependent expressions). No-op if @p name is
+    /// not a reference parameter.
+    void setReferenceValue(const std::string& name, double value);
+
     /// Clear all parameters
     void clear();
 
@@ -175,7 +211,7 @@ public:
     /// Bare numbers are treated as being in defaultUnit (no conversion).
     /// Numbers with explicit unit suffixes (mm, cm, m, in, ft) are converted
     /// to defaultUnit so they integrate correctly in the expression.
-    /// The result is in defaultUnit — the caller must convert to mm.
+    /// The result is in defaultUnit; the caller must convert to mm.
     /// @param expression The expression to evaluate
     /// @param result Output: the numeric result in defaultUnit
     /// @param defaultUnit Unit assumed for bare numbers (no suffix)
@@ -246,6 +282,12 @@ private:
 bool evaluateExpression(const std::string& expression, double& result,
                         const std::map<std::string, double>& params,
                         std::string* errorMsg = nullptr);
+
+/// True when `expression` reads a parameter: it evaluates with `params` but
+/// not without them, or to a different value. Decides whether the source text
+/// is kept so a dimension can follow the parameter later.
+bool expressionUsesParameters(const std::string& expression,
+                              const std::map<std::string, double>& params);
 
 }  // namespace hobbycad
 

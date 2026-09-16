@@ -8,12 +8,11 @@
 // =====================================================================
 
 #include <hobbycad/geometry/intersections.h>
+#include <hobbycad/units.h>
 
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace geometry {
@@ -223,9 +222,9 @@ LineArcIntersection lineArcIntersection(
 
     // Check if intersection points are on the arc
     auto checkPoint = [&arc](const Point2D& point) -> bool {
-        double angle = std::atan2(
+        double angle = radiansToDegrees(std::atan2(
             point.y - arc.center.y,
-            point.x - arc.center.x) * 180.0 / M_PI;
+            point.x - arc.center.x));
         return arc.containsAngle(angle);
     };
 
@@ -274,9 +273,9 @@ CircleCircleIntersection arcArcIntersection(const Arc& arc1, const Arc& arc2)
 
     // Filter by arc sweeps
     auto checkPoint = [](const Arc& arc, const Point2D& point) -> bool {
-        double angle = std::atan2(
+        double angle = radiansToDegrees(std::atan2(
             point.y - arc.center.y,
-            point.x - arc.center.x) * 180.0 / M_PI;
+            point.x - arc.center.x));
         return arc.containsAngle(angle);
     };
 
@@ -344,9 +343,9 @@ Point2D closestPointOnCircle(
 Point2D closestPointOnArc(const Point2D& point, const Arc& arc)
 {
     // Get angle to point
-    double angle = std::atan2(
+    double angle = radiansToDegrees(std::atan2(
         point.y - arc.center.y,
-        point.x - arc.center.x) * 180.0 / M_PI;
+        point.x - arc.center.x));
 
     if (arc.containsAngle(angle)) {
         // Point projects onto arc
@@ -441,25 +440,21 @@ bool pointOnArc(const Point2D& point, const Arc& arc, double tolerance)
     }
 
     // Check if angle is within sweep
-    double angle = std::atan2(
+    double angle = radiansToDegrees(std::atan2(
         point.y - arc.center.y,
-        point.x - arc.center.x) * 180.0 / M_PI;
+        point.x - arc.center.x));
 
     return arc.containsAngle(angle);
 }
 
 double normalizeAngle(double degrees)
 {
-    while (degrees < 0) degrees += 360.0;
-    while (degrees >= 360.0) degrees -= 360.0;
-    return degrees;
+    return hobbycad::normalizeAngle360(degrees);   // one implementation, units.h
 }
 
 double normalizeAngleSigned(double degrees)
 {
-    while (degrees < -180.0) degrees += 360.0;
-    while (degrees >= 180.0) degrees -= 360.0;
-    return degrees;
+    return hobbycad::normalizeAngle180(degrees);
 }
 
 }  // namespace geometry

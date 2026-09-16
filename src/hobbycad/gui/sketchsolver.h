@@ -15,6 +15,8 @@
 #include <hobbycad/sketch/solver.h>
 
 #include <QVector>
+#include <utility>
+#include <vector>
 #include <QPointF>
 #include <QString>
 
@@ -45,6 +47,12 @@ public:
         QVector<SketchEntity>& entities,
         const QVector<SketchConstraint>& constraints
     );
+    /// Points being dragged, for the next solve() only (see sketch::Solver).
+    void setDraggedPoints(const std::vector<std::pair<int, int>>& points) { m_solver.setDraggedPoints(points); }
+    /// Per-point drag stiffness for the next solve() only (see sketch::Solver).
+    /// The far/held points a handle drag pins resist moving that many times
+    /// harder; used with the forked libslvs drag-weight extension.
+    void setPointWeights(const std::vector<std::pair<int, int>>& points, double stiffness) { m_solver.setPointWeights(points, stiffness); }
 
     /// Test if adding a constraint would over-constrain the sketch
     /// @return True if the new constraint would cause over-constraint

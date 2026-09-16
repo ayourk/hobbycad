@@ -20,6 +20,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -44,11 +47,11 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
             container: archlinux:base-devel
             artifact_name: hobbycad-arch-x86_64
           - arch: aarch64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
             container: agners/archlinuxarm:latest
             artifact_name: hobbycad-arch-aarch64
 
@@ -67,133 +70,86 @@ jobs:
           pacman -Syu --noconfirm git base-devel
 
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
+      # The build dependencies are the depends and makedepends of
+      # packaging/arch/PKGBUILD; the extras are what the scripts/ci/
+      # dependency builds need beyond them.
       - name: Install build dependencies
+        run: scripts/ci/install-build-deps.sh arch --extra curl patch xz tar eigen
+
+      # OpenCASCADE is by far the slowest dependency, so its install tree is
+      # cached. The key names the image, architecture and compiler, the
+      # pinned source checksum and the build script, and it is exact: an older
+      # tree must never stand in for a new pin. A miss builds with its real
+      # /usr/local prefix but installs through DESTDIR into /opt/occt, and
+      # saves that tree at once, so a later failure in the job cannot lose it.
+      # Every run then copies the tree into /usr/local.
+      - name: OpenCASCADE cache key
+        id: occt-key
         run: |
-          pacman -S --noconfirm --needed \
-            base-devel cmake ninja pkgconf curl patch xz tar \
-            qt6-base qt6-svg qt6-tools qt6-imageformats \
-            opencascade tbb \
-            libpng libjpeg-turbo libwebp \
-            libzip minizip \
-            nlohmann-json \
-            libgit2 \
-            lib3mf \
-            librsvg \
-            mesa glu libxkbcommon \
-            eigen
+          . scripts/ci/pins.sh
+          echo "key=occt-${{ matrix.container }}-${{ matrix.arch }}-gcc$(gcc -dumpfullversion)-${PIN_OPENCASCADE_SHA256}-${{ hashFiles('scripts/ci/build-opencascade.sh') }}" >> "$GITHUB_OUTPUT"
 
-          # Build OpenMesh from PPA source (AUR package, not in official repos)
-          curl -L -o /tmp/openmesh.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/openmesh && tar -xzf /tmp/openmesh.tar.gz -C /tmp/openmesh --strip-components=1
-          cd /tmp/openmesh
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_APPS=OFF
-          cmake --build build
-          cmake --install build
+      - name: Restore OpenCASCADE
+        id: occt
+        uses: actions/cache/restore@v6
+        with:
+          path: /opt/occt
+          key: ${{ steps.occt-key.outputs.key }}
 
-          # Build libslvs from PPA source (solvespace package is GUI only)
-          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
-          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
-          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
-          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+      - name: Build OpenCASCADE
+        if: steps.occt.outputs.cache-hit != 'true'
+        run: DESTDIR=/opt/occt scripts/ci/build-opencascade.sh
 
-          # Stub empty submodule directories and populate Eigen from system package
-          for submod in zlib libpng freetype cairo pixman angle; do
-            mkdir -p extlib/$submod
-            echo "# stub" > extlib/$submod/CMakeLists.txt
-          done
-          mkdir -p extlib/eigen
-          cp -r /usr/include/eigen3/. extlib/eigen/
+      - name: Save OpenCASCADE
+        if: steps.occt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/occt
+          key: ${{ steps.occt-key.outputs.key }}
 
-          # EIGEN_DONT_VECTORIZE works around Eigen NEON isfinite_impl bug on aarch64
-          EXTRA_CXX_FLAGS=""
-          if [ "$(uname -m)" = "aarch64" ]; then
-            EXTRA_CXX_FLAGS="-DEIGEN_DONT_VECTORIZE"
-          fi
-          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
-          # override a normal variable, so we must patch the source directly
-          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
+      - name: Install OpenCASCADE
+        run: cp -a /opt/occt/usr/local/. /usr/local/
 
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="${EXTRA_CXX_FLAGS}" \
-            -DBUILD_LIB=ON \
-            -DENABLE_GUI=OFF \
-            -DENABLE_CLI=OFF \
-            -DENABLE_OPENMP=OFF \
-            -DENABLE_TESTS=OFF
-          cmake --build build
-          cmake --install build
+      # Built against the versions.json pins, from checksum-verified
+      # sources, statically (Arch ships no OpenCASCADE 8 and no libslvs).
+      - name: Build pinned dependencies
+        run: |
+          scripts/ci/build-nlohmann-json.sh
+          scripts/ci/build-libwebp.sh
+          scripts/ci/build-libslvs.sh --static
 
-          # Build meshfix from PPA source (not packaged for Arch)
-          curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
-          curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
-          tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
-          cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
-          # Use CMAKE_POLICY_VERSION_MINIMUM for newer CMake compatibility
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DMESHFIX_BUILD_SHARED=ON \
-            -DMESHFIX_BUILD_CLI=OFF
-          cmake --build build
-          cmake --install build
+          # MeshFix is not built: nothing in the package uses it (devtest
+          # only probes for it), and it is the planned auto-repair backend
+          # for HobbyMesh (docs/cad_library_recommendations.txt, section 14).
+          # Kept commented out, not removed. Before enabling it again: pin its
+          # orig in versions.json and fetch it through scripts/ci (Launchpad
+          # +sourcefiles URLs disappear), carry the shared-library patch in
+          # the orig, and fix the two loader memory-safety defects
+          # (MarcoAttene/MeshFix-V2.1 issue #19).
+          # curl -fL --retry 3 --retry-all-errors -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
+          # mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
+          # curl -fL --retry 3 --retry-all-errors -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
+          # tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
+          # cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
+          # # Use CMAKE_POLICY_VERSION_MINIMUM for newer CMake compatibility
+          # cmake -B build -G Ninja \
+          #   -DCMAKE_BUILD_TYPE=Release \
+          #   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          #   -DMESHFIX_BUILD_SHARED=ON \
+          #   -DMESHFIX_BUILD_CLI=OFF
+          # cmake --build build
+          # cmake --install build
 
       - name: Create PKGBUILD
         run: |
-          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
-          VERSION=${VERSION:-0.0.1}
+          VERSION=$(sed -nE 's/^[[:space:]]*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)
+          if [ -z "$VERSION" ]; then echo "::warning::version not found in CMakeLists.txt; using the 0.0.0 sentinel"; VERSION=0.0.0; fi
 
           mkdir -p pkgbuild
-          cat > pkgbuild/PKGBUILD << 'EOF'
-          # Maintainer: Aaron Yourk <ayourk@gmail.com>
-          pkgname=hobbycad
-          pkgver=VERSION_PLACEHOLDER
-          pkgrel=1
-          pkgdesc="Parametric 3D CAD Application"
-          arch=('x86_64' 'aarch64')
-          url="https://github.com/ayourk/hobbycad"
-          license=('GPL-3.0-only')
-          depends=(
-            'qt6-base'
-            'qt6-svg'
-            'opencascade'
-            'tbb'
-            'libgit2'
-            'libzip'
-            'minizip'
-            'lib3mf'
-          )
-          makedepends=(
-            'cmake'
-            'ninja'
-            'qt6-tools'
-            'nlohmann-json'
-            'librsvg'
-          )
-          source=()
-
-          build() {
-            cd "$startdir/.."
-            cmake -B build -G Ninja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INSTALL_PREFIX=/usr
-            cmake --build build
-          }
-
-          package() {
-            cd "$startdir/.."
-            DESTDIR="$pkgdir" cmake --install build
-          }
-          EOF
-
-          # Replace version placeholder
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" pkgbuild/PKGBUILD
+          cp packaging/arch/PKGBUILD pkgbuild/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" pkgbuild/PKGBUILD
 
       - name: Build package
         run: |
@@ -209,9 +165,9 @@ jobs:
           cp *.pkg.tar.zst ../ || cp *.pkg.tar.xz ../
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}-pkg
           path: "*.pkg.tar.*"
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

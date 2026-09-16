@@ -1,0 +1,299 @@
+================================================================================
+  HobbyCAD - BUILDING ON NETBSD
+================================================================================
+
+  Project          : HobbyCAD
+  File             : docs/netbsd_build.txt
+  Document Version : 0.0.1.0
+  Date             : 2026-08-30
+  Format           : Plain Text (all project documentation is plain text)
+  AI Attribution   : This document was primarily generated with the assistance
+                     of Claude AI (Anthropic). Human review and editorial
+                     direction provided by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+    1. Overview
+    2. Package Installation and Its Three Traps
+    3. X11 Headers Ship in the xcomp Set
+    4. Paths That Are Not Where CMake Expects
+    5. libslvs 3.2p1
+    6. OpenCASCADE 8.0.1 and the uselocale Problem
+    7. Building HobbyCAD
+    8. Verifying the GUI
+    9. Installing Without sysinst
+    10. Troubleshooting
+    11. Source Packages
+
+================================================================================
+  1. Overview
+================================================================================
+
+  Verified on NetBSD 11.0, amd64. Everything here was established by building
+  on that system and is not derived from upstream documentation.
+
+  NetBSD works, including the GUI. Its distinguishing trait is that it
+  provides almost the whole POSIX-2008 locale API EXCEPT uselocale(), which is
+  the one function OpenCASCADE's preferred path depends on. See section 6.
+
+  It also has three package-fetch traps that each present as "the repository
+  is down". See section 2.
+
+================================================================================
+  2. Package Installation and Its Three Traps
+================================================================================
+
+    export PKG_PATH=\
+      http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/x86_64/11.0_2026Q2/All/
+    pkg_add cmake ninja-build eigen3 qt6-qtbase qt6-qtsvg qt6-qttools \
+            nlohmann-json freetype2 mozilla-rootcerts-openssl
+
+  The traps, in the order they are encountered:
+
+    1. The repository path is x86_64, NOT amd64.
+       /amd64/ is a 302 redirect. A fetcher that does not follow redirects
+       reports an empty package set rather than an error, so a fully stocked
+       repository looks empty.
+
+    2. A fresh install has no CA bundle.
+       Any https:// repository fails certificate verification. Bootstrap over
+       http://, then install mozilla-rootcerts-openssl.
+
+    3. The resolver returns AAAA first.
+       Without an IPv6 route the fetch stalls on "No route to host" before
+       trying IPv4. Disable IPv6 on the interface or force IPv4.
+
+  IMPORTANT: the pkgsrc package named "eigen" is Eigen 2. Ask for eigen3 by
+  name. Installing "eigen" succeeds, places headers in /usr/pkg/include/eigen2,
+  and libslvs then fails at Eigen/SparseCore exactly as if nothing had been
+  installed.
+
+================================================================================
+  3. X11 Headers Ship in the xcomp Set
+================================================================================
+
+  Extracting xbase provides libX11 but NO headers. Install xcomp as well, or
+  the OpenCASCADE Visualization module fails on X11/Xlib.h while the libraries
+  are plainly present:
+
+    ftp -4 -o xcomp.tar.xz \
+     http://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/amd64/binary/sets/xcomp.tar.xz
+    tar -xpJf xcomp.tar.xz -C /
+
+  Note that the install sets live under /amd64/ even though the pkgsrc binary
+  packages live under /x86_64/.
+
+================================================================================
+  4. Paths That Are Not Where CMake Expects
+================================================================================
+
+    X11        /usr/X11R7/include, /usr/X11R7/lib
+    FreeType   /usr/pkg/include/freetype2
+
+  -DCMAKE_INCLUDE_PATH= does not reach compile flags. Export CPATH instead; it
+  also leaves the CMake cache untouched, so an interrupted build resumes
+  rather than reconfiguring and restarting:
+
+    export CPATH=/usr/X11R7/include:/usr/pkg/include
+    export LIBRARY_PATH=/usr/X11R7/lib:/usr/pkg/lib
+
+  At runtime the dynamic linker needs the X11 directory too. Either build with
+  an rpath:
+
+    -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,/usr/X11R7/lib"
+
+  or add /usr/X11R7/lib to /etc/ld.so.conf. Without one of those, libTKService
+  cannot resolve libX11.so.7 even though the build succeeded.
+
+================================================================================
+  5. libslvs 3.2p1
+================================================================================
+
+  Builds unpatched, given eigen3:
+
+  WHAT "3.2p1" MEANS
+
+  This is NOT an upstream release. Upstream SolveSpace has no 3.2p1.
+
+    3.2       the upstream SolveSpace version the snapshot is based on
+    .git~     taken from git rather than a release tarball
+    20260914  the day the HobbyCAD series was cut against upstream
+    +p1       revision 1 of the HobbyCAD changes
+
+  The two parts move independently: the snapshot says which upstream this
+  came from, and +pN says which revision of our changes is applied on top.
+  Bumping one does not imply bumping the other.
+
+  The changes are baked into the orig tarball rather than carried alongside
+  it, for portability: vcpkg, Homebrew and the BSDs all consume
+  the same tarball, and only Debian packaging can carry a debian/patches
+  series. That is also why it "builds unpatched" here. It does not need
+  patching because the patching already happened upstream of the tarball.
+
+  A build can detect this at compile time, from include/slvs.h:
+
+    SLVS_IS_HOBBYCAD_BUILD     1
+    SLVS_HOBBYCAD_PATCHLEVEL   1
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DENABLE_GUI=OFF -DENABLE_CLI=OFF -DENABLE_TESTS=OFF \
+      -DENABLE_OPENMP=OFF -DEIGEN3_INCLUDE_DIR=/usr/pkg/include/eigen3
+
+  The orig tarball does NOT bundle Eigen; extlib/eigen/ is an empty submodule
+  placeholder.
+
+================================================================================
+  6. OpenCASCADE 8.0.1 and the uselocale Problem
+================================================================================
+
+  Stock OpenCASCADE 8.0.1 does NOT build. It stops at:
+
+    Standard_CString.cxx:55: error: System does not support xlocale.
+
+  Use the baked tarball:
+
+    opencascade_8.0.1+p1.orig.tar.xz
+
+  The +p1 suffix means the same thing it does for libslvs: revision 1 of the
+  HobbyCAD changes, applied inside the orig tarball rather than carried
+  alongside it. Nothing needs patching.
+
+  NetBSD is the awkward case among the BSDs. It provides newlocale,
+  freelocale, duplocale, localeconv_l, strtod_l, strtof_l, strtold_l,
+  snprintf_l and sscanf_l in libc. The single omission is uselocale(), and no
+  pkgsrc package supplies it.
+
+  So NetBSD cannot set a C locale per thread, OCCT_CLOCALE_POSIX2008 must be
+  left undefined, and OpenCASCADE then refuses to build because that #error is
+  waived only for Android, QNX and MinGW.
+
+  The +p1 orig tarball adds NetBSD to that waiver, accepting the same global
+  setlocale() fallback those platforms already use.
+
+  You can confirm which path a build took from the binary itself. On NetBSD,
+  libTKernel.so contains no reference to uselocale and one to setlocale. Built
+  from identical sources, OpenBSD shows the reverse.
+
+  The hazard being guarded against is real here. With LC_NUMERIC=de_DE.UTF-8:
+
+    strtod("1.5")                  returns 1.0   (parsing stops at the '.')
+    strtod_l("1.5", C_locale)      returns 1.5
+
+  Because NetBSD has the *_l functions, a future OpenCASCADE could use the
+  macOS strategy and skip thread-locale switching entirely. That is raised
+  upstream in OCCT issue #1515.
+
+  Then:
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/pkg;/usr/X11R7" \
+      -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,/usr/X11R7/lib" \
+      -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,/usr/X11R7/lib" \
+      -DUSE_FREETYPE=ON -DUSE_TK=OFF -DUSE_TCL=OFF \
+      -DBUILD_MODULE_Draw=OFF -DBUILD_DOC_Overview=OFF \
+      -DINSTALL_TEST_CASES=OFF
+
+  IMPORTANT: build with USE_FREETYPE=ON. Verified both ways on this platform:
+
+    USE_FREETYPE=OFF   view cube unlabeled, scale bar has tick marks and no
+                       numbers
+    USE_FREETYPE=ON    view cube reads TOP / FRONT / RIGHT, scale bar reads
+                       0 ... 20 mm
+
+  Qt's own widgets keep their text either way, so the missing viewport labels
+  read as a platform font problem rather than a build flag.
+
+================================================================================
+  7. Building HobbyCAD
+================================================================================
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/pkg;/usr/X11R7;/path/to/occt-build"
+    cmake --build build -j$(sysctl -n hw.ncpu)
+
+  Builds with no NetBSD-specific source changes. Reports Qt 6.11.1 and
+  OpenCASCADE 8.0.1.
+
+  Verify with --version, --no-gui, and QT_QPA_PLATFORM=offscreen --help.
+  None of the three needs a display.
+
+================================================================================
+  8. Verifying the GUI
+================================================================================
+
+    Xvfb :99 -screen 0 1400x900x24 &
+    DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb hobbycad &
+    DISPLAY=:99 xwd -root -silent > shot.xwd
+
+  Renders, reporting:
+
+    OpenGL 4.5 - llvmpipe (LLVM 13.0.0, 256 bits)
+
+
+================================================================================
+  9. Installing Without sysinst
+================================================================================
+
+  sysinst is a curses installer and awkward to drive over a serial console.
+  The whole installation can be scripted from the installer's shell instead:
+  partition ld0 (virtio disks are ld, not sd or wd), newfs, extract the sets,
+  install bootxx_ffsv2, and write boot.cfg with consdev=com0.
+
+  A working example that produces one big / plus swap exists in the BSD VM
+  tooling, which is kept separately from this repository.
+
+  One gotcha if scripting it: disklabel -r reads the ON-DISK label, which a
+  blank disk does not have. Use plain disklabel to read the kernel's in-core
+  label. Otherwise the size comes back empty and every computed partition size
+  goes negative, which surfaces later as "fdisk: Partition exceeds size of
+  disk" rather than as a missing label.
+
+================================================================================
+  10. Troubleshooting
+================================================================================
+
+  "System does not support xlocale" at Standard_CString.cxx
+      This is a stock 8.0.1 tree, not the +p1 tarball. See section 6.
+
+  Eigen/SparseCore not found while building libslvs
+      The installed package is probably Eigen 2. Install eigen3. See
+      section 2.
+
+  "X11/Xlib.h: No such file or directory"
+      The xcomp set is not installed, or CPATH lacks /usr/X11R7/include. See
+      sections 3 and 4.
+
+  libX11.so.7 not found at runtime, though the build succeeded
+      No rpath and /usr/X11R7/lib is not in ld.so.conf. See section 4.
+
+  Package fetches fail or the repository appears empty
+      One of the three traps in section 2.
+
+  3D viewport renders but has no text anywhere
+      OpenCASCADE was built with USE_FREETYPE=OFF. See section 6.
+
+================================================================================
+  11. Source Packages
+================================================================================
+
+  The patched sources are published to the HobbyCAD PPA:
+
+    https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad
+
+  The orig tarballs there are the same ones consumed by vcpkg, Homebrew and
+  the BSDs. That is deliberate: patches are baked into the orig tarball rather
+  than carried in a debian/patches series precisely so that every consumer
+  gets identical sources. See "WHAT 3.2p1 MEANS" above.
+
+  CHECK THE VERSIONS BEFORE ASSUMING A MATCH. The instructions in this
+  document need:
+
+    libslvs        3.2.git~20260914+p1   (note the +p1)
+    opencascade    8.0.1+p1
+
+  A copy without +p1 is the stock upstream source and will not build here.
+  Neither will an opencascade older than 8.0.1, which predates the BSD work
+  entirely. If what is published does not carry those versions yet, wait for
+  it rather than substituting a stock tarball.

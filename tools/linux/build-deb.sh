@@ -14,7 +14,9 @@
 #  Prerequisites:
 #    sudo apt-get install -y \
 #      debhelper-compat dh-cmake dpkg-dev fakeroot lintian \
-#      devscripts ninja-build librsvg2-bin icoutils
+#      devscripts ninja-build
+#    (the icons are rendered by the build itself with Qt; no rsvg-convert
+#     or icotool is needed)
 #
 #  Output:
 #    ../<projectroot>/hobbycad_<version>_<arch>.deb
@@ -90,7 +92,7 @@ echo "--- Checking build prerequisites ---"
 echo ""
 
 MISSING=()
-for cmd in dpkg-buildpackage fakeroot lintian ninja rsvg-convert; do
+for cmd in dpkg-buildpackage fakeroot lintian ninja; do
     if ! command -v "${cmd}" &>/dev/null; then
         MISSING+=("${cmd}")
     fi
@@ -102,8 +104,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
     echo "  Install with:"
     echo "    sudo apt-get install -y \\"
     echo "      debhelper-compat dh-cmake dpkg-dev fakeroot \\"
-    echo "      lintian devscripts ninja-build \\"
-    echo "      librsvg2-bin icoutils"
+    echo "      lintian devscripts ninja-build"
     echo ""
     exit 1
 fi
@@ -116,12 +117,13 @@ echo ""
 echo "--- Verifying debian/ packaging files ---"
 echo ""
 
+# debian/compat is gone on purpose: the compat level is the
+# debhelper-compat (= N) build dependency in debian/control.
 REQUIRED_FILES=(
     "debian/control"
     "debian/rules"
     "debian/changelog"
     "debian/copyright"
-    "debian/compat"
     "debian/source/format"
 )
 
@@ -149,7 +151,7 @@ echo ""
 
 if [ -f "${DEB_FILE}" ]; then
     echo "====================================================================="
-    echo "  Package built successfully"
+    echo "  Package(s) built successfully"
     echo "====================================================================="
     echo ""
     echo "  File : ${DEB_FILE}"
@@ -158,15 +160,20 @@ if [ -f "${DEB_FILE}" ]; then
 
     echo "--- Running lintian ---"
     echo ""
-    lintian "${DEB_FILE}" || true
-    echo ""
+    # Every package this source produces: the application and libhobbycad-dev.
+    for pkg in "${DEB_FILE}" "${PROJECT_ROOT}"/../libhobbycad-dev_${VERSION}_${ARCH}.deb; do
+        [ -f "${pkg}" ] || continue
+        echo "  ${pkg##*/}"
+        lintian "${pkg}" || true
+        echo ""
+    done
 else
     # dpkg-buildpackage may use slightly different naming
     FOUND_DEB="$(ls "${PROJECT_ROOT}"/../hobbycad_*.deb 2>/dev/null | head -1)"
     if [ -n "${FOUND_DEB}" ]; then
         DEB_FILE="${FOUND_DEB}"
         echo "====================================================================="
-        echo "  Package built successfully"
+        echo "  Package(s) built successfully"
         echo "====================================================================="
         echo ""
         echo "  File : ${DEB_FILE}"
@@ -175,11 +182,15 @@ else
 
         echo "--- Running lintian ---"
         echo ""
-        lintian "${DEB_FILE}" || true
-        echo ""
+        for pkg in "${DEB_FILE}" "${PROJECT_ROOT}"/../libhobbycad-dev_${VERSION}_${ARCH}.deb; do
+            [ -f "${pkg}" ] || continue
+            echo "  ${pkg##*/}"
+            lintian "${pkg}" || true
+            echo ""
+        done
     else
         echo "====================================================================="
-        echo "  Build FAILED — .deb not found"
+        echo "  Build FAILED: .deb not found"
         echo "====================================================================="
         echo ""
         echo "  Check the log: ${LOG}"

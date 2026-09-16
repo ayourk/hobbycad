@@ -22,6 +22,11 @@
 #include <QVBoxLayout>
 #include <QWheelEvent>
 
+namespace {
+/// Side length of a timeline item's icon, in pixels.
+constexpr int kIconSide = 22;
+}  // namespace
+
 namespace hobbycad {
 
 // ---- TimelineItem (draggable icon button) ----------------------------
@@ -386,6 +391,47 @@ void TimelineWidget::setupUi()
     setFixedHeight(50);
 }
 
+QIcon TimelineWidget::badgedIcon(const QIcon& base, FeatureState state) const
+{
+    if (state != FeatureState::Error && state != FeatureState::Warning) {
+        return base;
+    }
+
+    // Standard platform icons, so they match every other warning and error
+    // dialog the user sees: SP_MessageBoxWarning is the triangle with the
+    // black exclamation mark, SP_MessageBoxCritical the red circle with the
+    // white cross.
+    //
+    // State was previously carried by background and border COLOR alone,
+    // which is invisible to a colorblind user and to anyone reading a
+    // screenshot in grayscale. The two badges differ in outline shape as
+    // well as color, so the distinction survives losing the color.
+    const QStyle::StandardPixmap sp = (state == FeatureState::Error)
+        ? QStyle::SP_MessageBoxCritical
+        : QStyle::SP_MessageBoxWarning;
+
+    const int side = kIconSide;
+    const int badge = side / 2;             // resized to fit, quarter area
+
+    QPixmap composed = base.pixmap(QSize(side, side));
+    if (composed.isNull()) {
+        composed = QPixmap(side, side);
+        composed.fill(Qt::transparent);
+    }
+
+    const QPixmap badgePix = style()->standardIcon(sp).pixmap(QSize(badge, badge));
+    if (badgePix.isNull()) {
+        return base;                        // no platform icon; keep the color cue
+    }
+
+    QPainter painter(&composed);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawPixmap(side - badge, side - badge, badgePix);
+    painter.end();
+
+    return QIcon(composed);
+}
+
 QIcon TimelineWidget::iconForFeature(TimelineFeature feature) const
 {
     // Map features to freedesktop icon names with fallbacks
@@ -465,42 +511,66 @@ QIcon TimelineWidget::iconForFeature(TimelineFeature feature) const
     return icon;
 }
 
-void TimelineWidget::addItem(TimelineFeature feature, const QString& name)
-{
-    int index = m_items.size();
+namespace {
+// The item button style, once. The disabled block is separate because the
+// normal style applied after a rollback deliberately leaves it off.
+const char* const kItemStyleBase =
+    "QToolButton {"
+    "  background: #4a4a4a;"
+    "  border: 1px solid #555;"
+    "  border-radius: 2px;"
+    "}"
+    "QToolButton:hover {"
+    "  background: #5a5a5a;"
+    "  border-color: #888;"
+    "}"
+    "QToolButton:checked {"
+    "  background: #6a8fbd;"
+    "  border-color: #8ab4f8;"
+    "}"
+    "QToolTip {"
+    "  background: #ffffcc;"
+    "  color: #000;"
+    "  border: 1px solid #000;"
+    "  padding: 2px;"
+    "}";
+const char* const kItemStyleDisabled =
+    "QToolButton:disabled {"
+    "  background: #333;"
+    "  border-color: #444;"
+    "}";
+}  // namespace
 
+// One timeline button: icon, size, style, and the click that selects it (a
+// second click deselects).
+TimelineItem* TimelineWidget::makeItem(int index, TimelineFeature feature, const QString& name)
+{
     auto* btn = new TimelineItem(index, this, m_iconRowWidget);
     btn->setIcon(iconForFeature(feature));
-    btn->setIconSize(QSize(22, 22));
+    btn->setIconSize(QSize(kIconSide, kIconSide));
     btn->setToolTip(name);
     btn->setFixedSize(32, 32);
     btn->setAutoRaise(true);
     btn->setCheckable(true);
-    btn->setStyleSheet(QStringLiteral(
-        "QToolButton {"
-        "  background: #4a4a4a;"
-        "  border: 1px solid #555;"
-        "  border-radius: 2px;"
-        "}"
-        "QToolButton:hover {"
-        "  background: #5a5a5a;"
-        "  border-color: #888;"
-        "}"
-        "QToolButton:checked {"
-        "  background: #6a8fbd;"
-        "  border-color: #8ab4f8;"
-        "}"
-        "QToolTip {"
-        "  background: #ffffcc;"
-        "  color: #000;"
-        "  border: 1px solid #000;"
-        "  padding: 2px;"
-        "}"
-        "QToolButton:disabled {"
-        "  background: #333;"
-        "  border-color: #444;"
-        "}"
-    ));
+    btn->setStyleSheet(QString::fromLatin1(kItemStyleBase) + QLatin1String(kItemStyleDisabled));
+    connect(btn, &QToolButton::clicked, this, [this, btn]() {
+        int idx = btn->index();
+        if (m_selectedIndex == idx) {
+            setSelectedIndex(-1);
+            emit itemClicked(-1);
+        } else {
+            setSelectedIndex(idx);
+            emit itemClicked(idx);
+        }
+    });
+    return btn;
+}
+
+void TimelineWidget::addItem(TimelineFeature feature, const QString& name)
+{
+    int index = m_items.size();
+
+    TimelineItem* btn = makeItem(index, feature, name);
 
     m_items.append(btn);
     m_features.append(feature);
@@ -512,19 +582,6 @@ void TimelineWidget::addItem(TimelineFeature feature, const QString& name)
 
     // Insert before the stretch
     m_contentLayout->insertWidget(m_contentLayout->count() - 1, btn);
-
-    // Connect click signal - handle exclusive selection (toggle on re-click)
-    connect(btn, &QToolButton::clicked, this, [this, btn]() {
-        int idx = btn->index();
-        if (m_selectedIndex == idx) {
-            // Clicking selected item deselects it
-            setSelectedIndex(-1);
-            emit itemClicked(-1);
-        } else {
-            setSelectedIndex(idx);
-            emit itemClicked(idx);
-        }
-    });
 
     // Update tick marks and arrows, then scroll to show the new item
     QMetaObject::invokeMethod(this, &TimelineWidget::updateTickMarks, Qt::QueuedConnection);
@@ -539,38 +596,7 @@ void TimelineWidget::insertItem(TimelineFeature feature, const QString& name, in
     if (index > m_items.size())
         index = m_items.size();
 
-    auto* btn = new TimelineItem(index, this, m_iconRowWidget);
-    btn->setIcon(iconForFeature(feature));
-    btn->setIconSize(QSize(22, 22));
-    btn->setToolTip(name);
-    btn->setFixedSize(32, 32);
-    btn->setAutoRaise(true);
-    btn->setCheckable(true);
-    btn->setStyleSheet(QStringLiteral(
-        "QToolButton {"
-        "  background: #4a4a4a;"
-        "  border: 1px solid #555;"
-        "  border-radius: 2px;"
-        "}"
-        "QToolButton:hover {"
-        "  background: #5a5a5a;"
-        "  border-color: #888;"
-        "}"
-        "QToolButton:checked {"
-        "  background: #6a8fbd;"
-        "  border-color: #8ab4f8;"
-        "}"
-        "QToolTip {"
-        "  background: #ffffcc;"
-        "  color: #000;"
-        "  border: 1px solid #000;"
-        "  padding: 2px;"
-        "}"
-        "QToolButton:disabled {"
-        "  background: #333;"
-        "  border-color: #444;"
-        "}"
-    ));
+    TimelineItem* btn = makeItem(index, feature, name);
 
     // Insert into lists at position
     m_items.insert(index, btn);
@@ -592,18 +618,6 @@ void TimelineWidget::insertItem(TimelineFeature feature, const QString& name, in
     if (m_rollbackPos >= 0 && index <= m_rollbackPos) {
         m_rollbackPos++;
     }
-
-    // Connect click signal
-    connect(btn, &QToolButton::clicked, this, [this, btn]() {
-        int idx = btn->index();
-        if (m_selectedIndex == idx) {
-            setSelectedIndex(-1);
-            emit itemClicked(-1);
-        } else {
-            setSelectedIndex(idx);
-            emit itemClicked(idx);
-        }
-    });
 
     // Update visuals
     updateItemStyles();
@@ -955,6 +969,21 @@ TimelineFeature TimelineWidget::featureAt(int index) const
     return m_features[index];
 }
 
+void TimelineWidget::setName(int index, const QString& name)
+{
+    if (index < 0 || index >= m_names.size()) {
+        return;
+    }
+    if (m_names[index] == name) {
+        return;
+    }
+    m_names[index] = name;
+    // The item is an icon; its tooltip is the only place the name is visible.
+    if (index < m_items.size() && m_items[index]) {
+        m_items[index]->setToolTip(name);
+    }
+}
+
 QString TimelineWidget::nameAt(int index) const
 {
     if (index < 0 || index >= m_names.size())
@@ -1054,27 +1083,7 @@ void TimelineWidget::updateRollbackFromDrag(int xPos)
 void TimelineWidget::updateItemStyles()
 {
     // Items after rollback position are "suppressed" (grayed out with strikethrough effect)
-    QString normalStyle = QStringLiteral(
-        "QToolButton {"
-        "  background: #4a4a4a;"
-        "  border: 1px solid #555;"
-        "  border-radius: 2px;"
-        "}"
-        "QToolButton:hover {"
-        "  background: #5a5a5a;"
-        "  border-color: #888;"
-        "}"
-        "QToolButton:checked {"
-        "  background: #6a8fbd;"
-        "  border-color: #8ab4f8;"
-        "}"
-        "QToolTip {"
-        "  background: #ffffcc;"
-        "  color: #000;"
-        "  border: 1px solid #000;"
-        "  padding: 2px;"
-        "}"
-    );
+    const QString normalStyle = QString::fromLatin1(kItemStyleBase);
 
     QString suppressedStyle = QStringLiteral(
         "QToolButton {"
@@ -1140,6 +1149,11 @@ void TimelineWidget::updateItemStyles()
         } else {
             m_items[i]->setEnabled(true);
             m_items[i]->setStyleSheet(normalStyle);
+        }
+
+        // Re-badge the icon so the state is legible without relying on color.
+        if (i < m_items.size() && i < m_features.size()) {
+            m_items[i]->setIcon(badgedIcon(iconForFeature(m_features[i]), state));
         }
 
         // Update icon opacity for suppressed items
@@ -1408,31 +1422,7 @@ void TimelineWidget::highlightDependencies(int index)
 void TimelineWidget::clearDependencyHighlights()
 {
     // Reset all highlighted items to default style
-    QString defaultStyle = QStringLiteral(
-        "QToolButton {"
-        "  background: #4a4a4a;"
-        "  border: 1px solid #555;"
-        "  border-radius: 2px;"
-        "}"
-        "QToolButton:hover {"
-        "  background: #5a5a5a;"
-        "  border-color: #888;"
-        "}"
-        "QToolButton:checked {"
-        "  background: #6a8fbd;"
-        "  border-color: #8ab4f8;"
-        "}"
-        "QToolTip {"
-        "  background: #ffffcc;"
-        "  color: #000;"
-        "  border: 1px solid #000;"
-        "  padding: 2px;"
-        "}"
-        "QToolButton:disabled {"
-        "  background: #333;"
-        "  border-color: #444;"
-        "}"
-    );
+    const QString defaultStyle = QString::fromLatin1(kItemStyleBase) + QLatin1String(kItemStyleDisabled);
 
     for (int idx : m_highlightedParents) {
         if (idx >= 0 && idx < m_items.size()) {

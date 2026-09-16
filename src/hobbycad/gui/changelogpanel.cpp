@@ -154,11 +154,11 @@ void ChangelogPanel::onItemClicked(int row)
     }
 
     if (row < m_undoCount) {
-        // Clicked an older undo entry — need to undo 'row' times
+        // Clicked an older undo entry: need to undo 'row' times
         // (row 1 = undo once, row 2 = undo twice, etc.)
         m_canvas->undoMultiple(row);
     } else {
-        // Clicked a redo entry — need to redo
+        // Clicked a redo entry: need to redo
         // First redo entry is at row m_undoCount
         int redoIndex = row - m_undoCount;
         // Need to redo (redoIndex + 1) times to reach that point

@@ -201,12 +201,12 @@ HOBBYCAD_EXPORT std::vector<std::vector<Point2D>> offsetPolyline(
 
 /// Triangle represented by three indices into a point array
 struct Triangle {
-    int i0, i1, i2;
+    int i0 = 0, i1 = 0, i2 = 0;
 };
 
 /// Edge in a triangulation (for Delaunay)
 struct Edge {
-    int i0, i1;
+    int i0 = 0, i1 = 0;
     bool operator==(const Edge& other) const {
         return (i0 == other.i0 && i1 == other.i1) ||
                (i0 == other.i1 && i1 == other.i0);

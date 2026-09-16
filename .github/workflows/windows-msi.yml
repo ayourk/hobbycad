@@ -8,7 +8,11 @@
 #   - Start menu shortcuts and file associations
 #   - Clean uninstall via Add/Remove Programs
 #
-# Both x64 and arm64 architectures are supported using native runners.
+# Both x64 and arm64 architectures are supported. The binaries come from
+# the reusable build workflows (windows-build-msvc.yml and
+# windows-build-msvc-arm64.yml, native runners); the packaging jobs here
+# only stage the runtime DLLs and run WiX, each on its own architecture's
+# runner so the matching Visual C++ runtime folder is at hand.
 
 name: Windows MSI
 
@@ -22,6 +26,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -33,114 +40,67 @@ jobs:
   #  Build and create x64 MSI
   # ================================================================
 
+  build-x64:
+    name: Build (x64)
+    uses: ./.github/workflows/windows-build-msvc.yml
+    with:
+      artifact-name: hobbycad-x64-msi-build
+
   msi-x64:
     name: HobbyCAD MSI (x64)
     runs-on: windows-latest
-
-    env:
-      BUILD_TYPE: Release
-      VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+    needs: build-x64
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Free disk space
+      - name: Download the x64 build
+        uses: actions/download-artifact@v8
+        with:
+          name: hobbycad-x64-msi-build
+          path: staging
+
+      # The runtime DLLs the MSI ships: at least as new as the toolset the build
+      # job used, which may have run on a different runner image.
+      - name: Select the Visual C++ runtime
+        id: msvc
         shell: pwsh
-        run: |
-          # Note: do NOT remove dotnet — WiX Toolset requires the .NET SDK
-          $dirs = @(
-            "C:\Android",
-            "C:\Program Files\LLVM",
-            "C:\Program Files (x86)\Microsoft SDKs\Azure",
-            "C:\Program Files\MongoDB",
-            "C:\Program Files\PostgreSQL"
-          )
-          foreach ($d in $dirs) {
-            if (Test-Path $d) {
-              Write-Host "Removing $d ..."
-              Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
-            }
-          }
-          Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
-
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      - name: Setup vcpkg
-        run: |
-          if (Test-Path "C:\vcpkg") {
-              Remove-Item -Recurse -Force C:\vcpkg
-          }
-          git clone --branch 2026.02.27 https://github.com/microsoft/vcpkg.git C:\vcpkg
-          & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
-          echo "C:\vcpkg" >> $env:GITHUB_PATH
-
-      - name: Setup MSVC developer environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Restore VCPKG_ROOT
-        run: |
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
-
-      - name: Clear vcpkg registry cache
-        run: |
-          $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
-          if (Test-Path $cachePath) {
-            Remove-Item -Recurse -Force $cachePath
-            Write-Host "Cleared vcpkg registry cache"
-          }
-
-      - name: Install dependencies via vcpkg
-        run: |
-          vcpkg install --triplet x64-windows-static-md `
-            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
-            --x-install-root=vcpkg_installed `
-            --clean-buildtrees-after-build
-
-      - name: Configure CMake
-        run: |
-          cmake -B build -G Ninja `
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
-            -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
-            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed
-
-      - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+        run: scripts/ci/select-msvc-toolset.ps1 -Arch x64 -MinRuntime "${{ needs.build-x64.outputs.msvc-toolset }}"
 
       - name: Prepare installation files
         shell: pwsh
         run: |
-          cmake --install build --prefix staging
-
           $exe = "staging\bin\hobbycad.exe"
           if (-not (Test-Path $exe)) {
-              Write-Error "hobbycad.exe not found"
+              Write-Error "hobbycad.exe not found in the downloaded build"
               exit 1
           }
           Write-Host "x64 build: $exe"
           Write-Host "Size: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
 
+          # App-local Visual C++ runtime for the MSI (the Inno installer runs vc_redist instead).
+          $crt = "${{ steps.msvc.outputs.crt }}"
+          if (-not $crt -or -not (Test-Path $crt)) { Write-Error "Visual C++ runtime DLLs not found: '$crt'"; exit 1 }
+          New-Item -ItemType Directory -Force -Path staging\crt | Out-Null
+          Copy-Item "$crt\*.dll" staging\crt\
+          Write-Host "Runtime DLLs from $crt"
+          Get-ChildItem staging\crt | ForEach-Object { Write-Host "  $($_.Name)" }
+
       - name: Install WiX Toolset
-        run: dotnet tool install --global wix
+        # WiX 7 refuses to build until its Open Source Maintenance Fee EULA is
+        # accepted (WIX7015). Aaron accepted it for HobbyCAD on 2026-09-15; the
+        # fee applies only at US$10,000 annual gross revenue and up. The id
+        # changes each major version, and a new one needs his acceptance again.
+        run: dotnet tool install --global wix --version 7.0.0
 
       - name: Get version
         id: version
         shell: pwsh
         run: |
-          $version = Select-String -Path CMakeLists.txt -Pattern 'project.*VERSION\s+([0-9.]+)' |
+          $version = Select-String -Path CMakeLists.txt -Pattern '^\s*VERSION\s+([0-9.]+)' |
                      ForEach-Object { $_.Matches[0].Groups[1].Value }
-          if (-not $version) { $version = "0.0.1" }
+          if (-not $version) { Write-Host "::warning::version not found in CMakeLists.txt; using the 0.0.0 sentinel"; $version = "0.0.0" }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create WiX source file
@@ -187,141 +147,114 @@ jobs:
                     </Extension>
                   </ProgId>
                 </Component>
+                <!-- hobbycad.com: the console-subsystem launcher a bare "hobbycad" resolves to in cmd and PowerShell -->
+                <Component Id="ConsoleLauncher" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+                  <File Id="HobbyCADCom" Source="staging\bin\hobbycad.com" KeyPath="yes" />
+                </Component>
+              </ComponentGroup>
+
+              <!-- App-local Visual C++ runtime: the static-md build links the CRT as DLLs and an MSI has no vc_redist
+                   bootstrapper, so Microsoft's redistributable DLLs travel beside hobbycad.exe -->
+              <ComponentGroup Id="RuntimeComponents" Directory="BinFolder">
+                <Files Include="staging\crt\*.dll" />
               </ComponentGroup>
 
               <Icon Id="HobbyCADIcon" SourceFile="staging\bin\hobbycad.exe" />
 
+              <!-- Qt 6.4 needs Windows 10 1809 (build 17763); refuse older systems here rather than failing at first launch.
+                   Windows Installer reports Windows 8.1 values (VersionNT 603, WindowsBuild 9600) on every later Windows,
+                   so the real build number comes from the registry. -->
+              <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+                <RegistrySearch Id="WindowsBuildNumber" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" />
+              </Property>
+              <Launch Condition="Installed OR WINDOWSBUILDNUMBER &gt;= 17763" Message="HobbyCAD requires Windows 10 version 1809 or later." />
+
               <Feature Id="ProductFeature" Title="HobbyCAD" Level="1">
                 <ComponentGroupRef Id="ProductComponents" />
+                <ComponentGroupRef Id="RuntimeComponents" />
               </Feature>
 
             </Package>
           </Wix>
           "@ | Out-File -FilePath "hobbycad.wxs" -Encoding UTF8
 
+      # Without -arch WiX builds a 32-bit package: ProgramFiles6432Folder becomes Program Files (x86)
       - name: Build MSI
-        run: wix build hobbycad.wxs -o HobbyCAD-${{ steps.version.outputs.VERSION }}-x64.msi
+        run: wix build -acceptEula wix7 -arch x64 hobbycad.wxs -o HobbyCAD-${{ steps.version.outputs.VERSION }}-x64.msi
 
       - name: Upload MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hobbycad-windows-x64-msi
           path: "*.msi"
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error
 
   # ================================================================
   #  Build and create arm64 MSI (native on ARM64 runner)
   # ================================================================
 
+  build-arm64:
+    name: Build (arm64)
+    uses: ./.github/workflows/windows-build-msvc-arm64.yml
+    with:
+      artifact-name: hobbycad-arm64-msi-build
+
   msi-arm64:
     name: HobbyCAD MSI (arm64)
     runs-on: windows-11-arm
-
-    env:
-      BUILD_TYPE: Release
-      VCPKG_DEFAULT_TRIPLET: arm64-windows-static-md
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+    needs: build-arm64
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Free disk space
+      - name: Download the arm64 build
+        uses: actions/download-artifact@v8
+        with:
+          name: hobbycad-arm64-msi-build
+          path: staging
+
+      # The runtime DLLs the MSI ships: at least as new as the toolset the build
+      # job used, which may have run on a different runner image.
+      - name: Select the Visual C++ runtime
+        id: msvc
         shell: pwsh
-        run: |
-          # Note: do NOT remove dotnet — WiX Toolset requires the .NET SDK
-          $dirs = @(
-            "C:\Android",
-            "C:\Program Files\LLVM",
-            "C:\Program Files (x86)\Microsoft SDKs\Azure",
-            "C:\Program Files\MongoDB",
-            "C:\Program Files\PostgreSQL"
-          )
-          foreach ($d in $dirs) {
-            if (Test-Path $d) {
-              Write-Host "Removing $d ..."
-              Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
-            }
-          }
-          Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
-
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      - name: Setup vcpkg
-        run: |
-          if (Test-Path "C:\vcpkg") {
-              Remove-Item -Recurse -Force C:\vcpkg
-          }
-          git clone --branch 2026.02.27 https://github.com/microsoft/vcpkg.git C:\vcpkg
-          & C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
-          echo "C:\vcpkg" >> $env:GITHUB_PATH
-
-      - name: Setup MSVC developer environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: arm64
-
-      - name: Restore VCPKG_ROOT
-        run: |
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
-
-      - name: Clear vcpkg registry cache
-        run: |
-          $cachePath = "$env:LOCALAPPDATA\vcpkg\registries"
-          if (Test-Path $cachePath) {
-            Remove-Item -Recurse -Force $cachePath
-            Write-Host "Cleared vcpkg registry cache"
-          }
-
-      - name: Install dependencies via vcpkg
-        run: |
-          vcpkg install --triplet arm64-windows-static-md `
-            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
-            --x-install-root=vcpkg_installed `
-            --clean-buildtrees-after-build
-
-      - name: Configure CMake
-        run: |
-          cmake -B build -G Ninja `
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
-            -DVCPKG_TARGET_TRIPLET=arm64-windows-static-md `
-            -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
-            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed
-
-      - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+        run: scripts/ci/select-msvc-toolset.ps1 -Arch arm64 -MinRuntime "${{ needs.build-arm64.outputs.msvc-toolset }}"
 
       - name: Prepare installation files
         shell: pwsh
         run: |
-          cmake --install build --prefix staging
-
           $exe = "staging\bin\hobbycad.exe"
           if (-not (Test-Path $exe)) {
-              Write-Error "hobbycad.exe not found"
+              Write-Error "hobbycad.exe not found in the downloaded build"
               exit 1
           }
           Write-Host "arm64 build: $exe"
           Write-Host "Size: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
 
+          # App-local Visual C++ runtime for the MSI (the Inno installer runs vc_redist instead).
+          $crt = "${{ steps.msvc.outputs.crt }}"
+          if (-not $crt -or -not (Test-Path $crt)) { Write-Error "Visual C++ runtime DLLs not found: '$crt'"; exit 1 }
+          New-Item -ItemType Directory -Force -Path staging\crt | Out-Null
+          Copy-Item "$crt\*.dll" staging\crt\
+          Write-Host "Runtime DLLs from $crt"
+          Get-ChildItem staging\crt | ForEach-Object { Write-Host "  $($_.Name)" }
+
       - name: Install WiX Toolset
-        run: dotnet tool install --global wix
+        # WiX 7 refuses to build until its Open Source Maintenance Fee EULA is
+        # accepted (WIX7015). Aaron accepted it for HobbyCAD on 2026-09-15; the
+        # fee applies only at US$10,000 annual gross revenue and up. The id
+        # changes each major version, and a new one needs his acceptance again.
+        run: dotnet tool install --global wix --version 7.0.0
 
       - name: Get version
         id: version
         shell: pwsh
         run: |
-          $version = Select-String -Path CMakeLists.txt -Pattern 'project.*VERSION\s+([0-9.]+)' |
+          $version = Select-String -Path CMakeLists.txt -Pattern '^\s*VERSION\s+([0-9.]+)' |
                      ForEach-Object { $_.Matches[0].Groups[1].Value }
-          if (-not $version) { $version = "0.0.1" }
+          if (-not $version) { Write-Host "::warning::version not found in CMakeLists.txt; using the 0.0.0 sentinel"; $version = "0.0.0" }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create WiX source file
@@ -368,12 +301,31 @@ jobs:
                     </Extension>
                   </ProgId>
                 </Component>
+                <!-- hobbycad.com: the console-subsystem launcher a bare "hobbycad" resolves to in cmd and PowerShell -->
+                <Component Id="ConsoleLauncher" Guid="D4E5F6A7-B8C9-0123-DEF1-234567890123">
+                  <File Id="HobbyCADCom" Source="staging\bin\hobbycad.com" KeyPath="yes" />
+                </Component>
+              </ComponentGroup>
+
+              <!-- App-local Visual C++ runtime: the static-md build links the CRT as DLLs and an MSI has no vc_redist
+                   bootstrapper, so Microsoft's redistributable DLLs travel beside hobbycad.exe -->
+              <ComponentGroup Id="RuntimeComponents" Directory="BinFolder">
+                <Files Include="staging\crt\*.dll" />
               </ComponentGroup>
 
               <Icon Id="HobbyCADIcon" SourceFile="staging\bin\hobbycad.exe" />
 
+              <!-- Qt 6.4 needs Windows 10 1809 (build 17763); refuse older systems here rather than failing at first launch.
+                   Windows Installer reports Windows 8.1 values (VersionNT 603, WindowsBuild 9600) on every later Windows,
+                   so the real build number comes from the registry. -->
+              <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+                <RegistrySearch Id="WindowsBuildNumber" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" />
+              </Property>
+              <Launch Condition="Installed OR WINDOWSBUILDNUMBER &gt;= 17763" Message="HobbyCAD requires Windows 10 version 1809 or later." />
+
               <Feature Id="ProductFeature" Title="HobbyCAD" Level="1">
                 <ComponentGroupRef Id="ProductComponents" />
+                <ComponentGroupRef Id="RuntimeComponents" />
               </Feature>
 
             </Package>
@@ -381,12 +333,12 @@ jobs:
           "@ | Out-File -FilePath "hobbycad.wxs" -Encoding UTF8
 
       - name: Build MSI
-        run: wix build hobbycad.wxs -o HobbyCAD-${{ steps.version.outputs.VERSION }}-arm64.msi
+        run: wix build -acceptEula wix7 -arch arm64 hobbycad.wxs -o HobbyCAD-${{ steps.version.outputs.VERSION }}-arm64.msi
 
       - name: Upload MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hobbycad-windows-arm64-msi
           path: "*.msi"
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

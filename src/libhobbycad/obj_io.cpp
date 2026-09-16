@@ -8,9 +8,13 @@
 // =====================================================================
 
 #include <hobbycad/obj_io.h>
+#include "hobbycad/occt_failure.h"
 
 // OpenCASCADE OBJ I/O
-#include <RWObj.hxx>
+// RWObj.hxx was removed upstream after OCCT 8.0.1. Nothing here needed it:
+// the RWObj class itself is unused, and the headers it pulled in
+// (Poly_Triangulation, Message_ProgressRange) are included directly below.
+// RWObj_CafReader is the supported API and survives.
 #include <RWObj_CafReader.hxx>
 #include <RWObj_ObjWriterContext.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -93,7 +97,7 @@ ReadResult readObj(const std::string& path)
         app->Close(doc);
 
     } catch (const Standard_Failure& e) {
-        result.errorMessage = std::string("OCCT exception: ") + e.GetMessageString();
+        result.errorMessage = std::string("OCCT exception: ") + occtFailureMessage(e);
     } catch (...) {
         result.errorMessage = "Unknown exception during OBJ import";
     }

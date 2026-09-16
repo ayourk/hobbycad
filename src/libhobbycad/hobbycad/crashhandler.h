@@ -25,6 +25,7 @@
 #include "core.h"
 
 #include <functional>
+#include <string>
 
 namespace hobbycad {
 
@@ -51,7 +52,7 @@ public:
     /// Register a callback to be invoked on crash for emergency save.
     ///
     /// @warning This callback runs inside a signal handler context.
-    ///          Keep it as simple as possible — avoid allocations,
+    ///          Keep it as simple as possible: avoid allocations,
     ///          Qt signals/slots, or complex I/O.  A simple fwrite()
     ///          of already-prepared data is ideal.
     ///
@@ -63,6 +64,43 @@ public:
     ///
     /// @param path  Absolute path to the crash log file.
     static void setCrashLogPath(const char* path);
+
+    /// Report a fatal condition detected inside a third-party library.
+    ///
+    /// Unlike the signal handler, this is called while the process is still
+    /// running normally, so the diagnostic the library produced can be
+    /// recorded and the user's work saved before anything terminates.
+    /// Logs the message and runs the emergency-save callback, then returns
+    /// so the caller decides what happens next.
+    ///
+    /// @param source  Short name of the library, e.g. "libslvs".
+    /// @param message The library's own diagnostic text.
+    static void reportLibraryFatal(const char* source, const char* message);
+
+    /// A symbolized backtrace of the CURRENT stack, newest frame first.
+    ///
+    /// @warning When called from a `catch` block the stack has already
+    /// unwound, so this shows where the exception was CAUGHT, not where it
+    /// was thrown. That is still worth logging (it names the event and
+    /// the widget that was being serviced), but do not read it as the
+    /// throw site. Capturing that needs interposing on `__cxa_throw`, which
+    /// is deliberately not done here.
+    ///
+    /// Returns a short explanatory string where the platform has no
+    /// backtrace facility, never an empty one.
+    static std::string captureBacktrace(int skipFrames = 1);
+
+    /// Record a C++ exception that was caught and handled, with a
+    /// backtrace, without terminating or saving.
+    ///
+    /// For failures the program intends to survive, unlike
+    /// reportLibraryFatal(), which is for a library that has already
+    /// decided the process is finished. The caller decides what happens
+    /// next; this only writes the record.
+    ///
+    /// @param context  Where it was caught, e.g. "QApplication::notify".
+    /// @param what     The exception's message.
+    static void reportException(const char* context, const char* what);
 
 private:
     CrashHandler() = delete;

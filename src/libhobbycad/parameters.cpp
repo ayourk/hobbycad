@@ -8,6 +8,7 @@
 // =====================================================================
 
 #include <hobbycad/parameters.h>
+#include <hobbycad/units.h>
 #include <hobbycad/format.h>
 
 #if HOBBYCAD_HAS_QT
@@ -26,14 +27,44 @@
 #include <stdexcept>
 #include <unordered_set>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 #ifndef M_E
 #define M_E 2.71828182845904523536
 #endif
 
 namespace hobbycad {
+
+std::string renameIdentifierInExpression(const std::string& expr,
+                                         const std::string& from,
+                                         const std::string& to)
+{
+    if (from.empty()) {
+        return expr;
+    }
+    auto isIdentChar = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9') || c == '_';
+    };
+
+    std::string out;
+    size_t i = 0;
+    while (i < expr.size()) {
+        if (expr.compare(i, from.size(), from) == 0) {
+            const bool leftOk = (i == 0) || !isIdentChar(expr[i - 1]);
+            const size_t after = i + from.size();
+            const bool rightOk = (after >= expr.size()) || !isIdentChar(expr[after]);
+            if (leftOk && rightOk) {
+                out += to;
+                i = after;
+                continue;
+            }
+        }
+        out += expr[i];
+        ++i;
+    }
+    return out;
+}
+
 
 // ---- ParametricValue ------------------------------------------------
 
@@ -113,9 +144,14 @@ void ParametricValue::parse()
 
     static std::unordered_set<std::string> functions = {
         "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
-        "sinr", "cosr", "tanr", "sqrt", "abs", "floor", "ceil",
+        "sinr", "cosr", "tanr", "sinh", "cosh", "tanh",
+        "sec", "csc", "cot", "asec", "acsc", "acot",
+        "sech", "csch", "coth", "asinh", "acosh", "atanh",
+        "acsch", "asech", "acoth",
+        "sqrt", "abs", "floor", "ceil",
         "round", "min", "max", "pow", "log", "log10", "log2",
-        "exp", "sign", "mod", "if", "pi", "e", "tau"
+        "exp", "sign", "mod", "clamp", "pi", "e", "tau",
+        "bif", "belse", "bfor", "bwhile", "bdo"
     };
 
     auto begin = std::sregex_iterator(m_expression.begin(), m_expression.end(), paramRx);
@@ -167,7 +203,7 @@ bool ParametricValue::evaluate(const std::map<std::string, double>& parameters)
 }
 
 // ---- Expression Evaluator ----
-// In anonymous namespace — implementation detail of this translation unit.
+// In anonymous namespace, an implementation detail of this translation unit.
 
 namespace {
 
@@ -202,8 +238,10 @@ public:
             return true;
         }
 
+        m_vars.clear();
+        m_loopIters = 0;
         try {
-            result = parseExpression();
+            result = execProgram();
             skipWhitespace();
             if (m_pos < m_expr.length()) {
                 error = hobbycad::format("Unexpected character '%c' at position %d",
@@ -224,9 +262,148 @@ private:
             ++m_pos;
     }
 
+    // C-style boolean layer (Path A): comparisons and logical operators yield
+    // 1.0 / 0.0; truthiness is (x != 0.0). Minimal Qt-free fallback condition
+    // language (see HobbyCAD-outside/qjsengine-scripting-web-*.md). Runtime
+    // errors (div-by-zero, unknown name) are suppressed inside the not-taken
+    // branch of &&, || and ?: so short-circuit is safe; syntax errors still
+    // propagate so the dead branch's extent can still be parsed.
+    struct SuppressGuard {
+        int& counter;
+        bool applied;
+        SuppressGuard(int& c, bool on) : counter(c), applied(on) { if (on) ++counter; }
+        ~SuppressGuard() { if (applied) --counter; }
+    };
+
     double parseExpression()
     {
-        return parseAddSub();
+        return parseAssignment();
+    }
+
+    // Assignment is an expression (JS-style): name = expr, right-associative.
+    // Writes a script-local variable; suppressed inside a not-taken branch.
+    double parseAssignment()
+    {
+        size_t save = m_pos;
+        skipWhitespace();
+        if (m_pos < m_expr.length() &&
+            (std::isalpha(static_cast<unsigned char>(m_expr[m_pos])) || m_expr[m_pos] == '_')) {
+            size_t s = m_pos;
+            while (m_pos < m_expr.length() &&
+                   (std::isalnum(static_cast<unsigned char>(m_expr[m_pos])) || m_expr[m_pos] == '_'))
+                ++m_pos;
+            std::string name = m_expr.substr(s, m_pos - s);
+            skipWhitespace();
+            if (m_pos < m_expr.length() && m_expr[m_pos] == '=' &&
+                (m_pos + 1 >= m_expr.length() || m_expr[m_pos + 1] != '=')) {
+                ++m_pos;  // consume '='
+                double v = parseAssignment();
+                if (!m_suppress)
+                    m_vars[name] = v;
+                return v;
+            }
+        }
+        m_pos = save;
+        return parseTernary();
+    }
+
+    // Lowest precedence: ternary  cond ? a : b   (right-associative)
+    double parseTernary()
+    {
+        double cond = parseLogicalOr();
+        skipWhitespace();
+        if (m_pos < m_expr.length() && m_expr[m_pos] == '?') {
+            ++m_pos;
+            double a;
+            {
+                SuppressGuard g(m_suppress, cond == 0.0);
+                a = parseTernary();
+            }
+            skipWhitespace();
+            if (m_pos >= m_expr.length() || m_expr[m_pos] != ':')
+                throw std::runtime_error("Expected ':' in conditional expression");
+            ++m_pos;
+            double b;
+            {
+                SuppressGuard g(m_suppress, cond != 0.0);
+                b = parseTernary();
+            }
+            return (cond != 0.0) ? a : b;
+        }
+        return cond;
+    }
+
+    double parseLogicalOr()
+    {
+        double left = parseLogicalAnd();
+        skipWhitespace();
+        while (m_pos + 1 < m_expr.length() &&
+               m_expr[m_pos] == '|' && m_expr[m_pos + 1] == '|') {
+            m_pos += 2;
+            double right;
+            {
+                SuppressGuard g(m_suppress, left != 0.0);   // short-circuit
+                right = parseLogicalAnd();
+            }
+            left = (left != 0.0 || right != 0.0) ? 1.0 : 0.0;
+            skipWhitespace();
+        }
+        return left;
+    }
+
+    double parseLogicalAnd()
+    {
+        double left = parseEquality();
+        skipWhitespace();
+        while (m_pos + 1 < m_expr.length() &&
+               m_expr[m_pos] == '&' && m_expr[m_pos + 1] == '&') {
+            m_pos += 2;
+            double right;
+            {
+                SuppressGuard g(m_suppress, left == 0.0);   // short-circuit
+                right = parseEquality();
+            }
+            left = (left != 0.0 && right != 0.0) ? 1.0 : 0.0;
+            skipWhitespace();
+        }
+        return left;
+    }
+
+    double parseEquality()
+    {
+        double left = parseRelational();
+        skipWhitespace();
+        while (m_pos + 1 < m_expr.length()) {
+            char a = m_expr[m_pos], b = m_expr[m_pos + 1];
+            if (a == '=' && b == '=') {
+                m_pos += 2;
+                left = (left == parseRelational()) ? 1.0 : 0.0;
+            } else if (a == '!' && b == '=') {
+                m_pos += 2;
+                left = (left != parseRelational()) ? 1.0 : 0.0;
+            } else {
+                break;
+            }
+            skipWhitespace();
+        }
+        return left;
+    }
+
+    double parseRelational()
+    {
+        double left = parseAddSub();
+        skipWhitespace();
+        while (m_pos < m_expr.length()) {
+            char a = m_expr[m_pos];
+            char b = (m_pos + 1 < m_expr.length()) ? m_expr[m_pos + 1] : '\0';
+            if (a == '<' && b == '=') { m_pos += 2; left = (left <= parseAddSub()) ? 1.0 : 0.0; }
+            else if (a == '>' && b == '=') { m_pos += 2; left = (left >= parseAddSub()) ? 1.0 : 0.0; }
+            else if (a == '<') { m_pos += 1; left = (left <  parseAddSub()) ? 1.0 : 0.0; }
+            else if (a == '>') { m_pos += 1; left = (left >  parseAddSub()) ? 1.0 : 0.0; }
+            else break;
+            skipWhitespace();
+        }
+        return left;
     }
 
     double parseAddSub()
@@ -263,13 +440,21 @@ private:
             if (op == '*')
                 left *= right;
             else if (op == '/') {
-                if (right == 0.0)
-                    throw std::runtime_error("Division by zero");
-                left /= right;
+                if (right == 0.0) {
+                    if (!m_suppress)
+                        throw std::runtime_error("Division by zero");
+                    left = 0.0;
+                } else {
+                    left /= right;
+                }
             } else {
-                if (right == 0.0)
-                    throw std::runtime_error("Modulo by zero");
-                left = std::fmod(left, right);
+                if (right == 0.0) {
+                    if (!m_suppress)
+                        throw std::runtime_error("Modulo by zero");
+                    left = 0.0;
+                } else {
+                    left = std::fmod(left, right);
+                }
             }
             skipWhitespace();
         }
@@ -300,6 +485,11 @@ private:
             if (m_expr[m_pos] == '+') {
                 ++m_pos;
                 return parseUnary();
+            }
+            if (m_expr[m_pos] == '!' &&
+                !(m_pos + 1 < m_expr.length() && m_expr[m_pos + 1] == '=')) {
+                ++m_pos;
+                return (parseUnary() != 0.0) ? 0.0 : 1.0;
             }
         }
         return parsePrimary();
@@ -389,7 +579,7 @@ private:
                                    (std::isalnum(static_cast<unsigned char>(m_expr[m_pos])) ||
                                     m_expr[m_pos] == '_'));
             if (!nextIsAlphaNum) {
-                LengthUnit suffixUnit;
+                LengthUnit suffixUnit{};
                 bool knownSuffix = true;
                 if (suffix == "mm") {
                     suffixUnit = LengthUnit::Millimeters;
@@ -408,11 +598,11 @@ private:
                     // Convert from explicit unit to default display unit
                     num = convertLength(num, suffixUnit, m_defaultUnit);
                 } else {
-                    // Not a known unit suffix — restore position, no conversion
+                    // Not a known unit suffix: restore position, no conversion
                     m_pos = suffixStart;
                 }
             } else {
-                // Followed by alphanumeric — not a unit suffix, restore position
+                // Followed by alphanumeric: not a unit suffix, restore position
                 m_pos = suffixStart;
             }
         }
@@ -435,6 +625,13 @@ private:
             return parseFunction(name);
         }
 
+        // Script-local variables (assignment) shadow params and constants.
+        {
+            auto vit = m_vars.find(name);
+            if (vit != m_vars.end())
+                return vit->second;
+        }
+
         // Built-in constants
         std::string lower = name;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
@@ -450,6 +647,8 @@ private:
         if (it != m_params.end())
             return it->second;
 
+        if (m_suppress)
+            return 0.0;
         throw std::runtime_error("Unknown parameter '" + name + "'");
     }
 
@@ -489,17 +688,29 @@ private:
 
             // Trigonometric (degrees)
             if (fn == "sin")
-                return std::sin(x * M_PI / 180.0);
+                return std::sin(degreesToRadians(x));
             if (fn == "cos")
-                return std::cos(x * M_PI / 180.0);
+                return std::cos(degreesToRadians(x));
             if (fn == "tan")
-                return std::tan(x * M_PI / 180.0);
+                return std::tan(degreesToRadians(x));
+            if (fn == "sec")
+                return 1.0 / std::cos(degreesToRadians(x));
+            if (fn == "csc")
+                return 1.0 / std::sin(degreesToRadians(x));
+            if (fn == "cot")
+                return std::cos(degreesToRadians(x)) / std::sin(degreesToRadians(x));
             if (fn == "asin")
-                return std::asin(x) * 180.0 / M_PI;
+                return radiansToDegrees(std::asin(x));
             if (fn == "acos")
-                return std::acos(x) * 180.0 / M_PI;
+                return radiansToDegrees(std::acos(x));
             if (fn == "atan")
-                return std::atan(x) * 180.0 / M_PI;
+                return radiansToDegrees(std::atan(x));
+            if (fn == "asec")
+                return radiansToDegrees(std::acos(1.0 / x));
+            if (fn == "acsc")
+                return radiansToDegrees(std::asin(1.0 / x));
+            if (fn == "acot")
+                return radiansToDegrees(std::atan(1.0 / x));
 
             // Trigonometric (radians)
             if (fn == "sinr")
@@ -508,6 +719,34 @@ private:
                 return std::cos(x);
             if (fn == "tanr")
                 return std::tan(x);
+
+            // Hyperbolic (argument is a plain real, not an angle in degrees)
+            if (fn == "sinh")
+                return std::sinh(x);
+            if (fn == "cosh")
+                return std::cosh(x);
+            if (fn == "tanh")
+                return std::tanh(x);
+            if (fn == "sech")
+                return 1.0 / std::cosh(x);
+            if (fn == "csch")
+                return 1.0 / std::sinh(x);
+            if (fn == "coth")
+                return std::cosh(x) / std::sinh(x);
+
+            // Inverse hyperbolic (plain real in and out)
+            if (fn == "asinh")
+                return std::asinh(x);
+            if (fn == "acosh")
+                return std::acosh(x);
+            if (fn == "atanh")
+                return std::atanh(x);
+            if (fn == "acsch")
+                return std::asinh(1.0 / x);
+            if (fn == "asech")
+                return std::acosh(1.0 / x);
+            if (fn == "acoth")
+                return std::atanh(1.0 / x);
 
             // Other math
             if (fn == "sqrt")
@@ -544,7 +783,7 @@ private:
             if (fn == "pow")
                 return std::pow(a, b);
             if (fn == "atan2")
-                return std::atan2(a, b) * 180.0 / M_PI;
+                return radiansToDegrees(std::atan2(a, b));
             if (fn == "mod")
                 return std::fmod(a, b);
         }
@@ -563,14 +802,213 @@ private:
             return result;
         }
 
-        // Conditional: if(condition, trueValue, falseValue)
-        if (fn == "if" && args.size() == 3) {
-            return (args[0] != 0.0) ? args[1] : args[2];
+        // clamp(x, lo, hi) == max(lo, min(hi, x)); assumes lo <= hi
+        if (fn == "clamp" && args.size() == 3) {
+            return std::max(args[1], std::min(args[2], args[0]));
         }
 
+        if (m_suppress)
+            return 0.0;
         throw std::runtime_error(
             "Unknown function '" + name + "' or wrong number of arguments (" +
             std::to_string(args.size()) + ")");
+    }
+
+    // ---- Statement / control-flow layer (Path A, C-style, 'b'-prefixed) ----
+    // if->bif, else->belse, for->bfor, while->bwhile, do->bdo, so the syntax
+    // mirrors the QtJS (Path B) host with only the prefix differing. Loop bodies
+    // and conditions are re-evaluated by rewinding m_pos; the suppress counter
+    // skips an untaken branch (and positions past a loop body without running
+    // it). Values are doubles; truthiness is (x != 0).
+
+    void expectChar(char c, const char* what)
+    {
+        skipWhitespace();
+        if (m_pos >= m_expr.length() || m_expr[m_pos] != c)
+            throw std::runtime_error(std::string("Expected '") + c + "' " + what);
+        ++m_pos;
+    }
+
+    std::string readIdentLower()
+    {
+        skipWhitespace();
+        size_t s = m_pos;
+        while (m_pos < m_expr.length() &&
+               (std::isalnum(static_cast<unsigned char>(m_expr[m_pos])) || m_expr[m_pos] == '_'))
+            ++m_pos;
+        std::string id = m_expr.substr(s, m_pos - s);
+        std::transform(id.begin(), id.end(), id.begin(), ::tolower);
+        return id;
+    }
+
+    std::string peekIdentLower()
+    {
+        size_t save = m_pos;
+        std::string id = readIdentLower();
+        m_pos = save;
+        return id;
+    }
+
+    // A program is a ';'-separated statement list; its value is the last one.
+    double execProgram() { return execStatementList('\0'); }
+
+    // term is '}' inside a block, '\0' at top level.
+    double execStatementList(char term)
+    {
+        double last = 0.0;
+        skipWhitespace();
+        while (m_pos < m_expr.length() && m_expr[m_pos] != term) {
+            if (m_expr[m_pos] == ';') { ++m_pos; skipWhitespace(); continue; }
+            last = execStatement();
+            skipWhitespace();
+            if (m_pos < m_expr.length() && m_expr[m_pos] == ';') { ++m_pos; skipWhitespace(); }
+            else break;
+        }
+        return last;
+    }
+
+    double execBlock()
+    {
+        expectChar('{', "to open a block");
+        double v = execStatementList('}');
+        expectChar('}', "to close a block");
+        return v;
+    }
+
+    double execStatement()
+    {
+        skipWhitespace();
+        if (m_pos < m_expr.length() && m_expr[m_pos] == '{')
+            return execBlock();
+        std::string kw = peekIdentLower();
+        if (kw == "bif")    return execIf();
+        if (kw == "bwhile") return execWhile();
+        if (kw == "bfor")   return execFor();
+        if (kw == "bdo")    return execDo();
+        return parseExpression();   // expression statement (includes assignment)
+    }
+
+    double execBlockOrStatement()
+    {
+        skipWhitespace();
+        if (m_pos < m_expr.length() && m_expr[m_pos] == '{')
+            return execBlock();
+        return execStatement();
+    }
+
+    void bumpLoopGuard(const char* which)
+    {
+        if (++m_loopIters > kMaxLoopIters)
+            throw std::runtime_error(std::string("Loop iteration limit exceeded in ") + which);
+    }
+
+    double execIf()
+    {
+        readIdentLower();                       // 'bif'
+        expectChar('(', "after bif");
+        double cond = parseExpression();
+        expectChar(')', "after bif condition");
+        double result = 0.0;
+        {
+            SuppressGuard g(m_suppress, cond == 0.0);
+            double t = execBlockOrStatement();
+            if (cond != 0.0) result = t;
+        }
+        skipWhitespace();
+        if (peekIdentLower() == "belse") {
+            readIdentLower();                   // 'belse'
+            SuppressGuard g(m_suppress, cond != 0.0);
+            double e = execBlockOrStatement();
+            if (cond == 0.0) result = e;
+        }
+        return result;
+    }
+
+    double execWhile()
+    {
+        readIdentLower();                       // 'bwhile'
+        expectChar('(', "after bwhile");
+        size_t condPos = m_pos;
+        { SuppressGuard g(m_suppress, true); parseExpression(); }   // position past cond
+        expectChar(')', "after bwhile condition");
+        size_t bodyPos = m_pos;
+        { SuppressGuard g(m_suppress, true); m_pos = bodyPos; execBlockOrStatement(); }
+        size_t bodyEnd = m_pos;
+        double last = 0.0;
+        if (!m_suppress) {
+            while (true) {
+                m_pos = condPos;
+                if (parseExpression() == 0.0) break;
+                m_pos = bodyPos;
+                last = execBlockOrStatement();
+                bumpLoopGuard("bwhile");
+            }
+        }
+        m_pos = bodyEnd;
+        return last;
+    }
+
+    double execFor()
+    {
+        readIdentLower();                       // 'bfor'
+        expectChar('(', "after bfor");
+        skipWhitespace();
+        if (m_pos < m_expr.length() && m_expr[m_pos] != ';')
+            parseExpression();                  // init: runs once
+        expectChar(';', "after bfor init");
+        size_t condPos = m_pos;
+        skipWhitespace();
+        bool condEmpty = (m_pos < m_expr.length() && m_expr[m_pos] == ';');
+        { SuppressGuard g(m_suppress, true); if (!condEmpty) parseExpression(); }
+        expectChar(';', "after bfor condition");
+        size_t postPos = m_pos;
+        skipWhitespace();
+        bool postEmpty = (m_pos < m_expr.length() && m_expr[m_pos] == ')');
+        { SuppressGuard g(m_suppress, true); if (!postEmpty) parseExpression(); }
+        expectChar(')', "after bfor clauses");
+        size_t bodyPos = m_pos;
+        { SuppressGuard g(m_suppress, true); m_pos = bodyPos; execBlockOrStatement(); }
+        size_t bodyEnd = m_pos;
+        double last = 0.0;
+        if (!m_suppress) {
+            while (true) {
+                if (!condEmpty) { m_pos = condPos; if (parseExpression() == 0.0) break; }
+                m_pos = bodyPos;
+                last = execBlockOrStatement();
+                if (!postEmpty) { m_pos = postPos; parseExpression(); }
+                bumpLoopGuard("bfor");
+            }
+        }
+        m_pos = bodyEnd;
+        return last;
+    }
+
+    double execDo()
+    {
+        readIdentLower();                       // 'bdo'
+        size_t bodyPos = m_pos;
+        { SuppressGuard g(m_suppress, true); m_pos = bodyPos; execBlockOrStatement(); }
+        size_t bodyEnd = m_pos;
+        m_pos = bodyEnd;
+        if (readIdentLower() != "bwhile")
+            throw std::runtime_error("Expected bwhile after bdo body");
+        expectChar('(', "after bdo's bwhile");
+        size_t condPos = m_pos;
+        { SuppressGuard g(m_suppress, true); parseExpression(); }
+        expectChar(')', "after bdo condition");
+        size_t endPos = m_pos;
+        double last = 0.0;
+        if (!m_suppress) {
+            while (true) {
+                m_pos = bodyPos;
+                last = execBlockOrStatement();
+                m_pos = condPos;
+                if (parseExpression() == 0.0) break;
+                bumpLoopGuard("bdo");
+            }
+        }
+        m_pos = endPos;
+        return last;
     }
 
     std::map<std::string, double> m_params;
@@ -579,6 +1017,10 @@ private:
     std::string m_expr;
     size_t m_pos = 0;
     std::string m_error;
+    int m_suppress = 0;   // >0 while parsing a short-circuited / not-taken branch
+    std::map<std::string, double> m_vars;   // mutable script locals (assignment)
+    long m_loopIters = 0;                   // total loop iterations, this evaluate()
+    static constexpr long kMaxLoopIters = 1000000;  // runaway-loop guard
 };
 
 }  // anonymous namespace
@@ -710,9 +1152,12 @@ public:
         static std::unordered_set<std::string> functions = {
             "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
             "sinr", "cosr", "tanr",
+            "sinh", "cosh", "tanh", "sec", "csc", "cot",
+            "asec", "acsc", "acot", "sech", "csch", "coth",
+            "asinh", "acosh", "atanh", "acsch", "asech", "acoth",
             "sqrt", "abs", "floor", "ceil", "round",
             "min", "max", "pow", "log", "log10", "log2", "exp",
-            "sign", "mod", "if",
+            "sign", "mod", "clamp",
             "pi", "e", "tau"
         };
 
@@ -749,6 +1194,31 @@ void ParameterEngine::setParameters(const std::vector<Parameter>& params)
         d->parameters[p.name] = p;
     }
     d->buildDependencyGraph();
+}
+
+void ParameterEngine::setReferenceParameter(const std::string& name,
+                                            const std::string& referenceSource,
+                                            const std::string& unit,
+                                            const std::string& comment)
+{
+    Parameter& p = d->parameters[name];
+    p.name = name;
+    p.isReference = true;
+    p.referenceSource = referenceSource;
+    p.expression.clear();          // no authored expression; value is measured
+    if (!unit.empty())    p.unit = unit;
+    if (!comment.empty()) p.comment = comment;
+    p.isUserParam = true;
+    p.isValid = true;
+    d->buildDependencyGraph();     // a reference param has no dependencies (leaf)
+}
+
+void ParameterEngine::setReferenceValue(const std::string& name, double value)
+{
+    auto it = d->parameters.find(name);
+    if (it == d->parameters.end() || !it->second.isReference) return;
+    it->second.value = value;
+    it->second.isValid = true;
 }
 
 std::vector<Parameter> ParameterEngine::parameters() const
@@ -834,6 +1304,15 @@ EvaluationResult ParameterEngine::evaluate()
     // Evaluate in topological order
     for (const std::string& name : d->evaluationOrder) {
         Parameter& p = d->parameters[name];
+
+        if (p.isReference) {
+            // Value is measured from the solved model (setReferenceValue); take
+            // it as-is so dependent expressions can reference it.
+            p.isValid = true;
+            p.errorMessage.clear();
+            values[name] = p.value;
+            continue;
+        }
 
         double val;
         std::string error;
@@ -966,9 +1445,12 @@ bool ParameterEngine::isValidName(const std::string& name)
     // Cannot be a reserved word
     static std::unordered_set<std::string> reserved = {
         "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+        "sinh", "cosh", "tanh", "sec", "csc", "cot",
+        "asec", "acsc", "acot", "sech", "csch", "coth",
+        "asinh", "acosh", "atanh", "acsch", "asech", "acoth",
         "sqrt", "abs", "floor", "ceil", "round",
         "min", "max", "pow", "log", "log10", "log2", "exp",
-        "pi", "e", "tau", "if", "mod", "sign"
+        "pi", "e", "tau", "mod", "sign", "clamp"
     };
 
     std::string lower = name;
@@ -1019,6 +1501,11 @@ QJsonObject ParameterEngine::toJson() const
             p["comment"] = QString::fromStdString(it->second.comment);
         if (!it->second.isUserParam)
             p["isUserParam"] = false;
+        if (it->second.isReference) {
+            p["isReference"] = true;
+            if (!it->second.referenceSource.empty())
+                p["referenceSource"] = QString::fromStdString(it->second.referenceSource);
+        }
         params.append(p);
     }
 
@@ -1045,6 +1532,8 @@ bool ParameterEngine::fromJson(const QJsonObject& json, std::string* errorMsg)
         param.unit = p["unit"].toString().toStdString();
         param.comment = p["comment"].toString().toStdString();
         param.isUserParam = p.value("isUserParam").toBool(true);
+        param.isReference = p.value("isReference").toBool(false);
+        param.referenceSource = p["referenceSource"].toString().toStdString();
 
         if (param.name.empty()) {
             if (errorMsg) *errorMsg = "Parameter missing name";
@@ -1058,7 +1547,7 @@ bool ParameterEngine::fromJson(const QJsonObject& json, std::string* errorMsg)
     return true;
 }
 
-#else  // !HOBBYCAD_HAS_QT — nlohmann/json fallback
+#else  // !HOBBYCAD_HAS_QT: nlohmann/json fallback
 
 nlohmann::json ParameterEngine::toJson() const
 {
@@ -1073,6 +1562,11 @@ nlohmann::json ParameterEngine::toJson() const
             p["comment"] = it->second.comment;
         if (!it->second.isUserParam)
             p["isUserParam"] = false;
+        if (it->second.isReference) {
+            p["isReference"] = true;
+            if (!it->second.referenceSource.empty())
+                p["referenceSource"] = it->second.referenceSource;
+        }
         params.push_back(p);
     }
 
@@ -1096,6 +1590,8 @@ bool ParameterEngine::fromJson(const nlohmann::json& json, std::string* errorMsg
         param.unit = p.value("unit", std::string{});
         param.comment = p.value("comment", std::string{});
         param.isUserParam = p.value("isUserParam", true);
+        param.isReference = p.value("isReference", false);
+        param.referenceSource = p.value("referenceSource", std::string{});
 
         if (param.name.empty()) {
             if (errorMsg) *errorMsg = "Parameter missing name";
@@ -1126,6 +1622,15 @@ bool evaluateExpression(const std::string& expression, double& result,
     }
 
     return ok;
+}
+
+bool expressionUsesParameters(const std::string& expression,
+                              const std::map<std::string, double>& params)
+{
+    double withParams = 0.0, without = 0.0;
+    const bool okWith = evaluateExpression(expression, withParams, params);
+    const bool okBare = evaluateExpression(expression, without, {});
+    return okWith && (!okBare || withParams != without);
 }
 
 }  // namespace hobbycad

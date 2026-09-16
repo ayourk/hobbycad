@@ -1,0 +1,40 @@
+# Suites that apply to a library-only build
+# =====================================================================
+# A third party can build libhobbycad alone, without the application and
+# without Qt:
+#
+#   cmake -S . -B build-noqt -G Ninja -DCMAKE_BUILD_TYPE=Release \
+#         -DHOBBYCAD_BUILD_APP=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=ON
+#
+# These suites test that library and nothing else, so they run against
+# such a build on a machine with no Qt at all:
+#
+#   for s in $(grep -v '^#' tests/library-suites.txt); do
+#       tests/$s/run.sh build-noqt || break
+#   done
+#
+# Left out, and why. They are not skips: run against a library-only build
+# they FAIL, correctly, because they cannot run.
+#
+#   browser         compiles the application's own widgets, which are Qt
+#                   and need moc output: it needs the GUI build.
+#   drawconstrain   half of it (hints.cpp) compiles a GUI source and needs
+#                   Qt on the machine; its snapmap half does run here.
+#   groupglyph      renders a Qt glyph offscreen; Qt only, no library.
+#   theme           a header over QColor; Qt only, no library.
+cli
+document
+dxf
+fit
+handleguard
+headers
+naming
+opengl
+pager
+project
+slice
+solver
+spline
+strutil
+transform
+units

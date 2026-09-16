@@ -104,24 +104,86 @@ void ToolbarDropdown::addVariant(const QString& variantName, int variantId)
 
     // Add variant action
     QAction* action = item.submenu->addAction(variantName);
-    connect(action, &QAction::triggered, this, [this, itemIndex, variantId, variantName]() {
-        // Update the item to remember this variant selection
+    action->setData(variantId);
+    connect(action, &QAction::triggered, this, [this, itemIndex, variantId, action]() {
+        // Read the name from the action rather than capturing a copy of the
+        // string. A captured copy is frozen in whatever language was current
+        // when the variant was registered, and it feeds the remembered
+        // selection, the button caption and the emitted signal, so after a
+        // live language switch all three would silently revert to the old
+        // language the next time a variant was picked.
+        const QString variantName = action->text();
         if (itemIndex < m_items.size()) {
             DropdownItem& it = m_items[itemIndex];
             it.lastVariantId = variantId;
             it.lastVariantName = variantName;
-            // Update button text to show the selected variant's category
-            // Extract category from variant name (e.g., "Arc Slot (Radius)" -> "Arc Slot")
-            QString displayText = variantName;
-            int parenPos = displayText.indexOf(QLatin1Char('('));
-            if (parenPos > 0) {
-                displayText = displayText.left(parenPos).trimmed();
-            }
-            it.mainButton->setText(displayText);
+            it.mainButton->setText(variantCategory(variantName));
         }
         onVariantTriggered(itemIndex, variantId);
         emit variantSelected(itemIndex, variantId, variantName);
     });
+}
+
+QString ToolbarDropdown::variantCategory(const QString& variantName)
+{
+    // The button shows the category rather than the full variant, so
+    // "Arc Slot (Radius)" becomes "Arc Slot".
+    //
+    // Both bracket forms are checked because CJK translations use the
+    // fullwidth pair: the Chinese for that string is "弧形槽（半径）", and
+    // matching only U+0028 would leave the qualifier on the button for every
+    // CJK language while working perfectly in every Latin one.
+    static const QChar kOpeners[] = {QLatin1Char('('), QChar(0xFF08)};
+    int cut = -1;
+    for (QChar opener : kOpeners) {
+        const int at = variantName.indexOf(opener);
+        if (at > 0 && (cut < 0 || at < cut)) {
+            cut = at;
+        }
+    }
+    return cut > 0 ? variantName.left(cut).trimmed() : variantName;
+}
+
+void ToolbarDropdown::setVariantText(int index, int variantId,
+                                     const QString& text)
+{
+    if (index < 0 || index >= m_items.size()) {
+        return;
+    }
+    DropdownItem& item = m_items[index];
+    if (!item.submenu) {
+        return;
+    }
+    const auto actions = item.submenu->actions();
+    for (QAction* action : actions) {
+        if (action->data().toInt() != variantId) {
+            continue;
+        }
+        action->setText(text);
+        // If this is the variant currently showing on the button, the caption
+        // and the remembered name are derived from it and must follow.
+        if (item.lastVariantId == variantId) {
+            item.lastVariantName = text;
+            if (item.mainButton) {
+                item.mainButton->setText(variantCategory(text));
+            }
+        }
+        return;
+    }
+}
+
+void ToolbarDropdown::setButtonText(int index, const QString& text,
+                                    const QString& toolTip)
+{
+    if (index < 0 || index >= m_items.size()) {
+        return;
+    }
+    DropdownItem& item = m_items[index];
+    item.originalText = text;
+    if (item.mainButton) {
+        item.mainButton->setText(text);
+        item.mainButton->setToolTip(toolTip.isEmpty() ? text : toolTip);
+    }
 }
 
 void ToolbarDropdown::addSeparator()

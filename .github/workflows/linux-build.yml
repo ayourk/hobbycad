@@ -35,6 +35,12 @@ jobs:
   linux:
     name: HobbyCAD Linux (${{ matrix.os }}, ${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    # Ubuntu 22.04 builds in an ubuntu:22.04 container: the hosted runner's
+    # newer CMake in /usr/local would hide jammy's own CMake 3.22 and GCC 11,
+    # the toolchain HobbyCAD supports there.
+    container: ${{ matrix.container }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
 
     strategy:
       fail-fast: false
@@ -43,25 +49,37 @@ jobs:
           # Ubuntu 22.04
           - os: ubuntu-22.04
             arch: x86_64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
+            container: ubuntu:22.04
             artifact_name: hobbycad-linux-ubuntu2204-x64
           - os: ubuntu-22.04
             arch: aarch64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
+            container: ubuntu:22.04
             artifact_name: hobbycad-linux-ubuntu2204-arm64
           # Ubuntu 24.04
           - os: ubuntu-24.04
             arch: x86_64
             runner: ubuntu-24.04
+            container: ""
             artifact_name: hobbycad-linux-ubuntu2404-x64
           - os: ubuntu-24.04
             arch: aarch64
             runner: ubuntu-24.04-arm
+            container: ""
             artifact_name: hobbycad-linux-ubuntu2404-arm64
 
     steps:
+      # A bare image has none of what the hosted runner provides; sudo lets
+      # the steps below run unchanged as root.
+      - name: Prepare the container
+        if: matrix.container != ''
+        run: |
+          apt-get update
+          apt-get install -y git sudo ca-certificates curl gnupg software-properties-common tzdata
+
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Add HobbyCAD PPA
         run: |
@@ -72,41 +90,12 @@ jobs:
           sudo apt-get update
 
       # Remove stock Qt 6.2 packages that conflict with PPA's Qt 6.4.2
-      - name: Remove stock Qt 6.2 (Ubuntu 22.04)
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get remove -y 'libqt6*' 'qt6-*' 2>/dev/null || true
-          sudo apt-get autoremove -y
-
-      # Install Qt 6.4.2 from PPA
-      - name: Install Qt 6.4.2 from PPA (Ubuntu 22.04)
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get install -y \
-            qt6-base-dev qt6-base-dev-tools \
-            libqt6openglwidgets6 qmake6 \
-            qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-            qt6-svg-dev qt6-image-formats-plugins
-
+      # The build dependencies are debian/control's Build-Depends (the PPA
+      # supplies Qt 6.4.2 on 22.04, libslvs and nlohmann-json 3.12.0). The
+      # extras are the Qt image plugins the WebP check looks for and the
+      # devtest libraries, which the package does not use.
       - name: Install dependencies
-        run: |
-          sudo apt-get install -y \
-            libslvs-dev \
-            build-essential cmake ninja-build pkg-config \
-            libocct-data-exchange-dev libocct-draw-dev \
-            libocct-foundation-dev libocct-modeling-algorithms-dev \
-            libocct-modeling-data-dev libocct-ocaf-dev \
-            libocct-visualization-dev occt-misc libtbb-dev \
-            qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-            qt6-tools-dev-tools qt6-l10n-tools \
-            libqt6openglwidgets6 qt6-svg-dev qt6-image-formats-plugins qmake6 \
-            libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
-            libpng-dev libjpeg-dev libwebp-dev \
-            libzip-dev libminizip-dev \
-            nlohmann-json3-dev \
-            libgit2-dev \
-            lib3mf-dev libopenmesh-dev libmeshfix-dev \
-            librsvg2-bin
+        run: scripts/ci/install-build-deps.sh deb --extra qt6-image-formats-plugins lib3mf-dev libopenmesh-dev libmeshfix-dev
 
       - name: Configure CMake
         run: cmake --preset linux-release
@@ -119,9 +108,71 @@ jobs:
           cmake --install build --prefix build/install
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: build/install/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error
+
+  # A third party must be able to build the library alone. Qt is installed
+  # by the same dependency step the application uses and then disabled at
+  # configure time on purpose: that proves the Qt-free path works, rather
+  # than proving Qt happens to be absent from an image.
+  library-only:
+    name: libhobbycad alone, Qt disabled
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout HobbyCAD
+        uses: actions/checkout@v7
+
+      - name: Add HobbyCAD PPA
+        run: |
+          sudo add-apt-repository -y ppa:ayourk/hobbycad
+          echo 'Package: *
+          Pin: release o=LP-PPA-ayourk-hobbycad
+          Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/hobbycad-ppa
+          sudo apt-get update
+
+      - name: Install dependencies
+        run: scripts/ci/install-build-deps.sh deb
+
+      - name: Configure the static library without the app or Qt
+        run: |
+          cmake -S . -B build-noqt -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DHOBBYCAD_BUILD_APP=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=ON
+
+      - name: Build the static library
+        run: cmake --build build-noqt
+
+      - name: Configure and build the shared library without the app or Qt
+        run: |
+          cmake -S . -B build-noqt-shared -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DHOBBYCAD_BUILD_APP=OFF -DHOBBYCAD_CORE_LINKAGE=SHARED \
+            -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=ON
+          cmake --build build-noqt-shared
+
+      # Project::save and Project::load once sat inside the Qt half of
+      # project.cpp, so the Qt-free library built but could not open or save
+      # anything. Moving them back would pass every compile step; this is
+      # what catches it.
+      - name: The Qt-free library must be able to open and save a project
+        run: |
+          so=$(ls build-noqt-shared/src/libhobbycad/libhobbycad.so.*.*.* | head -1)
+          for sym in save load; do
+            nm -CD --defined-only "$so" | grep -q "hobbycad::Project::$sym(" || {
+              echo "::error::Project::$sym is missing from the Qt-free library"
+              exit 1
+            }
+          done
+
+      - name: Run the library suites against it
+        run: |
+          set -e
+          grep -v '^#' tests/library-suites.txt | while read -r suite; do
+            [ -n "$suite" ] || continue
+            echo "== $suite"
+            "tests/$suite/run.sh" "$PWD/build-noqt"
+          done
+

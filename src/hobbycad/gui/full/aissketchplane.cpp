@@ -3,6 +3,7 @@
 // =====================================================================
 
 #include "aissketchplane.h"
+#include <hobbycad/units.h>
 
 #include <Graphic3d_ArrayOfSegments.hxx>
 #include <Graphic3d_ArrayOfTriangles.hxx>
@@ -13,10 +14,12 @@
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
+
+#include <hobbycad/plane_frame.h>
 #include <Prs3d_Presentation.hxx>
 #include <SelectMgr_EntityOwner.hxx>
 #include <Select3D_SensitiveFace.hxx>
-#include <TColgp_Array1OfPnt.hxx>
+#include <NCollection_Array1.hxx>
 
 #include <cmath>
 
@@ -38,20 +41,10 @@ void AisSketchPlane::setPlane(SketchPlane plane, double offset)
     m_offset = offset;
     m_useCustomTransform = false;
 
-    switch (plane) {
-    case SketchPlane::XY:
-        m_basePlane = gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-        break;
-    case SketchPlane::XZ:
-        m_basePlane = gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 1, 0));
-        break;
-    case SketchPlane::YZ:
-        m_basePlane = gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0));
-        break;
-    default:
-        m_basePlane = gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-        break;
-    }
+    // One authoritative right-handed frame shared with the sketch mapping
+    // (hobbycad/plane_frame.h): sets the normal AND the in-plane X/Y axes,
+    // so the visualized plane and the 2D sketch axes agree. XZ is normal=-Y.
+    m_basePlane = gp_Pln(hobbycad::originPlaneFrame(plane));
 
     updatePlaneGeometry();
 }
@@ -78,9 +71,18 @@ void AisSketchPlane::setCustomPlane(PlaneRotationAxis axis, double angleDeg, dou
         break;
     }
 
-    double angleRad = angleDeg * M_PI / 180.0;
+    double angleRad = degreesToRadians(angleDeg);
     m_transform.SetRotation(rotAxis, angleRad);
 
+    updatePlaneGeometry();
+}
+
+void AisSketchPlane::setFrame(const gp_Ax3& frame)
+{
+    m_basePlane = gp_Pln(frame);
+    m_transform = gp_Trsf();
+    m_useCustomTransform = false;
+    m_offset = 0.0;
     updatePlaneGeometry();
 }
 
@@ -115,44 +117,52 @@ void AisSketchPlane::updatePlaneGeometry()
 
 void AisSketchPlane::Compute(const Handle(PrsMgr_PresentationManager)& /*thePrsMgr*/,
                               const Handle(Prs3d_Presentation)& thePrs,
-                              const Standard_Integer /*theMode*/)
+                              const int /*theMode*/)
 {
     thePrs->Clear();
     buildPlane(thePrs);
 }
 
+// The plane's axes, offset center and four corners after the optional custom
+// transform: what both the presentation and the selection are built from.
+AisSketchPlane::Frame AisSketchPlane::frame() const
+{
+    Frame f;
+    f.normal = m_basePlane.Axis().Direction();
+    f.xDir = m_basePlane.XAxis().Direction();
+    f.yDir = m_basePlane.YAxis().Direction();
+    if (m_useCustomTransform) {
+        f.normal.Transform(m_transform);
+        f.xDir.Transform(m_transform);
+        f.yDir.Transform(m_transform);
+    }
+    f.center = m_basePlane.Location();
+    if (m_useCustomTransform) {
+        f.center.Transform(m_transform);
+    }
+    f.center.Translate(gp_Vec(f.normal) * m_offset);
+    const double hs = m_size / 2.0;
+    f.corner[0] = f.center.Translated(gp_Vec(f.xDir) * (-hs) + gp_Vec(f.yDir) * (-hs));
+    f.corner[1] = f.center.Translated(gp_Vec(f.xDir) * ( hs) + gp_Vec(f.yDir) * (-hs));
+    f.corner[2] = f.center.Translated(gp_Vec(f.xDir) * ( hs) + gp_Vec(f.yDir) * ( hs));
+    f.corner[3] = f.center.Translated(gp_Vec(f.xDir) * (-hs) + gp_Vec(f.yDir) * ( hs));
+    return f;
+}
+
 void AisSketchPlane::ComputeSelection(const Handle(SelectMgr_Selection)& theSel,
-                                       const Standard_Integer /*theMode*/)
+                                       const int /*theMode*/)
 {
     // Make the plane selectable
     Handle(SelectMgr_EntityOwner) owner = new SelectMgr_EntityOwner(this);
 
-    // Get plane axes
-    gp_Dir normal = m_basePlane.Axis().Direction();
-    gp_Dir xDir = m_basePlane.XAxis().Direction();
-    gp_Dir yDir = m_basePlane.YAxis().Direction();
+    const Frame f = frame();
+    const gp_Dir normal = f.normal;
+    const gp_Dir xDir = f.xDir;
+    const gp_Dir yDir = f.yDir;
+    const gp_Pnt center = f.center;
+    const gp_Pnt p1 = f.corner[0], p2 = f.corner[1], p3 = f.corner[2], p4 = f.corner[3];
 
-    if (m_useCustomTransform) {
-        normal.Transform(m_transform);
-        xDir.Transform(m_transform);
-        yDir.Transform(m_transform);
-    }
-
-    // Plane center with offset
-    gp_Pnt center = m_basePlane.Location();
-    if (m_useCustomTransform) {
-        center.Transform(m_transform);
-    }
-    center.Translate(gp_Vec(normal) * m_offset);
-
-    // Calculate corner points
-    double hs = m_size / 2.0;
-    gp_Pnt p1 = center.Translated(gp_Vec(xDir) * (-hs) + gp_Vec(yDir) * (-hs));
-    gp_Pnt p2 = center.Translated(gp_Vec(xDir) * ( hs) + gp_Vec(yDir) * (-hs));
-    gp_Pnt p3 = center.Translated(gp_Vec(xDir) * ( hs) + gp_Vec(yDir) * ( hs));
-    gp_Pnt p4 = center.Translated(gp_Vec(xDir) * (-hs) + gp_Vec(yDir) * ( hs));
-
-    TColgp_Array1OfPnt points(1, 4);
+    NCollection_Array1<gp_Pnt> points(1, 4);
     points.SetValue(1, p1);
     points.SetValue(2, p2);
     points.SetValue(3, p3);
@@ -165,30 +175,12 @@ void AisSketchPlane::ComputeSelection(const Handle(SelectMgr_Selection)& theSel,
 
 void AisSketchPlane::buildPlane(const Handle(Prs3d_Presentation)& prs)
 {
-    // Get plane axes
-    gp_Dir normal = m_basePlane.Axis().Direction();
-    gp_Dir xDir = m_basePlane.XAxis().Direction();
-    gp_Dir yDir = m_basePlane.YAxis().Direction();
-
-    if (m_useCustomTransform) {
-        normal.Transform(m_transform);
-        xDir.Transform(m_transform);
-        yDir.Transform(m_transform);
-    }
-
-    // Plane center with offset
-    gp_Pnt center = m_basePlane.Location();
-    if (m_useCustomTransform) {
-        center.Transform(m_transform);
-    }
-    center.Translate(gp_Vec(normal) * m_offset);
-
-    // Calculate corner points
-    double hs = m_size / 2.0;
-    gp_Pnt p1 = center.Translated(gp_Vec(xDir) * (-hs) + gp_Vec(yDir) * (-hs));
-    gp_Pnt p2 = center.Translated(gp_Vec(xDir) * ( hs) + gp_Vec(yDir) * (-hs));
-    gp_Pnt p3 = center.Translated(gp_Vec(xDir) * ( hs) + gp_Vec(yDir) * ( hs));
-    gp_Pnt p4 = center.Translated(gp_Vec(xDir) * (-hs) + gp_Vec(yDir) * ( hs));
+    const Frame f = frame();
+    const gp_Dir normal = f.normal;
+    const gp_Dir xDir = f.xDir;
+    const gp_Dir yDir = f.yDir;
+    const gp_Pnt center = f.center;
+    const gp_Pnt p1 = f.corner[0], p2 = f.corner[1], p3 = f.corner[2], p4 = f.corner[3];
 
     // --- Fill (semi-transparent) ---
     Handle(Graphic3d_Group) fillGroup = prs->NewGroup();
@@ -210,7 +202,7 @@ void AisSketchPlane::buildPlane(const Handle(Prs3d_Presentation)& prs)
 
     // Create quad as two triangles
     Handle(Graphic3d_ArrayOfTriangles) triangles =
-        new Graphic3d_ArrayOfTriangles(6, 0, Standard_True);  // with normals
+        new Graphic3d_ArrayOfTriangles(6, 0, true);  // with normals
 
     // Add vertices with normals for both triangles
     triangles->AddVertex(p1, normal);

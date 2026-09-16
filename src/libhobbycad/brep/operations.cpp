@@ -8,6 +8,7 @@
 // =====================================================================
 
 #include <hobbycad/brep/operations.h>
+#include <hobbycad/units.h>
 
 // OpenCASCADE includes
 #include <BRepGProp.hxx>
@@ -47,20 +48,29 @@
 #include <gp_Ax2.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <Geom_BSplineCurve.hxx>
-#include <TColgp_Array1OfPnt.hxx>
-#include <TColStd_Array1OfReal.hxx>
-#include <TColStd_Array1OfInteger.hxx>
+#include <NCollection_Array1.hxx>
 #include <GeomAPI_Interpolate.hxx>
 
+// OCCT 8.0 folded the TColgp_HArray1Of* classes into the NCollection_HArray1<>
+// template, leaving the old names as deprecated typedefs in headers that
+// GeomAPI_Interpolate.hxx no longer pulls in transitively. 7.9.x has no such
+// template at all (its NCollection_HArray1.hxx defines only a macro), and
+// TColgp_HArray1OfPnt is a distinct DEFINE_HARRAY1 class there, so the two
+// spellings are NOT interchangeable and every use has to be version-guarded.
+#include <Standard_Version.hxx>
+#if OCC_VERSION_MAJOR >= 8
+#include <NCollection_HArray1.hxx>
+#else
+#include <TColgp_HArray1OfPnt.hxx>
+#endif
+
 // Lists for thick solid
-#include <TopTools_ListOfShape.hxx>
+#include <NCollection_List.hxx>
 
 #include <algorithm>
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace brep {
@@ -70,15 +80,6 @@ namespace brep {
 // =====================================================================
 
 namespace {
-
-/// Find entity by ID in entity list
-const sketch::Entity* findEntity(int id, const std::vector<sketch::Entity>& entities)
-{
-    for (const sketch::Entity& e : entities) {
-        if (e.id == id) return &e;
-    }
-    return nullptr;
-}
 
 /// Convert 2D sketch point to 3D point (on XY plane at Z=0)
 gp_Pnt toPoint3D(const Point2D& p2d, double z = 0.0)
@@ -108,8 +109,8 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
             gp_Ax2 axis(center, zDir);
             gp_Circ circle(axis, entity.radius);
 
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double endRad = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
+            double startRad = degreesToRadians(entity.startAngle);
+            double endRad = degreesToRadians(entity.startAngle + entity.sweepAngle);
 
             if (reversed) {
                 std::swap(startRad, endRad);
@@ -157,14 +158,18 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
         if (entity.points.size() >= 2) {
             // Build B-Spline through control points
             int nPts = static_cast<int>(entity.points.size());
-            TColgp_Array1OfPnt pts(1, nPts);
+            NCollection_Array1<gp_Pnt> pts(1, nPts);
             for (int i = 0; i < nPts; ++i) {
                 int idx = reversed ? (nPts - 1 - i) : i;
                 pts.SetValue(i + 1, toPoint3D(entity.points[idx]));
             }
 
+#if OCC_VERSION_MAJOR >= 8
+            Handle(NCollection_HArray1<gp_Pnt>) hPts = new NCollection_HArray1<gp_Pnt>(pts);
+#else
             Handle(TColgp_HArray1OfPnt) hPts = new TColgp_HArray1OfPnt(pts);
-            GeomAPI_Interpolate interp(hPts, Standard_False, 1e-6);
+#endif
+            GeomAPI_Interpolate interp(hPts, false, 1e-6);
             interp.Perform();
 
             if (interp.IsDone()) {
@@ -178,7 +183,8 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
         break;
 
     case sketch::EntityType::Rectangle:
-        // Rectangle is actually 4 edges - handled specially in wire building
+    case sketch::EntityType::Parallelogram:
+        // Four edges: buildRectangleEdges, called from wire building
         break;
 
     case sketch::EntityType::Polygon:
@@ -196,20 +202,18 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
     return edge;
 }
 
-/// Build multiple edges for rectangle entity
+/// Build the four edges of a rectangle or parallelogram entity
 std::vector<TopoDS_Edge> buildRectangleEdges(const sketch::Entity& entity, bool reversed = false)
 {
     std::vector<TopoDS_Edge> edges;
 
-    if (entity.type != sketch::EntityType::Rectangle || entity.points.size() < 2)
+    Point2D c[4];
+    if (!sketch::quadCorners(entity, c))
         return edges;
 
-    Point2D p1 = entity.points[0];
-    Point2D p3 = entity.points[1];
-    Point2D p2(p3.x, p1.y);
-    Point2D p4(p1.x, p3.y);
-
-    std::vector<Point2D> corners = {p1, p2, p3, p4};
+    // From the corners, not the first two points: a rotated rectangle stores
+    // four corners and a parallelogram is not axis-aligned.
+    std::vector<Point2D> corners(c, c + 4);
     if (reversed) {
         std::reverse(corners.begin(), corners.end());
     }
@@ -274,7 +278,7 @@ std::vector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool rever
     // Direction from c1 to c2
     Point2D dir = c2 - c1;
     double len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-    if (len < 1e-6) return edges;
+    if (len < geometry::kDegenerateLen) return edges;
 
     dir = dir / len;
     Point2D perp(-dir.y, dir.x);
@@ -287,7 +291,7 @@ std::vector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool rever
 
     // Two straight lines and two arcs
     // Arc angles
-    double angle1 = std::atan2(perp.y, perp.x) * 180.0 / M_PI;
+    double angle1 = radiansToDegrees(std::atan2(perp.y, perp.x));
     double angle2 = angle1 + 180.0;
 
     if (!reversed) {
@@ -297,8 +301,8 @@ std::vector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool rever
         // Arc at c2 from p2 to p3
         gp_Ax2 axis2(toPoint3D(c2), gp_Dir(0, 0, 1));
         gp_Circ circ2(axis2, r);
-        double start2 = angle1 * M_PI / 180.0;
-        double end2 = angle2 * M_PI / 180.0;
+        double start2 = degreesToRadians(angle1);
+        double end2 = degreesToRadians(angle2);
         edges.push_back(BRepBuilderAPI_MakeEdge(circ2, start2, end2));
 
         // Line from p3 to p4
@@ -307,23 +311,23 @@ std::vector<TopoDS_Edge> buildSlotEdges(const sketch::Entity& entity, bool rever
         // Arc at c1 from p4 to p1
         gp_Ax2 axis1(toPoint3D(c1), gp_Dir(0, 0, 1));
         gp_Circ circ1(axis1, r);
-        double start1 = angle2 * M_PI / 180.0;
-        double end1 = (angle1 + 360.0) * M_PI / 180.0;
+        double start1 = degreesToRadians(angle2);
+        double end1 = degreesToRadians(angle1 + 360.0);
         edges.push_back(BRepBuilderAPI_MakeEdge(circ1, start1, end1));
     } else {
         // Reversed order
         gp_Ax2 axis1(toPoint3D(c1), gp_Dir(0, 0, 1));
         gp_Circ circ1(axis1, r);
-        double start1 = (angle1 + 360.0) * M_PI / 180.0;
-        double end1 = angle2 * M_PI / 180.0;
+        double start1 = degreesToRadians(angle1 + 360.0);
+        double end1 = degreesToRadians(angle2);
         edges.push_back(BRepBuilderAPI_MakeEdge(circ1, end1, start1));
 
         edges.push_back(BRepBuilderAPI_MakeEdge(toPoint3D(p4), toPoint3D(p3)));
 
         gp_Ax2 axis2(toPoint3D(c2), gp_Dir(0, 0, 1));
         gp_Circ circ2(axis2, r);
-        double start2 = angle2 * M_PI / 180.0;
-        double end2 = angle1 * M_PI / 180.0;
+        double start2 = degreesToRadians(angle2);
+        double end2 = degreesToRadians(angle1);
         edges.push_back(BRepBuilderAPI_MakeEdge(circ2, end2, start2));
 
         edges.push_back(BRepBuilderAPI_MakeEdge(toPoint3D(p2), toPoint3D(p1)));
@@ -343,11 +347,12 @@ TopoDS_Wire buildWireFromProfile(
         int entityId = profile.entityIds[i];
         bool reversed = (i < profile.reversed.size()) ? profile.reversed[i] : false;
 
-        const sketch::Entity* entity = findEntity(entityId, entities);
+        const sketch::Entity* entity = sketch::findEntityById(entities, entityId);
         if (!entity) continue;
 
         // Handle multi-edge entities
-        if (entity->type == sketch::EntityType::Rectangle) {
+        if (entity->type == sketch::EntityType::Rectangle
+            || entity->type == sketch::EntityType::Parallelogram) {
             auto edges = buildRectangleEdges(*entity, reversed);
             for (const auto& edge : edges) {
                 if (!edge.IsNull()) wireBuilder.Add(edge);
@@ -382,7 +387,7 @@ TopoDS_Face buildFaceFromWire(const TopoDS_Wire& wire)
 {
     if (wire.IsNull()) return TopoDS_Face();
 
-    BRepBuilderAPI_MakeFace faceBuilder(wire, Standard_True);  // planar = true
+    BRepBuilderAPI_MakeFace faceBuilder(wire, true);  // planar = true
     if (faceBuilder.IsDone()) {
         return faceBuilder.Face();
     }
@@ -398,7 +403,8 @@ TopoDS_Wire buildWireFromEntities(const std::vector<sketch::Entity>& pathEntitie
     for (const sketch::Entity& entity : pathEntities) {
         if (entity.isConstruction) continue;
 
-        if (entity.type == sketch::EntityType::Rectangle) {
+        if (entity.type == sketch::EntityType::Rectangle
+            || entity.type == sketch::EntityType::Parallelogram) {
             auto edges = buildRectangleEdges(entity, false);
             for (const auto& edge : edges) {
                 if (!edge.IsNull()) wireBuilder.Add(edge);
@@ -462,7 +468,7 @@ OperationResult extrudeProfile(
 
     // Perform extrusion
     try {
-        BRepPrimAPI_MakePrism prism(face, extrusionVec, Standard_True);  // copy = true
+        BRepPrimAPI_MakePrism prism(face, extrusionVec, true);  // copy = true
         if (prism.IsDone()) {
             result.shape = prism.Shape();
             result.success = true;
@@ -510,8 +516,8 @@ OperationResult extrudeProfileSymmetric(
             gp_Vec vec2(direction);
             vec2.Scale(-halfDist);
 
-            BRepPrimAPI_MakePrism prism1(face, vec1, Standard_True);
-            BRepPrimAPI_MakePrism prism2(face, vec2, Standard_True);
+            BRepPrimAPI_MakePrism prism1(face, vec1, true);
+            BRepPrimAPI_MakePrism prism2(face, vec2, true);
 
             if (prism1.IsDone() && prism2.IsDone()) {
                 // Fuse the two halves
@@ -530,7 +536,7 @@ OperationResult extrudeProfileSymmetric(
             gp_Vec extrusionVec(direction);
             extrusionVec.Scale(distance);
 
-            BRepPrimAPI_MakePrism prism(face, extrusionVec, Standard_True);
+            BRepPrimAPI_MakePrism prism(face, extrusionVec, true);
             if (prism.IsDone()) {
                 result.shape = prism.Shape();
                 result.success = true;
@@ -568,11 +574,11 @@ OperationResult revolveProfile(
     }
 
     // Convert angle to radians
-    double angleRad = angleDegrees * M_PI / 180.0;
+    double angleRad = degreesToRadians(angleDegrees);
 
     // Perform revolution
     try {
-        BRepPrimAPI_MakeRevol revol(face, axis, angleRad, Standard_True);  // copy = true
+        BRepPrimAPI_MakeRevol revol(face, axis, angleRad, true);  // copy = true
         if (revol.IsDone()) {
             result.shape = revol.Shape();
             result.success = true;
@@ -637,8 +643,8 @@ OperationResult loftProfiles(
     }
 
     try {
-        BRepOffsetAPI_ThruSections loft(solid ? Standard_True : Standard_False,
-                                         Standard_False);  // ruled = false
+        BRepOffsetAPI_ThruSections loft(solid ? true : false,
+                                         false);  // ruled = false
 
         for (const sketch::Profile& profile : profiles) {
             TopoDS_Wire wire = buildWireFromProfile(profile, entities);
@@ -894,7 +900,7 @@ OperationResult shellShape(
 
     try {
         // Collect faces to remove (openings)
-        TopTools_ListOfShape facesToRemoveList;
+        NCollection_List<TopoDS_Shape> facesToRemoveList;
 
         std::vector<TopoDS_Face> allFaces;
         for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {

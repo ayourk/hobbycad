@@ -3,11 +3,15 @@
 # Build HobbyCAD on macOS x86_64 (Intel) using vcpkg with static
 # linking.  All third-party dependencies are statically linked.
 #
-# Separated from the arm64 workflow because the x86_64 runner
-# (macos-13-large) is a paid runner that may not always be available.
-# Keeping it in its own workflow prevents cancellation of arm64 builds.
+# Separated from the arm64 workflow because x86_64 runs on the self-hosted
+# Intel Mac mini (MacMini2018-hobbycad, macOS 15.1): GitHub retired the
+# free x86_64 macOS runner and the paid macos-13-large was often
+# unavailable. The repository is public, so the job is gated on the
+# repository owner; fork pull requests never reach the machine. The mini
+# keeps ~/vcpkg and its binary cache between runs, so the steps below are
+# written to be repeatable rather than to assume a fresh runner.
 
-name: macOS Build x64 ($$$)
+name: macOS Build x64
 
 on:
   push:
@@ -19,6 +23,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -28,30 +35,35 @@ jobs:
 
   macos-x64:
     name: HobbyCAD macOS (x86_64)
-    runs-on: macos-13-large
+    runs-on: [self-hosted, macOS, X64]
+    if: github.actor == 'ayourk'
+    concurrency:
+      group: mac-mini-build-x64
+      cancel-in-progress: true
+    timeout-minutes: 180
 
     env:
       BUILD_TYPE: Release
       VCPKG_DEFAULT_TRIPLET: x64-osx-static
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      # The mini's own archive cache, which persists between runs.
+      VCPKG_BINARY_SOURCES: "clear;default,readwrite"
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install build tools
-        run: brew install ninja
-
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+        run: brew list --formula ninja >/dev/null 2>&1 || brew install ninja
 
       - name: Setup vcpkg
         run: |
-          git clone --branch 2026.02.27 https://github.com/microsoft/vcpkg.git ~/vcpkg
+          # Repeatable: the mini keeps ~/vcpkg; a fresh machine clones it.
+          if [ -d ~/vcpkg/.git ]; then
+            git -C ~/vcpkg fetch --quiet --tags origin
+            git -C ~/vcpkg checkout --quiet 2026.02.27
+          else
+            git clone --branch 2026.02.27 https://github.com/microsoft/vcpkg.git ~/vcpkg
+          fi
           ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           echo "VCPKG_ROOT=$HOME/vcpkg" >> $GITHUB_ENV
           echo "$HOME/vcpkg" >> $GITHUB_PATH
@@ -82,20 +94,44 @@ jobs:
         run: |
           cmake --install build --prefix build/install
 
-          # Static build — single executable, no dylibs to bundle
-          exe="build/install/bin/hobbycad"
+          # On macOS the target is an app bundle, installed at the prefix
+          # root as HobbyCAD.app (static build: one executable inside it,
+          # no dylibs to bundle). The bare bin/hobbycad form is kept as a
+          # fallback for a non-bundle configuration.
+          exe="build/install/HobbyCAD.app/Contents/MacOS/HobbyCAD"
+          [ -f "$exe" ] || exe="build/install/bin/hobbycad"
           if [ ! -f "$exe" ]; then
-            echo "::error::hobbycad not found at $exe"
+            echo "::error::hobbycad not found in build/install (neither HobbyCAD.app nor bin/)"
             exit 1
+          fi
+          if [ -f build/install/HobbyCAD.app/Contents/Resources/hobbycad.icns ]; then
+            echo "Bundle icon: hobbycad.icns present"
+          else
+            echo "::warning::HobbyCAD.app has no hobbycad.icns"
           fi
           echo "Static build produced: $exe"
           echo "Size: $(du -h "$exe" | cut -f1)"
           echo "Architecture: $(file "$exe")"
 
+      - name: Create DMG
+        # make-dmg.sh asks Finder for the window layout through AppleScript.
+        # The first run from the runner service raises macOS's Automation
+        # prompt on the mini's screen; allow it once, or the layout is
+        # skipped and the DMG is still produced.
+        run: tools/macos/make-dmg.sh build/install/HobbyCAD.app x86_64 dist
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: hobbycad-macos-x86_64-dmg
+          path: dist/*.dmg
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hobbycad-macos-x64
           path: build/install/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

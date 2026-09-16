@@ -20,9 +20,9 @@ namespace hobbycad {
 
 IMPLEMENT_STANDARD_RTTIEXT(AisGrid, AIS_InteractiveObject)
 
-AisGrid::AisGrid(Standard_Real extent,
-                 Standard_Real minorStep,
-                 Standard_Real majorStep)
+AisGrid::AisGrid(double extent,
+                 double minorStep,
+                 double majorStep)
     : m_extent(extent)
     , m_minorStep(minorStep)
     , m_majorStep(majorStep)
@@ -30,7 +30,7 @@ AisGrid::AisGrid(Standard_Real extent,
     , m_majorColor(0.50, 0.53, 0.58, Quantity_TOC_RGB)
 {
     // Mark as infinite so FitAll ignores this object's bounding box
-    SetInfiniteState(Standard_True);
+    SetInfiniteState(true);
 }
 
 void AisGrid::SetMinorColor(const Quantity_Color& color)
@@ -43,32 +43,32 @@ void AisGrid::SetMajorColor(const Quantity_Color& color)
     m_majorColor = color;
 }
 
-void AisGrid::SetExtent(Standard_Real extent)
+void AisGrid::SetExtent(double extent)
 {
     m_extent = extent;
 }
 
-void AisGrid::SetMinorStep(Standard_Real step)
+void AisGrid::SetMinorStep(double step)
 {
     m_minorStep = step;
 }
 
-void AisGrid::SetMajorStep(Standard_Real step)
+void AisGrid::SetMajorStep(double step)
 {
     m_majorStep = step;
 }
 
 void AisGrid::Compute(const Handle(PrsMgr_PresentationManager)& /*thePrsMgr*/,
                       const Handle(Prs3d_Presentation)& thePrs,
-                      const Standard_Integer /*theMode*/)
+                      const int /*theMode*/)
 {
     buildGrid(thePrs);
 }
 
 void AisGrid::ComputeSelection(const Handle(SelectMgr_Selection)& /*theSel*/,
-                               const Standard_Integer /*theMode*/)
+                               const int /*theMode*/)
 {
-    // Grid is not selectable — no selection primitives
+    // Grid is not selectable: no selection primitives
 }
 
 void AisGrid::buildGrid(const Handle(Prs3d_Presentation)& prs)
@@ -88,7 +88,7 @@ void AisGrid::buildGrid(const Handle(Prs3d_Presentation)& prs)
     int majorCount = 0;
 
     for (int i = -numMinorLines; i <= numMinorLines; ++i) {
-        Standard_Real pos = i * m_minorStep;
+        double pos = i * m_minorStep;
         bool isMajor = (m_majorStep > 0.0) &&
                        (std::fabs(std::fmod(pos, m_majorStep)) < 0.001 ||
                         std::fabs(std::fmod(pos, m_majorStep) - m_majorStep) < 0.001);
@@ -110,7 +110,7 @@ void AisGrid::buildGrid(const Handle(Prs3d_Presentation)& prs)
             new Graphic3d_ArrayOfSegments(minorCount * 2);
 
         for (int i = -numMinorLines; i <= numMinorLines; ++i) {
-            Standard_Real pos = i * m_minorStep;
+            double pos = i * m_minorStep;
             bool isMajor = (m_majorStep > 0.0) &&
                            (std::fabs(std::fmod(pos, m_majorStep)) < 0.001 ||
                             std::fabs(std::fmod(pos, m_majorStep) - m_majorStep) < 0.001);
@@ -139,7 +139,7 @@ void AisGrid::buildGrid(const Handle(Prs3d_Presentation)& prs)
             new Graphic3d_ArrayOfSegments(majorCount * 2);
 
         for (int i = -numMinorLines; i <= numMinorLines; ++i) {
-            Standard_Real pos = i * m_minorStep;
+            double pos = i * m_minorStep;
             bool isMajor = (m_majorStep > 0.0) &&
                            (std::fabs(std::fmod(pos, m_majorStep)) < 0.001 ||
                             std::fabs(std::fmod(pos, m_majorStep) - m_majorStep) < 0.001);

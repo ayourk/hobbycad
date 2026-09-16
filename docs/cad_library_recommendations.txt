@@ -156,7 +156,7 @@ A CAD application of this scope requires several distinct functional layers:
     ------------------------------
     Website:   https://www.wxwidgets.org
     License:   wxWindows Library License (LGPL with static linking
-               exception — more permissive than Qt's LGPL 3.0)
+               exception, more permissive than Qt's LGPL 3.0)
     Language:  C++
 
     wxWidgets is a mature cross-platform toolkit that renders using
@@ -393,7 +393,7 @@ A CAD application of this scope requires several distinct functional layers:
                  tool) for the first implementation, with Approach B
                  as a long-term goal if demand warrants it.
 
-                 Export is not applicable — .scad is a scripting
+                 Export is not applicable; .scad is a scripting
                  language, not a geometry interchange format.
 
     Parasolid (X_T/X_B)
@@ -430,7 +430,7 @@ A CAD application of this scope requires several distinct functional layers:
     tori, NURBS), trimmed and stitched into a topologically consistent
     B-Rep solid. Converting between these representations requires
     "reverse engineering" the original geometry from a cloud of flat
-    triangles — fundamentally an information-recovery problem where the
+    triangles: fundamentally an information-recovery problem where the
     original information has been discarded.
 
   The Pipeline (Conceptual):
@@ -656,7 +656,7 @@ A CAD application of this scope requires several distinct functional layers:
   This requires that the application architecture follows a strict
   command pattern where all model modifications go through a command
   layer that can be serialized to Python. This architectural decision
-  must be made from day one — retrofitting macro recording is extremely
+  must be made from day one; retrofitting macro recording is extremely
   difficult.
 
   8.6  DEPENDENCIES
@@ -736,10 +736,10 @@ A CAD application of this scope requires several distinct functional layers:
   Advantages:
     - Mature and battle-tested (used by GitHub Desktop, GitKraken,
       Visual Studio, Sourcetree, and many others)
-    - Pure C with clean API — easy to call from C++ directly or
+    - Pure C with clean API, easy to call from C++ directly or
       via thin wrappers
     - Cross-platform (Linux, macOS, Windows, iOS fully supported)
-    - No dependency on a git installation — self-contained
+    - No dependency on a git installation, self-contained
     - Re-entrant and thread-safe
     - Available in Ubuntu, Homebrew, vcpkg, and most package
       managers as libgit2-dev
@@ -748,7 +748,7 @@ A CAD application of this scope requires several distinct functional layers:
   Disadvantages:
     - C API requires manual memory management (git_*_free calls);
       mitigated by C++ RAII wrappers (see cppgit2 / libgit2pp)
-    - Does not support every git feature — notably Git LFS, git
+    - Does not support every git feature: notably Git LFS, git
       submodules (partial), sparse checkout, and some newer
       protocol v2 features are missing or incomplete
     - Occasional behavioral differences from canonical git in
@@ -802,18 +802,18 @@ A CAD application of this scope requires several distinct functional layers:
       License:  GPL 2.0
       Invoke git commands via QProcess or popen().
       Advantages:
-        - Zero library dependency — just needs git installed
+        - Zero library dependency, just needs git installed
         - Always feature-complete (supports LFS, submodules,
           sparse checkout, protocol v2, everything)
         - Behavior is always identical to canonical git
         - Simpler implementation for basic operations
       Disadvantages:
         - Requires git to be installed on the user's system
-        - Process spawn overhead for each operation — slow for
+        - Process spawn overhead for each operation: slow for
           frequent queries (status, diff) in the UI
         - Parsing text output is fragile (locale-dependent,
           format changes between git versions)
-        - Less portable — git may not be available or may be
+        - Less portable: git may not be available or may be
           an unexpected version on some systems
         - No in-process access to git objects or refs
 
@@ -829,10 +829,10 @@ A CAD application of this scope requires several distinct functional layers:
         - Supports Git protocol v2
         - Permissive license (MIT/Apache 2.0)
       Disadvantages:
-        - Rust library — not directly callable from C++. Would
+        - Rust library, not directly callable from C++. Would
           require FFI bindings (C API) which do not yet exist
           in a stable, published form
-        - Not yet feature-complete — still maturing, some
+        - Not yet feature-complete: still maturing, some
           operations are missing or marked unstable
         - Adds Rust toolchain as a build dependency, which is
           a significant complexity increase for a C++/Qt project
@@ -850,7 +850,7 @@ A CAD application of this scope requires several distinct functional layers:
         - Very mature and feature-complete
         - Permissive license
       Disadvantages:
-        - Java — requires JVM, completely impractical for a
+        - Java: requires JVM, completely impractical for a
           C++/Qt application
       Verdict: Not applicable for HobbyCAD.
 
@@ -863,7 +863,7 @@ A CAD application of this scope requires several distinct functional layers:
           interpreter for scripting-level git operations
         - No compiled dependencies
       Disadvantages:
-        - Python-only — too slow for UI-level operations
+        - Python-only: too slow for UI-level operations
           (status queries, diff generation)
         - Cannot be used for the core C++ version control panel
       Verdict: Potentially useful as an optional Python scripting
@@ -978,7 +978,7 @@ A CAD application of this scope requires several distinct functional layers:
     selection, and local mesh operations. Lightweight and fast.
 
     Alternative:
-      libigl (header-only, MPL 2.0) — provides mesh processing
+      libigl (header-only, MPL 2.0): provides mesh processing
       algorithms on top of Eigen matrices. Less structured than
       OpenMesh but more flexible for algorithm prototyping.
 
@@ -1001,8 +1001,8 @@ A CAD application of this scope requires several distinct functional layers:
       - Corefinement and Boolean operations on meshes
 
     MeshFix
-    Website:   https://github.com/MarcoAttworx/MeshFix-V2.1
-    License:   GPL 2.0
+    Website:   https://github.com/MarcoAttene/MeshFix-V2.1
+    License:   GPL 3.0 or later
     Language:  C++
 
     Automatic repair tool for converting raw digitized mesh data into
@@ -1032,7 +1032,7 @@ A CAD application of this scope requires several distinct functional layers:
     approaches.
 
     Alternative:
-      Custom voxelizer using OCCT or CGAL — possible but OpenVDB is
+      Custom voxelizer using OCCT or CGAL: possible but OpenVDB is
       significantly more optimized for this class of operations.
 
   14.4  MESH I/O (EXTENDED FORMATS)
@@ -1085,7 +1085,7 @@ A CAD application of this scope requires several distinct functional layers:
   | Shared: Python Scripting  | CPython + pybind11          | PSF / BSD |
   | Mesh Data Structure       | OpenMesh                    | BSD       |
   | Mesh Processing / Repair  | CGAL (Polygon Mesh Proc.)   | GPL 3.0+  |
-  | Auto-Repair               | MeshFix                     | GPL 2.0   |
+  | Auto-Repair               | MeshFix                     | GPL 3.0+  |
   | Voxelization / Make Solid | OpenVDB                     | MPL 2.0   |
   | Extended Mesh I/O         | Assimp                      | BSD       |
   | 3MF Support               | lib3mf                      | BSD       |
@@ -1109,34 +1109,34 @@ A CAD application of this scope requires several distinct functional layers:
   Blender's key library dependencies:
 
     Rendering:
-      Cycles (internal) — Physically-based path tracer (Blender's own)
-      EEVEE (internal)  — Real-time renderer (Blender's own)
-      OpenGL / Vulkan   — GPU rendering API
+      Cycles (internal): Physically-based path tracer (Blender's own)
+      EEVEE (internal):  Real-time renderer (Blender's own)
+      OpenGL / Vulkan:   GPU rendering API
 
     Geometry / Math:
-      Eigen             — Linear algebra (header-only, MPL 2.0)
-      OpenSubdiv        — Subdivision surfaces (Pixar, Apache 2.0)
-      Bullet            — Physics engine (zlib license)
-      Manifold          — Mesh Boolean operations
+      Eigen:             Linear algebra (header-only, MPL 2.0)
+      OpenSubdiv:        Subdivision surfaces (Pixar, Apache 2.0)
+      Bullet:            Physics engine (zlib license)
+      Manifold:          Mesh Boolean operations
 
     Volumetrics / VFX:
-      OpenVDB           — Volumetric data (DreamWorks, MPL 2.0)
-      OpenColorIO       — Color management (Academy SW Foundation)
-      OpenImageIO       — Image I/O (BSD)
-      OpenEXR / Imath   — HDR image format (Academy SW Foundation)
-      Alembic           — Scene interchange (MIT)
+      OpenVDB:           Volumetric data (DreamWorks, MPL 2.0)
+      OpenColorIO:       Color management (Academy SW Foundation)
+      OpenImageIO:       Image I/O (BSD)
+      OpenEXR / Imath:   HDR image format (Academy SW Foundation)
+      Alembic:           Scene interchange (MIT)
 
     Performance:
-      TBB               — Threading Building Blocks (Apache 2.0)
-      Embree            — Ray tracing kernels (Intel, Apache 2.0)
-      OIDN              — AI denoiser (Intel, Apache 2.0)
+      TBB:               Threading Building Blocks (Apache 2.0)
+      Embree:            Ray tracing kernels (Intel, Apache 2.0)
+      OIDN:              AI denoiser (Intel, Apache 2.0)
 
     Scripting:
-      Python (CPython)  — Scripting and plugin system
-      pybind11 / custom — Python C++ bindings
+      Python (CPython):  Scripting and plugin system
+      pybind11 / custom: Python C++ bindings
 
     UI:
-      Custom (internal) — Blender uses its own UI toolkit, not Qt/GTK
+      Custom (internal): Blender uses its own UI toolkit, not Qt/GTK
 
     File Formats:
       Assimp-like internal importers for FBX, OBJ, STL, glTF, USD,

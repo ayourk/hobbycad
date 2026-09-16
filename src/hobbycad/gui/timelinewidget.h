@@ -15,6 +15,7 @@
 #define HOBBYCAD_TIMELINEWIDGET_H
 
 #include <hobbycad/project.h>
+#include <hobbycad/feature.h>
 
 #include <QWidget>
 #include <QVector>
@@ -26,25 +27,8 @@ class QFrame;
 
 namespace hobbycad {
 
-/// Timeline feature types with associated icons
-enum class TimelineFeature {
-    Origin,
-    Sketch,
-    Extrude,
-    Revolve,
-    Fillet,
-    Chamfer,
-    Hole,
-    Mirror,
-    Pattern,
-    Box,
-    Cylinder,
-    Sphere,
-    Move,
-    Join,
-    Cut,
-    Intersect
-};
+/// Timeline feature types: the library's feature enum, one list.
+using TimelineFeature = FeatureType;
 
 /// Dependency information for a timeline item
 struct TimelineDependency {
@@ -84,6 +68,16 @@ public:
 
     /// Get the feature name at an index.
     QString nameAt(int index) const;
+
+    /// Rename an item in place.
+    ///
+    /// Needed so undoing a rename can relabel the timeline. The alternative
+    /// (removing the item and re-adding it with the new name) would lose
+    /// its POSITION, and position is meaning in an ordered history.
+    ///
+    /// Items are icon-only, so the name is what the tooltip shows; both the
+    /// stored name and the tooltip are updated.
+    void setName(int index, const QString& name);
 
     /// Get the currently selected item index (-1 if none).
     int selectedIndex() const;
@@ -210,7 +204,12 @@ private slots:
 private:
     void setupUi();
     QIcon iconForFeature(TimelineFeature feature) const;
+
+    /// Overlay the standard warning/error badge on a feature icon.
+    /// Returns @p base unchanged for Normal state.
+    QIcon badgedIcon(const QIcon& base, FeatureState state) const;
     void updateItemStyles();
+    class TimelineItem* makeItem(int index, TimelineFeature feature, const QString& name);
     void updateTickMarks();
 
     QScrollArea* m_scrollArea = nullptr;

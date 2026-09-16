@@ -292,6 +292,7 @@ const char* entityTypeName(EntityType type)
     case EntityType::Point:     return "Point";
     case EntityType::Line:      return "Line";
     case EntityType::Rectangle: return "Rectangle";
+    case EntityType::Parallelogram: return "Parallelogram";
     case EntityType::Circle:    return "Circle";
     case EntityType::Arc:       return "Arc";
     case EntityType::Spline:    return "Spline";
@@ -299,6 +300,7 @@ const char* entityTypeName(EntityType type)
     case EntityType::Slot:      return "Slot";
     case EntityType::Ellipse:   return "Ellipse";
     case EntityType::Text:      return "Text";
+    case EntityType::Dimension: return "Dimension";
     }
     return "Unknown";
 }

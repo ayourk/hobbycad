@@ -48,12 +48,26 @@ jobs:
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Homebrew
         run: |
           # Ensure Homebrew is up to date
           brew update
+
+      - name: Install Qt 6.4.2 (prebuilt)
+        # The project pins Qt 6.4.2. Homebrew's qt is rolling (6.11 today) and
+        # has no Intel macOS bottle at all, so on x86_64 "brew install qt"
+        # compiles Qt for hours. The prebuilt 6.4.2 (the same route
+        # tools/macos/setup-env.sh documents) is one universal binary for
+        # arm64 and x86_64.
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.4.2'
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
 
       - name: Tap HobbyCAD repository
         run: |
@@ -62,7 +76,7 @@ jobs:
       - name: Install HobbyCAD dependencies
         run: |
           # Install dependencies from tap (keg-only, pinned versions)
-          brew install ayourk/hobbycad/opencascade@7.9.2
+          brew install ayourk/hobbycad/opencascade@8.0.1
           brew install ayourk/hobbycad/libzip@1.7.3
           brew install ayourk/hobbycad/libgit2@1.9.2
           brew install ayourk/hobbycad/libslvs
@@ -70,19 +84,21 @@ jobs:
           brew install ayourk/hobbycad/openmesh
           brew install ayourk/hobbycad/meshfix
 
-          # Install standard dependencies
-          brew install qt@6 ninja librsvg
+          # Install standard dependencies. nlohmann-json is required by
+          # libhobbycad; the icons are rendered by the build itself, so no
+          # librsvg.
+          brew install ninja nlohmann-json
 
       - name: Set CMAKE_PREFIX_PATH
         run: |
-          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)
+          OCCT_PFX=$(brew --prefix ayourk/hobbycad/opencascade@8.0.1)
           LZIP_PFX=$(brew --prefix ayourk/hobbycad/libzip@1.7.3)
           LGIT_PFX=$(brew --prefix ayourk/hobbycad/libgit2@1.9.2)
           SLVS_PFX=$(brew --prefix ayourk/hobbycad/libslvs)
           L3MF_PFX=$(brew --prefix ayourk/hobbycad/lib3mf)
           OMSH_PFX=$(brew --prefix ayourk/hobbycad/openmesh)
           MFIX_PFX=$(brew --prefix ayourk/hobbycad/meshfix)
-          QT6_PFX=$(brew --prefix qt@6)
+          QT6_PFX="${QT_ROOT_DIR}"
 
           PREFIX_PATH="${OCCT_PFX}:${LZIP_PFX}:${LGIT_PFX}:${SLVS_PFX}:${L3MF_PFX}:${OMSH_PFX}:${MFIX_PFX}:${QT6_PFX}"
           echo "CMAKE_PREFIX_PATH=${PREFIX_PATH}" >> "$GITHUB_ENV"
@@ -103,9 +119,9 @@ jobs:
           tar -czvf ../hobbycad-homebrew-${{ matrix.arch }}.tar.gz .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: "*.tar.gz"
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

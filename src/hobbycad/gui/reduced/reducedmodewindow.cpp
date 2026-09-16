@@ -3,10 +3,13 @@
 // =====================================================================
 
 #include "reducedmodewindow.h"
+#include "../propertyrow.h"
+#include "gui/sketchutils.h"
 #include "reducedviewport.h"
 #include "diagnosticdialog.h"
 #include "gui/changelogpanel.h"
 #include "gui/clipanel.h"
+#include "cli/cliengine.h"
 #include "gui/modeltoolbar.h"
 #include "gui/toolbarbutton.h"
 #include "gui/toolbardropdown.h"
@@ -14,7 +17,6 @@
 #include "gui/formulafield.h"
 #include "gui/sketchtoolbar.h"
 #include "gui/sketchcanvas.h"
-#include "gui/sketchactionbar.h"
 #include "gui/sketchplanedialog.h"
 
 #include <QAction>
@@ -73,6 +75,18 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
     m_centralCli = new CliPanel(m_splitter);
     m_splitter->addWidget(m_centralCli);
 
+    // The terminal edits the project this window shows, into the same history
+    // as the Edit menu. It was never given a host, so Reduced mode's own
+    // terminal could not touch the model at all; it is how this mode reaches
+    // the 3D model it cannot draw (Aaron, 2026-09-15: "In reduced mode, The
+    // GUI CLI window should be able to manipulate the 3D Stuff that reduced
+    // mode can't.").
+    if (m_centralCli->engine()) {
+        m_centralCli->engine()->setUndoHost(this);
+        m_centralCli->engine()->setDocumentHost(this);
+    }
+    m_centralCli->setGuiMode(true);
+
     // Exit command in the central CLI panel closes the app
     connect(m_centralCli, &CliPanel::exitRequested,
             this, &QWidget::close);
@@ -85,19 +99,25 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
 
     // Sketch mode: 2D canvas
     m_sketchCanvas = new SketchCanvas(m_viewportStack);
+
+    installSketchCanvasResolvers();   // projection resolver and source lister (MainWindow)
+
     m_sketchCanvas->setUnitSuffix(unitSuffix());
     m_viewportStack->addWidget(m_sketchCanvas);
 
     m_mainLayout->addWidget(m_viewportStack, 1);  // stretch factor 1
 
     // Connect sketch canvas constraint selection (ReducedMode-specific)
+    // Wire Edit > Cut/Copy/Paste to the sketch canvas.
+    connectClipboardActions();
+
     connect(m_sketchCanvas, &SketchCanvas::constraintSelectionChanged,
             this, &ReducedModeWindow::onConstraintSelectionChanged);
 
     // Timeline below the viewport stack
     m_timeline = new TimelineWidget(container);
     m_mainLayout->addWidget(m_timeline);
-    createTimeline();
+    connectTimeline();   // the project's history, as in Full mode
 
     setCentralWidget(container);
     finalizeLayout();
@@ -113,11 +133,11 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
 
     // Hook into the View > Terminal toggle from MainWindow.
     // In Reduced Mode, toggling the terminal shows/hides the
-    // central CLI panel (not the dock — we hide the dock entirely
+    // central CLI panel (not the dock; we hide the dock entirely
     // since the central panel serves that role).
     if (auto* action = findChild<QAction*>(
             QString(), Qt::FindDirectChildrenOnly)) {
-        // We need the specific toggle action — use the one we stored
+        // We need the specific toggle action; use the one we stored
     }
 
     // Connect to the toggle action created in MainWindow::createMenus()
@@ -130,7 +150,7 @@ ReducedModeWindow::ReducedModeWindow(const OpenGLInfo& glInfo,
     // Start with terminal visible and action checked
     terminalToggleAction()->setChecked(true);
 
-    // Hide the dock-based terminal — not needed in Reduced Mode
+    // Hide the dock-based terminal, not needed in Reduced Mode
     // since we have the central one
     hideDockTerminal();
 
@@ -186,122 +206,6 @@ void ReducedModeWindow::showDiagnosticDialog()
     }
 }
 
-// createToolbar() is no longer needed - ModelToolbar handles all button setup internally
-
-void ReducedModeWindow::createTimeline()
-{
-    // Add example timeline items to demonstrate scrolling behavior
-    // These will be replaced with actual feature history
-    m_timeline->addItem(TimelineFeature::Origin, tr("Origin"));
-    m_timeline->addItem(TimelineFeature::Sketch, tr("Sketch1"));
-    m_timeline->addItem(TimelineFeature::Extrude, tr("Extrude1"));
-    m_timeline->addItem(TimelineFeature::Sketch, tr("Sketch2"));
-    m_timeline->addItem(TimelineFeature::Extrude, tr("Extrude2"));
-    m_timeline->addItem(TimelineFeature::Fillet, tr("Fillet1"));
-    m_timeline->addItem(TimelineFeature::Hole, tr("Hole1"));
-    m_timeline->addItem(TimelineFeature::Mirror, tr("Mirror1"));
-    m_timeline->addItem(TimelineFeature::Chamfer, tr("Chamfer1"));
-    m_timeline->addItem(TimelineFeature::Pattern, tr("Pattern1"));
-
-    // Connect timeline item selection to properties panel
-    connect(m_timeline, &TimelineWidget::itemClicked,
-            this, &ReducedModeWindow::showFeatureProperties);
-}
-
-void ReducedModeWindow::onCreateSketchClicked()
-{
-    // Show plane selection dialog
-    SketchPlaneDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted) {
-        return;  // User cancelled
-    }
-
-    SketchPlane plane = dialog.selectedPlane();
-    double offset = dialog.offset();
-
-    // Store offset for display in properties
-    m_pendingSketchOffset = offset;
-
-    enterSketchMode(plane);
-}
-
-void ReducedModeWindow::enterSketchMode(SketchPlane plane)
-{
-    MainWindow::enterSketchMode(plane);
-
-    // Add new sketch to timeline
-    int sketchCount = 0;
-    for (int i = 0; i < m_timeline->itemCount(); ++i) {
-        if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-            ++sketchCount;
-        }
-    }
-    QString sketchName = tr("Sketch%1").arg(sketchCount + 1);
-    m_timeline->addItem(TimelineFeature::Sketch, sketchName);
-
-    // Select the new sketch in timeline
-    m_timeline->setSelectedIndex(m_timeline->itemCount() - 1);
-
-    // Update properties to show sketch settings
-    QTreeWidget* propsTree = propertiesTree();
-    if (propsTree) {
-        propsTree->clear();
-
-        // Sketch name
-        auto* nameItem = new QTreeWidgetItem(propsTree);
-        nameItem->setText(0, tr("Name"));
-        nameItem->setText(1, sketchName);
-        nameItem->setFlags(nameItem->flags() | Qt::ItemIsEditable);
-
-        // Plane selection
-        auto* planeItem = new QTreeWidgetItem(propsTree);
-        planeItem->setText(0, tr("Plane"));
-        QStringList planes = {tr("XY"), tr("XZ"), tr("YZ")};
-        int planeIdx = static_cast<int>(plane);
-        planeItem->setText(1, planes.value(planeIdx));
-        planeItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-        planeItem->setData(1, Qt::UserRole + 1, planes);
-        planeItem->setData(1, Qt::UserRole + 2, planeIdx);
-
-        // Plane offset
-        auto* offsetItem = new QTreeWidgetItem(propsTree);
-        offsetItem->setText(0, tr("Offset"));
-        offsetItem->setText(1, tr("%1 mm").arg(m_pendingSketchOffset, 0, 'g', 6));
-
-        // Grid settings
-        auto* gridHeader = new QTreeWidgetItem(propsTree);
-        gridHeader->setText(0, tr("Grid"));
-
-        auto* showGridItem = new QTreeWidgetItem(gridHeader);
-        showGridItem->setText(0, tr("Show Grid"));
-        showGridItem->setText(1, m_sketchCanvas->isGridVisible() ? tr("Yes") : tr("No"));
-        showGridItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-        showGridItem->setData(1, Qt::UserRole + 1, QStringList{tr("Yes"), tr("No")});
-        showGridItem->setData(1, Qt::UserRole + 2, m_sketchCanvas->isGridVisible() ? 0 : 1);
-
-        auto* snapItem = new QTreeWidgetItem(gridHeader);
-        snapItem->setText(0, tr("Snap to Grid"));
-        snapItem->setText(1, m_sketchCanvas->snapToGrid() ? tr("Yes") : tr("No"));
-        snapItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-        snapItem->setData(1, Qt::UserRole + 1, QStringList{tr("Yes"), tr("No")});
-        snapItem->setData(1, Qt::UserRole + 2, m_sketchCanvas->snapToGrid() ? 0 : 1);
-
-        auto* spacingItem = new QTreeWidgetItem(gridHeader);
-        spacingItem->setText(0, tr("Grid Spacing"));
-        spacingItem->setText(1, QStringLiteral("%1 %2")
-                             .arg(m_sketchCanvas->gridSpacing())
-                             .arg(unitSuffix()));
-        spacingItem->setFlags(spacingItem->flags() | Qt::ItemIsEditable);
-
-        // Entities count
-        auto* entitiesItem = new QTreeWidgetItem(propsTree);
-        entitiesItem->setText(0, tr("Entities"));
-        entitiesItem->setText(1, QString::number(m_sketchCanvas->entities().size()));
-
-        propsTree->expandAll();
-    }
-}
-
 void ReducedModeWindow::exitSketchMode()
 {
     MainWindow::exitSketchMode();
@@ -313,54 +217,13 @@ void ReducedModeWindow::exitSketchMode()
     m_centralCli->focusInput();
 }
 
-void ReducedModeWindow::saveCurrentSketch()
-{
-    // Save the sketch entities to the document
-    // For now, just mark the sketch as saved in the timeline
-    if (m_timeline->itemCount() > 0) {
-        int lastIdx = m_timeline->itemCount() - 1;
-        if (m_timeline->featureAt(lastIdx) == TimelineFeature::Sketch) {
-            // The sketch is already in the timeline - entities are stored
-            // TODO: Persist sketch entities to the document
-            statusBar()->showMessage(
-                tr("Sketch '%1' saved with %2 entities")
-                    .arg(m_timeline->nameAt(lastIdx))
-                    .arg(m_sketchCanvas->entities().size()),
-                3000);
-        }
-    }
-}
-
-void ReducedModeWindow::discardCurrentSketch()
-{
-    // Discard the sketch - remove from timeline if it was newly created
-    if (m_timeline->itemCount() > 0) {
-        int lastIdx = m_timeline->itemCount() - 1;
-        if (m_timeline->featureAt(lastIdx) == TimelineFeature::Sketch) {
-            // Check if sketch has any entities
-            if (m_sketchCanvas->entities().isEmpty()) {
-                // Empty sketch - remove it from timeline
-                m_timeline->removeItem(lastIdx);
-                statusBar()->showMessage(tr("Empty sketch discarded"), 3000);
-            } else {
-                // Has entities but user cancelled - ask what to do
-                // For now, just warn and keep the sketch
-                statusBar()->showMessage(
-                    tr("Sketch changes discarded (%1 entities)")
-                        .arg(m_sketchCanvas->entities().size()),
-                    3000);
-                // TODO: Restore original sketch state if editing existing sketch
-            }
-        }
-    }
-}
-
 void ReducedModeWindow::onConstraintSelectionChanged(int constraintId)
 {
     if (constraintId < 0) {
-        // Constraint deselected — revert to sketch-level properties
+        // Constraint deselected: back to the sketch's own page. This used to
+        // call enterSketchMode() again, which added a second timeline item.
         if (m_inSketchMode) {
-            enterSketchMode(m_sketchCanvas->sketchPlane());
+            showSketchProperties();
         }
         return;
     }

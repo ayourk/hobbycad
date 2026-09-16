@@ -7,17 +7,16 @@
 //
 //  Cross-platform: Linux, Windows (MSVC/MinGW), macOS (Apple Clang).
 //
-//  Phase 0 (Foundation) — required:
-//    OCCT, Qt 6, libgit2, libzip, OpenGL, rsvg-convert
-//    icotool (Windows only, optional — WARN if missing)
+//  Phase 0 (Foundation), required:
+//    OCCT, Qt 6, libgit2, libzip, OpenGL
 //
-//  Phase 1 (Basic Modeling) — optional:
+//  Phase 1 (Basic Modeling), optional:
 //    libslvs (SolveSpace constraint solver)
 //
-//  Phase 3 (Python / Plugins / Version Control) — optional:
+//  Phase 3 (Python / Plugins / Version Control), optional:
 //    pybind11 + Python 3
 //
-//  Phase 5 (HobbyMesh) — optional:
+//  Phase 5 (HobbyMesh), optional:
 //    OpenMesh, lib3mf, MeshFix, CGAL, OpenVDB, Assimp, Eigen
 //
 //  Exit code:
@@ -127,7 +126,7 @@ struct DepResult {
     std::string phase;
     std::string name;
     std::string version;
-    Status      status;
+    Status status{};
     std::string detail;
     std::string fix;        // corrective action for WARN/FAIL
 };
@@ -164,7 +163,7 @@ int main(int argc, char* argv[])
     //  PHASE 0: Foundation (required)
     // =================================================================
 
-    // OCCT — BRep kernel, STEP/STL/IGES writers
+    // OCCT: BRep kernel, STEP/STL/IGES writers
     {
         DepResult r{"0", "OCCT", OCC_VERSION_COMPLETE, FAIL, "", ""};
         try {
@@ -183,7 +182,7 @@ int main(int argc, char* argv[])
         add(r);
     }
 
-    // Qt 6 — GUI framework
+    // Qt 6: GUI framework
     //
     // QApplication is created here and kept alive so the OpenGL test
     // below can create a context and query the real GL version.
@@ -202,7 +201,7 @@ int main(int argc, char* argv[])
         add(r);
     }
 
-    // libgit2 — version control
+    // libgit2: version control
     {
         DepResult r{"0", "libgit2", "", FAIL, "", ""};
         int major, minor, rev;
@@ -217,14 +216,14 @@ int main(int argc, char* argv[])
         add(r);
     }
 
-    // libzip — archive support
+    // libzip: archive support
     {
         DepResult r{"0", "libzip", zip_libzip_version(),
                     PASS, "version query OK", ""};
         add(r);
     }
 
-    // OpenGL — 3D viewport
+    // OpenGL: 3D viewport
     //
     // With QApplication alive, we can create a QOffscreenSurface and
     // QOpenGLContext to query the real GL version string from the
@@ -259,18 +258,18 @@ int main(int argc, char* argv[])
                 }
                 ctx.doneCurrent();
             } else {
-                // No GPU / headless — still PASS if symbol linked
+                // No GPU / headless, still PASS if symbol linked
                 auto fn = glGetString;
                 if (fn != nullptr) {
                     r.status = PASS;
-                    r.detail = "no GL context (headless?) — symbol linked OK";
+                    r.detail = "no GL context (headless?); symbol linked OK";
                 } else {
                     r.detail = "glGetString symbol missing";
                     r.fix    = "install OpenGL dev packages / GPU drivers";
                 }
             }
         } else {
-            // QApplication failed — can't create GL context
+            // QApplication failed; can't create GL context
             auto fn = glGetString;
             if (fn != nullptr) {
                 r.status = PASS;
@@ -282,88 +281,6 @@ int main(int argc, char* argv[])
         }
         add(r);
     }
-
-    // rsvg-convert — SVG to PNG icon generation (build-time)
-    {
-        DepResult r{"0", "rsvg-convert", "", FAIL, "", ""};
-#if defined(_WIN32)
-        int rc = std::system("where rsvg-convert >nul 2>nul");
-#else
-        int rc = std::system("command -v rsvg-convert >/dev/null 2>&1");
-#endif
-        if (rc == 0) {
-            // Try to get version
-            FILE* fp = nullptr;
-#if defined(_WIN32)
-            fp = _popen("rsvg-convert --version 2>nul", "r");
-#else
-            fp = popen("rsvg-convert --version 2>/dev/null", "r");
-#endif
-            if (fp) {
-                char buf[128] = {};
-                if (fgets(buf, sizeof(buf), fp)) {
-                    std::string ver(buf);
-                    // Trim trailing newline
-                    while (!ver.empty() && (ver.back() == '\n' || ver.back() == '\r'))
-                        ver.pop_back();
-                    // Extract version number (e.g., "rsvg-convert version 2.56.1")
-                    auto pos = ver.rfind(' ');
-                    if (pos != std::string::npos)
-                        r.version = ver.substr(pos + 1);
-                    else
-                        r.version = ver;
-                }
-#if defined(_WIN32)
-                _pclose(fp);
-#else
-                pclose(fp);
-#endif
-            }
-            r.status = PASS;
-            r.detail = "SVG to PNG conversion available";
-        } else {
-            r.detail = "rsvg-convert not found";
-            const char* plat = platform_name();
-            if      (std::string(plat) == "linux")
-                r.fix = "sudo apt-get install -y librsvg2-bin";
-            else if (std::string(plat) == "macos")
-                r.fix = "brew install librsvg";
-            else
-                r.fix = "install librsvg / rsvg-convert";
-        }
-        add(r);
-    }
-
-    // icotool — .ico generation (Windows only, optional, build-time)
-#if defined(_WIN32)
-    {
-        DepResult r{"0", "icotool", "", WARN, "", ""};
-        int rc = std::system("where icotool >nul 2>nul");
-        if (rc == 0) {
-            FILE* fp = _popen("icotool --version 2>nul", "r");
-            if (fp) {
-                char buf[128] = {};
-                if (fgets(buf, sizeof(buf), fp)) {
-                    std::string ver(buf);
-                    while (!ver.empty() && (ver.back() == '\n' || ver.back() == '\r'))
-                        ver.pop_back();
-                    auto pos = ver.rfind(' ');
-                    if (pos != std::string::npos)
-                        r.version = ver.substr(pos + 1);
-                    else
-                        r.version = ver;
-                }
-                _pclose(fp);
-            }
-            r.status = PASS;
-            r.detail = "Windows .ico generation available";
-        } else {
-            r.detail = "icotool not found (optional — .ico generation disabled)";
-            r.fix = "install icoutils";
-        }
-        add(r);
-    }
-#endif
 
     // =================================================================
     //  PHASE 1: Basic Modeling (optional)
@@ -495,7 +412,11 @@ int main(int argc, char* argv[])
         try {
             auto wrapper = Lib3MF::CWrapper::loadLibrary();
             auto model   = wrapper->CreateModel();
-            r.version    = wrapper->GetLibraryVersion();
+            Lib3MF_uint32 major = 0, minor = 0, micro = 0;
+            wrapper->GetLibraryVersion(major, minor, micro);
+            r.version    = std::to_string(major) + "." +
+                           std::to_string(minor) + "." +
+                           std::to_string(micro);
             r.detail     = "created 3MF model OK";
         } catch (const std::exception& e) {
             r.status = FAIL;
@@ -681,7 +602,7 @@ int main(int argc, char* argv[])
                 if (idx > highest_pass_phase)
                     highest_pass_phase = idx;
             } else {
-                // Stop at first failed phase — higher phases
+                // Stop at first failed phase; higher phases
                 // depend on lower ones
                 break;
             }
@@ -763,7 +684,7 @@ int main(int argc, char* argv[])
             if (!r.version.empty())
                 out << " " << r.version;
             if (!r.detail.empty())
-                out << " — " << r.detail;
+                out << ": " << r.detail;
             out << "\n";
             if (!r.fix.empty())
                 out << "         -> " << r.fix << "\n";

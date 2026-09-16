@@ -2,6 +2,9 @@
 #
 # Build HobbyCAD on Windows arm64 using MSVC with vcpkg manifest mode.
 # Builds natively on ARM64 runner (no cross-compilation).
+#
+# Also a reusable workflow: the Installer and MSI workflows call it and
+# package the install tree it uploads.
 
 name: Windows Build (MSVC arm64)
 
@@ -15,6 +18,19 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Called by windows-inno.yml and windows-msi.yml, which package this
+  # build instead of compiling their own copy of it.
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: Name of the uploaded install tree
+        type: string
+        required: false
+        default: hobbycad-windows-arm64-msvc
+    outputs:
+      msvc-toolset:
+        description: The MSVC toolset the build used; a job packaging its runtime DLLs needs one at least this new.
+        value: ${{ jobs.msvc-arm64.outputs.msvc-toolset }}
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -24,16 +40,18 @@ jobs:
 
   msvc-arm64:
     name: HobbyCAD via MSVC (arm64)
+    outputs:
+      msvc-toolset: ${{ steps.msvc.outputs.toolset }}
     runs-on: windows-11-arm
 
     env:
       BUILD_TYPE: Release
       VCPKG_DEFAULT_TRIPLET: arm64-windows-static-md
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Free disk space
         shell: pwsh
@@ -55,13 +73,6 @@ jobs:
           }
           Get-PSDrive C | Select-Object Used,Free | Format-Table -AutoSize
 
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
       - name: Setup vcpkg
         run: |
           if (Test-Path "C:\vcpkg") {
@@ -72,10 +83,21 @@ jobs:
           echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
           echo "C:\vcpkg" >> $env:GITHUB_PATH
 
+      # MSVC 14.44 (Visual Studio 2022, v143) for as long as the runner image
+      # carries it, otherwise the newest toolset and its runtime, with a warning
+      # (Aaron, 2026-09-15). vcpkg ignores the developer environment and picks
+      # its own toolset, so the script also pins it in a copy of the triplets.
+      - name: Select MSVC toolset
+        id: msvc
+        shell: pwsh
+        run: scripts/ci/select-msvc-toolset.ps1 -Arch arm64 -TripletSource vcpkg-custom-triplets -TripletOut "$env:RUNNER_TEMP\vcpkg-triplets"
+
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: arm64
+          toolset: ${{ steps.msvc.outputs.toolset }}
+          vsversion: ${{ steps.msvc.outputs.vsversion }}
 
       - name: Restore VCPKG_ROOT
         run: |
@@ -89,12 +111,39 @@ jobs:
             Write-Host "Cleared vcpkg registry cache"
           }
 
+      # vcpkg stores every package it builds as an archive in vcpkg-bincache
+      # (the files provider in VCPKG_BINARY_SOURCES), and that directory is kept
+      # in the GitHub Actions cache. vcpkg hashes each package's inputs itself,
+      # so restoring an older cache is safe: unchanged packages come from it and
+      # only changed ones build. The runner image is in the key because an image
+      # update can change the compiler and with it those hashes.
+      - name: vcpkg binary cache key
+        id: vcpkg-key
+        run: |
+          New-Item -ItemType Directory -Force -Path vcpkg-bincache | Out-Null
+          "image=$env:ImageVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-arm64-windows-static-md-2026.02.27-${{ steps.vcpkg-key.outputs.image }}-${{ steps.msvc.outputs.toolset }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-custom-triplets/**') }}
+          restore-keys: vcpkg-arm64-windows-static-md-2026.02.27-
+
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet arm64-windows-static-md `
-            --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets `
+            --overlay-triplets="${{ steps.msvc.outputs.triplets }}" `
             --x-install-root=vcpkg_installed `
             --clean-buildtrees-after-build
+
+      - name: Save vcpkg binary cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Configure CMake
         run: |
@@ -102,7 +151,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
             -DVCPKG_TARGET_TRIPLET=arm64-windows-static-md `
-            -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}\vcpkg-custom-triplets `
+            -DVCPKG_OVERLAY_TRIPLETS="${{ steps.msvc.outputs.triplets }}" `
             -DVCPKG_INSTALLED_DIR=${{ github.workspace }}\vcpkg_installed
 
       - name: Build
@@ -123,9 +172,39 @@ jobs:
           Write-Host "Size: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: hobbycad-windows-arm64-msvc
+          name: ${{ inputs.artifact-name || 'hobbycad-windows-arm64-msvc' }}
           path: build/install/
-          retention-days: 14
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Portable zip
+        shell: pwsh
+        run: |
+          # A run-anywhere tree for people who want no installer: the install
+          # tree plus the Visual C++ runtime DLLs beside the program, the only
+          # dynamic dependency the static-md build has.
+          $version = Select-String -Path CMakeLists.txt -Pattern '^\s*VERSION\s+([0-9.]+)' |
+                     Select-Object -First 1 | ForEach-Object { $_.Matches[0].Groups[1].Value }
+          if (-not $version) { Write-Host "::warning::version not found in CMakeLists.txt; using the 0.0.0 sentinel"; $version = "0.0.0" }
+          $name = "HobbyCAD-$version-windows-arm64"
+          New-Item -ItemType Directory -Force -Path "zip\$name" | Out-Null
+          Copy-Item -Recurse build\install\* "zip\$name\"
+          Copy-Item LICENSE "zip\$name\LICENSE.txt"
+          $crt = "${{ steps.msvc.outputs.crt }}"
+          if (-not $crt -or -not (Test-Path $crt)) { Write-Error "Visual C++ runtime DLLs not found: '$crt'"; exit 1 }
+          Copy-Item "$crt\*.dll" "zip\$name\bin\"
+          Compress-Archive -Path "zip\$name" -DestinationPath "$name.zip" -CompressionLevel Optimal
+          Write-Host "$name.zip $([math]::Round((Get-Item "$name.zip").Length / 1MB, 1)) MB, runtime DLLs from $crt"
+          echo "ZIP_NAME=$name.zip" >> $env:GITHUB_ENV
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v7
+        with:
+          # Follows the caller's artifact name, so a run that calls this build
+          # more than once (Installer and MSI) uploads distinct zips.
+          name: ${{ inputs.artifact-name && format('{0}-zip', inputs.artifact-name) || 'hobbycad-windows-arm64-zip' }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
           if-no-files-found: error

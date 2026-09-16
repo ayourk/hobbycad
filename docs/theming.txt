@@ -70,14 +70,14 @@ Below is the complete list of object names as of Phase 0.
 
 --- CLI terminal panel ---
 
-  CliPanel                QPlainTextEdit — terminal emulator widget
+  CliPanel                QPlainTextEdit: terminal emulator widget
                           (prompt + input on same line, cursor at end)
 
 --- Status bar ---
 
   StatusBar               QStatusBar at the bottom of the window
-  StatusLabel             QLabel — left side status text ("Ready")
-  GlModeLabel             QLabel — right side OpenGL/mode indicator
+  StatusLabel             QLabel: left side status text ("Ready")
+  GlModeLabel             QLabel: right side OpenGL/mode indicator
 
 --- Dialogs ---
 
@@ -224,7 +224,7 @@ the #id selector to re-apply dark colors:
     }
 
 If your theme is dark and you want the terminal to match, simply
-include the terminal selector in your theme — it will override the
+include the terminal selector in your theme; it will override the
 built-in default.
 
 
@@ -239,7 +239,7 @@ Specificity:
 Viewport (Full Mode):
   The 3D viewport (#Viewport) uses WA_PaintOnScreen with OCCT
   owning the OpenGL context.  QSS background-color has no
-  effect on it — the viewport background is set via OCCT's
+  effect on it; the viewport background is set via OCCT's
   V3d_View::SetBgGradientColors() in viewportwidget.cpp.
 
 Fonts:
@@ -269,7 +269,13 @@ Theme validation:
   loadTheme() helper in main.cpp.
 
 Platform differences:
-  Some Qt widgets render differently on GTK vs KDE vs macOS.
-  QSS overrides platform style completely for targeted widgets.
-  Test on your target platforms.
+  HobbyCAD sets Qt's Fusion widget style on every platform before a
+  theme is applied. The themes are written against Fusion (the Linux
+  default), and a native style underneath the same stylesheet mixes
+  badly: on macOS the Objects/Files tabs drew over the Project dock's
+  title and became a blue segmented control, and the dock buttons kept
+  the light native glyphs. QSS overrides the style only for the widgets
+  it targets, so the base style matters for everything else. A user
+  who wants the native look can pass -style <name> or set
+  QT_STYLE_OVERRIDE; HobbyCAD then leaves the style alone.
 

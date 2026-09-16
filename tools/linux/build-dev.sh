@@ -40,6 +40,12 @@ BUILD_DIR="${PROJECT_ROOT}/build"
 LOG="${PROJECT_ROOT}/build-hobbycad.log"
 BINARY="${BUILD_DIR}/src/hobbycad/hobbycad"
 
+# Dev runs enable the in-app debug log (SketchCanvas::debugLogFile), which then
+# writes to build/DEBUG.log relative to the launch directory (the project root
+# here). Installed builds leave HOBBYCAD_DEBUG unset and stay silent. Set an
+# explicit value before invoking to override.
+export HOBBYCAD_DEBUG="${HOBBYCAD_DEBUG:-1}"
+
 DEVTEST_DIR="${PROJECT_ROOT}/devtest"
 DEVTEST_LOG="${DEVTEST_DIR}/devtest.log"
 
@@ -60,13 +66,16 @@ BUILD_TYPE="Debug"
 LINKAGE="STATIC"
 ACTIONS=()
 SCRIPT_FILE=""
+# Set when a build type or linkage is named on the command line, which is what
+# distinguishes "clean release" (clean then build) from "clean" (clean only).
+BUILD_REQUESTED=false
 
 while [ $# -gt 0 ]; do
     case "${1,,}" in
-        release)     BUILD_TYPE="Release" ;;
-        debug)       BUILD_TYPE="Debug" ;;
-        shared)      LINKAGE="SHARED" ;;
-        static)      LINKAGE="STATIC" ;;
+        release)     BUILD_TYPE="Release"; BUILD_REQUESTED=true ;;
+        debug)       BUILD_TYPE="Debug"; BUILD_REQUESTED=true ;;
+        shared)      LINKAGE="SHARED"; BUILD_REQUESTED=true ;;
+        static)      LINKAGE="STATIC"; BUILD_REQUESTED=true ;;
         clean)       ACTIONS+=("clean") ;;
         run)         ACTIONS+=("run") ;;
         run-cli)     ACTIONS+=("run-cli") ;;
@@ -92,9 +101,29 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# Default action: build
+# Default action: build.
+#
+# "clean" on its own means clean-only, as documented. But "clean release" and
+# "clean debug" are documented as clean-then-build, and a bare ACTIONS-empty
+# test never reached that: clean had already filled ACTIONS, so no build
+# action was ever added and the script exited after cleaning. The bug hid
+# behind "clean ... run", where do_build is reached as a side effect of
+# do_run finding no binary.
+#
+# So: build when nothing was asked for, and also when a build type or linkage
+# was named explicitly alongside clean.
 if [ ${#ACTIONS[@]} -eq 0 ]; then
     ACTIONS=("build")
+elif [ "${BUILD_REQUESTED}" = true ]; then
+    has_buildish=false
+    for a in "${ACTIONS[@]}"; do
+        case "${a}" in
+            build|run|run-reduced|run-cli|run-script) has_buildish=true ;;
+        esac
+    done
+    if [ "${has_buildish}" = false ]; then
+        ACTIONS+=("build")
+    fi
 fi
 
 # ---- Logging setup ---------------------------------------------------
@@ -102,7 +131,7 @@ fi
 exec > >(tee "${LOG}") 2>&1
 
 echo "====================================================================="
-echo "  HobbyCAD Developer Build — Phase 2 (Parametric Features)"
+echo "  HobbyCAD Developer Build: Phase 2 (Parametric Features)"
 echo "====================================================================="
 echo ""
 echo "  Project root : ${PROJECT_ROOT}"
@@ -126,7 +155,7 @@ do_devtest() {
     if [ -f "${DEVTEST_LOG}" ]; then
         # Check if CMakeLists.txt is newer than the log (dependencies changed)
         if [ -f "${devtest_cmake}" ] && [ "${devtest_cmake}" -nt "${DEVTEST_LOG}" ]; then
-            echo "--- Devtest: CMakeLists.txt modified — rerunning ---"
+            echo "--- Devtest: CMakeLists.txt modified, rerunning ---"
             echo ""
             rm -rf "${DEVTEST_DIR}/build"
         else
@@ -140,7 +169,7 @@ do_devtest() {
                 echo ""
                 devtest_needed=false
             else
-                echo "--- Devtest: result line missing or failed — rerunning ---"
+                echo "--- Devtest: result line missing or failed, rerunning ---"
                 echo ""
             fi
         fi
@@ -151,7 +180,7 @@ do_devtest() {
         echo ""
 
         if [ ! -d "${DEVTEST_DIR}" ]; then
-            echo "  WARNING: devtest/ directory not found — skipping"
+            echo "  WARNING: devtest/ directory not found, skipping"
             echo ""
             return 0
         fi
@@ -218,11 +247,23 @@ do_build() {
         echo "  Binary : ${BINARY}"
         echo "  Size   : $(du -h "${BINARY}" | cut -f1)"
         echo "  Type   : ${BUILD_TYPE}"
+        # The icons are rendered by the build itself (tools/render-icons.cpp
+        # through cmake/GenerateIcons.cmake); say so, the way the binary is
+        # reported, so a missing icon set is visible here and not first in a
+        # package build.
+        local icon_dir="${BUILD_DIR}/icons"
+        local png_count
+        png_count=$(ls "${icon_dir}"/hobbycad-*.png 2>/dev/null | wc -l | tr -d ' ')
+        if [ "${png_count}" -gt 0 ]; then
+            echo "  Icons  : ${png_count} PNG sizes$( [ -f "${icon_dir}/hobbycad.ico" ] && echo ", hobbycad.ico" )$( [ -f "${icon_dir}/hobbycad.icns" ] && echo ", hobbycad.icns" ) in ${icon_dir}"
+        else
+            echo "  Icons  : [WARN] none rendered in ${icon_dir} (see the CMake output for render_icons)"
+        fi
         echo ""
         return 0
     else
         echo "====================================================================="
-        echo "  Build FAILED — binary not found"
+        echo "  Build FAILED: binary not found"
         echo "====================================================================="
         echo ""
         return 1
@@ -242,8 +283,8 @@ do_run() {
         return 0
     fi
 
-    # Binary missing — need to build first
-    echo "--- Binary not found — building first ---"
+    # Binary missing: need to build first
+    echo "--- Binary not found, building first ---"
     echo ""
     if ! do_build; then
         return 1
@@ -272,8 +313,8 @@ do_run_reduced() {
         return 0
     fi
 
-    # Binary missing — need to build first
-    echo "--- Binary not found — building first ---"
+    # Binary missing: need to build first
+    echo "--- Binary not found, building first ---"
     echo ""
     if ! do_build; then
         return 1
@@ -298,8 +339,8 @@ do_run_cli() {
         return $?
     fi
 
-    # Binary missing — need to build first
-    echo "--- Binary not found — building first ---"
+    # Binary missing: need to build first
+    echo "--- Binary not found, building first ---"
     echo ""
     if ! do_build; then
         return 1
@@ -316,7 +357,7 @@ do_run_script() {
 
     # Build if binary is missing
     if [ ! -f "${BINARY}" ]; then
-        echo "--- Binary not found — building first ---"
+        echo "--- Binary not found, building first ---"
         echo ""
         if ! do_build; then
             return 1
@@ -324,12 +365,12 @@ do_run_script() {
     fi
 
     if [ -f "${arg}" ]; then
-        # Argument is a file — run it as a CLI script (headless)
+        # Argument is a file: run it as a CLI script (headless)
         echo "--- Running script: ${arg} ---"
         echo ""
         "${BINARY}" script "${arg}"
     else
-        # Argument is an inline command — launch the GUI with --exec
+        # Argument is an inline command: launch the GUI with --exec
         echo "--- Launching GUI with: ${arg} ---"
         echo ""
         "${BINARY}" --exec "${arg}" &

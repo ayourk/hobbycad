@@ -8,14 +8,13 @@
 // =====================================================================
 
 #include <hobbycad/geometry/utils.h>
+#include <hobbycad/units.h>
 #include <hobbycad/geometry/intersections.h>
 
 #include <algorithm>
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace geometry {
@@ -77,7 +76,7 @@ Point2D lerp(const Point2D& a, const Point2D& b, double t)
 
 double vectorAngle(const Point2D& v)
 {
-    return std::atan2(v.y, v.x) * 180.0 / M_PI;
+    return radiansToDegrees(std::atan2(v.y, v.x));
 }
 
 double angleBetween(const Point2D& a, const Point2D& b)
@@ -92,18 +91,18 @@ double angleBetween(const Point2D& a, const Point2D& b)
     double cosAngle = dot(a, b) / (lenA * lenB);
     cosAngle = std::clamp(cosAngle, -1.0, 1.0);
 
-    return std::acos(cosAngle) * 180.0 / M_PI;
+    return radiansToDegrees(std::acos(cosAngle));
 }
 
 double signedAngleBetween(const Point2D& a, const Point2D& b)
 {
-    double angle = (std::atan2(b.y, b.x) - std::atan2(a.y, a.x)) * 180.0 / M_PI;
+    double angle = radiansToDegrees(std::atan2(b.y, b.x) - std::atan2(a.y, a.x));
     return normalizeAngleSigned(angle);
 }
 
 Point2D rotatePoint(const Point2D& point, double angleDegrees)
 {
-    double rad = angleDegrees * M_PI / 180.0;
+    double rad = degreesToRadians(angleDegrees);
     double c = std::cos(rad);
     double s = std::sin(rad);
     return Point2D(
@@ -126,6 +125,18 @@ Point2D rotatePointAround(const Point2D& point, const Point2D& center, double an
 double lineLength(const Point2D& p1, const Point2D& p2)
 {
     return std::hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+Point2D snapToGrid(const Point2D& p, double spacing)
+{
+    if (spacing <= 0.0) return p;
+    return Point2D(std::round(p.x / spacing) * spacing, std::round(p.y / spacing) * spacing);
+}
+
+Point2D polarPoint(const Point2D& center, double distance, double angleRad)
+{
+    return Point2D(center.x + distance * std::cos(angleRad),
+                   center.y + distance * std::sin(angleRad));
 }
 
 Point2D lineMidpoint(const Point2D& p1, const Point2D& p2)
@@ -256,13 +267,13 @@ Point2D snapToAngleIncrementWithAngle(
     }
 
     // Calculate current angle in degrees
-    double angle = std::atan2(delta.y, delta.x) * 180.0 / M_PI;
+    double angle = radiansToDegrees(std::atan2(delta.y, delta.x));
 
     // Snap to nearest increment
     snappedAngle = std::round(angle / incrementDegrees) * incrementDegrees;
 
     // Calculate new position at snapped angle
-    double snappedRad = snappedAngle * M_PI / 180.0;
+    double snappedRad = degreesToRadians(snappedAngle);
     return origin + Point2D(distance * std::cos(snappedRad), distance * std::sin(snappedRad));
 }
 
@@ -299,9 +310,9 @@ std::optional<Arc> arcFromThreePoints(
     double radius = std::hypot(start.x - ux, start.y - uy);
 
     // Calculate start and end angles
-    double startAngle = std::atan2(ay - uy, ax - ux) * 180.0 / M_PI;
-    double midAngle = std::atan2(by - uy, bx - ux) * 180.0 / M_PI;
-    double endAngle = std::atan2(cy - uy, cx - ux) * 180.0 / M_PI;
+    double startAngle = radiansToDegrees(std::atan2(ay - uy, ax - ux));
+    double midAngle = radiansToDegrees(std::atan2(by - uy, bx - ux));
+    double endAngle = radiansToDegrees(std::atan2(cy - uy, cx - ux));
 
     // Determine sweep direction based on mid point
     // Normalize angles to [0, 360)
@@ -334,10 +345,10 @@ Arc arcFromCenterAndEndpoints(
     arc.center = center;
     arc.radius = std::hypot(start.x - center.x, start.y - center.y);
 
-    double startAngle = std::atan2(
-        start.y - center.y, start.x - center.x) * 180.0 / M_PI;
-    double endAngle = std::atan2(
-        end.y - center.y, end.x - center.x) * 180.0 / M_PI;
+    double startAngle = radiansToDegrees(std::atan2(
+        start.y - center.y, start.x - center.x));
+    double endAngle = radiansToDegrees(std::atan2(
+        end.y - center.y, end.x - center.x));
 
     arc.startAngle = normalizeAngle(startAngle);
     double sweep = normalizeAngle(endAngle - startAngle);
@@ -353,15 +364,15 @@ Arc arcFromCenterAndEndpoints(
 
 double arcLength(const Arc& arc)
 {
-    return std::abs(arc.radius * (arc.sweepAngle * M_PI / 180.0));
+    return std::abs(arc.radius * (degreesToRadians(arc.sweepAngle)));
 }
 
 std::vector<Arc> splitArc(const Arc& arc, const Point2D& point)
 {
     // Check if point is on arc
-    double angle = std::atan2(
+    double angle = radiansToDegrees(std::atan2(
         point.y - arc.center.y,
-        point.x - arc.center.x) * 180.0 / M_PI;
+        point.x - arc.center.x));
 
     if (!arc.containsAngle(angle)) {
         return {};  // Point not on arc
@@ -702,12 +713,12 @@ TangentArcResult arcTangentToLine(
     double radius = lineLength(center, tangentPoint);
 
     // Calculate angles
-    double startAngle = std::atan2(
+    double startAngle = radiansToDegrees(std::atan2(
         tangentPoint.y - center.y,
-        tangentPoint.x - center.x) * 180.0 / M_PI;
-    double endAngle = std::atan2(
+        tangentPoint.x - center.x));
+    double endAngle = radiansToDegrees(std::atan2(
         endPoint.y - center.y,
-        endPoint.x - center.x) * 180.0 / M_PI;
+        endPoint.x - center.x));
 
     // Determine sweep direction based on tangent direction
     // The arc should be tangent to the line, meaning the tangent at startAngle
@@ -720,11 +731,7 @@ TangentArcResult arcTangentToLine(
     // Check if tangent direction matches line direction
     if (dot(tangentAtStart, lineDir) < 0) {
         // Sweep in the other direction
-        if (sweepAngle > 0) {
-            sweepAngle -= 360.0;
-        } else {
-            sweepAngle += 360.0;
-        }
+        sweepAngle = oppositeSweepDeg(sweepAngle);
     }
 
     result.valid = true;
@@ -791,23 +798,19 @@ TangentArcResult filletArc(
     Point2D tangent2 = vertex + dir2 * tangentDist;
 
     // Calculate arc angles
-    double startAngle = std::atan2(
+    double startAngle = radiansToDegrees(std::atan2(
         tangent1.y - center.y,
-        tangent1.x - center.x) * 180.0 / M_PI;
-    double endAngle = std::atan2(
+        tangent1.x - center.x));
+    double endAngle = radiansToDegrees(std::atan2(
         tangent2.y - center.y,
-        tangent2.x - center.x) * 180.0 / M_PI;
+        tangent2.x - center.x));
 
     // The fillet arc should go the "short way" between tangent points
     double sweepAngle = normalizeAngleSigned(endAngle - startAngle);
 
     // Ensure we take the shorter path (< 180 degrees for a fillet)
     if (std::abs(sweepAngle) > 180.0) {
-        if (sweepAngle > 0) {
-            sweepAngle -= 360.0;
-        } else {
-            sweepAngle += 360.0;
-        }
+        sweepAngle = oppositeSweepDeg(sweepAngle);
     }
 
     result.valid = true;
@@ -817,6 +820,203 @@ TangentArcResult filletArc(
     result.sweepAngle = sweepAngle;
 
     return result;
+}
+
+// =====================================================================
+//  Sketch placement helpers
+// =====================================================================
+
+ChordFrame chordFrame(const Point2D& start, const Point2D& end, double tolerance)
+{
+    ChordFrame f;
+    f.midpoint = Point2D((start.x + end.x) * 0.5, (start.y + end.y) * 0.5);
+
+    const Point2D delta(end.x - start.x, end.y - start.y);
+    f.length = length(delta);
+    if (f.length <= tolerance) {
+        return f;               // valid stays false; direction/normal unset
+    }
+
+    f.direction = Point2D(delta.x / f.length, delta.y / f.length);
+    f.normal    = Point2D(-f.direction.y, f.direction.x);
+    f.valid     = true;
+    return f;
+}
+
+ChordCenters circleCentersThroughPoints(const Point2D& a, const Point2D& b,
+                                        double radius, double tolerance)
+{
+    ChordCenters c;
+
+    const ChordFrame f = chordFrame(a, b, tolerance);
+    if (!f.valid || radius <= 0.0) {
+        return c;
+    }
+
+    const double halfChord = f.length * 0.5;
+    if (halfChord > radius) {
+        return c;               // no circle of this radius reaches both points
+    }
+
+    // The exactly-tangent case (halfChord == radius) falls out naturally: the
+    // offset is zero and both centers coincide with the midpoint.
+    const double offset = std::sqrt(radius * radius - halfChord * halfChord);
+    c.first  = Point2D(f.midpoint.x + f.normal.x * offset,
+                       f.midpoint.y + f.normal.y * offset);
+    c.second = Point2D(f.midpoint.x - f.normal.x * offset,
+                       f.midpoint.y - f.normal.y * offset);
+    c.valid  = true;
+    return c;
+}
+
+Point2D applyInsideAngleLock(const Point2D& p1, const Point2D& p2, const Point2D& toward,
+                             double lockedLength, double lockedAngleDegrees)
+{
+    const Point2D dir = toward - p2;
+    const double mouseLen = length(dir);
+    const double mouseAng = std::atan2(dir.y, dir.x);
+    const double useLen = (lockedLength > 0.0) ? lockedLength : mouseLen;
+    double useAng = mouseAng;
+    if (lockedAngleDegrees != -1.0) {
+        // Inside angle: between p2 -> p1 and p2 -> p3, on the cursor's side.
+        const double edge1Dir = std::atan2(p1.y - p2.y, p1.x - p2.x);
+        const double dir1 = edge1Dir + degreesToRadians(lockedAngleDegrees);
+        const double dir2 = edge1Dir - degreesToRadians(lockedAngleDegrees);
+        const double diff1 = std::abs(std::remainder(mouseAng - dir1, 2.0 * M_PI));
+        const double diff2 = std::abs(std::remainder(mouseAng - dir2, 2.0 * M_PI));
+        useAng = (diff1 <= diff2) ? dir1 : dir2;
+    }
+    if (useLen > 0.001) return polarPoint(p2, useLen, useAng);
+    return toward;
+}
+
+bool lockedRadiusCenterToward(const Point2D& a, const Point2D& b, double radius,
+                              const Point2D& toward, Point2D& center)
+{
+    const ChordCenters cc = circleCentersThroughPoints(a, b, radius);
+    if (!cc.valid) return false;
+    center = (lineLength(cc.first, toward) <= lineLength(cc.second, toward)) ? cc.first : cc.second;
+    return true;
+}
+
+Point2D applyPolarLock(const Point2D& from, const Point2D& to,
+                       double lockedLength, double lockedAngleDegrees)
+{
+    const Point2D delta(to.x - from.x, to.y - from.y);
+    const double mouseLength = length(delta);
+    const double mouseAngle  = std::atan2(delta.y, delta.x);
+
+    const double useLength = (lockedLength > 0.0) ? lockedLength : mouseLength;
+    const double useAngle  = (lockedAngleDegrees != -1.0)
+                                 ? degreesToRadians(lockedAngleDegrees)
+                                 : mouseAngle;
+
+    // Guard mirrors the sketch UI: a degenerate length leaves the point where
+    // it was rather than collapsing it onto `from`.
+    if (useLength <= 0.001) {
+        return to;
+    }
+    return Point2D(from.x + useLength * std::cos(useAngle),
+                   from.y + useLength * std::sin(useAngle));
+}
+
+
+std::vector<Point2D> regularPolygonVertices(
+    const Point2D& center, double radius, int sides,
+    double startAngle, bool circumscribed)
+{
+    std::vector<Point2D> verts;
+    if (sides < 3 || radius <= 0.0) return verts;
+
+    double vertexRadius = radius;
+    double a0 = startAngle;
+    if (circumscribed) {
+        vertexRadius = radius / std::cos(M_PI / sides);  // apothem -> vertex distance
+        a0 += M_PI / sides;                              // edge midpoint faces startAngle
+    }
+    const double step = 2.0 * M_PI / sides;
+    verts.reserve(static_cast<size_t>(sides));
+    for (int i = 0; i < sides; ++i) {
+        const double ang = a0 + i * step;
+        verts.push_back(Point2D(center.x + vertexRadius * std::cos(ang),
+                                center.y + vertexRadius * std::sin(ang)));
+    }
+    return verts;
+}
+
+
+ArcCenterFromChord arcCenterOnBisector(
+    const Point2D& start, const Point2D& end, const Point2D& target,
+    bool semicircle, bool flip,
+    ChordFloor floor, double minPerpDistance)
+{
+    ArcCenterFromChord r;
+    const ChordFrame cf = chordFrame(start, end, 1e-3);
+    if (!cf.valid) return r;   // coincident endpoints -> invalid
+
+    double projDist = dot(target - cf.midpoint, cf.normal);
+    if (semicircle) projDist = 0.0;   // exact 180-degree arc
+    if (flip) projDist = -projDist;   // mirror to the far side of the chord
+
+    if (floor == ChordFloor::MinPerpDistance && std::abs(projDist) < minPerpDistance)
+        projDist = (projDist >= 0 ? 1.0 : -1.0) * minPerpDistance;
+
+    Point2D center = cf.midpoint + cf.normal * projDist;
+    double radius = length(center - start);
+
+    const double halfChord = cf.length / 2.0;
+    if (floor == ChordFloor::MinRadius && !semicircle) {
+        const double minRadius = halfChord * 1.01;   // just past the degenerate chord
+        if (radius < minRadius) {
+            const double minDist =
+                std::sqrt(minRadius * minRadius - halfChord * halfChord);
+            const double sign = (projDist >= 0) ? 1.0 : -1.0;
+            center = cf.midpoint + cf.normal * (sign * minDist);
+            radius = minRadius;
+            projDist = sign * minDist;
+        }
+    }
+    r.valid = true; r.center = center; r.radius = radius; r.projection = projDist;
+    return r;
+}
+
+
+Point2D closestPointOnSegment(const Point2D& point, const Point2D& a, const Point2D& b)
+{
+    const Point2D ab = b - a, ap = point - a;
+    const double L2 = ab.x * ab.x + ab.y * ab.y;
+    double t = (L2 > kExactEps) ? (ap.x * ab.x + ap.y * ab.y) / L2 : 0.0;
+    t = std::max(0.0, std::min(1.0, t));
+    return a + ab * t;
+}
+
+Point2D pointAtLockedSweep(const Point2D& center, const Point2D& start, const Point2D& toward,
+                           double lockedSweepDeg, bool flip)
+{
+    const double radius = std::hypot(start.x - center.x, start.y - center.y);
+    const double startAngle = std::atan2(start.y - center.y, start.x - center.x);
+    const double towardAngle = std::atan2(toward.y - center.y, toward.x - center.x);
+    double sweep = towardAngle - startAngle;
+    sweep = wrapSweepRad(sweep);
+    if (flip) sweep = (sweep > 0) ? sweep - 2.0 * M_PI : sweep + 2.0 * M_PI;
+    const double sign = (sweep >= 0) ? 1.0 : -1.0;
+    const double endAngle = startAngle + sign * degreesToRadians(std::abs(lockedSweepDeg));
+    return Point2D(center.x + radius * std::cos(endAngle), center.y + radius * std::sin(endAngle));
+}
+
+Point2D arcCenterFromChordAndSweep(const Point2D& start, const Point2D& end, const Point2D& toward,
+                                   double lockedSweepDeg)
+{
+    const Point2D mid((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
+    const double chordLen = std::hypot(end.x - start.x, end.y - start.y);
+    if (chordLen <= 0.001) return toward;
+    const Point2D chordDir((end.x - start.x) / chordLen, (end.y - start.y) / chordLen);
+    const Point2D perpDir = perpendicular(chordDir);
+    const double tanHalf = std::tan(degreesToRadians(std::abs(lockedSweepDeg)) / 2.0);
+    const double projDist = (tanHalf > 1e-6) ? (chordLen / 2.0) / tanHalf : 1e6;   // 180 degrees: center on the chord
+    const double towardProj = (toward.x - mid.x) * perpDir.x + (toward.y - mid.y) * perpDir.y;
+    const double sign = (towardProj >= 0) ? 1.0 : -1.0;
+    return Point2D(mid.x + perpDir.x * sign * projDist, mid.y + perpDir.y * sign * projDist);
 }
 
 }  // namespace geometry

@@ -5,9 +5,16 @@
 //  Manages a persistent command history file for the interactive
 //  REPL.  Stores up to a configurable number of lines in:
 //
-//    Linux:   ~/.config/hobbycad/cli_history
-//    macOS:   ~/Library/Application Support/hobbycad/cli_history
-//    Windows: %APPDATA%/hobbycad/cli_history
+//    Linux:   $XDG_CONFIG_HOME/hobbycad/cli_history, or
+//             ~/.config/hobbycad/cli_history
+//    macOS:   ~/Library/Preferences/hobbycad/cli_history
+//    Windows: %LOCALAPPDATA%/hobbycad/cli_history
+//
+//  Those are the directories Qt's QStandardPaths GenericConfigLocation
+//  returned when this class used it, reproduced exactly so an existing
+//  history file is still found now that the command layer is Qt-free.
+//  (The list above used to name Application Support and %APPDATA%; the
+//  code never wrote there.)
 //
 //  The maximum number of stored lines defaults to 500 and can be
 //  changed at runtime or via the REPL "history" command.
@@ -19,8 +26,8 @@
 #ifndef HOBBYCAD_CLIHISTORY_H
 #define HOBBYCAD_CLIHISTORY_H
 
-#include <QString>
-#include <QStringList>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 
@@ -44,14 +51,14 @@ public:
     // ---- History access ---------------------------------------------
 
     /// All entries, oldest first.
-    const QStringList& entries() const;
+    const std::vector<std::string>& entries() const;
 
     /// Number of entries.
     int count() const;
 
     /// Add a command to the history.  Duplicates of the most recent
     /// entry are suppressed (consecutive dedup).
-    void append(const QString& command);
+    void append(const std::string& command);
 
     /// Clear all entries (does not delete the file until save).
     void clear();
@@ -67,12 +74,12 @@ public:
     bool save() const;
 
     /// Full path to the history file.
-    QString filePath() const;
+    std::string filePath() const;
 
 private:
     void trim();
 
-    QStringList m_entries;
+    std::vector<std::string> m_entries;
     int         m_maxLines;
 };
 

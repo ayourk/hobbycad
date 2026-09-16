@@ -93,11 +93,53 @@ std::string OpenGLInfo::summary() const
 
 #if HOBBYCAD_HAS_QT
 
+/// Read the GL strings and the negotiated version out of a live context.
+///
+/// Factored out because the success path and the diagnostic-fallback path
+/// below need exactly the same six queries. They were previously duplicated
+/// verbatim, and had already started to drift: only one copy carried the
+/// explanatory comment.
+static void readContextInfo(QOpenGLContext& ctx, OpenGLInfo& info)
+{
+    QOffscreenSurface surface;
+    surface.setFormat(ctx.format());
+    surface.create();
+
+    if (!ctx.makeCurrent(&surface)) {
+        if (info.errorMessage.empty()) {
+            info.errorMessage = "Context created but makeCurrent() failed";
+        }
+        surface.destroy();
+        return;
+    }
+
+    auto* gl = ctx.functions();
+    const char* str;
+    str = reinterpret_cast<const char*>(gl->glGetString(GL_VERSION));
+    if (str) info.version = str;
+    str = reinterpret_cast<const char*>(gl->glGetString(GL_RENDERER));
+    if (str) info.renderer = str;
+    str = reinterpret_cast<const char*>(gl->glGetString(GL_VENDOR));
+    if (str) info.vendor = str;
+    str = reinterpret_cast<const char*>(gl->glGetString(GL_SHADING_LANGUAGE_VERSION));
+    if (str) info.glslVersion = str;
+
+    // The negotiated format, not the requested one: a driver may hand back
+    // more or less than was asked for and still report success.
+    const auto actualFmt = ctx.format();
+    info.majorVersion = actualFmt.majorVersion();
+    info.minorVersion = actualFmt.minorVersion();
+
+    ctx.doneCurrent();
+    surface.destroy();
+}
+
 OpenGLInfo probeOpenGL()
 {
     OpenGLInfo info;
 
-    // Request a 3.3 Core profile context
+    // Ask for 3.3 Core first. This is the strictest form of the question, and
+    // succeeding here is unambiguous.
     QSurfaceFormat fmt;
     fmt.setVersion(3, 3);
     fmt.setProfile(QSurfaceFormat::CoreProfile);
@@ -106,74 +148,43 @@ OpenGLInfo probeOpenGL()
     QOpenGLContext ctx;
     ctx.setFormat(fmt);
 
-    if (!ctx.create()) {
-        info.contextCreated = false;
-        info.errorMessage   = "Failed to create OpenGL 3.3 Core context";
-
-        // Try again without version constraint to gather diagnostics
-        QSurfaceFormat fallbackFmt;
-        fallbackFmt.setRenderableType(QSurfaceFormat::OpenGL);
-        QOpenGLContext fallbackCtx;
-        fallbackCtx.setFormat(fallbackFmt);
-
-        if (fallbackCtx.create()) {
-            QOffscreenSurface surface;
-            surface.setFormat(fallbackCtx.format());
-            surface.create();
-
-            if (fallbackCtx.makeCurrent(&surface)) {
-                auto* gl = fallbackCtx.functions();
-                const char* str;
-                str = reinterpret_cast<const char*>(gl->glGetString(GL_VERSION));
-                if (str) info.version = str;
-                str = reinterpret_cast<const char*>(gl->glGetString(GL_RENDERER));
-                if (str) info.renderer = str;
-                str = reinterpret_cast<const char*>(gl->glGetString(GL_VENDOR));
-                if (str) info.vendor = str;
-                str = reinterpret_cast<const char*>(gl->glGetString(GL_SHADING_LANGUAGE_VERSION));
-                if (str) info.glslVersion = str;
-
-                // Parse version from fallback context
-                auto actualFmt = fallbackCtx.format();
-                info.majorVersion = actualFmt.majorVersion();
-                info.minorVersion = actualFmt.minorVersion();
-
-                fallbackCtx.doneCurrent();
-            }
-            surface.destroy();
-        }
+    if (ctx.create()) {
+        info.contextCreated = true;
+        readContextInfo(ctx, info);
         return info;
     }
 
-    // Context created successfully
-    info.contextCreated = true;
+    // The core-profile request failed, but that is NOT the same as "this
+    // machine cannot do OpenGL 3.3". Several stacks (older Mesa, some VM and
+    // remote-X/GLX setups, certain vendor drivers) refuse an explicit core
+    // profile while happily supplying a compatibility context at a HIGHER
+    // version. Nothing in HobbyCAD requires a core profile: OCCT creates and
+    // owns the context itself and is content with compatibility.
+    //
+    // So retry unconstrained, and let the version it reports stand as the
+    // verdict. Previously this branch gathered the same information purely as
+    // diagnostics and left contextCreated false, which sent capable machines
+    // to Reduced Mode with "4.5" sitting in the report.
+    QSurfaceFormat fallbackFmt;
+    fallbackFmt.setRenderableType(QSurfaceFormat::OpenGL);
+    QOpenGLContext fallbackCtx;
+    fallbackCtx.setFormat(fallbackFmt);
 
-    QOffscreenSurface surface;
-    surface.setFormat(ctx.format());
-    surface.create();
-
-    if (ctx.makeCurrent(&surface)) {
-        auto* gl = ctx.functions();
-        const char* str;
-        str = reinterpret_cast<const char*>(gl->glGetString(GL_VERSION));
-        if (str) info.version = str;
-        str = reinterpret_cast<const char*>(gl->glGetString(GL_RENDERER));
-        if (str) info.renderer = str;
-        str = reinterpret_cast<const char*>(gl->glGetString(GL_VENDOR));
-        if (str) info.vendor = str;
-        str = reinterpret_cast<const char*>(gl->glGetString(GL_SHADING_LANGUAGE_VERSION));
-        if (str) info.glslVersion = str;
-
-        auto actualFmt = ctx.format();
-        info.majorVersion = actualFmt.majorVersion();
-        info.minorVersion = actualFmt.minorVersion();
-
-        ctx.doneCurrent();
-    } else {
-        info.errorMessage = "Context created but makeCurrent() failed";
+    if (!fallbackCtx.create()) {
+        info.contextCreated = false;
+        info.errorMessage =
+            "Failed to create an OpenGL context (3.3 Core and unconstrained)";
+        return info;
     }
 
-    surface.destroy();
+    readContextInfo(fallbackCtx, info);
+    info.contextCreated = true;
+    info.usedCompatibilityProfile = true;
+    if (!info.meetsMinimum()) {
+        info.errorMessage =
+            "No OpenGL 3.3 Core context; the compatibility context reports "
+            "less than 3.3";
+    }
     return info;
 }
 
@@ -278,7 +289,7 @@ OpenGLInfo probeOpenGL()
     return info;
 }
 
-#else  // No Qt or EGL — return stub
+#else  // No Qt or EGL: return stub
 
 OpenGLInfo probeOpenGL()
 {

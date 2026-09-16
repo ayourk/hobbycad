@@ -21,6 +21,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -39,23 +42,27 @@ jobs:
     name: HobbyCAD DEB (${{ matrix.distro }}, ${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.container }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Ubuntu 22.04 (native runners)
+          # Ubuntu 22.04 in an ubuntu:22.04 container: the hosted runner's
+          # newer CMake in /usr/local would hide jammy's own CMake 3.22 and
+          # GCC 11, which Launchpad builds with and which HobbyCAD supports.
           - distro: ubuntu2204
             distro_name: jammy
             arch: amd64
-            runner: ubuntu-22.04
-            container: ""
+            runner: ubuntu-24.04
+            container: ubuntu:22.04
             artifact_name: hobbycad-ubuntu2204-amd64
           - distro: ubuntu2204
             distro_name: jammy
             arch: arm64
-            runner: ubuntu-22.04-arm
-            container: ""
+            runner: ubuntu-24.04-arm
+            container: ubuntu:22.04
             artifact_name: hobbycad-ubuntu2204-arm64
           # Ubuntu 24.04 (native runners)
           - distro: ubuntu2404
@@ -74,191 +81,104 @@ jobs:
           - distro: debian12
             distro_name: bookworm
             arch: amd64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
             container: debian:12
             artifact_name: hobbycad-debian12-amd64
           - distro: debian12
             distro_name: bookworm
             arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
             container: debian:12
             artifact_name: hobbycad-debian12-arm64
 
     steps:
-      - name: Install git (for containers)
+      # A bare image has none of what the hosted runner provides; sudo lets
+      # the steps below run unchanged as root.
+      - name: Prepare the container
         if: matrix.container != ''
         run: |
           apt-get update
-          apt-get install -y git
+          apt-get install -y git sudo ca-certificates curl gnupg software-properties-common tzdata
 
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Install build dependencies
+      - name: Add the HobbyCAD PPA (Ubuntu)
+        if: startsWith(matrix.distro, 'ubuntu')
         run: |
-          SUDO=""
-          if [ -z "${{ matrix.container }}" ]; then
-            SUDO="sudo"
-          fi
-
-          # Add HobbyCAD PPA for libslvs and Qt 6.4.2 (Ubuntu only, not Debian containers)
-          if [ -z "${{ matrix.container }}" ]; then
-            $SUDO add-apt-repository -y ppa:ayourk/hobbycad
-            echo 'Package: *
+          sudo add-apt-repository -y ppa:ayourk/hobbycad
+          echo 'Package: *
           Pin: release o=LP-PPA-ayourk-hobbycad
-          Pin-Priority: 1001' | $SUDO tee /etc/apt/preferences.d/hobbycad-ppa
-            $SUDO apt-get update
-            INSTALL_LIBSLVS="libslvs-dev"
-            # Remove stock Qt 6.2 and install Qt 6.4.2 from PPA (Jammy only)
-            if [ "${{ matrix.distro }}" = "ubuntu2204" ]; then
-              $SUDO apt-get remove -y 'libqt6*' 'qt6-*' 2>/dev/null || true
-              $SUDO apt-get autoremove -y
-              $SUDO apt-get install -y \
-                qt6-base-dev qt6-base-dev-tools \
-                libqt6openglwidgets6 qmake6 \
-                qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
-                qt6-svg-dev qt6-image-formats-plugins
-            fi
-          else
-            # For Debian containers, we'll build libslvs from source after deps
-            apt-get update
-            INSTALL_LIBSLVS=""
-          fi
+          Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/hobbycad-ppa
+          sudo apt-get update
 
-          # meshfix-dev only available in Ubuntu PPA, not Debian
-          INSTALL_MESHFIX=""
-          if [ -z "${{ matrix.container }}" ]; then
-            INSTALL_MESHFIX="libmeshfix-dev"
-          fi
+      # The build dependencies are debian/control's Build-Depends. On Ubuntu
+      # the PPA supplies all of them, Qt 6.4.2 on 22.04, libslvs-dev and
+      # nlohmann-json3-dev (>= 3.12.0) included.
+      - name: Install build dependencies (Ubuntu)
+        if: startsWith(matrix.distro, 'ubuntu')
+        run: scripts/ci/install-build-deps.sh deb --extra curl xz-utils
+        # With MeshFix again (see the commented Debian step below), the PPA
+        # carries it for jammy and noble:
+        # run: scripts/ci/install-build-deps.sh deb --extra curl xz-utils libmeshfix-dev
 
-          # Qt OpenGL/SVG dev package names differ between PPA (Jammy) and stock repos
-          QT_OPENGL_DEV="libqt6opengl6-dev"
-          QT_SVG_DEV="libqt6svg6-dev"
-          if [ "${{ matrix.distro }}" = "ubuntu2204" ]; then
-            # PPA Qt 6.4.2 folds OpenGL into qt6-base-dev, SVG is qt6-svg-dev
-            QT_OPENGL_DEV=""
-            QT_SVG_DEV="qt6-svg-dev"
-          fi
+      # Debian has no libslvs and an older nlohmann-json, so the container
+      # job builds those two from the versions.json pins and installs the
+      # rest of debian/control's Build-Depends.
+      - name: Install build dependencies (Debian)
+        if: startsWith(matrix.distro, 'debian')
+        run: scripts/ci/install-build-deps.sh deb --provided libslvs-dev,nlohmann-json3-dev --extra libeigen3-dev curl xz-utils ca-certificates
 
-          $SUDO apt-get install -y \
-            $INSTALL_LIBSLVS \
-            $INSTALL_MESHFIX \
-            build-essential cmake ninja-build pkg-config curl xz-utils \
-            dpkg-dev debhelper fakeroot \
-            libocct-data-exchange-dev libocct-draw-dev \
-            libocct-foundation-dev libocct-modeling-algorithms-dev \
-            libocct-modeling-data-dev libocct-ocaf-dev \
-            libocct-visualization-dev occt-misc libtbb-dev \
-            qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-            qt6-tools-dev-tools qt6-l10n-tools $QT_OPENGL_DEV \
-            libqt6openglwidgets6 $QT_SVG_DEV qt6-image-formats-plugins qmake6 \
-            libgl-dev libglu1-mesa-dev libegl-dev libxkbcommon-dev \
-            libpng-dev libjpeg-dev libwebp-dev \
-            libzip-dev libminizip-dev \
-            nlohmann-json3-dev \
-            libgit2-dev \
-            lib3mf-dev libopenmesh-dev \
-            libeigen3-dev \
-            librsvg2-bin
-
-      - name: Build libslvs from source (Debian containers only)
-        if: matrix.container != ''
+      - name: Build pinned dependencies (Debian)
+        if: startsWith(matrix.distro, 'debian')
         run: |
-          # Download source and patches from Launchpad PPA
-          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
-          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
-          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
-          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+          scripts/ci/build-nlohmann-json.sh
+          scripts/ci/build-libslvs.sh --static
 
-          # Stub empty submodule directories and populate Eigen from system package
-          for submod in zlib libpng freetype cairo pixman angle; do
-            mkdir -p extlib/$submod
-            echo "# stub" > extlib/$submod/CMakeLists.txt
-          done
-          mkdir -p extlib/eigen
-          cp -r /usr/include/eigen3/. extlib/eigen/
+      # MeshFix is not built: nothing in the package uses it (devtest only
+      # probes for it), and it is the planned auto-repair backend for
+      # HobbyMesh (docs/cad_library_recommendations.txt, section 14). Kept
+      # commented out, not removed. Before enabling it again: pin its orig in
+      # versions.json and fetch it through scripts/ci (Launchpad +sourcefiles
+      # URLs disappear), carry the shared-library patch in the orig, and fix
+      # the two loader memory-safety defects (MarcoAttene/MeshFix-V2.1 issue
+      # #19). Debian has no MeshFix package, so its legs build it.
+      # - name: Build meshfix from source (Debian)
+      #   if: startsWith(matrix.distro, 'debian')
+      #   run: |
+      #     curl -fL --retry 3 --retry-all-errors -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
+      #     mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
+      #     curl -fL --retry 3 --retry-all-errors -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
+      #     tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
+      #     cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
+      #     cmake -B build -G Ninja \
+      #       -DCMAKE_BUILD_TYPE=Release \
+      #       -DMESHFIX_BUILD_SHARED=ON \
+      #       -DMESHFIX_BUILD_CLI=OFF
+      #     cmake --build build
+      #     cmake --install build
+      #     # /usr/local/lib is not in the loader cache until ldconfig runs;
+      #     # the package build runs the test suites against this library.
+      #     ldconfig
 
-          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
-          # override a normal variable, so we must patch the source directly
-          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
-
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_LIB=ON \
-            -DENABLE_GUI=OFF \
-            -DENABLE_CLI=OFF \
-            -DENABLE_OPENMP=OFF \
-            -DENABLE_TESTS=OFF
-          cmake --build build
-          cmake --install build
-
-      - name: Build meshfix from source (Debian containers only)
-        if: matrix.container != ''
+      - name: Build the packages with the repository's debian/ directory
         run: |
-          # Download source and patches from Launchpad PPA
-          curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
-          curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
-          tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
-          cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DMESHFIX_BUILD_SHARED=ON \
-            -DMESHFIX_BUILD_CLI=OFF
-          cmake --build build
-          cmake --install build
-
-      - name: Configure CMake
-        run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Create DEB package structure
-        run: |
-          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
-          VERSION=${VERSION:-0.0.1}
-          PKGDIR="hobbycad_${VERSION}_${{ matrix.arch }}"
-
-          # Create package directory structure
-          mkdir -p "${PKGDIR}/DEBIAN"
-          mkdir -p "${PKGDIR}/usr"
-
-          # Install to package directory
-          DESTDIR=$(pwd)/${PKGDIR} cmake --install build
-
-          # Create control file
-          cat > "${PKGDIR}/DEBIAN/control" << EOF
-          Package: hobbycad
-          Version: ${VERSION}
-          Section: graphics
-          Priority: optional
-          Architecture: ${{ matrix.arch }}
-          Depends: libc6, libqt6core6, libqt6gui6, libqt6widgets6, libqt6opengl6, libqt6svg6, libocct-modeling-algorithms7, libocct-visualization7, libocct-data-exchange7, libtbb12, libgit2-1.1 | libgit2-1.5 | libgit2-1.7
-          Maintainer: Aaron Yourk <ayourk@gmail.com>
-          Description: Parametric 3D CAD Application
-           HobbyCAD is a Linux-native open-source parametric 3D CAD application
-           built with Qt6 and OpenCASCADE. It provides a modern interface for
-           creating and editing 3D models with parametric constraints.
-          Homepage: https://github.com/ayourk/hobbycad
-          EOF
-
-          # Set permissions
-          find "${PKGDIR}" -type d -exec chmod 755 {} \;
-          find "${PKGDIR}" -type f -exec chmod 644 {} \;
-          chmod 755 "${PKGDIR}/usr/bin/hobbycad"
-
-          # Build the package
-          dpkg-deb --build --root-owner-group "${PKGDIR}"
+          # debian/ is the authoritative packaging: it produces hobbycad and
+          # libhobbycad-dev and takes the runtime dependencies (the OCCT 8.0
+          # libraries among them) from shlibs instead of a hand-written list.
+          # The Debian legs built libslvs and nlohmann-json from source above,
+          # so the build-dependency check is skipped there.
+          SKIP_DEPS=""
+          case "${{ matrix.distro }}" in debian*) SKIP_DEPS="-d" ;; esac
+          dpkg-buildpackage -us -uc -b $SKIP_DEPS
+          mkdir -p artifacts
+          mv ../*.deb artifacts/
+          ls -la artifacts
 
       - name: Upload DEB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}-deb
-          path: "*.deb"
-          retention-days: 14
+          path: "artifacts/*.deb"
+          retention-days: 30
           if-no-files-found: error

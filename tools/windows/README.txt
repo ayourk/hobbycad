@@ -1,5 +1,5 @@
 ================================================================================
-  tools/windows/ -- Windows Environment Setup and Build Scripts
+  tools/windows/ — Windows Environment Setup and Build Scripts
 ================================================================================
 
   Scripts for setting up a Windows development environment and

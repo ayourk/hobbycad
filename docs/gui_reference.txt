@@ -31,10 +31,20 @@
        3.4  Grid Options
        3.5  Coordinate System
        3.6  Orbit Behavior
+       3.7  Theme
+            3.7.1  Theme Editor
     4. Dock Panels
        4.1  Project Panel
+       4.1.1  Objects Tab
+       4.1.2  Files Tab
+       4.1.3  Showing and Hiding Objects
+       4.1.4  Right-Click Actions
        4.2  Properties Panel
-       4.3  Terminal Panel
+       4.2.1  Background Image
+       4.2.2  Plane Transform
+       4.3  Constraints Panel
+       4.4  Options Panel
+       4.5  Terminal Panel
     5. Preferences Dialog
        5.1  Navigation Page
        5.2  Bindings Page
@@ -242,8 +252,81 @@
           If nothing is selected, uses current pan position.
 
         This option is useful when working on a specific part
-        of a complex model — select the part, then use the
+        of a complex model: select the part, then use the
         ViewCube to examine it from different angles.
+
+
+  3.7  Theme
+  -----------
+
+    Theme >               Submenu for the color theme
+      Light               Light menus, panels and sketch canvas
+      Dark                Dark menus, panels and sketch canvas
+      Edit...             Open the Theme Editor (see 3.7.1)
+
+    Light and Dark are exclusive. The choice applies at once to the
+    window and to every open sketch, and is remembered for the next
+    launch. A theme chosen on the command line at launch takes
+    precedence over the remembered one.
+
+
+  3.7.1  Theme Editor
+  --------------------
+
+    View > Theme > Edit... opens the Theme Editor, which recolors the
+    sketch canvas. It edits the theme currently in use, and the title
+    bar says which (Light or Dark). To edit the other theme, switch to
+    it first. The editor does not change the 3D viewport or the menus,
+    panels and dialogs.
+
+    The left side is a tree of color roles, grouped by category, each
+    with a swatch of its current color. Click a role to edit it;
+    category rows cannot be selected. The right side shows the name of
+    the selected role, a color picker, and Reset this role.
+
+    Categories:
+      Canvas              Background, grid
+      Geometry            Under-constrained, fully constrained, error,
+                          projected, construction and centerline
+                          geometry, and the selection highlight
+      Constraints         Driving, reference, failed, redundant and
+                          selected constraints
+      Dimension edit      The in-place dimension editor in its
+                          selected, typing and empty states
+      Labels              Halo, text, fill
+      Snap & guides       Snap marker, inference, guide lines
+      Points & handles    Points, and the center, angle and radius
+                          drag handles
+      Axes & origin       X, Y and Z axes, origin
+      Misc                Preview, tangent marker, pivot
+
+    Color picker:
+      Swatch              The left half is the current color. The
+                          right half is the color the role had when
+                          you selected it; click it to go back.
+      RGB                 R, G and B sliders, each with a 0 to 255
+                          field
+      HSL                 H (0 to 359), S and L (0 to 255)
+      HEX                 HTML notation, as #RRGGBB
+      Grad                A saturation/lightness square beside a hue
+                          strip
+
+      The picker opens on the tab you last used (Grad the first time).
+
+    Buttons:
+      Reset this role     Return the selected role to the theme's
+                          built-in color. Available only when that
+                          role has been changed.
+      Restore Defaults    Return every role in the theme being edited
+                          to its built-in color. The other theme is
+                          not affected. There is no confirmation.
+      Close               Close the editor.
+
+    Every change is live: open sketches repaint as the color changes,
+    and the color is saved immediately. Closing the editor keeps your
+    changes; there is no Cancel, so use Reset this role or Restore
+    Defaults to undo them. Colors are stored per theme in HobbyCAD's
+    settings, not in the project, so they apply to every project.
 
 ================================================================================
   4. DOCK PANELS
@@ -252,11 +335,116 @@
   4.1  Project Panel
   -------------------
 
-    The Project panel (left side) displays:
-    - Origin (coordinate system reference)
-    - Sketches (2D sketch definitions)
-    - Bodies (3D solid geometry)
-    - Feature tree (parametric history)
+    The Project panel (left side) has two tabs:
+
+      Objects   What your design is made of. This is the tab you
+                will use most, and it opens by default.
+      Files     The files on disk that make up the project.
+
+    The panel remembers which tab you were last using and reopens
+    on that one.
+
+
+  4.1.1  Objects Tab
+  -------------------
+
+    A tree of everything in the current design:
+
+      Document Settings   Units and other document-wide settings.
+                          Double-click a setting to change it.
+
+      Origin              The fixed reference geometry that every
+                          design has: the XY, XZ and YZ planes,
+                          the X, Y and Z axes, and the origin
+                          point. Select a plane and start a sketch
+                          to draw on it. This folder is collapsed
+                          by default.
+
+      Bodies              The 3D solids in your design.
+
+      Sketches            The 2D sketches. Double-click one to
+                          reopen it for editing. A sketch with a
+                          background image shows it as a "Canvas"
+                          underneath the sketch.
+
+      Construction        Construction planes you have created.
+
+      Parameters          Opens the parameters dialog.
+
+    Folders appear only when they have something in them. A new
+    project shows no Bodies folder until you make a body, and the
+    folder disappears again if you delete the last one. Origin and
+    Document Settings are always present.
+
+    You may also see:
+
+      Misc                Only ever appears if something has gone
+                          wrong internally: it collects objects
+                          HobbyCAD could not file correctly, and
+                          it is marked with a warning. Seeing this
+                          folder is worth reporting as a bug. The
+                          objects inside it are not lost, and a
+                          tooltip on each says what went wrong.
+
+    Press F2, or right-click and choose Rename, to rename an item
+    that can be renamed. Origin geometry cannot be renamed or
+    deleted.
+
+
+  4.1.2  Files Tab
+  -----------------
+
+    A file browser rooted at the project directory. Files are
+    styled by how the project uses them:
+
+      Blue, bold          A CAD file listed in the project
+                          manifest (sketches, geometry).
+      Gray                A foreign file kept alongside the
+                          project but tracked separately.
+      Orange              Present in the directory but not part
+                          of the project.
+      Gray italic         Ignored by version control.
+
+    Hover any file to see its full path and status.
+
+
+  4.1.3  Showing and Hiding Objects
+  ----------------------------------
+
+    Objects that can be shown or hidden have a checkbox in the
+    Objects tab. Clear it to hide the object in the 3D viewport,
+    tick it to bring it back. Hiding an object does not delete it
+    or remove it from the design; it only affects what is drawn.
+
+    Right-click offers the same thing as Hide or Show, whichever
+    applies to the object's current state.
+
+
+  4.1.4  Right-Click Actions
+  ---------------------------
+
+    The menu depends on what the object is, and only ever offers
+    what that object actually supports:
+
+      Edit                Reopen the object for editing. Named
+                          for what it edits, so a sketch offers
+                          "Edit Sketch" and a background image
+                          offers "Calibrate...".
+      Create Sketch       On an origin plane or a construction
+                          plane: start a new sketch on it.
+      Hide / Show         Toggle visibility, as above.
+      Rename              Edit the name in place. Same as F2.
+      Export...           Write the object out as its own file.
+      Relink...           On a linked project whose file cannot
+                          be found: choose the file again. Opens
+                          a file browser in the last folder that
+                          still exists near where the file used
+                          to be.
+      Delete              Remove the object. Always last in the
+                          menu and separated from everything
+                          else, so it is not next to Edit.
+
+    Folders themselves have no menu.
 
 
   4.2  Properties Panel
@@ -265,8 +453,243 @@
     The Properties panel (right side) displays properties of the
     currently selected object. Properties vary by object type.
 
+    While a sketch is open, the panel also holds the Background
+    Image section, described next.
 
-  4.3  Terminal Panel
+
+  4.2.1  Background Image
+  ------------------------
+
+    A background image is a reference picture placed behind the
+    sketch (a scanned drawing, a photo of a part, a screenshot)
+    that you trace or measure against. It appears in the objects
+    browser as a "Canvas" underneath its sketch.
+
+    Choosing an image
+      The "..." button opens the Background Image dialog: pick a
+      file, preview it, set its opacity, and choose whether the
+      image is embedded or referenced.
+
+      Embed / reference is set for you and is usually right:
+
+        Image inside your project folder   referenced, by a path
+                                           relative to the project
+        Image anywhere else                embedded, bytes and all
+
+      The reason is portability. A referenced image is stored as
+      a path relative to the project, so moving or sending the
+      project keeps the link intact. An image outside the project
+      has no such path, so it is embedded; otherwise the project
+      would only open on the machine that made it. Override the
+      checkbox if you have a reason to; the default is the safe
+      one. Until a project has been saved there is no folder to
+      be inside of, so images are embedded.
+
+      Replacing an image keeps the placement you already set:
+      position, rotation, aspect lock and the grayscale, contrast
+      and brightness adjustments all carry over. Opacity comes
+      from the dialog, since the dialog offers a control for it.
+
+    Calibrating the scale
+      "Calibrate Scale" sizes the image so that distances measured
+      on it match real dimensions, the point of tracing a scanned
+      drawing. Right-clicking the Canvas node and choosing
+      "Calibrate..." does the same thing.
+
+      Click two points on the image whose real separation you
+      know, type that distance, and Apply Calibration resizes the
+      image to match. Optionally align it at the same time, either
+      to an axis or to an existing sketch line used as a
+      reference.
+
+    The picture's scale
+      The Scale field in the Background section is the scale
+      itself, in millimeters of sketch per image pixel, and the
+      line under it spells out the pixel size and how many pixels
+      make a millimeter. Type the scale when you know it (a 300 DPI
+      scan is 25.4 / 300 = 0.0847 mm/px), or let Calibrate Scale
+      measure it. Setting it sizes the image from its pixel
+      dimensions, so the picture keeps its proportions.
+
+      "Lock aspect ratio" keeps the picture's own proportions when
+      you edit the width or height: one scale for both axes. Turn
+      it off to stretch the picture; the readout then shows two
+      scales, X and Y, so a stretched picture cannot pass for a
+      drawing to scale.
+
+      The dialog stays open while you click, so it does not block
+      the canvas. Closing or canceling it leaves the image
+      untouched. The sketch must be open to calibrate its canvas.
+
+
+  4.2.2  Plane Transform
+  -----------------------
+
+    Selecting a construction plane in the Objects tab opens the Plane
+    Transform editor in the Properties panel, below the plane's
+    properties. It moves and turns the plane in place, with a live
+    preview in the 3D viewport. Nothing changes until you press Apply.
+
+    The editor closes, dropping any preview, when the plane is
+    deselected, when something else is selected, or when a sketch is
+    opened. It is available in full 3D mode only.
+
+    Fields:
+      Type                How the plane is defined: Offset from origin
+                          plane, Offset from another plane, or Angled.
+                          Read-only.
+      Offset              Distance along the plane's normal, in mm.
+      Rotate 1            An axis (X, Y or Z) and an angle, from -360
+                          to 360 degrees.
+      Rotate 2            A second axis and angle.
+      Roll                Spin about the plane's own normal. This only
+                          changes the orientation of sketches drawn on
+                          the plane.
+      Center is           How Center X, Y and Z are measured:
+                            Absolute (global axes)
+                              Global coordinates.
+                            Relative to base plane
+                              Offsets along the base plane's X and Y
+                              axes and its normal.
+                            Relative to plane...
+                              Offsets along another construction
+                              plane's axes and normal. The plane then
+                              follows that reference.
+      Reference           Shown only for Relative to plane...: the
+                          plane to measure from. Planes that already
+                          depend on this one are left out, so no loop
+                          can form.
+      Center X/Y/Z        The plane's center, in mm. The labels add
+                          "(offset)" in the relative modes.
+      Visible in viewport Show or hide the plane in the 3D viewport.
+
+    Buttons:
+      Apply               Commit the edit as one undo step. Enter does
+                          the same while the editor has focus.
+      Reset               Return every field to the stored plane and
+                          drop the preview. Escape does the same.
+
+    Apply and Reset are available only when a field differs from the
+    stored plane.
+
+    While you edit, the blue highlight moves to where the plane would
+    go, and the green plane stays where it is until you Apply. The
+    status line under the buttons reports the result, including an
+    edit that is refused because its reference would form a loop.
+
+    Turning either rotation angle away from zero makes an offset plane
+    Angled, and returning both to zero makes it an offset plane again.
+    A plane offset from another plane keeps that type. Applied edits
+    are saved with the project, and Edit > Undo reverses them.
+
+
+  4.3  Constraints Panel
+  -----------------------
+
+    The Constraints panel lists every constraint on the open sketch.
+    Use it to find, check and delete a constraint without hunting for
+    its symbol on the canvas, for example when symbols overlap or when
+    an over-constrained sketch needs sorting out.
+
+    It appears only while a sketch is open, as a tab on the right
+    beside Properties (Properties, Constraints, Options). It has no
+    View menu entry of its own: while a sketch is open, View >
+    Properties (Ctrl+P) shows or hides the whole group. The tab can be
+    dragged to the left side.
+
+    Summary line
+      The top line counts the constraints and how many the solver could
+      not satisfy, for example "12 constraints, 1 not satisfied". After
+      Find redundant, it says how many redundant constraints were
+      found.
+
+    The list
+      One numbered row per constraint, with the value for dimensional
+      constraints:
+
+        3. Distance = 25.4 mm
+        4. Perpendicular
+        5. Angle = 90°
+
+      Row styles:
+        Italic              A reference (driven) constraint
+        Red text            Not satisfied by the solver
+        Amber background    Redundant, from the last Find redundant
+
+      Hover a row to see its type, the ids of the entities it applies
+      to, and whether it is a reference, unsatisfied or redundant.
+      Click a row to select that constraint on the canvas.
+
+    Buttons:
+      Find redundant      Find the constraints that make the sketch
+                          over-constrained. Available only when the
+                          sketch is over-constrained. It re-solves the
+                          sketch once per constraint, so it can take a
+                          moment on a large sketch.
+      Delete              Delete the selected constraint. Available
+                          when a row is selected. Undo restores it.
+
+    Reading Find redundant
+      Every highlighted constraint is a candidate, both in the list and
+      on the canvas. Removing any ONE of them clears the
+      over-constraint; you do not need to remove them all, so pick the
+      one you can best do without. Reference constraints are never
+      offered, since they do not drive the geometry. If no single
+      constraint accounts for the problem, the summary line says so.
+      Deleting a constraint from this panel clears the highlights,
+      since they described the sketch as it was.
+
+
+  4.4  Options Panel
+  -------------------
+
+    The Options panel holds display settings for the open sketch. Like
+    the Constraints panel, it appears only while a sketch is open, as
+    the third tab beside Properties, and View > Properties shows or
+    hides it with the rest of the group.
+
+    Display:
+      Sketch grid         Show the grid on the canvas.
+      Snap to grid        Snap points to grid intersections.
+
+    Show:
+      Profiles            Shade closed profiles.
+      Points              Mark endpoints that are not constrained to
+                          other geometry.
+      Dimensions          Show dimension labels. Constraint symbols
+                          are not affected.
+      Constraints         Show constraint symbols. Dimension labels
+                          are not affected.
+        Coincidence markers
+                          Mark points joined by a coincidence, which
+                          otherwise show nothing. Off by default.
+      Construction geometry
+                          Show construction geometry. Clear it to hide
+                          that geometry without deleting it.
+      Projected geometry  Show projected (reference) geometry. Clear it
+                          to hide that geometry without deleting it.
+
+    Selection:
+      Linetype            Normal, Construction or Centerline. Shows the
+                          linetype of the selected geometry; choosing
+                          one applies it to everything selected.
+                          Unavailable when nothing is selected.
+
+    Look At               Return the canvas to its starting view,
+                          centered on the sketch origin.
+    Slice                 Section the 3D model at the sketch plane so
+                          you can sketch against its interior. The
+                          same setting as View > Slice at Sketch
+                          Plane; each follows the other.
+
+    Sketch grid, Snap to grid, Profiles, Points, Dimensions and
+    Constraints are remembered when HobbyCAD closes and restored each
+    time a sketch is opened. Coincidence markers, Construction geometry
+    and Projected geometry are not remembered; they start off, on and
+    on.
+
+
+  4.5  Terminal Panel
   --------------------
 
     The Terminal panel (bottom) provides an interactive CLI for
@@ -293,7 +716,7 @@
                     mouse navigation styles.
 
     Rotation:
-      Default axis          X, Y, or Z — axis used for keyboard rotation
+      Default axis          X, Y, or Z: axis used for keyboard rotation
       PgUp/PgDn step        Degrees per step (1-45°)
       PgUp/PgDn interval    Milliseconds between steps
 
@@ -357,6 +780,13 @@
           When checked, ViewCube rotations orbit around the center
           of selected objects instead of the pan position.
           Default: Off
+
+    Terminal:
+      Scrollback
+          Lines of output the Terminal panel keeps before discarding
+          the oldest. Set to 0 for Unlimited, which grows without
+          bound and is offered as a deliberate choice.
+          Default: 10000 lines
 
 ================================================================================
   6. SKETCH MODE
@@ -751,12 +1181,12 @@
       the smallest effective distance wins, provided the raw distance
       is within the snap tolerance radius.
 
-      Higher weight means stronger pull — exact geometric points beat
+      Higher weight means stronger pull: exact geometric points beat
       perimeter snaps even when slightly farther from the cursor.
 
         Snap Type         Weight    Description
         ───────────────   ──────    ──────────────────────────────────
-        Origin            4.0       Origin point (0,0) — strongest
+        Origin            4.0       Origin point (0,0), strongest
         Endpoint          2.5       Line/arc/spline endpoints
         Center            2.5       Circle/arc/ellipse/polygon centers
         Intersection      2.2       Entity–entity and axis crossings
@@ -1035,8 +1465,8 @@
       are detected automatically based on containment.
 
     Profile Visualization:
-      - Outer profiles: Semi-transparent blue fill
-      - Inner profiles (holes): Indicated by containment
+      - Outer profiles: Semi-transparent green fill
+      - Inner profiles (holes): Semi-transparent red fill
       - Profile boundaries highlighted on selection
 
 

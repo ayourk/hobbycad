@@ -10,18 +10,51 @@
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/geometry/intersections.h>
 #include <hobbycad/geometry/utils.h>
+#include <hobbycad/units.h>
 
 #include <cmath>
 #include <algorithm>
+#include <array>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
 
+namespace {
+inline Point3 at3(const Point2D& p) { return Point3{p.x, p.y, 0.0}; }
+}  // namespace
+
 using namespace geometry;
+
+namespace {
+
+// Cubic Bezier control quads describing a spline's curve, for sampling and
+// picking. When bezier is true the control points ARE the Bezier control
+// polygon (3k+1 points, one cubic per 3-point step); otherwise the polyline
+// is treated as Catmull-Rom (tension 0.5) and converted to Bezier segments.
+std::vector<std::array<Point2D, 4>>
+splineBezierSegments(const std::vector<Point3>& points, bool bezier)
+{
+    std::vector<std::array<Point2D, 4>> segs;
+    const int n = static_cast<int>(points.size());
+    if (n < 2) return segs;
+    if (bezier && n >= 4 && (n - 1) % 3 == 0) {
+        for (int i = 0; i + 3 < n; i += 3)
+            segs.push_back({{points[i], points[i + 1], points[i + 2], points[i + 3]}});
+        return segs;
+    }
+    for (int i = 0; i < n - 1; ++i) {
+        Point2D cp0 = (i == 0) ? points[i] : points[i - 1];
+        Point2D cp1 = points[i];
+        Point2D cp2 = points[i + 1];
+        Point2D cp3 = (i == n - 2) ? points[i + 1] : points[i + 2];
+        segs.push_back({{cp1, cp1 + (cp2 - cp0) / 6.0, cp2 - (cp3 - cp1) / 6.0, cp2}});
+    }
+    return segs;
+}
+
+} // namespace
 
 // =====================================================================
 //  Entity Methods
@@ -53,8 +86,29 @@ BoundingBox Entity::boundingBox() const
             bbox.include(Point2D(p.x + radius, p.y + radius));
         }
     } else if (type == EntityType::Ellipse && !points.empty()) {
-        bbox.include(Point2D(points[0].x - majorRadius, points[0].y - minorRadius));
-        bbox.include(Point2D(points[0].x + majorRadius, points[0].y + minorRadius));
+        // Exact axis-aligned bound of a rotated ellipse: the extreme reached in
+        // x (and y) over the parametric ellipse is hypot of the two axes'
+        // projections onto that world axis.
+        const double th = degreesToRadians(ellipseRotation);
+        const double c = std::cos(th), s = std::sin(th);
+        const double hx = std::sqrt(majorRadius * majorRadius * c * c +
+                                    minorRadius * minorRadius * s * s);
+        const double hy = std::sqrt(majorRadius * majorRadius * s * s +
+                                    minorRadius * minorRadius * c * c);
+        bbox.include(Point2D(points[0].x - hx, points[0].y - hy));
+        bbox.include(Point2D(points[0].x + hx, points[0].y + hy));
+    } else if (type == EntityType::Spline && points.size() >= 2) {
+        // Sample the actual curve so the bound covers Catmull-Rom overshoot
+        // between control points (the control points alone under-bound it).
+        // Bezier stays a valid superset: its control-point hull already
+        // contains the curve; this only ever grows the box, never clips.
+        for (const auto& b : splineBezierSegments(points, splineBezier)) {
+            const int N = 24;
+            for (int s = 0; s <= N; ++s) {
+                double t = static_cast<double>(s) / N, u = 1.0 - t;
+                bbox.include(u*u*u*b[0] + 3.0*u*u*t*b[1] + 3.0*u*t*t*b[2] + t*t*t*b[3]);
+            }
+        }
     }
 
     return bbox;
@@ -73,11 +127,7 @@ std::vector<Point2D> Entity::endpoints() const
         break;
     case EntityType::Arc:
         if (!points.empty()) {
-            Arc arc;
-            arc.center = points[0];
-            arc.radius = radius;
-            arc.startAngle = startAngle;
-            arc.sweepAngle = sweepAngle;
+            Arc arc = toArc();
             result.push_back(arc.startPoint());
             result.push_back(arc.endPoint());
         }
@@ -111,6 +161,77 @@ bool Entity::containsPoint(const Point2D& point, double tolerance) const
     return distanceTo(point) < tolerance;
 }
 
+void setAnchorHandle(BezierAnchor& a, BezierHandleSide side, double angleDeg, double length,
+                     bool canIn, bool canOut)
+{
+    const double rad = degreesToRadians(angleDeg);
+    const double dx = length * std::cos(rad), dy = length * std::sin(rad);
+    if ((side == BezierHandleSide::Out || side == BezierHandleSide::Tangent) && canOut) {
+        a.hasOut = true;
+        a.outHandle = {a.pos.x + dx, a.pos.y + dy};
+    }
+    if (side == BezierHandleSide::In && canIn) {
+        a.hasIn = true;
+        a.inHandle = {a.pos.x + dx, a.pos.y + dy};
+    }
+    if (side == BezierHandleSide::Tangent && canIn) {
+        a.hasIn = true;
+        a.inHandle = {a.pos.x - dx, a.pos.y - dy};
+    }
+}
+
+bool anchorHandlePolar(const BezierAnchor& a, BezierHandleSide side, double& angleDeg, double& length)
+{
+    const Point2D* h = nullptr;
+    if (side == BezierHandleSide::In && a.hasIn) h = &a.inHandle;
+    else if (side == BezierHandleSide::Out && a.hasOut) h = &a.outHandle;
+    if (!h) return false;
+    length = geometry::lineLength(a.pos, *h);
+    if (length < geometry::kZeroEps) return false;            // coincident: a corner
+    angleDeg = atan2Degrees(h->y - a.pos.y, h->x - a.pos.x);
+    return true;
+}
+
+AnchorContinuity anchorContinuity(const BezierAnchor& a)
+{
+    if (!a.hasIn || !a.hasOut) return AnchorContinuity::Corner;
+    const Point2D o(a.outHandle.x - a.pos.x, a.outHandle.y - a.pos.y);
+    const Point2D i(a.pos.x - a.inHandle.x, a.pos.y - a.inHandle.y);
+    const double lo = geometry::length(o), li = geometry::length(i);
+    if (lo < geometry::kZeroEps || li < geometry::kZeroEps) return AnchorContinuity::Corner;
+    constexpr double kCollinearCos = 1.0 - geometry::kDegenerateLen;   // cos of ~0.08 degrees
+    const double cosine = geometry::dot(o, i) / (lo * li);
+    if (cosine <= kCollinearCos) return AnchorContinuity::Corner;
+    return (std::fabs(lo - li) < geometry::kDegenerateLen) ? AnchorContinuity::Smooth
+                                                           : AnchorContinuity::Asymmetric;
+}
+
+std::vector<Point2D> Entity::connectionPoints() const
+{
+    if (type == EntityType::Point) {
+        if (points.empty()) return {};
+        return {Point2D(points[0])};
+    }
+    if (type == EntityType::Rectangle) {
+        Point2D c[4];
+        if (!rectangleCorners(*this, c)) return {};
+        return {c[0], c[1], c[2], c[3]};
+    }
+    return endpoints();
+}
+
+geometry::Arc Entity::toArc() const
+{
+    Arc arc;
+    if (!points.empty()) {
+        arc.center = points[0];
+    }
+    arc.radius     = radius;
+    arc.startAngle = startAngle;
+    arc.sweepAngle = sweepAngle;
+    return arc;
+}
+
 Point2D Entity::closestPoint(const Point2D& point) const
 {
     switch (type) {
@@ -134,50 +255,28 @@ Point2D Entity::closestPoint(const Point2D& point) const
 
     case EntityType::Arc:
         if (!points.empty()) {
-            Arc arc;
-            arc.center = points[0];
-            arc.radius = radius;
-            arc.startAngle = startAngle;
-            arc.sweepAngle = sweepAngle;
+            Arc arc = toArc();
             return closestPointOnArc(point, arc);
         }
         break;
 
-    case EntityType::Rectangle:
-        if (points.size() >= 4) {
-            // 4-point rotated rectangle: find closest point on any edge
-            Point2D closest = points[0];
-            double minDist = std::hypot(point.x - points[0].x, point.y - points[0].y);
-            for (int i = 0; i < 4; ++i) {
-                int j = (i + 1) % 4;
-                Point2D cp = closestPointOnLine(point, points[i], points[j]);
-                double d = std::hypot(point.x - cp.x, point.y - cp.y);
-                if (d < minDist) { minDist = d; closest = cp; }
-            }
-            return closest;
-        } else if (points.size() >= 2) {
-            // Axis-aligned rectangle from 2 corner points
-            Point2D corners[4] = {
-                points[0],
-                Point2D(points[1].x, points[0].y),
-                points[1],
-                Point2D(points[0].x, points[1].y)
-            };
+    case EntityType::Rectangle: {
+        // Stored corners (4-point) or the two diagonal corners expanded: the
+        // closest point on any of the four edges.
+        Point2D corners[4];
+        if (rectangleCorners(*this, corners)) {
             Point2D closest = corners[0];
             double minDist = std::hypot(point.x - corners[0].x, point.y - corners[0].y);
-
             for (int i = 0; i < 4; ++i) {
                 int j = (i + 1) % 4;
                 Point2D cp = closestPointOnLine(point, corners[i], corners[j]);
                 double d = std::hypot(point.x - cp.x, point.y - cp.y);
-                if (d < minDist) {
-                    minDist = d;
-                    closest = cp;
-                }
+                if (d < minDist) { minDist = d; closest = cp; }
             }
             return closest;
         }
         break;
+    }
 
     case EntityType::Parallelogram:
         if (points.size() >= 4) {
@@ -198,12 +297,18 @@ Point2D Entity::closestPoint(const Point2D& point) const
             double a = majorRadius;
             double b = minorRadius;
             if (a < 0.001 || b < 0.001) break;
-            double dx = point.x - points[0].x;
-            double dy = point.y - points[0].y;
-            double angle = std::atan2(dy, dx);
-            // Approximate: point on ellipse at same angle from center
-            return Point2D(points[0].x + a * std::cos(angle),
-                           points[0].y + b * std::sin(angle));
+            const double th = degreesToRadians(ellipseRotation);
+            const double ct = std::cos(th), st = std::sin(th);
+            const double dx = point.x - points[0].x;
+            const double dy = point.y - points[0].y;
+            // Into local frame, take the same-angle point, then rotate back.
+            const double lxq =  dx * ct + dy * st;
+            const double lyq = -dx * st + dy * ct;
+            const double angle = std::atan2(lyq, lxq);
+            const double lx = a * std::cos(angle);
+            const double ly = b * std::sin(angle);
+            return Point2D(points[0].x + lx * ct - ly * st,
+                           points[0].y + lx * st + ly * ct);
         }
         break;
 
@@ -212,27 +317,17 @@ Point2D Entity::closestPoint(const Point2D& point) const
             if (points.size() == 2) {
                 return closestPointOnLine(point, points[0], points[1]);
             }
-            // Sample Catmull-Rom spline and find closest point on sub-segments
+            // Sample the spline's cubic segments (Bezier control polygon when
+            // splineBezier, else Catmull-Rom) and find the closest sampled point.
             Point2D bestPoint = points[0];
             double minDist = std::hypot(point.x - points[0].x, point.y - points[0].y);
             const int samplesPerSegment = 20;
-
-            for (int i = 0; i < static_cast<int>(points.size()) - 1; ++i) {
-                Point2D cp0 = (i == 0) ? points[i] : points[i - 1];
-                Point2D cp1 = points[i];
-                Point2D cp2 = points[i + 1];
-                Point2D cp3 = (i == static_cast<int>(points.size()) - 2) ? points[i + 1] : points[i + 2];
-
-                Point2D b0 = cp1;
-                Point2D b1 = cp1 + (cp2 - cp0) / 6.0;
-                Point2D b2 = cp2 - (cp3 - cp1) / 6.0;
-                Point2D b3 = cp2;
-
-                Point2D prev = b0;
+            for (const auto& b : splineBezierSegments(points, splineBezier)) {
+                Point2D prev = b[0];
                 for (int s = 1; s <= samplesPerSegment; ++s) {
                     double st = static_cast<double>(s) / samplesPerSegment;
                     double u = 1.0 - st;
-                    Point2D cur = u*u*u*b0 + 3.0*u*u*st*b1 + 3.0*u*st*st*b2 + st*st*st*b3;
+                    Point2D cur = u*u*u*b[0] + 3.0*u*u*st*b[1] + 3.0*u*st*st*b[2] + st*st*st*b[3];
                     Point2D cp = closestPointOnLine(point, prev, cur);
                     double d = std::hypot(point.x - cp.x, point.y - cp.y);
                     if (d < minDist) { minDist = d; bestPoint = cp; }
@@ -261,15 +356,13 @@ Point2D Entity::closestPoint(const Point2D& point) const
 
             // Normalize sweep angle
             double sweep = endAngle - startAngle;
-            while (sweep > M_PI) sweep -= 2 * M_PI;
-            while (sweep < -M_PI) sweep += 2 * M_PI;
+            sweep = geometry::wrapSweepRad(sweep);
             if (arcFlipped) {
                 sweep = (sweep > 0) ? sweep - 2 * M_PI : sweep + 2 * M_PI;
             }
 
             double relAngle = pointAngle - startAngle;
-            while (relAngle > M_PI) relAngle -= 2 * M_PI;
-            while (relAngle < -M_PI) relAngle += 2 * M_PI;
+            relAngle = geometry::wrapSweepRad(relAngle);
 
             bool inSweep = (sweep >= 0) ? (relAngle >= 0 && relAngle <= sweep) : (relAngle <= 0 && relAngle >= sweep);
 
@@ -357,11 +450,7 @@ double Entity::distanceTo(const Point2D& point) const
 
     case EntityType::Arc:
         if (!points.empty()) {
-            Arc arc;
-            arc.center = points[0];
-            arc.radius = radius;
-            arc.startAngle = startAngle;
-            arc.sweepAngle = sweepAngle;
+            Arc arc = toArc();
             return pointToArcDistance(point, arc);
         }
         break;
@@ -400,10 +489,15 @@ double Entity::distanceTo(const Point2D& point) const
             double a = majorRadius;
             double b = minorRadius;
             if (a < 0.001 || b < 0.001) break;
-            double dx = point.x - points[0].x;
-            double dy = point.y - points[0].y;
-            // Normalized ellipse equation: (dx/a)^2 + (dy/b)^2 = 1 on the outline
-            double normalized = (dx * dx) / (a * a) + (dy * dy) / (b * b);
+            // Rotate the query into the ellipse's local (unrotated) frame.
+            const double th = degreesToRadians(ellipseRotation);
+            const double ct = std::cos(th), st = std::sin(th);
+            const double dx = point.x - points[0].x;
+            const double dy = point.y - points[0].y;
+            const double lx =  dx * ct + dy * st;
+            const double ly = -dx * st + dy * ct;
+            // Normalized ellipse equation: (lx/a)^2 + (ly/b)^2 = 1 on the outline
+            double normalized = (lx * lx) / (a * a) + (ly * ly) / (b * b);
             // Approximate distance: |normalized - 1| * min(a,b)
             // This matches the GUI hit-testing tolerance calculation
             return std::abs(normalized - 1.0) * std::min(a, b);
@@ -416,27 +510,16 @@ double Entity::distanceTo(const Point2D& point) const
                 // Just two points - distance to line segment
                 return pointToLineDistance(point, points[0], points[1]);
             }
-            // Sample Catmull-Rom spline and find minimum distance to sub-segments
+            // Sample the spline's cubic segments (Bezier control polygon when
+            // splineBezier, else Catmull-Rom) and find the minimum distance.
             const int samplesPerSegment = 20;
             double minDist = std::numeric_limits<double>::max();
-            for (int i = 0; i < static_cast<int>(points.size()) - 1; ++i) {
-                Point2D cp0 = (i == 0) ? points[i] : points[i - 1];
-                Point2D cp1 = points[i];
-                Point2D cp2 = points[i + 1];
-                Point2D cp3 = (i == static_cast<int>(points.size()) - 2) ? points[i + 1] : points[i + 2];
-
-                // Convert Catmull-Rom to cubic Bezier control points (tension = 0.5)
-                Point2D b0 = cp1;
-                Point2D b1 = cp1 + (cp2 - cp0) / 6.0;
-                Point2D b2 = cp2 - (cp3 - cp1) / 6.0;
-                Point2D b3 = cp2;
-
-                // Sample the cubic Bezier and test each sub-segment
-                Point2D prev = b0;
+            for (const auto& b : splineBezierSegments(points, splineBezier)) {
+                Point2D prev = b[0];
                 for (int s = 1; s <= samplesPerSegment; ++s) {
                     double st = static_cast<double>(s) / samplesPerSegment;
                     double u = 1.0 - st;
-                    Point2D cur = u*u*u*b0 + 3.0*u*u*st*b1 + 3.0*u*st*st*b2 + st*st*st*b3;
+                    Point2D cur = u*u*u*b[0] + 3.0*u*u*st*b[1] + 3.0*u*st*st*b[2] + st*st*st*b[3];
                     double d = pointToLineDistance(point, prev, cur);
                     if (d < minDist) minDist = d;
                     prev = cur;
@@ -464,15 +547,13 @@ double Entity::distanceTo(const Point2D& point) const
 
             // Normalize sweep angle
             double sweep = endAngle - startAngle;
-            while (sweep > M_PI) sweep -= 2 * M_PI;
-            while (sweep < -M_PI) sweep += 2 * M_PI;
+            sweep = geometry::wrapSweepRad(sweep);
             if (arcFlipped) {
                 sweep = (sweep > 0) ? sweep - 2 * M_PI : sweep + 2 * M_PI;
             }
 
             double relAngle = pointAngle - startAngle;
-            while (relAngle > M_PI) relAngle -= 2 * M_PI;
-            while (relAngle < -M_PI) relAngle += 2 * M_PI;
+            relAngle = geometry::wrapSweepRad(relAngle);
 
             bool inSweep = (sweep >= 0) ? (relAngle >= 0 && relAngle <= sweep) : (relAngle <= 0 && relAngle >= sweep);
 
@@ -541,8 +622,9 @@ double Entity::distanceTo(const Point2D& point) const
 
 void Entity::transform(const Transform2D& t)
 {
-    for (Point2D& p : points) {
-        p = t.apply(p);
+    for (Point3& p : points) {
+        const Point2D xy = t.apply(p.xy());   // 2D transform is in-plane
+        p.x = xy.x; p.y = xy.y;               // z (off-plane) preserved
     }
     // Note: radius values are not scaled here - caller should handle scaling
 }
@@ -614,6 +696,20 @@ Entity createArc(int id, const Point2D& center, double radius,
     e.radius = radius;
     e.startAngle = startAngle;
     e.sweepAngle = sweepAngle;
+
+    // Store the endpoints as well, so a parametric arc has the SAME point
+    // layout as one built from three points: [center, start, end].
+    //
+    // The parametric fields stay authoritative: rendering draws from
+    // center/radius/startAngle/sweepAngle, and the solver re-derives all
+    // three of those from the solved points on readback. The endpoints are a
+    // derived second view, needed because everything that addresses an arc by
+    // its ends works through points[1] and points[2]: solver registration
+    // (without them an arc degrades to a plain circle and its endpoints
+    // cannot be constrained at all), endpoint snapping, and trim/extend.
+    const geometry::Arc a = e.toArc();
+    e.points.push_back(a.startPoint());
+    e.points.push_back(a.endPoint());
     return e;
 }
 
@@ -634,8 +730,80 @@ Entity createSpline(int id, const std::vector<Point2D>& controlPoints)
     Entity e;
     e.id = id;
     e.type = EntityType::Spline;
-    e.points = controlPoints;
+    e.points.assign(controlPoints.begin(), controlPoints.end());
     return e;
+}
+
+Entity createBezierSpline(int id, const std::vector<Point2D>& controlPoints)
+{
+    Entity e = createSpline(id, controlPoints);
+    e.splineBezier = true;
+    return e;
+}
+
+Entity createRationalBezierSpline(int id, const std::vector<Point2D>& controlPoints,
+                                  const std::vector<double>& weights)
+{
+    Entity e = createBezierSpline(id, controlPoints);
+    e.splineRational = true;
+    e.weights = weights;
+    // A missing/short weight list defaults to 1.0 (non-rational for that point).
+    e.weights.resize(controlPoints.size(), 1.0);
+    return e;
+}
+
+std::vector<Point2D> bezierControlPolygon(const std::vector<BezierAnchor>& anchors)
+{
+    std::vector<Point2D> poly;
+    const size_t n = anchors.size();
+    if (n < 2) return poly;                 // need at least one segment
+    poly.reserve(3 * (n - 1) + 1);
+    poly.push_back(anchors[0].pos);
+    for (size_t k = 0; k + 1 < n; ++k) {
+        const BezierAnchor& a = anchors[k];
+        const BezierAnchor& b = anchors[k + 1];
+        // segment k: [P_k, out_k, in_{k+1}, P_{k+1}]; a missing handle collapses
+        // onto its anchor (a corner on that side).
+        poly.push_back(a.hasOut ? a.outHandle : a.pos);
+        poly.push_back(b.hasIn  ? b.inHandle  : b.pos);
+        poly.push_back(b.pos);
+    }
+    return poly;
+}
+
+std::vector<double> bezierControlPolygonWeights(const std::vector<BezierAnchor>& anchors)
+{
+    std::vector<double> w;
+    const int n = static_cast<int>(anchors.size());
+    if (n < 2) return w;
+    const int np = 3 * (n - 1) + 1;
+    w.reserve(np);
+    // control point j belongs to anchor (j+1)/3 (integer div): P_k and its two
+    // handles (out_k, in_k) all carry anchor k's weight.
+    for (int j = 0; j < np; ++j)
+        w.push_back(anchors[static_cast<std::size_t>((j + 1) / 3)].weight);
+    return w;
+}
+
+std::vector<BezierAnchor> bezierAnchorsFromControlPolygon(const std::vector<Point2D>& poly)
+{
+    std::vector<BezierAnchor> anchors;
+    const int n = static_cast<int>(poly.size());
+    if (n < 4 || (n - 1) % 3 != 0) return anchors;   // not a Bezier control polygon
+    const int N = (n - 1) / 3;                        // segment count
+    for (int k = 0; k <= N; ++k) {
+        BezierAnchor a;
+        a.pos = poly[3 * k];
+        if (k > 0) { a.hasIn  = true; a.inHandle  = poly[3 * k - 1]; }
+        if (k < N) { a.hasOut = true; a.outHandle = poly[3 * k + 1]; }
+        anchors.push_back(a);
+    }
+    return anchors;
+}
+
+bool isRegularPolygon(const Entity& entity)
+{
+    return entity.type == EntityType::Polygon && entity.radius >= 0.001;
 }
 
 Entity createPolygon(int id, const Point2D& center, double radius, int sides)
@@ -660,6 +828,178 @@ Entity createSlot(int id, const Point2D& center1, const Point2D& center2, double
     return e;
 }
 
+double maxArcSlotSweepDegrees(double pathRadius, double halfWidth)
+{
+    // A slot needs a centerline to sweep along and caps that fit inside it.
+    if (pathRadius <= 0.0 || !slotWidthIsPositive(2.0 * halfWidth)) return 0.0;
+
+    // Half the width may EQUAL the radius, and that case is real rather
+    // than degenerate: the inner edge collapses onto the arc center, the
+    // two caps have radius R and centers a full diameter apart, and they
+    // meet at the center itself. asin(1) is a half turn, so the limit
+    // comes out at 180 degrees. Only a width past that has no shape.
+    if (halfWidth > pathRadius) return 0.0;
+
+    // The caps touch when the STRAIGHT-LINE distance between their centers
+    // is two cap radii. That distance is a chord of the centerline circle,
+    // so the angle it subtends is 2*asin(halfWidth / pathRadius).
+    //
+    // Measuring the gap as an arc length instead (2*halfWidth/pathRadius,
+    // the obvious reading) is close but leaves the caps slightly
+    // OVERLAPPING, because an arc is longer than the chord it spans. At
+    // r=30, width=8 it is off by 0.024mm. Small, but the whole point of
+    // this value is that the ends meet exactly.
+    const double limit = 360.0 - arcSlotCuspSeparationDegrees(pathRadius, halfWidth);
+    return limit > 0.0 ? limit : 0.0;
+}
+
+bool updateSlotFromPath(Entity& slot, const Entity& path)
+{
+    if (slot.type != EntityType::Slot) return false;
+
+    if (path.type == EntityType::Line) {
+        if (path.points.size() < 2) return false;
+        // A circle swept along a segment puts its center at each end.
+        slot.points = { path.points[0], path.points[1] };
+        slot.arcFlipped = false;
+        return true;
+    }
+
+    if (path.type == EntityType::Arc) {
+        if (path.points.empty() || !geometry::isPositiveLength(path.radius)) return false;
+        const geometry::Arc arc = path.toArc();
+        slot.points = { arc.center, arc.startPoint(), arc.endPoint() };
+        // Two end centers cannot say which way round the arc runs; the
+        // arc's own sweep can, so it has to be carried across or the slot
+        // silently takes the short way.
+        slot.arcFlipped = std::abs(path.sweepAngle) > 180.0;
+        return true;
+    }
+
+    return false;
+}
+
+double arcSlotGapDegrees(double pathRadius, double halfWidth,
+                         double capRadiiApart)
+{
+    if (pathRadius <= 0.0 || !slotWidthIsPositive(2.0 * halfWidth)) return 0.0;
+    if (halfWidth > pathRadius) return 0.0;
+
+    // Separation is a CHORD of the centerline circle: 2*R*sin(gap/2).
+    const double sep = capRadiiApart * halfWidth;
+    const double ratio = sep / (2.0 * pathRadius);
+    if (ratio >= 1.0) return 180.0;          // ends diametrically opposite
+    return radiansToDegrees(2.0 * std::asin(ratio));
+}
+
+double arcSlotCuspSeparationDegrees(double pathRadius, double halfWidth)
+{
+    return arcSlotGapDegrees(pathRadius, halfWidth, 2.0);
+}
+
+double arcSlotFloorSeparationDegrees(double pathRadius, double halfWidth)
+{
+    return arcSlotGapDegrees(pathRadius, halfWidth, 1.0);
+}
+
+SlotArcCenter enforceSlotArcSeparation(
+    const Point2D& start, const Point2D& end,
+    const Point2D& center, double slotHalfWidth)
+{
+    SlotArcCenter r;
+    r.center = center;
+    r.radius = std::hypot(center.x - start.x, center.y - start.y);
+
+    const double slotR = (slotHalfWidth < 0.1) ? 5.0 : slotHalfWidth;   // UI default
+    const double minSep = (r.radius > 0.001)
+        ? degreesToRadians(arcSlotFloorSeparationDegrees(r.radius, slotR))
+        : 0.1;
+
+    double sA = std::atan2(start.y - center.y, start.x - center.x);
+    double eA = std::atan2(end.y - center.y, end.x - center.x);
+    double diff = eA - sA;
+    diff = geometry::wrapSweepRad(diff);
+
+    const double chordLen = std::hypot(end.x - start.x, end.y - start.y);
+    if (std::abs(diff) < minSep && r.radius > 0.001 && chordLen > 0.001) {
+        const double halfChord = chordLen / 2.0;
+        const double required = halfChord / std::sin(minSep / 2.0);
+        if (required > r.radius) {
+            const double midx = (start.x + end.x) / 2.0;
+            const double midy = (start.y + end.y) / 2.0;
+            const double tcx = center.x - midx, tcy = center.y - midy;
+            const double toLen = std::hypot(tcx, tcy);
+            if (toLen > 0.001) {
+                const double newDist =
+                    std::sqrt(required * required - halfChord * halfChord);
+                r.center = Point2D(midx + tcx * (newDist / toLen),
+                                   midy + tcy * (newDist / toLen));
+                r.radius = required;
+            }
+        }
+    }
+    return r;
+}
+
+void resyncArcEndpoints(Entity& arc)
+{
+    if (arc.type != EntityType::Arc || arc.points.size() < 3) return;
+    const double cx = arc.points[0].x, cy = arc.points[0].y;
+    const double r = arc.radius;
+    const double s = degreesToRadians(arc.startAngle);
+    const double e = degreesToRadians(arc.startAngle + arc.sweepAngle);
+    arc.points[1] = Point3{cx + r * std::cos(s), cy + r * std::sin(s), 0.0};
+    arc.points[2] = Point3{cx + r * std::cos(e), cy + r * std::sin(e), 0.0};
+}
+
+void setArcFromAngles(Entity& arc, const Point2D& center, double radius,
+                      double startAngleDeg, double sweepAngleDeg)
+{
+    arc.type = EntityType::Arc;
+    arc.points.assign(3, Point3{center.x, center.y, 0.0});
+    arc.radius = radius;
+    arc.startAngle = startAngleDeg;
+    arc.sweepAngle = sweepAngleDeg;
+    resyncArcEndpoints(arc);
+}
+
+void resyncTextHandle(Entity& text)
+{
+    if (text.type != EntityType::Text || text.points.size() < 2) return;
+    const double dist = std::max(text.fontSize * 2.0,
+                                 text.fontSize * static_cast<double>(text.text.length()) * 0.6);
+    const Point2D anchor(text.points[0]);
+    text.points[1] = at3(geometry::polarPoint(anchor, dist, degreesToRadians(text.textRotation)));
+}
+
+int nearestArcEndIndex(const Entity& arc, const Point2D& p)
+{
+    if (arc.points.size() < 3) return 1;
+    return (geometry::lineLength(arc.points[1], p) <= geometry::lineLength(arc.points[2], p)) ? 1 : 2;
+}
+
+void rescaleCircleToRadius(Entity& circle, double radius)
+{
+    if (circle.type != EntityType::Circle || circle.points.empty()) return;
+    circle.radius = radius;
+    const double cx = circle.points[0].x, cy = circle.points[0].y;
+    for (size_t i = 1; i < circle.points.size(); ++i) {
+        const double dx = circle.points[i].x - cx, dy = circle.points[i].y - cy;
+        const double len = std::sqrt(dx * dx + dy * dy);
+        if (len > geometry::kDegenerateLen)
+            circle.points[i] = Point3{cx + dx * (radius / len),
+                                      cy + dy * (radius / len), 0.0};
+    }
+}
+
+double absoluteMaxArcSlotSweepDegrees(double pathRadius, double halfWidth)
+{
+    const double gap = arcSlotGapDegrees(pathRadius, halfWidth, 1.0);
+    if (gap <= 0.0) return 0.0;
+    const double limit = 360.0 - gap;
+    return limit > 0.0 ? limit : 0.0;
+}
+
 Entity createArcSlot(int id, const Point2D& arcCenter, const Point2D& start,
                      const Point2D& end, double radius, bool flipped)
 {
@@ -674,7 +1014,8 @@ Entity createArcSlot(int id, const Point2D& arcCenter, const Point2D& start,
     return e;
 }
 
-Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius)
+Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius,
+                     double rotationDeg)
 {
     Entity e;
     e.id = id;
@@ -682,6 +1023,7 @@ Entity createEllipse(int id, const Point2D& center, double majorRadius, double m
     e.points.push_back(center);
     e.majorRadius = majorRadius;
     e.minorRadius = minorRadius;
+    e.ellipseRotation = rotationDeg;
     return e;
 }
 
@@ -774,8 +1116,10 @@ bool entityIntersectsRect(const Entity& entity, const Rect2D& rect)
         break;
 
     case EntityType::Rectangle:
+    case EntityType::Parallelogram:
         if (entity.points.size() >= 4) {
-            // 4-point rotated rectangle: check any vertex or any edge crossing
+            // Four stored corners (a rotated rectangle or a parallelogram):
+            // check any vertex or any edge crossing
             for (int i = 0; i < 4; ++i) {
                 if (rect.contains(entity.points[i])) return true;
                 Point2D edgeStart = entity.points[i];
@@ -802,16 +1146,12 @@ bool entityIntersectsRect(const Entity& entity, const Rect2D& rect)
 
     case EntityType::Arc:
         if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            double r = entity.radius;
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double endRad   = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
-            Point2D startPt = center + Point2D(r * std::cos(startRad), r * std::sin(startRad));
-            Point2D endPt   = center + Point2D(r * std::cos(endRad),   r * std::sin(endRad));
+            const geometry::Arc arc = entity.toArc();
+            const Point2D startPt = arc.startPoint();
+            const Point2D endPt   = arc.endPoint();
             if (rect.contains(startPt) || rect.contains(endPt)) return true;
             // Also check midpoint of arc
-            double midRad = (entity.startAngle + entity.sweepAngle / 2) * M_PI / 180.0;
-            Point2D midPt = center + Point2D(r * std::cos(midRad), r * std::sin(midRad));
+            const Point2D midPt = arc.pointAt(0.5);
             return rect.contains(midPt);
         }
         break;
@@ -858,8 +1198,10 @@ bool entityEnclosedByRect(const Entity& entity, const Rect2D& rect)
         break;
 
     case EntityType::Rectangle:
+    case EntityType::Parallelogram:
         if (entity.points.size() >= 4) {
-            // 4-point rotated rectangle: all corners must be enclosed
+            // Four stored corners (a rotated rectangle or a parallelogram):
+            // all of them must be enclosed
             return rect.contains(entity.points[0]) && rect.contains(entity.points[1]) &&
                    rect.contains(entity.points[2]) && rect.contains(entity.points[3]);
         } else if (entity.points.size() >= 2) {
@@ -869,16 +1211,12 @@ bool entityEnclosedByRect(const Entity& entity, const Rect2D& rect)
 
     case EntityType::Arc:
         if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            double r = entity.radius;
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double endRad   = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
-            Point2D startPt = center + Point2D(r * std::cos(startRad), r * std::sin(startRad));
-            Point2D endPt   = center + Point2D(r * std::cos(endRad),   r * std::sin(endRad));
+            const geometry::Arc arc = entity.toArc();
+            const Point2D startPt = arc.startPoint();
+            const Point2D endPt   = arc.endPoint();
             if (!rect.contains(startPt) || !rect.contains(endPt)) return false;
             // Also check midpoint
-            double midRad = (entity.startAngle + entity.sweepAngle / 2) * M_PI / 180.0;
-            Point2D midPt = center + Point2D(r * std::cos(midRad), r * std::sin(midRad));
+            const Point2D midPt = arc.pointAt(0.5);
             return rect.contains(midPt);
         }
         break;
@@ -922,7 +1260,7 @@ double getEntityAngle(const Entity& entity)
     }
 
     Point2D delta = entity.points[1] - entity.points[0];
-    double angle = std::atan2(delta.y, delta.x) * 180.0 / M_PI;
+    double angle = radiansToDegrees(std::atan2(delta.y, delta.x));
 
     // Normalize to 0-360
     if (angle < 0) {
@@ -931,206 +1269,99 @@ double getEntityAngle(const Entity& entity)
     return angle;
 }
 
-std::vector<Point2D> entityToPolygon(const Entity& entity, int segments)
+Entity makeSlotCenterline(const Entity& slot, double pathRadius, double startAngleDeg, double sweepDeg)
 {
-    std::vector<Point2D> result;
-
-    switch (entity.type) {
-    case EntityType::Point:
-        if (!entity.points.empty()) {
-            result.push_back(entity.points[0]);
+    Entity path;
+    path.isConstruction = true;
+    if (slot.points.size() >= 3) {
+        path.type = EntityType::Arc;
+        path.points = { slot.points[0], slot.points[1], slot.points[2] };
+        const Point2D& c = slot.points[0];
+        const Point2D& sp0 = slot.points[1];
+        const Point2D& ep0 = slot.points[2];
+        path.radius = pathRadius > 0.0 ? pathRadius : std::hypot(sp0.x - c.x, sp0.y - c.y);
+        if (std::isnan(startAngleDeg) || std::isnan(sweepDeg)) {
+            // From the geometry plus arcFlipped, NOT slot.startAngle/sweepAngle: arc
+            // slots carry the >180 direction in arcFlipped and leave sweepAngle
+            // unset, so copying it would give the centerline a short sweep and the
+            // slot would not follow past 180 degrees.
+            const double a0 = std::atan2(sp0.y - c.y, sp0.x - c.x);
+            const double a1 = std::atan2(ep0.y - c.y, ep0.x - c.x);
+            double sweep = a1 - a0;
+            sweep = geometry::wrapSweepRad(sweep);
+            if (slot.arcFlipped) sweep = (sweep > 0) ? sweep - 2.0 * M_PI : sweep + 2.0 * M_PI;
+            path.startAngle = radiansToDegrees(a0);
+            path.sweepAngle = radiansToDegrees(sweep);
+        } else {
+            path.startAngle = startAngleDeg;
+            path.sweepAngle = sweepDeg;
         }
-        break;
-
-    case EntityType::Line:
-        if (entity.points.size() >= 2) {
-            result.push_back(entity.points[0]);
-            result.push_back(entity.points[1]);
-        }
-        break;
-
-    case EntityType::Rectangle:
-        if (entity.points.size() >= 2) {
-            Rect2D rect = Rect2D::fromPoints(entity.points[0], entity.points[1]);
-            result.push_back(rect.topLeft());
-            result.push_back(rect.topRight());
-            result.push_back(rect.bottomRight());
-            result.push_back(rect.bottomLeft());
-            result.push_back(rect.topLeft());  // Close
-        }
-        break;
-
-    case EntityType::Circle:
-        if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            for (int i = 0; i <= segments; ++i) {
-                double angle = 2.0 * M_PI * i / segments;
-                result.push_back(Point2D(
-                    center.x + entity.radius * std::cos(angle),
-                    center.y + entity.radius * std::sin(angle)));
-            }
-        }
-        break;
-
-    case EntityType::Arc:
-        if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double sweepRad = entity.sweepAngle * M_PI / 180.0;
-            int arcSegments = std::max(1, static_cast<int>(segments * std::abs(entity.sweepAngle) / 360.0));
-            for (int i = 0; i <= arcSegments; ++i) {
-                double angle = startRad + sweepRad * i / arcSegments;
-                result.push_back(Point2D(
-                    center.x + entity.radius * std::cos(angle),
-                    center.y + entity.radius * std::sin(angle)));
-            }
-        }
-        break;
-
-    case EntityType::Ellipse:
-        if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            for (int i = 0; i <= segments; ++i) {
-                double angle = 2.0 * M_PI * i / segments;
-                result.push_back(Point2D(
-                    center.x + entity.majorRadius * std::cos(angle),
-                    center.y + entity.minorRadius * std::sin(angle)));
-            }
-        }
-        break;
-
-    case EntityType::Polygon:
-        if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            for (int i = 0; i <= entity.sides; ++i) {
-                double angle = 2.0 * M_PI * i / entity.sides - M_PI / 2.0;
-                result.push_back(Point2D(
-                    center.x + entity.radius * std::cos(angle),
-                    center.y + entity.radius * std::sin(angle)));
-            }
-        }
-        break;
-
-    case EntityType::Slot:
-        if (entity.points.size() >= 3) {
-            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
-            Point2D arcCenter = entity.points[0];
-            Point2D start = entity.points[1];
-            Point2D end = entity.points[2];
-            double halfWidth = entity.radius;
-
-            double arcRadius = std::hypot(start.x - arcCenter.x, start.y - arcCenter.y);
-            double innerRadius = arcRadius - halfWidth;
-            double outerRadius = arcRadius + halfWidth;
-
-            // Calculate angles
-            double startAngle = std::atan2(start.y - arcCenter.y, start.x - arcCenter.x);
-            double endAngle = std::atan2(end.y - arcCenter.y, end.x - arcCenter.x);
-            double sweepAngle = endAngle - startAngle;
-
-            // Normalize sweep
-            while (sweepAngle > M_PI) sweepAngle -= 2 * M_PI;
-            while (sweepAngle < -M_PI) sweepAngle += 2 * M_PI;
-            if (entity.arcFlipped) {
-                sweepAngle = (sweepAngle > 0) ? sweepAngle - 2 * M_PI : sweepAngle + 2 * M_PI;
-            }
-
-            int arcSegs = std::max(8, static_cast<int>(segments * std::abs(sweepAngle) / (2 * M_PI)));
-            int capSegs = segments / 4;
-
-            // Outer arc
-            for (int i = 0; i <= arcSegs; ++i) {
-                double angle = startAngle + sweepAngle * i / arcSegs;
-                result.push_back(Point2D(
-                    arcCenter.x + outerRadius * std::cos(angle),
-                    arcCenter.y + outerRadius * std::sin(angle)));
-            }
-
-            // End cap (semicircle)
-            Point2D endOuter = arcCenter + Point2D(outerRadius * std::cos(endAngle), outerRadius * std::sin(endAngle));
-            Point2D endInner = arcCenter + Point2D(innerRadius * std::cos(endAngle), innerRadius * std::sin(endAngle));
-            Point2D endCapCenter = (endOuter + endInner) / 2.0;
-            double capDir = (sweepAngle >= 0) ? 1.0 : -1.0;
-            for (int i = 1; i <= capSegs; ++i) {
-                double capAngle = endAngle + capDir * M_PI * i / capSegs;
-                result.push_back(Point2D(
-                    endCapCenter.x + halfWidth * std::cos(capAngle),
-                    endCapCenter.y + halfWidth * std::sin(capAngle)));
-            }
-
-            // Inner arc (reverse)
-            for (int i = arcSegs; i >= 0; --i) {
-                double angle = startAngle + sweepAngle * i / arcSegs;
-                result.push_back(Point2D(
-                    arcCenter.x + innerRadius * std::cos(angle),
-                    arcCenter.y + innerRadius * std::sin(angle)));
-            }
-
-            // Start cap (semicircle)
-            Point2D startOuter = arcCenter + Point2D(outerRadius * std::cos(startAngle), outerRadius * std::sin(startAngle));
-            Point2D startInner = arcCenter + Point2D(innerRadius * std::cos(startAngle), innerRadius * std::sin(startAngle));
-            Point2D startCapCenter = (startOuter + startInner) / 2.0;
-            for (int i = 1; i < capSegs; ++i) {
-                double capAngle = startAngle + M_PI + capDir * M_PI * i / capSegs;
-                result.push_back(Point2D(
-                    startCapCenter.x + halfWidth * std::cos(capAngle),
-                    startCapCenter.y + halfWidth * std::sin(capAngle)));
-            }
-
-            // Close
-            if (!result.empty()) {
-                result.push_back(result.front());
-            }
-        } else if (entity.points.size() >= 2) {
-            // Linear slot: two semicircles connected by lines
-            Point2D c1 = entity.points[0];
-            Point2D c2 = entity.points[1];
-            Point2D dir = c2 - c1;
-            double len = std::hypot(dir.x, dir.y);
-            if (len > 0) {
-                Point2D norm(-dir.y / len, dir.x / len);
-                int halfSegs = segments / 2;
-
-                // First semicircle
-                for (int i = 0; i <= halfSegs; ++i) {
-                    double angle = M_PI / 2.0 + M_PI * i / halfSegs;
-                    double dx = dir.x / len, dy = dir.y / len;
-                    double ca = std::cos(angle), sa = std::sin(angle);
-                    result.push_back(Point2D(
-                        c1.x + entity.radius * (dx * ca - dy * sa),
-                        c1.y + entity.radius * (dy * ca + dx * sa)));
-                }
-                // Second semicircle
-                for (int i = 0; i <= halfSegs; ++i) {
-                    double angle = -M_PI / 2.0 + M_PI * i / halfSegs;
-                    double dx = dir.x / len, dy = dir.y / len;
-                    double ca = std::cos(angle), sa = std::sin(angle);
-                    result.push_back(Point2D(
-                        c2.x + entity.radius * (dx * ca - dy * sa),
-                        c2.y + entity.radius * (dy * ca + dx * sa)));
-                }
-                // Close
-                if (!result.empty()) {
-                    result.push_back(result.front());
-                }
-            }
-        }
-        break;
-
-    case EntityType::Spline:
-        // For splines, return control points (proper tessellation would need Catmull-Rom)
-        result = entity.points;
-        break;
-
-    case EntityType::Text:
-        // Text has no geometric representation as polygon
-        if (!entity.points.empty()) {
-            result.push_back(entity.points[0]);
-        }
-        break;
+    } else if (slot.points.size() >= 2) {
+        path.type = EntityType::Line;
+        path.points = { slot.points[0], slot.points[1] };
     }
+    return path;
+}
 
-    return result;
+bool rectangleFromThreePoints(const Point2D& p1, const Point2D& p2, const Point2D& p3, Point2D out[4])
+{
+    const Point2D edge = p2 - p1;
+    if (geometry::length(edge) <= 0.01) return false;
+    const Point2D perpDir = geometry::perpendicular(geometry::normalize(edge));
+    const double perpDist = geometry::dot(p3 - p1, perpDir);
+    out[0] = p1;
+    out[1] = p2;
+    out[2] = p2 + perpDir * perpDist;
+    out[3] = p1 + perpDir * perpDist;
+    return true;
+}
+
+bool rectangleCorners(const Entity& rect, Point2D out[4])
+{
+    if (rect.type != EntityType::Rectangle || rect.points.size() < 2) return false;
+    if (rect.points.size() >= 4) {
+        for (int i = 0; i < 4; ++i) out[i] = rect.points[i];
+    } else {
+        const Point2D p0 = rect.points[0], p1 = rect.points[1];
+        out[0] = p0;
+        out[1] = Point2D(p1.x, p0.y);
+        out[2] = p1;
+        out[3] = Point2D(p0.x, p1.y);
+    }
+    return true;
+}
+
+bool quadCorners(const Entity& entity, Point2D out[4])
+{
+    if (entity.type == EntityType::Rectangle) return rectangleCorners(entity, out);
+    if (entity.type != EntityType::Parallelogram || entity.points.size() < 4) return false;
+    for (int i = 0; i < 4; ++i) out[i] = entity.points[i];
+    return true;
+}
+
+const Entity* findEntityById(const std::vector<Entity>& entities, int id)
+{
+    for (const Entity& e : entities) {
+        if (e.id == id) return &e;
+    }
+    return nullptr;
+}
+
+Entity* findEntityById(std::vector<Entity>& entities, int id)
+{
+    for (Entity& e : entities) {
+        if (e.id == id) return &e;
+    }
+    return nullptr;
+}
+
+int nextFreeEntityId(const std::vector<Entity>& entities)
+{
+    int next = 1;
+    for (const Entity& e : entities) {
+        if (e.id >= next) next = e.id + 1;
+    }
+    return next;
 }
 
 }  // namespace sketch

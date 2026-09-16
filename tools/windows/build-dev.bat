@@ -192,11 +192,12 @@ REM ---- Parse arguments (collect actions in order) ---------------------
 
 set "BUILD_TYPE=Debug"
 set "ACTION_COUNT=0"
+set "BUILD_REQUESTED=0"
 
 :parse_args
 if "%~1"=="" goto args_done
-if /i "%~1"=="release" set "BUILD_TYPE=Release" & shift & goto parse_args
-if /i "%~1"=="debug"   set "BUILD_TYPE=Debug"   & shift & goto parse_args
+if /i "%~1"=="release" set "BUILD_TYPE=Release" & set "BUILD_REQUESTED=1" & shift & goto parse_args
+if /i "%~1"=="debug"   set "BUILD_TYPE=Debug"   & set "BUILD_REQUESTED=1" & shift & goto parse_args
 if /i "%~1"=="clean" (
     set /a ACTION_COUNT+=1
     set "ACTION_!ACTION_COUNT!=clean"
@@ -221,10 +222,28 @@ echo Usage: %~nx0 [debug^|release] [clean] [run^|run-reduced^|run-cli]
 exit /b 1
 :args_done
 
-REM Default action: build
+REM Default action: build.
+REM Build when nothing was asked for, and also when a build type or linkage
+REM was named alongside clean. Testing ACTION_COUNT alone never reached the
+REM second case: clean had already incremented it, so "clean release" cleaned
+REM and exited despite being documented as clean-then-build.
 if %ACTION_COUNT%==0 (
     set "ACTION_COUNT=1"
     set "ACTION_1=build"
+) else if "%BUILD_REQUESTED%"=="1" (
+    REM Does the action list already contain something that builds?
+    set "HAS_BUILDISH="
+    for /l %%I in (1,1,%ACTION_COUNT%) do (
+        call set "THIS_ACTION=%%ACTION_%%I%%"
+        if /i "!THIS_ACTION!"=="build"       set "HAS_BUILDISH=1"
+        if /i "!THIS_ACTION!"=="run"         set "HAS_BUILDISH=1"
+        if /i "!THIS_ACTION!"=="run-reduced" set "HAS_BUILDISH=1"
+        if /i "!THIS_ACTION!"=="run-cli"     set "HAS_BUILDISH=1"
+    )
+    if not defined HAS_BUILDISH (
+        set /a ACTION_COUNT+=1
+        call set "ACTION_%%ACTION_COUNT%%=build"
+    )
 )
 
 REM ---- Clear log file -------------------------------------------------
@@ -297,7 +316,7 @@ REM =====================================================================
             call :log "  Log: %DEVTEST_LOG%"
             call :log ""
         ) else (
-            call :log "--- Devtest: result line missing or failed — rerunning ---"
+            call :log "--- Devtest: result line missing or failed, rerunning ---"
             call :log ""
         )
     )
@@ -308,7 +327,7 @@ REM =====================================================================
     call :log ""
 
     if not exist "%DEVTEST_DIR%" (
-        call :log "  WARNING: devtest\ directory not found — skipping"
+        call :log "  WARNING: devtest\ directory not found, skipping"
         call :log ""
         goto :eof
     )
@@ -328,7 +347,7 @@ REM =====================================================================
     )
     build\depcheck.exe >> "%DEVTEST_LOG%" 2>&1
     if %errorlevel% neq 0 (
-        call :log "  Devtest FAILED — fix dependency issues before building."
+        call :log "  Devtest FAILED: fix dependency issues before building."
         call :log "  See: %DEVTEST_LOG%"
         popd
         exit /b 1
@@ -372,7 +391,7 @@ goto :eof
     cmake --preset "!PRESET!" -S "%PROJECT_ROOT%" >> "%LOG%" 2>&1
 
     if %errorlevel% neq 0 (
-        call :log "  CMake configure FAILED — see %LOG%"
+        call :log "  CMake configure FAILED: see %LOG%"
         exit /b 1
     )
     call :log ""
@@ -401,7 +420,7 @@ goto :eof
         call :log ""
     ) else (
         call :log "====================================================================="
-        call :log "  Build FAILED — binary not found"
+        call :log "  Build FAILED: binary not found"
         call :log "====================================================================="
         call :log "  Expected: !BINARY!"
         call :log "  Check the log: %LOG%"
@@ -422,8 +441,8 @@ goto :eof
         goto :eof
     )
 
-    REM Binary missing — build first
-    call :log "--- Binary not found — building first ---"
+    REM Binary missing: build first
+    call :log "--- Binary not found, building first ---"
     call :log ""
     call :do_build
 
@@ -447,7 +466,7 @@ goto :eof
         goto :eof
     )
 
-    call :log "--- Binary not found — building first ---"
+    call :log "--- Binary not found, building first ---"
     call :log ""
     call :do_build
 
@@ -469,7 +488,7 @@ goto :eof
         goto :eof
     )
 
-    call :log "--- Binary not found — building first ---"
+    call :log "--- Binary not found, building first ---"
     call :log ""
     call :do_build
 

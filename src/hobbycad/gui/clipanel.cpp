@@ -3,8 +3,13 @@
 // =====================================================================
 
 #include "clipanel.h"
+#include <QSettings>
+#include <algorithm>
+#include <cstring>
+#include <QScrollBar>
 
 #include "cli/clihistory.h"
+#include "cli_translator.h"
 #include "cli/cliengine.h"
 
 #include <hobbycad/core.h>
@@ -26,6 +31,9 @@ CliPanel::CliPanel(QWidget* parent)
     setObjectName(QStringLiteral("CliPanel"));
 
     m_history = new CliHistory();
+    // The command layer is Qt-free and asks for its message text; give
+    // it Qt so the panel still speaks the user's language.
+    installCliTranslator();
     m_history->load();
 
     m_engine = new CliEngine(*m_history);
@@ -37,7 +45,19 @@ CliPanel::CliPanel(QWidget* parent)
 
     // Terminal appearance
     setLineWrapMode(QPlainTextEdit::WidgetWidth);
-    setMaximumBlockCount(10000);
+    // Scrollback, from preferences. 10,000 lines was hard-coded here; it is
+    // a reasonable default but the right number depends on the session:
+    // a long CLI-driven build wants more, a small machine wants less.
+    // 0 means unlimited, which grows without bound and is offered as a
+    // deliberate choice rather than the default.
+    {
+        QSettings settings;
+        settings.beginGroup(QStringLiteral("preferences"));
+        const int scrollback =
+            settings.value(QStringLiteral("cliScrollback"), 10000).toInt();
+        settings.endGroup();
+        setMaximumBlockCount(scrollback > 0 ? scrollback : 0);
+    }
     setUndoRedoEnabled(false);
     setCursorWidth(8);  // block cursor
 
@@ -57,7 +77,7 @@ CliPanel::CliPanel(QWidget* parent)
     cur.insertText(
         QStringLiteral("HobbyCAD ") +
         QString::fromLatin1(hobbycad::version()) +
-        QStringLiteral(" — Embedded Terminal\n"
+        QStringLiteral(": Embedded Terminal\n"
             "Type 'help' for available commands.\n\n"));
     setTextCursor(cur);
 
@@ -85,10 +105,48 @@ void CliPanel::focusInput()
 
 void CliPanel::keyPressEvent(QKeyEvent* event)
 {
+    // While output is being held back, Space reveals the next page (the
+    // same key a terminal pager uses). Only while paging, and only when the
+    // user has not started typing: stealing Space from a command being
+    // entered would be worse than not having a pager at all.
+    if (paging() && event->key() == Qt::Key_Space
+        && currentInput().isEmpty()) {
+        revealMore();
+        event->accept();
+        return;
+    }
+
+    // Any other key means they are done reading; show the rest rather than
+    // making them dismiss a pager to type.
+    if (paging() && !event->text().isEmpty()) {
+        revealMore(true);      // one flush, not a page at a time
+    }
+
+    // "(END)" is acknowledgement, not output. Once a key is pressed it has
+    // been read, so it goes and the prompt takes its line; leaving it
+    // behind would litter the scrollback with markers between commands.
+    if (m_endMarkerStart >= 0 && !event->text().isEmpty()) {
+        // Remove the WORD, keep the LINE. The marker becomes a blank line
+        // separating the output from the prompt that follows, rather than
+        // the prompt sliding up onto the row where "(END)" was. Without
+        // the gap, output and prompt run together and a long result looks
+        // like it is still going.
+        QTextCursor cur = textCursor();
+        cur.setPosition(m_endMarkerStart);
+        cur.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
+                         static_cast<int>(std::strlen("(END)")));
+        cur.removeSelectedText();
+        m_endMarkerStart = -1;
+
+        cur.movePosition(QTextCursor::End);
+        setTextCursor(cur);
+        showPrompt();
+    }
+
     QTextCursor cur = textCursor();
     int pos = cur.position();
 
-    // Enter/Return — execute the command
+    // Enter/Return: execute the command
     if (event->key() == Qt::Key_Return ||
         event->key() == Qt::Key_Enter) {
         moveCursorToEnd();
@@ -96,19 +154,19 @@ void CliPanel::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // Up arrow — history previous
+    // Up arrow: history previous
     if (event->key() == Qt::Key_Up) {
         historyUp();
         return;
     }
 
-    // Down arrow — history next
+    // Down arrow: history next
     if (event->key() == Qt::Key_Down) {
         historyDown();
         return;
     }
 
-    // Home — jump to start of input (after prompt), not start of line
+    // Home: jump to start of input (after prompt), not start of line
     if (event->key() == Qt::Key_Home) {
         QTextCursor c = textCursor();
         if (event->modifiers() & Qt::ShiftModifier) {
@@ -120,7 +178,7 @@ void CliPanel::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // Ctrl+A — select all input (not all text)
+    // Ctrl+A: select all input (not all text)
     if (event->key() == Qt::Key_A &&
         event->modifiers() == Qt::ControlModifier) {
         QTextCursor c = textCursor();
@@ -130,7 +188,7 @@ void CliPanel::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // Ctrl+C — copy selection, or if no selection, cancel input
+    // Ctrl+C: copy selection, or if no selection, cancel input
     if (event->key() == Qt::Key_C &&
         event->modifiers() == Qt::ControlModifier) {
         if (cur.hasSelection()) {
@@ -144,7 +202,7 @@ void CliPanel::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // Ctrl+V — paste at cursor (only in editable region)
+    // Ctrl+V: paste at cursor (only in editable region)
     if (event->key() == Qt::Key_V &&
         event->modifiers() == Qt::ControlModifier) {
         moveCursorToEnd();
@@ -158,28 +216,28 @@ void CliPanel::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // Ctrl+U — clear input line
+    // Ctrl+U: clear input line
     if (event->key() == Qt::Key_U &&
         event->modifiers() == Qt::ControlModifier) {
         setCurrentInput(QString());
         return;
     }
 
-    // Backspace — don't delete past the prompt
+    // Backspace: don't delete past the prompt
     if (event->key() == Qt::Key_Backspace) {
         if (pos <= m_promptEnd) return;
         QPlainTextEdit::keyPressEvent(event);
         return;
     }
 
-    // Delete — only in editable region
+    // Delete: only in editable region
     if (event->key() == Qt::Key_Delete) {
         if (pos < m_promptEnd) return;
         QPlainTextEdit::keyPressEvent(event);
         return;
     }
 
-    // Left arrow — don't move past prompt
+    // Left arrow: don't move past prompt
     if (event->key() == Qt::Key_Left) {
         if (pos <= m_promptEnd &&
             !(event->modifiers() & Qt::ShiftModifier)) {
@@ -195,7 +253,7 @@ void CliPanel::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // For all other keys — ensure cursor is in the editable region
+    // For all other keys: ensure cursor is in the editable region
     if (pos < m_promptEnd) {
         moveCursorToEnd();
     }
@@ -266,16 +324,18 @@ void CliPanel::executeCurrentLine()
         return;
     }
 
-    m_history->append(input);
+    m_history->append(input.toStdString());
     m_historyIndex = -1;
 
-    CliResult result = m_engine->execute(input);
+    CliResult result = m_engine->execute(input.toStdString());
 
-    if (!result.output.isEmpty()) {
-        appendOutput(result.output);
+    if (!result.output.empty()) {
+        // result.paginate is the command saying "this is for reading".
+        // The terminal REPL pages it; here it means start at the top.
+        appendOutput(QString::fromStdString(result.output), result.paginate);
     }
-    if (!result.error.isEmpty()) {
-        appendError(result.error);
+    if (!result.error.empty()) {
+        appendError(QString::fromStdString(result.error));
     }
 
     if (result.requestExit) {
@@ -328,15 +388,15 @@ void CliPanel::executeCurrentLine()
 void CliPanel::historyUp()
 {
     const auto& entries = m_history->entries();
-    if (entries.isEmpty()) return;
+    if (entries.empty()) return;
 
     if (m_historyIndex == -1) {
         m_savedInput = currentInput();
-        m_historyIndex = entries.size() - 1;
+        m_historyIndex = static_cast<int>(entries.size()) - 1;
     } else if (m_historyIndex > 0) {
         m_historyIndex--;
     }
-    setCurrentInput(entries[m_historyIndex]);
+    setCurrentInput(QString::fromStdString(entries[m_historyIndex]));
 }
 
 void CliPanel::historyDown()
@@ -344,9 +404,9 @@ void CliPanel::historyDown()
     if (m_historyIndex == -1) return;
 
     const auto& entries = m_history->entries();
-    if (m_historyIndex < entries.size() - 1) {
+    if (m_historyIndex < static_cast<int>(entries.size()) - 1) {
         m_historyIndex++;
-        setCurrentInput(entries[m_historyIndex]);
+        setCurrentInput(QString::fromStdString(entries[m_historyIndex]));
     } else {
         m_historyIndex = -1;
         setCurrentInput(m_savedInput);
@@ -355,12 +415,110 @@ void CliPanel::historyDown()
 
 // ---- Output helpers -------------------------------------------------
 
-void CliPanel::appendOutput(const QString& text)
+int CliPanel::visibleLineCount() const
 {
+    const int lineHeight = fontMetrics().lineSpacing();
+    if (lineHeight <= 0) {
+        return 24;
+    }
+    // One line held back for the prompt that follows the output.
+    return std::max(1, viewport()->height() / lineHeight - 1);
+}
+
+void CliPanel::appendOutput(const QString& text, bool paginate)
+{
+    QStringList lines = text.split(QLatin1Char('\n'));
+
+    if (!paginate) {
+        QTextCursor cur = textCursor();
+        cur.movePosition(QTextCursor::End);
+        cur.insertText(text + QStringLiteral("\n"));
+        setTextCursor(cur);
+        return;
+    }
+
+    // Hold everything, then reveal what fits. revealMore() decides how
+    // much, so the first page and every later one use the same rule.
+    m_pending = lines;
+    m_moreMarkerStart = -1;
+    m_endMarkerStart = -1;
+    revealMore();
+}
+
+void CliPanel::revealMore(bool all, bool markEnd)
+{
+    if (m_pending.isEmpty()) {
+        return;
+    }
+
+    const int fits = visibleLineCount();
+
     QTextCursor cur = textCursor();
-    cur.movePosition(QTextCursor::End);
-    cur.insertText(text + QStringLiteral("\n"));
+
+    // Drop the previous "-- more --" marker before writing past it.
+    if (m_moreMarkerStart >= 0) {
+        cur.setPosition(m_moreMarkerStart);
+        cur.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+        cur.removeSelectedText();
+        m_moreMarkerStart = -1;
+    } else {
+        cur.movePosition(QTextCursor::End);
+    }
+
+    // Reveal everything when the remainder fits, and note the "+ 1".
+    //
+    // The "-- N more --" marker occupies a line itself, so holding back a
+    // single line to announce it uses exactly as much room as showing the
+    // line would. At a viewport of precisely 50 lines and 50 lines of
+    // output this was the difference between "49 lines and a marker" and
+    // simply showing all 50. Never withhold fewer lines than the marker
+    // costs; it is pure loss.
+    const int take = (all || m_pending.size() <= fits + 1)
+                         ? m_pending.size()
+                         : fits;
+
+    QStringList shown;
+    for (int i = 0; i < take; ++i) {
+        shown << m_pending.takeFirst();
+    }
+    cur.insertText(shown.join(QLatin1Char('\n')) + QStringLiteral("\n"));
+
+    if (!m_pending.isEmpty()) {
+        m_moreMarkerStart = cur.position();
+        cur.insertText(tr("-- %n more line(s); press Space, or resize --", "",
+                          m_pending.size())
+                       + QStringLiteral("\n"));
+    } else if (markEnd) {
+        // The pager finished without the user asking it to: the panel
+        // grew until the rest fitted. Say so, the way less does, so it is
+        // clear the output ended rather than the pager still waiting.
+        // Not shown when the user pressed a key: they know they finished.
+        m_endMarkerStart = cur.position();
+        cur.insertText(QStringLiteral("(END)\n"));
+    }
+
     setTextCursor(cur);
+    ensureCursorVisible();
+}
+
+void CliPanel::resizeEvent(QResizeEvent* event)
+{
+    QPlainTextEdit::resizeEvent(event);
+
+    // A resize reveals more ONLY when the whole remainder now fits.
+    //
+    // Calling revealMore() on any resize was wrong: it hands over another
+    // page regardless of direction, so SHRINKING the panel revealed extra
+    // lines, the opposite of what a smaller viewport should do. Growing
+    // part-way is left alone too; the user asked for a page at a time, and
+    // a window that is merely taller has not withdrawn that.
+    //
+    // Growing past the remainder is the one case worth acting on: holding
+    // lines back that the viewport could already display is pointless, so
+    // the rest is shown and paging ends.
+    if (paging() && m_pending.size() <= visibleLineCount() + 1) {
+        revealMore(false, /*markEnd=*/true);
+    }
 }
 
 void CliPanel::appendError(const QString& text)
@@ -373,7 +531,7 @@ void CliPanel::appendError(const QString& text)
 
 void CliPanel::showPrompt()
 {
-    QString prompt = m_engine->buildPrompt();
+    QString prompt = QString::fromStdString(m_engine->buildPrompt());
 
     // Append the prompt text.  We use textCursor() to insert
     // without the automatic newline that appendPlainText adds.

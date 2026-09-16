@@ -4,15 +4,14 @@
 #
 #  Generates platform-specific icon files from the canonical SVG:
 #
-#    Linux:   PNG files at hicolor theme sizes (16–512)
+#    Linux:   PNG files at hicolor theme sizes (16–512) and the 32x32
+#             XPM the Debian menu wants (also on the BSDs)
 #    Windows: Multi-resolution .ico (16–256)
 #    macOS:   .icns via iconutil (16–1024)
 #
-#  Requires: rsvg-convert (from librsvg2-bin on Ubuntu)
-#  Optional: icotool (from icoutils, for .ico generation)
-#            iconutil (macOS only, ships with Xcode)
-#            ImageMagick magick (fallback for .ico; avoid "convert"
-#            which collides with Windows system utility)
+#  Requires: nothing beyond the Qt the GUI already needs (Gui + Svg);
+#  the icons are rendered by tools/render-icons.cpp, built here.
+#  macOS .icns uses Apple's iconutil, present on every Mac.
 #
 #  Usage in CMakeLists.txt:
 #    include(cmake/GenerateIcons.cmake)
@@ -24,22 +23,8 @@
 #
 # =====================================================================
 
-find_program(RSVG_CONVERT rsvg-convert)
-find_program(ICOTOOL icotool)
+# iconutil is Apple's own, present on every macOS; nothing to install.
 find_program(ICONUTIL iconutil)
-
-# ImageMagick 7+ uses "magick" as the primary command.
-# Avoid find_program(CONVERT convert) — on Windows this finds
-# C:\Windows\System32\convert.exe (disk partition utility).
-find_program(MAGICK magick)
-if(NOT MAGICK)
-    # ImageMagick 6 fallback — only search in typical install paths,
-    # never in C:\Windows\System32.
-    find_program(MAGICK convert
-        PATHS /usr/bin /usr/local/bin /opt/homebrew/bin
-        NO_DEFAULT_PATH
-    )
-endif()
 
 function(generate_icons)
     cmake_parse_arguments(ICON "" "SVG;OUTPUT;NAME" "" ${ARGN})
@@ -54,73 +39,100 @@ function(generate_icons)
         set(ICON_NAME "hobbycad")
     endif()
 
-    if(NOT RSVG_CONVERT)
-        message(WARNING
-            "rsvg-convert not found — icon generation disabled.\n"
-            "Install with: sudo apt-get install -y librsvg2-bin")
-        return()
+    # The scalable SVG comes straight from the source tree; every raster
+    # form, the menu XPM included, is rendered from it below.
+    install(FILES ${ICON_SVG}
+        DESTINATION share/icons/hicolor/scalable/apps
+        RENAME ${ICON_NAME}.svg
+        OPTIONAL
+    )
+
+    # ------------------------------------------------------------------
+    #  The renderer: tools/render-icons.cpp, built here with the Qt the
+    #  GUI already requires (Gui + Svg). It writes the hicolor PNGs, the
+    #  Windows .ico, the macOS iconset PNGs and the Debian menu XPM from
+    #  the one SVG, so no rsvg-convert, icotool or ImageMagick is needed
+    #  on any build host.
+    # ------------------------------------------------------------------
+    if(NOT TARGET Qt6::Svg)
+        message(FATAL_ERROR "generate_icons: Qt6::Svg is required to render the icons")
     endif()
+    add_executable(render_icons ${CMAKE_SOURCE_DIR}/tools/render-icons.cpp)
+    target_link_libraries(render_icons PRIVATE Qt6::Gui Qt6::Svg)
+    # A static Qt links its platform plugin into every executable, and on
+    # macOS the Cocoa plugin refers to OpenGL (glGetString, glGetIntegerv)
+    # without carrying the framework in its own link interface, so the
+    # renderer, which asks Qt for no OpenGL of its own, failed to link.
+    if(APPLE)
+        target_link_libraries(render_icons PRIVATE "-framework OpenGL")
+    endif()
+    set_target_properties(render_icons PROPERTIES AUTOMOC OFF)
 
     file(MAKE_DIRECTORY ${ICON_OUTPUT})
 
-    # ------------------------------------------------------------------
-    #  Linux: PNG files at freedesktop hicolor sizes
-    # ------------------------------------------------------------------
-
     set(HICOLOR_SIZES 16 24 32 48 64 128 256 512)
-    set(ICON_PNG_FILES "")
-
-    foreach(_size ${HICOLOR_SIZES})
-        set(_png "${ICON_OUTPUT}/${ICON_NAME}-${_size}.png")
-        add_custom_command(
-            OUTPUT  ${_png}
-            COMMAND ${RSVG_CONVERT}
-                    -w ${_size} -h ${_size}
-                    -o ${_png}
-                    ${ICON_SVG}
-            DEPENDS ${ICON_SVG}
-            COMMENT "Generating ${ICON_NAME}-${_size}.png"
-        )
-        list(APPEND ICON_PNG_FILES ${_png})
-    endforeach()
-
-    # ------------------------------------------------------------------
-    #  Windows: .ico (multi-resolution)
-    # ------------------------------------------------------------------
-
     set(ICO_SIZES 16 32 48 64 128 256)
-    set(ICON_ICO_FILE "")
+    set(_iconset_sizes 16 32 64 128 256 512 1024)
 
-    if(ICOTOOL)
-        # Preferred: icotool from icoutils
-        set(_ico "${ICON_OUTPUT}/${ICON_NAME}.ico")
-        set(_ico_pngs "")
-        foreach(_size ${ICO_SIZES})
-            list(APPEND _ico_pngs "${ICON_OUTPUT}/${ICON_NAME}-${_size}.png")
-        endforeach()
-        add_custom_command(
-            OUTPUT  ${_ico}
-            COMMAND ${ICOTOOL} -c -o ${_ico} ${_ico_pngs}
-            DEPENDS ${_ico_pngs}
-            COMMENT "Generating ${ICON_NAME}.ico (icotool)"
-        )
-        set(ICON_ICO_FILE ${_ico})
-    elseif(MAGICK)
-        # Fallback: ImageMagick (magick or convert)
-        set(_ico "${ICON_OUTPUT}/${ICON_NAME}.ico")
-        set(_ico_pngs "")
-        foreach(_size ${ICO_SIZES})
-            list(APPEND _ico_pngs "${ICON_OUTPUT}/${ICON_NAME}-${_size}.png")
-        endforeach()
-        add_custom_command(
-            OUTPUT  ${_ico}
-            COMMAND ${MAGICK} ${_ico_pngs} ${_ico}
-            DEPENDS ${_ico_pngs}
-            COMMENT "Generating ${ICON_NAME}.ico (ImageMagick)"
-        )
-        set(ICON_ICO_FILE ${_ico})
+    set(ICON_PNG_FILES "")
+    foreach(_size ${HICOLOR_SIZES})
+        list(APPEND ICON_PNG_FILES "${ICON_OUTPUT}/${ICON_NAME}-${_size}.png")
+    endforeach()
+    set(_ico "${ICON_OUTPUT}/${ICON_NAME}.ico")
+    set(_iconset_pngs "")
+    foreach(_size ${_iconset_sizes})
+        list(APPEND _iconset_pngs "${ICON_OUTPUT}/${ICON_NAME}-${_size}.png")
+    endforeach()
+    # One render of every size any platform needs (the lists overlap).
+    set(_all_sizes ${HICOLOR_SIZES} ${_iconset_sizes})
+    list(REMOVE_DUPLICATES _all_sizes)
+    string(REPLACE ";" "," _ico_list "${ICO_SIZES}")
+
+    # The Debian menu icon: XPM, 32x32 at most, on the platforms that have
+    # a pixmaps directory. Windows and macOS never ask for it.
+    set(_xpm "")
+    set(_xpm_arg "")
+    if(UNIX AND NOT APPLE)
+        set(_xpm "${ICON_OUTPUT}/${ICON_NAME}.xpm")
+        set(_xpm_arg "xpm=32")
+    endif()
+
+    # The hicolor and iconset lists overlap; one output list, no duplicates.
+    set(_all_outputs ${ICON_PNG_FILES} ${_iconset_pngs} ${_ico} ${_xpm})
+    list(REMOVE_DUPLICATES _all_outputs)
+
+    # The renderer needs no display, but QGuiApplication needs a platform
+    # plugin. A shared Qt ships the "offscreen" plugin, which is what a
+    # build container without a display wants. A static Qt (the vcpkg
+    # builds on Windows and macOS) links only the platform plugin it was
+    # built with, "windows" or "cocoa"; asking it for "offscreen" aborts
+    # with "Could not find the Qt platform plugin", so there the default
+    # platform is used and no window is ever shown.
+    get_target_property(_qt_core_type Qt6::Core TYPE)
+    if(_qt_core_type STREQUAL "STATIC_LIBRARY")
+        set(_render_env "")
     else()
-        message(STATUS "No .ico generator found (install icoutils or imagemagick)")
+        set(_render_env ${CMAKE_COMMAND} -E env QT_QPA_PLATFORM=offscreen)
+    endif()
+    add_custom_command(
+        OUTPUT  ${_all_outputs}
+        COMMAND ${_render_env}
+                $<TARGET_FILE:render_icons> ${ICON_SVG} ${ICON_OUTPUT} ${ICON_NAME}
+                ${_all_sizes} "ico=${_ico_list}" ${_xpm_arg}
+        DEPENDS render_icons ${ICON_SVG}
+        COMMENT "Rendering ${ICON_NAME} icons (PNG sizes, .ico, .xpm) from ${ICON_SVG}"
+        VERBATIM
+    )
+    set(ICON_ICO_FILE ${_ico})
+
+    # Windows: the .ico is installed beside the binary tree so an installer
+    # can use it for its own icon (Inno Setup's SetupIconFile). Other
+    # platforms have no use for it and Debian would have to list it.
+    if(WIN32)
+        install(FILES ${_ico} DESTINATION share/icons OPTIONAL)
+    endif()
+    if(_xpm)
+        install(FILES ${_xpm} DESTINATION share/pixmaps OPTIONAL)
     endif()
 
     # ------------------------------------------------------------------
@@ -146,56 +158,39 @@ function(generate_icons)
         #  256 -> icon_128x128@2x.png AND icon_256x256.png
         #  512 -> icon_256x256@2x.png AND icon_512x512.png
         # 1024 -> icon_512x512@2x.png
-        set(_iconset_sizes 16 32 64 128 256 512 1024)
-        set(_iconset_pngs "")
-
-        foreach(_size ${_iconset_sizes})
-            set(_png "${ICON_OUTPUT}/${ICON_NAME}-iconset-${_size}.png")
-            add_custom_command(
-                OUTPUT  ${_png}
-                COMMAND ${RSVG_CONVERT}
-                        -w ${_size} -h ${_size}
-                        -o ${_png}
-                        ${ICON_SVG}
-                DEPENDS ${ICON_SVG}
-                COMMENT "Generating iconset ${_size}x${_size}"
-            )
-            list(APPEND _iconset_pngs ${_png})
-        endforeach()
-
         # Copy to iconset with correct naming
         add_custom_command(
             OUTPUT  ${_icns}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_iconset}
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-16.png
+                ${ICON_OUTPUT}/${ICON_NAME}-16.png
                 ${_iconset}/icon_16x16.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-32.png
+                ${ICON_OUTPUT}/${ICON_NAME}-32.png
                 ${_iconset}/icon_16x16@2x.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-32.png
+                ${ICON_OUTPUT}/${ICON_NAME}-32.png
                 ${_iconset}/icon_32x32.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-64.png
+                ${ICON_OUTPUT}/${ICON_NAME}-64.png
                 ${_iconset}/icon_32x32@2x.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-128.png
+                ${ICON_OUTPUT}/${ICON_NAME}-128.png
                 ${_iconset}/icon_128x128.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-256.png
+                ${ICON_OUTPUT}/${ICON_NAME}-256.png
                 ${_iconset}/icon_128x128@2x.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-256.png
+                ${ICON_OUTPUT}/${ICON_NAME}-256.png
                 ${_iconset}/icon_256x256.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-512.png
+                ${ICON_OUTPUT}/${ICON_NAME}-512.png
                 ${_iconset}/icon_256x256@2x.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-512.png
+                ${ICON_OUTPUT}/${ICON_NAME}-512.png
                 ${_iconset}/icon_512x512.png
             COMMAND ${CMAKE_COMMAND} -E copy
-                ${ICON_OUTPUT}/${ICON_NAME}-iconset-1024.png
+                ${ICON_OUTPUT}/${ICON_NAME}-1024.png
                 ${_iconset}/icon_512x512@2x.png
             COMMAND ${ICONUTIL} -c icns -o ${_icns} ${_iconset}
             DEPENDS ${_iconset_pngs}
@@ -203,7 +198,7 @@ function(generate_icons)
         )
         set(ICON_ICNS_FILE ${_icns})
     elseif(APPLE)
-        message(STATUS "iconutil not found — .icns generation disabled")
+        message(STATUS "iconutil not found; .icns generation disabled")
     endif()
 
     # ------------------------------------------------------------------
@@ -217,19 +212,15 @@ function(generate_icons)
     if(ICON_ICNS_FILE)
         list(APPEND _all_icons ${ICON_ICNS_FILE})
     endif()
+    if(_xpm)
+        list(APPEND _all_icons ${_xpm})
+    endif()
 
     add_custom_target(icons ALL DEPENDS ${_all_icons})
 
     # ------------------------------------------------------------------
     #  Install rules
     # ------------------------------------------------------------------
-
-    # Scalable SVG
-    install(FILES ${ICON_SVG}
-        DESTINATION share/icons/hicolor/scalable/apps
-        RENAME ${ICON_NAME}.svg
-        OPTIONAL
-    )
 
     # Hicolor PNGs
     foreach(_size ${HICOLOR_SIZES})
@@ -239,12 +230,6 @@ function(generate_icons)
             OPTIONAL
         )
     endforeach()
-
-    # XPM (installed from source, not generated)
-    install(FILES ${CMAKE_SOURCE_DIR}/resources/icons/${ICON_NAME}.xpm
-        DESTINATION share/pixmaps
-        OPTIONAL
-    )
 
     # Export variables to parent scope
     set(ICON_PNG_FILES  ${ICON_PNG_FILES}  PARENT_SCOPE)

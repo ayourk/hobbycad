@@ -1,5 +1,5 @@
 =====================================================================
-  src/libhobbymesh/README.txt — HobbyMesh Core Library (Future — Phase 5)
+  src/libhobbymesh/README.txt — HobbyMesh Core Library (Future, Phase 5)
 =====================================================================
 
   Reusable mesh editing library.  Will provide mesh I/O, repair,

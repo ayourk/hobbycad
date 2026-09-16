@@ -5,6 +5,7 @@
 #ifndef HOBBYCAD_FULLMODEWINDOW_H
 #define HOBBYCAD_FULLMODEWINDOW_H
 
+#include <QHash>
 #include "gui/mainwindow.h"
 #include "gui/modeltoolbar.h"
 #include "gui/parametersdialog.h"
@@ -15,6 +16,8 @@
 #include <hobbycad/sketch/profiles.h>
 
 #include <AIS_Shape.hxx>
+#include <Graphic3d_ClipPlane.hxx>
+#include <Graphic3d_Camera.hxx>
 #include <TopoDS_Shape.hxx>
 
 #include <QList>
@@ -28,54 +31,56 @@ namespace hobbycad {
 
 class ViewportWidget;
 
-/// A completed sketch with its 3D representation
-struct CompletedSketch {
-    int featureId = 0;          ///< Unique feature ID for dependency tracking
-    QString name;
-    SketchPlane plane;
-    double planeOffset = 0.0;   ///< Offset from origin along plane normal
-    // Custom plane parameters (only used when plane == Custom)
-    PlaneRotationAxis rotationAxis = PlaneRotationAxis::X;
-    double rotationAngle = 0.0;  ///< Rotation angle in degrees
-    QVector<SketchEntity> entities;
-    Handle(AIS_Shape) aisShape;  ///< 3D wireframe for viewport display
-    bool suppressed = false;    ///< True if suppressed in timeline
-};
-
 class FullModeWindow : public MainWindow {
     Q_OBJECT
 
 public:
+    /// Abandon the 3D viewport and keep running without it.
+    ///
+    /// Called after an OCCT failure escaped an event handler. Everything
+    /// that does not need a GL context (sketching, the object tree, file
+    /// operations) keeps working, so this is a real degradation rather
+    /// than a polite way of dying.
+    ///
+    /// @return true if the window is usable afterwards.
+    bool dropViewport();
+
     explicit FullModeWindow(const OpenGLInfo& glInfo,
                             QWidget* parent = nullptr);
 
 public slots:
-    void enterSketchMode(SketchPlane plane = SketchPlane::XY) override;
+    void beginStartupSketch(SketchPlane plane) override;
     void exitSketchMode() override;
 
+    /// Orient the 3D camera square onto the active sketch's plane (Fusion's
+    /// "Look At"). Also called automatically when switching to 3D in a sketch.
+    void lookAtSketchPlane();
+
+    /// Match the 3D viewport to the 2D sketch view when entering 3D: orient
+    /// flat-on to the plane, center on the 2D view center, and match its
+    /// scale (no fit-all); also drops the transient plane highlight.
+    void syncViewportToSketchView();
+
+    /// Save the model camera and match the viewport to the 2D sketch view;
+    /// the first-3D-view seed, guarded so it runs once when the view is ready.
+    void seedSketch3DView();
+
 protected:
+    // Full mode adds its drawing to the shared views: bodies and sketch
+    // wireframes in the viewport, and the construction planes.
     void onDocumentLoaded() override;
+    void onDocumentRecipeChanged() override;
     void onDocumentClosed() override;
+    void refreshModelViews() override;
+    void showSketchPlaneHighlight(SketchPlane plane, double offset,
+                                  PlaneRotationAxis axis, double angle) override;
     void applyPreferences() override;
     SketchCanvas* activeSketchCanvas() const override;
-    bool getSelectedSketchForExport(
-        QVector<sketch::Entity>& outEntities,
-        QVector<sketch::Constraint>& outConstraints) const override;
 
 private slots:
     void onNewConstructionPlane();
     void onConstructionPlaneSelected(int planeId);
     void onSketchEntityModified(int entityId);
-
-    // Timeline context menu handlers
-    void onEditFeature(int index);
-    void onRenameFeature(int index);
-    void onDeleteFeature(int index);
-    void onSuppressFeature(int index, bool suppress);
-    void onFeatureMoved(int fromIndex, int toIndex);
-    void onRollbackChanged(int index);
-    void onExportSketchDXF(int index);
-    void onExportSketchSVG(int index);
 
     // Model tool handlers
     void onModelToolSelected(ModelTool tool);
@@ -84,18 +89,21 @@ private slots:
 
 private:
     // Overrides from MainWindow
-    void onSketchDeselected() override;
-    void populateSketchFeatureProperties(QTreeWidgetItem* parent,
-                                          int timelineIndex,
-                                          const QString& units) override;
-    void onCreateSketchClicked() override;
-    void saveCurrentSketch() override;
-    void discardCurrentSketch() override;
+    void showOriginPlaneProperties(SketchPlane plane) override;
+    void hidePlaneHighlight() override { hideSketchPlane(); }
 
-    void createTimeline();
+    void orientViewToSketchPlane(const Handle(V3d_View)& v);
+    // Constructor wiring, one function per concern.
+    void connectViewportSignals();
+    void connectSketchModeToggle();
+    void connectSketchToolbarValidation();
+    void connectSketchCanvasSignals();
+    void connectViewActions();
+    void connectCliViewportCommands();
+    void connectConstructionSignals();
+    /// Show the project's bodies, index-aligned with m_solidAisShapes.
     void displayShapes();
-    void showSketchProperties();
-    Handle(AIS_Shape) createSketchWireframe(const CompletedSketch& sketch);
+    Handle(AIS_Shape) createSketchWireframe(const SketchData& sketch);
 
     // Sketch plane visualization
     void showSketchPlane(SketchPlane plane, double offset,
@@ -103,57 +111,47 @@ private:
                          double rotAngle = 0.0);
     void hideSketchPlane();
 
-    // Project loading helpers
-    void loadProjectData();
-    void populateFeatureTree();
-    void populateTimeline();
-    void loadSketchesFromProject();
-    void loadParametersFromProject();
-    void loadConstructionPlanesFromProject();
-    void clearProjectData();
+    /// Show or hide one body in the viewport, by body ID.
+    /// @return false if no such body.
+    bool setBodyVisible(int bodyId, bool visible) override;
 
     // Construction plane display
     void displayConstructionPlane(int planeId);
-    void hideConstructionPlane(int planeId);
-
-    // Timeline feature helpers
-    int sketchIndexFromTimelineIndex(int timelineIndex) const;
-    int timelineIndexFromSketchIndex(int sketchIndex) const;
-
-    /// Validate that a timeline index is in bounds and not the Origin.
-    /// Returns the feature type on success, or std::nullopt (with status message).
-    std::optional<TimelineFeature> validateFeatureAction(
-        int index, const QString& actionVerb) const;
-
-    /// Retrieve a selected sketch's profiles for 3D operations (extrude/revolve).
-    /// Returns std::nullopt with appropriate error messages on failure.
-    struct SketchProfilesResult {
-        const CompletedSketch* sketch = nullptr;
-        std::vector<sketch::Entity> libEntities;
-        std::vector<sketch::Profile> profiles;
-    };
-    std::optional<SketchProfilesResult> getSelectedSketchProfiles(
-        const QString& operationName);
+    void eraseConstructionPlane(int planeId);
+    /// Redraw every visible construction plane from the project (after
+    /// undo/redo, Apply, or a project load).
+    void refreshConstructionPlaneVisuals();
+    /// The selection highlight at an arbitrary frame (construction planes,
+    /// and the live preview of an edit).
+    void showPlaneFrame(const gp_Ax3& frame);
+    void previewConstructionPlane(const ConstructionPlaneData& plane);
+    void applyConstructionPlaneEdit(const ConstructionPlaneData& plane);
+    void resetConstructionPlanePreview();
 
     ViewportWidget*  m_viewport      = nullptr;
     QLabel*          m_axisLabel = nullptr;
 
-    // Completed sketches
-    QVector<CompletedSketch> m_completedSketches;
-    int m_currentSketchIndex = -1;  ///< Index of sketch being edited (-1 if new)
-    int m_pendingSketchTimelineIdx = -1;  ///< Timeline index of sketch being created
-    PlaneRotationAxis m_pendingRotationAxis = PlaneRotationAxis::X;
-    double m_pendingRotationAngle = 0.0;
+    /// Each stored sketch's wireframe, by sketch id. Views of the project,
+    /// rebuilt by refreshModelViews(); the sketches themselves are the session's.
+    QHash<int, Handle(AIS_Shape)> m_sketchWireframes;
 
     // Sketch plane visualization
+    Handle(Graphic3d_ClipPlane) m_sliceClipPlane;   ///< Active "Slice" section plane, if any
     Handle(AisSketchPlane) m_sketchPlaneVis;
+    QHash<int, Handle(AisSketchPlane)> m_constructionPlaneVis;   ///< Committed planes by id
 
-    // Feature ID tracking for dependencies
-    int m_nextFeatureId = 1;  ///< Next feature ID to assign (0 reserved for Origin)
-
-    // 3D solid bodies from extrude/revolve operations
-    QVector<TopoDS_Shape> m_solidBodies;
+    /// Shaded handles of the project's bodies, index-aligned with them.
     QVector<Handle(AIS_Shape)> m_solidAisShapes;
+
+    // 3D camera save/restore across the 2D/3D sketch toggle. The viewport is
+    // one reused OCCT view, so entering a sketch saves the model camera before
+    // looking flat-on at the plane; toggling preserves the in-sketch view; and
+    // finishing the sketch restores the pre-sketch model camera.
+    Handle(Graphic3d_Camera) m_preSketch3DCam;  ///< model camera before the sketch
+    Handle(Graphic3d_Camera) m_inSketch3DCam;   ///< the in-sketch 3D orientation
+    bool m_sketch3DSeeded = false;              ///< first 3D view of this sketch done
+    bool m_pendingSketchSeed = false;           ///< 3D toggled before the view was ready; seed on viewInitialized
+    std::optional<SketchPlane> m_pendingStartupSketch;  ///< --exec sketch waiting for full viewport init
 };
 
 }  // namespace hobbycad

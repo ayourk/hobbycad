@@ -5,8 +5,8 @@
 #  Top-level CMakeLists.txt
 #
 #  Build targets:
-#    libhobbycad   — Reusable core library (geometry, file I/O)
-#    hobbycad      — Application executable (GUI + CLI modes)
+#    libhobbycad:    Reusable core library (geometry, file I/O)
+#    hobbycad:       Application executable (GUI + CLI modes)
 #
 #  Usage:
 #    cmake --preset linux-debug
@@ -61,6 +61,15 @@ endif()
 option(HOBBYCAD_BUILD_APP
     "Build the HobbyCAD application (requires Qt6 >= 6.4.2)" ON)
 
+# A LAYERING TEST, not a product. The command line is a front end that
+# ties closely to libhobbycad, and building it alone (with the
+# application off) proves the command layer needs neither Qt nor a GUI.
+# The shipped packages contain the application, which reaches the same
+# commands; this target is never installed and is off by default so an
+# ordinary build does not pay for it.
+option(HOBBYCAD_BUILD_CLI
+    "Build the command line alone, a test that it needs no Qt (not packaged)" OFF)
+
 # ---- Qt detection ----------------------------------------------------
 #  Probe for Qt 6.4.2+ early.  If not found (or too old), automatically
 #  disable the GUI build and fall back to a library-only build.
@@ -73,7 +82,7 @@ find_package(Threads REQUIRED)
 if(HOBBYCAD_BUILD_APP)
     find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} QUIET COMPONENTS Core)
     if(NOT Qt6_FOUND)
-        message(STATUS "Qt6 >= ${HOBBYCAD_MIN_QT_VERSION} not found — disabling GUI, building library only")
+        message(STATUS "Qt6 >= ${HOBBYCAD_MIN_QT_VERSION} not found; disabling GUI, building library only")
         set(HOBBYCAD_BUILD_APP OFF)
     endif()
 endif()
@@ -82,6 +91,7 @@ message(STATUS "HobbyCAD ${PROJECT_VERSION}")
 message(STATUS "Core library linkage: ${HOBBYCAD_CORE_LINKAGE}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build application: ${HOBBYCAD_BUILD_APP}")
+message(STATUS "Build command line: ${HOBBYCAD_BUILD_CLI}")
 if(Qt6_FOUND)
     message(STATUS "Qt version: ${Qt6_VERSION}")
 else()
@@ -106,7 +116,10 @@ endif()
 
 add_subdirectory(src/libhobbycad)
 
-if(HOBBYCAD_BUILD_APP)
+# src/hobbycad holds the application AND the command-line front end, so
+# the directory is entered when either one is being built. The GUI target
+# inside it stays gated on HOBBYCAD_BUILD_APP.
+if(HOBBYCAD_BUILD_APP OR HOBBYCAD_BUILD_CLI)
     add_subdirectory(src/hobbycad)
 endif()
 

@@ -43,14 +43,14 @@
 
 A Linux-native, open-source, parametric 3D CAD application for
 hobbyists, by hobbyists. HobbyCAD is built for mechanical
-engineering, product design, and maker fabrication — delivering
+engineering, product design, and maker fabrication, delivering
 professional-quality tools without requiring proprietary software,
 subscription fees, or cloud lock-in.
 
 Key principles:
 
   - Linux-first development (no Windows/macOS port-back compromises)
-  - For hobbyists, by hobbyists — professional-quality results
+  - For hobbyists, by hobbyists: professional-quality results
     without the professional price tag
   - Offline-first: version control integration is HobbyCAD's cloud
     connectivity. All collaboration and sharing flows through git
@@ -143,7 +143,7 @@ Key principles:
   The user creates multiple solid bodies within a single part file,
   using Boolean operations (union, subtract, intersect) to combine
   them into a final shape. Any body can be flagged as a
-  "construction body" — used as reference geometry for booleans,
+  "construction body", used as reference geometry for booleans,
   splits, and clearance checks but excluded from mass properties
   and export by default. See project_definition.txt Phase 2 for
   construction body details.
@@ -152,7 +152,7 @@ Key principles:
   ---------------------------------------------------
   The user imports an STL or OBJ mesh file and converts it (fully or
   partially) into B-Rep solid geometry suitable for export as STEP.
-  This is a notoriously difficult problem — no existing CAD software
+  This is a notoriously difficult problem; no existing CAD software
   performs this reliably for arbitrary geometry. HobbyCAD would offer
   this as a phased capability:
 
@@ -567,7 +567,7 @@ Key principles:
   Unlike Fusion 360 and Onshape, which require proprietary cloud
   backends for collaboration and version history, HobbyCAD works
   entirely offline with local file storage. Version control is
-  HobbyCAD's cloud connectivity — all collaboration, sharing, and
+  HobbyCAD's cloud connectivity: all collaboration, sharing, and
   project history flows through git and GitHub/GitLab, using
   infrastructure the open-source community already uses and trusts.
 
@@ -576,7 +576,7 @@ Key principles:
 
   The native project format is a plain directory of text-based files
   (JSON manifest, BREP geometry, JSON sketches/features, Python
-  scripts) — fully inspectable, hand-editable, and version-control
+  scripts), fully inspectable, hand-editable, and version-control
   friendly. Built-in git integration allows users to manage project
   history, collaborate, and share via GitHub/GitLab directly from
   the application. See project_definition.txt Section 5.2-5.5 for
@@ -605,7 +605,7 @@ Key principles:
 
   7.7  Mesh-to-B-Rep Conversion (eventually Mesh-to-STEP)
   -----------------------------
-  No existing CAD software — open-source or commercial — reliably
+  No existing CAD software, open-source or commercial, reliably
   converts triangulated mesh data (STL/OBJ) into proper B-Rep solid
   geometry (STEP). This is a fundamental unsolved problem in CAD,
   and even a partially capable implementation would be a unique
@@ -687,7 +687,7 @@ Key principles:
   2009 by Ryan Schmidt as a PhD research project at the University of
   Toronto, it was acquired by Autodesk on October 31, 2011 and placed
   in their 123D product family. It became the go-to "Swiss Army Knife"
-  for anyone working with triangle meshes — hobbyists, engineers,
+  for anyone working with triangle meshes; hobbyists, engineers,
   jewelers, dental labs, and 3D printing service bureaus all relied on
   it daily.
 
@@ -849,7 +849,7 @@ Key principles:
       HobbyMesh's GPL 3.0 license.
 
       However, libslic3r was not designed as a clean embeddable
-      library — it has extensive dependencies (Boost, TBB, Clipper,
+      library; it has extensive dependencies (Boost, TBB, Clipper,
       wxWidgets build system entanglement) and no published stable
       API for external consumers. Multiple developers have attempted
       to build it standalone with limited success. Integration would
@@ -869,7 +869,7 @@ Key principles:
           AGPL 3.0 with proper attribution).
 
       The CLI subprocess approach is recommended for initial
-      integration — it requires no library dependency and works
+      integration; it requires no library dependency and works
       with whatever slicer the user has installed.
 
     Orientation Optimizer
@@ -931,7 +931,7 @@ Key principles:
     | Mesh Processing           | CGAL (Polygon Mesh Proc.)   | GPL 3.0+  |
     | Mesh Data Structure       | OpenMesh or libigl          | BSD       |
     | Voxelization              | OpenVDB                     | MPL 2.0   |
-    | Mesh Repair               | MeshFix or custom           | GPL 2.0   |
+    | Mesh Repair               | MeshFix or custom           | GPL 3.0+  |
     | 3D Viewport               | OpenGL 3.3+ via Qt          | -         |
     | Sculpting / Remeshing     | Custom (based on libigl)    | BSD       |
     +---------------------------+-----------------------------+-----------+
@@ -988,15 +988,15 @@ Key principles:
 
   PHASED APPROACH:
 
-    Phase A — CLI subprocess (initial, low effort):
+    Phase A: CLI subprocess (initial, low effort)
       Invoke the user's installed slicer (PrusaSlicer, OrcaSlicer,
       or any Slic3r derivative) via its command-line interface for
       headless batch slicing. HobbyMesh exports a 3MF file with
       print settings, calls the slicer CLI, and optionally displays
-      a G-code preview. Requires no library dependency — works with
+      a G-code preview. Requires no library dependency; works with
       whatever slicer is already installed.
 
-    Phase B — 3MF round-trip (medium effort):
+    Phase B: 3MF round-trip (medium effort)
       Deep 3MF integration with embedded slicer profiles, print
       settings, and modifier meshes. The user configures print
       parameters inside HobbyMesh, exports a fully-configured 3MF,
@@ -1004,7 +1004,7 @@ Key principles:
       profile manager to HobbyMesh for storing and editing print
       presets.
 
-    Phase C — Embedded slicer library plugin (long-term, high effort):
+    Phase C: Embedded slicer library plugin (long-term, high effort)
       Fork and strip the OrcaSlicer (or PrusaSlicer) codebase to
       extract a clean, embeddable slicing library with a stable C/C++
       API. Ship as an optional HobbyMesh plugin.
@@ -1045,8 +1045,8 @@ Key principles:
     The slicer integration should be an optional plugin, not a core
     dependency. Users who prefer their own slicer workflow (or who
     use resin printers with proprietary slicers) should not be
-    affected. HobbyMesh's core functionality — mesh editing, repair,
-    sculpting, Boolean operations — must work without the slicer
+    affected. HobbyMesh's core functionality (mesh editing, repair,
+    sculpting, Boolean operations) must work without the slicer
     plugin installed.
 
 ================================================================================

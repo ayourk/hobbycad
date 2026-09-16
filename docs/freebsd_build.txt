@@ -1,0 +1,593 @@
+================================================================================
+  HobbyCAD - BUILDING ON FREEBSD
+================================================================================
+
+  Project          : HobbyCAD
+  File             : docs/freebsd_build.txt
+  Document Version : 0.0.1.0
+  Date             : 2026-08-30
+  Format           : Plain Text (all project documentation is plain text)
+  AI Attribution   : This document was primarily generated with the assistance
+                     of Claude AI (Anthropic). Human review and editorial
+                     direction provided by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+    1. Overview
+    2. Supported Releases
+    3. Package Installation
+    4. libslvs 3.2p1
+    5. OpenCASCADE 8.0.1
+    6. Building HobbyCAD
+    7. Verifying the GUI
+    8. DragonFly BSD
+    9. GhostBSD
+    10. Troubleshooting
+    11. Source Packages
+
+================================================================================
+  1. Overview
+================================================================================
+
+  FreeBSD is the least demanding BSD target and is close to Linux in effort.
+  The full stack (libslvs, OpenCASCADE, HobbyCAD and the GUI) builds and runs
+  with one OpenCASCADE patch and no FreeBSD-specific changes to HobbyCAD
+  sources.
+
+  Everything in this document was established by building on the releases
+  named below. It is not derived from upstream documentation.
+
+  This document also covers DragonFly BSD and GhostBSD, which are FreeBSD
+  derivatives rather than separate targets. See sections 8 and 9.
+
+================================================================================
+  2. Supported Releases
+================================================================================
+
+  Verified on FreeBSD 14.4-RELEASE and 15.1-RELEASE-p3, amd64.
+
+  Treat 14.4 and 15.x as a single target. Measured on both, the toolchain and
+  package versions were identical:
+
+    clang        19.1.7
+    qt6-base     6.11.1
+    freetype2    2.14.3
+    eigen        3.4.0_4
+    cmake        3.31.12
+    ninja        1.13.2
+
+  The only differences observed across the whole stack were the compiler
+  warning count and llvmpipe's SIMD width (256-bit on 14.4, 128-bit on 15.1).
+  Neither is a build concern.
+
+  NOTE: that version parity is partly an artifact of installing both machines
+  from the same pkg snapshot. The quarterly and latest package branches can
+  diverge independently of the operating system version.
+
+================================================================================
+  3. Package Installation
+================================================================================
+
+    pkg install cmake ninja eigen qt6-base qt6-svg qt6-tools \
+                nlohmann-json freetype2
+
+  The build itself requires: nlohmann_json, OpenCASCADE, OpenGL, PNG, Qt6,
+  slvs (libslvs) and Threads.
+
+  A wider set is probed by devtest/, which is a dependency-readiness harness
+  rather than part of the build: CGAL, OpenVDB, assimp, OpenMesh, lib3mf,
+  meshfix, pybind11, libgit2, libzip and TBB. None of these is referenced by
+  any source file yet. They are PLANNED dependencies for features not yet
+  implemented, not optional ones the build degrades without. Installing them
+  is preparation, not a requirement.
+
+  libgit2 in particular is expected to become required. It is packaged here
+  (1.9.7), so that transition should not need any porting work.
+
+================================================================================
+  4. libslvs 3.2p1
+================================================================================
+
+  Builds unpatched.
+
+  WHAT "3.2p1" MEANS
+
+  This is NOT an upstream release. Upstream SolveSpace has no 3.2p1.
+
+    3.2       the upstream SolveSpace version the snapshot is based on
+    .git~     taken from git rather than a release tarball
+    20260914  the day the HobbyCAD series was cut against upstream
+    +p1       revision 1 of the HobbyCAD changes
+
+  The two parts move independently: the snapshot says which upstream this
+  came from, and +pN says which revision of our changes is applied on top.
+  Bumping one does not imply bumping the other.
+
+  The changes are baked into the orig tarball rather than carried alongside
+  it, for portability: vcpkg, Homebrew and the BSDs all consume
+  the same tarball, and only Debian packaging can carry a debian/patches
+  series. That is also why it "builds unpatched" here. It does not need
+  patching because the patching already happened upstream of the tarball.
+
+  A build can detect this at compile time, from include/slvs.h:
+
+    SLVS_IS_HOBBYCAD_BUILD     1
+    SLVS_HOBBYCAD_PATCHLEVEL   1
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DENABLE_GUI=OFF -DENABLE_CLI=OFF -DENABLE_TESTS=OFF -DENABLE_OPENMP=OFF
+    cmake --build build -j$(sysctl -n hw.ncpu)
+
+  The orig tarball does NOT bundle Eigen. extlib/eigen/ is an empty submodule
+  placeholder, so Eigen must come from pkg. A missing Eigen fails partway
+  through the build at Eigen/SparseCore, not at configure time.
+
+================================================================================
+  5. OpenCASCADE 8.0.1
+================================================================================
+
+  Stock OpenCASCADE 8.0.1 does NOT build on FreeBSD. It stops at:
+
+    Standard_CString.cxx:55: error: System does not support xlocale.
+      Import/export could be broken if C locale did not specified by
+      application.
+
+  OCCT_CLOCALE_POSIX2008 is defined only for __APPLE__ and for glibc via
+  _GNU_SOURCE, which FreeBSD's clang does not define. The #error above is
+  waived only for Android, QNX and MinGW, so every BSD reaches it.
+
+
+  Use the baked tarball:
+
+    opencascade_8.0.1+p1.orig.tar.xz
+
+  The +p1 suffix means the same thing it does for libslvs: revision 1 of the
+  HobbyCAD changes, applied inside the orig tarball rather than carried
+  alongside it. 8.0.1 is the upstream release, +p1 the local changes. Nothing
+  needs patching; the patching already happened upstream of the tarball.
+
+  The changes are baked in rather than carried alongside because vcpkg,
+  Homebrew and the BSD ports all consume the orig tarball directly and cannot
+  read a debian/patches series. Nothing is stripped from the tarball either,
+  so every consumer builds from identical bytes.
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DUSE_FREETYPE=ON -DUSE_TK=OFF -DUSE_TCL=OFF \
+      -DBUILD_MODULE_Draw=OFF -DBUILD_DOC_Overview=OFF \
+      -DINSTALL_TEST_CASES=OFF
+
+  FreeType is found unaided at /usr/local/include/freetype2, with the library
+  at /usr/local/lib/libfreetype.so.
+
+  IMPORTANT: build with USE_FREETYPE=ON. With it off, everything still builds
+  and runs, but the 3D viewport has no text at all: no view-cube labels and no
+  scale-bar numbers. Qt's own widgets keep their text, so the result reads as
+  a platform font problem rather than a build flag.
+
+  NOTE: FreeType and X11 being found without help is specific to FreeBSD's
+  layout. Do not assume a successful build here means the include paths are
+  right on other systems.
+
+================================================================================
+  6. Building HobbyCAD
+================================================================================
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/local;/path/to/occt-build"
+    cmake --build build -j$(sysctl -n hw.ncpu)
+
+  One accommodation for the BSDs exists in the HobbyCAD tree. backtrace() and
+  backtrace_symbols() are in libc on glibc but in a separate libexecinfo here.
+  crashhandler.cpp guards its include with __has_include(<execinfo.h>), which
+  SUCCEEDS on FreeBSD because the header is installed, so the code compiles and
+  then fails at link with "undefined symbol: backtrace". The CMake check tests
+  for the symbol rather than the header and links libexecinfo when it is
+  separate.
+
+  Verify with three levels, none of which needs a display:
+
+    hobbycad --version
+        Dynamic linking resolves; prints the OpenCASCADE version in use.
+
+    hobbycad --no-gui
+        Reaches the CLI prompt, so OpenCASCADE and libslvs initialized.
+
+    QT_QPA_PLATFORM=offscreen hobbycad --help
+        The Qt platform layer comes up.
+
+  --version reporting "OpenCASCADE 8.0.1" confirms the build is running
+  against the OpenCASCADE just built rather than a system copy.
+
+================================================================================
+  7. Verifying the GUI
+================================================================================
+
+    Xvfb :99 -screen 0 1400x900x24 &
+    DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb hobbycad &
+    DISPLAY=:99 xwd -root -silent > shot.xwd
+
+  Capturing with xwd avoids needing ImageMagick on the machine under test; the
+  file can be converted elsewhere.
+
+  Renders on both releases, reporting:
+
+    OpenGL 4.6 - llvmpipe (LLVM 19.1.7)
+
+================================================================================
+  8. DragonFly BSD
+================================================================================
+
+  DragonFly 6.4.2 matches FreeBSD for locale purposes: <xlocale.h> is present
+  and newlocale/uselocale are usable, so the OpenCASCADE guard behaves exactly
+  as it does on FreeBSD.
+
+  BUILD THE WHOLE STACK WITH gcc11, NOT THE BASE COMPILER.
+
+    pkg install gcc11 cmake ninja pkgconf qt6-base qt6-svg qt6-tools \
+                eigen freetype2 nlohmann-json libzip png \
+                xorgproto libX11 libXext libXmu mesa-libs
+    cmake ... -DCMAKE_C_COMPILER=/usr/local/bin/gcc11 \
+              -DCMAKE_CXX_COMPILER=/usr/local/bin/g++11 \
+              -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,/usr/local/lib/gcc11" \
+              -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,/usr/local/lib/gcc11"
+
+  COMPILER ROUTES, ALL FOUR
+
+    1. gcc11 from dports                                     RECOMMENDED
+       pkg install gcc11, then point CMake at it as above. One command, and
+       it is what the ports framework itself selects: a port declaring
+       USES=compiler:c++17-lang gets an adequate compiler added as a build
+       dependency automatically.
+
+    2. base gcc 8.3 (2019)                                   works, but
+       The whole stack does build with it, verified end to end, GUI
+       included. Nothing is wrong with the compiler itself; what is missing
+       is a library it was never shipped with. Three pieces of work first:
+
+         - Qt: dports ships only 6.8.3, whose headers gcc 8.3 cannot
+           compile: static assertions about noexcept helper functions in
+           qmetatype.h, qvariant.h, qlocale.h, qdatetime.h, qurl.h and
+           qjsonvalue.h, before reaching any HobbyCAD code. Qt 6.4.2 does
+           compile under gcc 8.3, but needs its own DragonFly porting; see
+           below.
+
+         - std::filesystem: HobbyCAD uses it, and AS SHIPPED the base
+           toolchain cannot link it. <filesystem> is installed as a header,
+           but the base libstdc++ contains no filesystem implementation: no
+           libstdc++fs in any form, and zero filesystem symbols in
+           libstdc++.so and libstdc++.a alike. -lstdc++fs does not help by
+           itself, because no such library is present to link against.
+           <experimental/filesystem> is not installed either. This is not a
+           packaging slip in the release image: the 6.4 source tree builds
+           libstdc++ from three components (libconv_1998, libconv_2011,
+           libconv_supc) and has no C++17 component at all, so a full
+           buildworld produces the same result. The objects are ordinary
+           libstdc++ source and can be rebuilt; that is how this route was
+           proven. See ROUTE 2 IN DETAIL below.
+
+         - Everything must be built with the SAME compiler. libslvs,
+           OpenCASCADE, Qt and HobbyCAD all with gcc 8.3, into a prefix of
+           their own. Pairing a gcc 8.3 HobbyCAD with the gcc11
+           OpenCASCADE from route 1 reintroduces exactly the mixing
+           described further down, and does so inside the parts you
+           control, which is the case actually worth avoiding.
+
+    3. clang from dports                                  PARTLY TESTED
+       Out of the box it hits the same wall: dports clang links the SAME
+       base libstdc++, so it inherits the missing filesystem exactly, and
+       there is no libc++ package to switch to, only libcxxrt, which is
+       an ABI library rather than a standard library. Mk/Uses/compiler.mk
+       anticipates this, forcing USE_GCC=yes when clang would use
+       libstdc++.
+
+       But the route 2 library solves it here too, and this much IS
+       measured: clang 19 links and runs the filesystem probe against the
+       reconstructed libstdc++fs, and does so with a single runtime:
+       libstdc++.so.9 and nothing else. So the filesystem obstacle is not
+       specific to gcc 8.3 and is not what closes this route.
+
+       What remains untested is Qt. Qt 6.4.2 would need building under
+       clang, with the DragonFly changes listed below plus whatever clang
+       raises that gcc did not. Also untried: pointing clang at gcc11's
+       libstdc++, or building libc++ from source for -stdlib=libc++.
+       Treat this as a route that plausibly works and has not been walked
+       end to end, rather than one that is closed.
+
+    4. base gcc 4.7                                          RULED OUT
+       The other base compiler, selectable via CCVER=gcc47. Measured, not
+       assumed: it is c++ 4.7.4 [DragonFly] Release/2014-06-12, and it
+       rejects the standard outright:
+
+         c++: error: unrecognized command line option '-std=c++17'
+
+       so nothing in HobbyCAD can be compiled with it. Unlike route 3, this
+       one is genuinely closed rather than merely unexplored.
+
+  FIXED IN LATER DRAGONFLY. This is a 6.4-era gap. The current source tree
+  ships GCC 12, whose libstdc++ build adds libconv_2017 and libconv_2020
+  components, and libconv_2017 compiles fs_ops.cc, fs_path.cc and fs_dir.cc.
+  On such a release the base compiler needs none of the above.
+
+  WHAT QT 6.4.2 NEEDS, if taking route 2. Its DragonFly port is unfinished:
+  qsystemdetection.h folds DragonFly in with FreeBSD and the code then
+  assumes FreeBSD APIs. The whole 6.4.2 suite (50 libraries including
+  XcbQpa and the xcb platform plugin) builds under gcc 8.3 once these are
+  closed:
+
+      - no mkspecs/dragonfly-g++ (two small files; qmake.conf differs from
+        the freebsd one by a single line)
+      - src/gui/configure.cmake gates ALL X11 and XCB detection on a
+        hard-coded platform list that omits DragonFly, so find_package(X11)
+        is never called and every QPA feature reports "no" while FindX11
+        succeeds standalone. Note CMake's FREEBSD variable is false here
+        even though Q_OS_FREEBSD is true in C++
+      - <sys/cpuset.h> and cpuset_getaffinity() in qthread_unix.cpp, which
+        DragonFly does not have; it belongs on the Q_OS_BSD4 sysctl path
+      - kinfo_proc fields, named kp_* here and ki_* on FreeBSD, in
+        qlockfile_unix.cpp
+      - no Elf32_Nhdr and no EM_AARCH64, needed by qelfparser_p.cpp
+      - the kqueue file watcher platform list, which omits DragonFly
+      - -Wl,--no-undefined, which cannot hold because DragonFly keeps
+        environ in crt1.o while FreeBSD's libc exports it
+
+  ROUTE 2 IN DETAIL: REBUILDING THE MISSING libstdc++fs
+
+  Not recommended (route 1 is one command) but it does work, and the
+  whole stack including the GUI was verified this way. What follows is the
+  procedure, so the option is a documented choice rather than folklore.
+
+  The filesystem objects are ordinary libstdc++ source that DragonFly 6.4
+  simply does not compile. Rebuild them from GCC 8.3's own sources against
+  the headers base already installs:
+
+    fetch the four files from GCC 8.3, libstdc++-v3/src/filesystem/:
+      std-path.cc  std-ops.cc  std-dir.cc  ops-common.h  dir-common.h
+
+    std-ops.cc and std-dir.cc open with #include <experimental/filesystem>,
+    which DragonFly does not install. Delete that line from both. GCC
+    compiles these sources once per namespace and the include is vestigial
+    here; neither file uses anything from experimental.
+
+    c++ -std=gnu++17 -fPIC -O2 -D_GLIBCXX_USE_CXX11_ABI=1 \
+        -DNEED_DO_COPY_FILE -I. -c std-path.cc std-ops.cc std-dir.cc
+    ar rcs libstdc++fs.a std-path.o std-ops.o std-dir.o
+
+    NEED_DO_COPY_FILE matters. GCC guards do_copy_file with it and defines
+    it when building the translation unit that owns the definition; without
+    it the archive builds and links fail on that one symbol.
+
+  Then add the archive to every link, e.g.
+
+    cmake ... -DCMAKE_CXX_STANDARD_LIBRARIES="/path/to/libstdc++fs.a"
+
+  WHY THIS IS NOT THE RECOMMENDED ROUTE. The result is sound in practice:
+  one C++ runtime, correct behavior, GUI included, but filesystem arrives
+  from a private static archive while the rest of the C++ library comes from
+  the system libstdc++. On a correct build these objects live INSIDE
+  libstdc++ itself, which is what a gcc >= 9 provides. Route 2 also means
+  building Qt 6.4.2 with the changes listed above before compiling a line of
+  HobbyCAD. Take it if you have a reason to stay on the base compiler; take
+  route 1 otherwise.
+
+
+  TWO C++ RUNTIMES ARE NORMAL HERE, AND UNAVOIDABLE WITH DPORTS QT.
+
+  dports is not internally consistent about this. Qt6 is built with gcc11
+  and links /usr/local/lib/gcc11/libstdc++.so.6, but its own dependencies
+  are not: libicui18n, libicuuc and libdouble-conversion are built with the
+  base compiler and link /usr/lib/gcc80/libstdc++.so.9. So libQt6Core pulls
+  in BOTH, and any Qt6 program on DragonFly ends up with two C++ runtimes
+  in one process no matter which compiler you choose.
+
+  Inspect the finished binary, not a single library: a library can look
+  clean while the process is not:
+
+    ldd path/to/hobbycad | grep stdc++
+
+  Expect two lines on route 1. That is the normal state for a Qt6
+  application here, and it works: ICU version-namespaces its C++ symbols
+  and presents a C interface to Qt, so the two runtimes never exchange C++
+  objects. The hazard is real but narrow: it would bite if a C++ object
+  or exception crossed between libraries compiled against different
+  runtimes, which does not happen in this arrangement.
+
+  Route 2 is actually the tidier one in this respect: building everything
+  including Qt with the base compiler yields a single libstdc++.so.9. That
+  is a curiosity rather than a reason to prefer it.
+
+  What IS worth avoiding is mixing compilers within the parts you build
+  yourself. Build libslvs, OpenCASCADE and HobbyCAD with the same compiler;
+  do not let one default to base cc while the others use gcc11.
+
+  Differences to expect:
+
+    - Qt does NOT fold DragonFly into Q_OS_FREEBSD. Any platform guard must
+      name __DragonFly__ explicitly. HobbyCAD's xdg-open guard does.
+
+    - The root shell is csh, which mangles escaped quotes in ad-hoc test
+      commands. Fetch scripts rather than typing them. Note that ssh hands a
+      command to the login shell, so even "ssh host sh -c ..." is parsed by
+      csh first; feed the script in on stdin instead.
+
+    - The live image brings up no network at all. Run "dhclient vtnet0"
+      before anything tries to fetch.
+
+    - A minimal install has NO FONTS AT ALL: fc-list is empty and there is
+      no .ttf or .otf anywhere. The GUI still starts and the 3D viewport
+      draws correctly, but every Qt label renders as an empty box. Install
+      one: pkg install dejavu. Note the packaged Qt would pull a font in as
+      a dependency; a hand-built Qt does not.
+
+    - The viewport reports OpenGL 2.1 under the software rasterizer here,
+      against 4.6 on FreeBSD and 4.5 on NetBSD and OpenBSD. HobbyCAD renders
+      correctly at 2.1.
+
+    - DragonFly ships no <malloc.h>, the same as OpenBSD. FreeBSD and NetBSD
+      both provide one, as a shim that includes <stdlib.h>, which is why this
+      surfaces only here and on OpenBSD. The build stops at:
+
+        fatal error: malloc.h: No such file or directory
+
+      Several OpenCASCADE sources include it, so guarding a single site is
+      not enough: the build only stops at the next one. Put a compatibility
+      header on the include path before building:
+
+        mkdir -p ~/compat-include
+        printf '#include <stdlib.h>\n' > ~/compat-include/malloc.h
+        export CPATH=~/compat-include
+
+      The mallinfo() calls those files make are already guarded by
+      HAS_MALLINFO, so only the include itself is a problem. This is the same
+      fix OpenBSD needs, for the same reason.
+
+  SCOPE: the full stack builds and runs here: libslvs 3.2p1 unmodified,
+  OpenCASCADE 8.0.1+p1 with the compatibility header above, and HobbyCAD
+  itself. Verified with gcc11, and separately with base gcc 8.3 by way of
+  route 2. The GUI was exercised under Xvfb with the xcb platform plugin:
+  menus, toolbars, the project tree and the 3D viewport all render.
+
+================================================================================
+  9. GhostBSD
+================================================================================
+
+  GhostBSD 26.1 reports itself as "FreeBSD 15.0-RELEASE-p2", and its
+  capability probe and locale reproducer output are identical to FreeBSD's.
+  The build steps in this document apply, with one structural difference.
+
+  GhostBSD PACKAGES ITS BASE SYSTEM, Debian style: a library ships as
+  GhostBSD-<name> and its headers separately as GhostBSD-<name>-dev. The
+  runtime is installed, the headers are not. So a base header that is simply
+  present on FreeBSD can be missing here while the shared library sits in
+  /usr/lib. OpenCASCADE hits this first:
+
+    Standard_StackTrace.cxx:34: fatal error: 'execinfo.h' file not found
+
+  with /usr/lib/libexecinfo.so.1 present the whole time. Install the headers:
+
+    pkg install GhostBSD-libexecinfo-dev
+
+  Treat any "header not found, but the library exists" error the same way and
+  look for the matching -dev package before assuming the base system lacks
+  the feature.
+
+  Its value is exercising the GUI in a real desktop session (MATE) rather than
+  under Xvfb.
+
+  Practical notes for testing in a virtual machine:
+
+    - The live ISO replicates its system image into a RAM disk and requires
+      about 4 GB for that. Give the VM 6 GB.
+
+    - Its X server segfaults under qemu's standard VGA. This is convenient for
+      automation: xinit gives up and drops to a shell prompt.
+
+    - Log in as "ghostbsd" for a shell, or "installer" to install. The
+      ghostbsd account has passwordless sudo.
+
+    - Package set that builds the stack here:
+
+        pkg install cmake ninja pkgconf qt6-base qt6-svg qt6-tools \
+                    eigen freetype2 nlohmann-json libzip png \
+                    xorgproto libX11 libXext libXmu mesa-libs \
+                    xorg-vfbserver GhostBSD-libexecinfo-dev
+
+      The last one is the -dev split described below; without it
+      OpenCASCADE stops on a missing execinfo.h.
+
+    - GhostBSD enables ipfw by default: firewall_enable="YES" with
+      firewall_type="workstation". Inbound ssh is dropped rather than
+      refused, so a connection times out and looks like a dead sshd even
+      though it is listening. Either add
+
+        firewall_myservices="22/tcp"
+        firewall_allowservices="any"
+
+      to /etc/rc.conf, or set firewall_enable="NO" on an isolated machine.
+
+      Do NOT run "service ipfw stop" over ssh. It flushes the ruleset, which
+      leaves the default deny rule in place and drops the connection you are
+      issuing the command from. To disable it on a running system without
+      cutting yourself off, set net.inet.ip.fw.enable=0 with sysctl.
+
+    - Root login over ssh is refused by default. Set PermitRootLogin in
+      /etc/ssh/sshd_config if key-based root access is wanted.
+
+================================================================================
+  10. Troubleshooting
+================================================================================
+
+  "System does not support xlocale" at Standard_CString.cxx
+      This is a stock 8.0.1 tree, not the +p1 tarball. See section 5.
+
+  "undefined symbol: backtrace" when linking HobbyCAD
+      libexecinfo is not being linked. The CMake symbol check handles this;
+      a stale build directory may predate it.
+
+  3D viewport renders but has no text anywhere
+      OpenCASCADE was built with USE_FREETYPE=OFF. See section 5.
+
+  Qt menus and labels are empty boxes, but 3D viewport text is fine
+      The inverse of the above, and a different cause: no fonts are
+      installed. Check with fc-list; if it is empty, pkg install dejavu.
+      Seen on a minimal DragonFly install. Both symptoms read as "a font
+      problem" and they are opposites.
+
+  Eigen/SparseCore not found while building libslvs
+      Eigen is not installed. The orig tarball does not bundle it.
+
+  "fatal error: malloc.h: No such file or directory"
+      DragonFly and OpenBSD ship no <malloc.h>. Put a compatibility header
+      on CPATH; guarding one source is not enough, because several include
+      it. See section 8.
+
+  "'execinfo.h' file not found" while /usr/lib/libexecinfo.so.1 exists
+      GhostBSD only. Its base system is split into runtime and -dev
+      packages: pkg install GhostBSD-libexecinfo-dev. See section 9.
+
+  "X11/Xlib.h: No such file or directory" building OpenCASCADE
+      OpenCASCADE compiles with -DHAVE_XLIB but never adds an X11 include
+      directory, which is true on Linux and on no BSD. Put the X11 headers
+      on CPATH. On DragonFly that is /usr/local/include, and note that
+      setting CPATH to only a compat directory drops it again.
+
+  Qt headers fail on "Use *_NON_NOEXCEPT version of the macro"
+      DragonFly only, and it is the compiler, not HobbyCAD. The base gcc 8.3
+      cannot compile the Qt 6.8 headers dports ships. Build the whole stack
+      with gcc11. See section 8.
+
+  ssh to a GhostBSD machine times out with no banner
+      ipfw is enabled by default and drops inbound ssh rather than refusing
+      it, so it looks like a dead sshd. See section 9. Do not stop ipfw over
+      ssh; that flushes to the default deny rule and drops your connection.
+
+  Two libstdc++ show up in ldd on DragonFly
+      Expected on route 1, not a fault. dports Qt6 is built with gcc11 but
+      its ICU dependency is built with the base compiler, so both are
+      loaded. See section 8. What to avoid is mixing compilers across the
+      parts you build yourself.
+
+================================================================================
+  11. Source Packages
+================================================================================
+
+  The patched sources are published to the HobbyCAD PPA:
+
+    https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad
+
+  The orig tarballs there are the same ones consumed by vcpkg, Homebrew and
+  the BSDs. That is deliberate: patches are baked into the orig tarball rather
+  than carried in a debian/patches series precisely so that every consumer
+  gets identical sources. See "WHAT 3.2p1 MEANS" above.
+
+  CHECK THE VERSIONS BEFORE ASSUMING A MATCH. The instructions in this
+  document need:
+
+    libslvs        3.2.git~20260914+p1   (note the +p1)
+    opencascade    8.0.1+p1
+
+  A copy without +p1 is the stock upstream source and will not build here.
+  Neither will an opencascade older than 8.0.1, which predates the BSD work
+  entirely. If what is published does not carry those versions yet, wait for
+  it rather than substituting a stock tarball.

@@ -1,0 +1,216 @@
+.\" ============================================================================
+.\"  HobbyCAD — MANUAL PAGE FOR HOBBYCAD(1)
+.\" ============================================================================
+.\"
+.\"  Project          : HobbyCAD
+.\"  Repository       : HobbyCAD (ayourk/hobbycad)
+.\"  File             : docs/man/hobbycad.1
+.\"  Document Version : 0.0.1
+.\"  Date             : 2026-08-31
+.\"
+.\"  AI Attribution   : This document was primarily generated with
+.\"                     the assistance of Claude AI (Anthropic).
+.\"                     Human review and editorial direction provided
+.\"                     by the project author.
+.\"
+.\"  SPDX-License-Identifier: GPL-3.0-only
+.\" ============================================================================
+.TH HOBBYCAD 1 "2026-08-31" "hobbycad 0.0.1" "User Commands"
+.SH NAME
+hobbycad \- parametric 3D CAD application
+.SH SYNOPSIS
+.B hobbycad
+.RI [ options ]
+.RI [ file ]
+.br
+.B hobbycad
+.I command
+.RI [ args ]
+.SH DESCRIPTION
+.B HobbyCAD
+is a parametric 3D solid modeler built on the OpenCASCADE Technology (OCCT)
+kernel with a Qt 6 interface. It provides boundary representation (B\-Rep)
+modeling, sketching with a geometric constraint solver, and import and export
+of common CAD interchange formats.
+.PP
+Given a
+.IR file ,
+HobbyCAD opens it. A directory is treated as a native project; see
+.BR "FILE FORMATS" .
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show a help message and exit.
+.TP
+.B \-\-version
+Show version information, including the OpenCASCADE version in use, and exit.
+This is the quickest way to confirm which OCCT a build is running against.
+.TP
+.B \-\-no\-gui
+Start in interactive command\-line mode instead of the graphical interface.
+Requires no display server.
+.TP
+.BI \-\-theme " file.qss"
+Load a custom Qt stylesheet. Overridden by
+.BR HOBBYCAD_THEME .
+.TP
+.BI \-\-exec " command"
+Execute one command as the graphical interface starts.
+.SH COMMANDS
+.TP
+.BI convert " input output"
+Convert between file formats. The output format is taken from the output
+file's extension unless
+.BI \-\-format " fmt"
+is given.
+.TP
+.BI script " file"
+Execute a script file. A
+.B \-
+in place of
+.I file
+reads the script from standard input, so scripts may be piped. Pass
+.B \-\-dry\-run
+to validate a script without executing it.
+.PP
+Run
+.B hobbycad
+.I command
+.B \-\-help
+for options specific to a command.
+.SH STARTUP MODES
+HobbyCAD selects a mode at startup according to what the system supports.
+.TP
+.B Full Mode
+The 3D viewport, used whenever OCCT can initialize one. This is the default.
+.TP
+.B Reduced Mode
+A 2D canvas only, used when OpenGL is unavailable or when forced with
+.BR HOBBYCAD_REDUCED_MODE .
+File conversion and geometry operations remain available.
+.TP
+.B CLI Mode
+An interactive terminal, entered with
+.B \-\-no\-gui
+or automatically when no display server is present. Type
+.B help
+at its prompt for the command list, which includes
+.BR new ", " open ", " save ", " export ", " import ", " extrude
+and
+.BR sketch .
+.SH FILE FORMATS
+.TP
+.B .hcad
+Native HobbyCAD project. A directory containing a manifest rather than a
+single file, so a project is opened by passing its directory.
+.TP
+.BR .brep ", " .brp
+OpenCASCADE B\-Rep geometry.
+.TP
+.BR .step ", " .stp ", " .iges ", " .igs
+Interchange formats for exchange with other CAD systems.
+.TP
+.BR .stl ", " .obj
+Mesh formats, for 3D printing and rendering.
+.TP
+.BR .dxf ", " .svg
+Two\-dimensional formats, used for sketch import and export.
+.SH ENVIRONMENT
+.TP
+.B HOBBYCAD_THEME
+Path to a Qt stylesheet
+.RB ( .qss )
+file. Consulted only when
+.B \-\-theme
+was not given, or named a stylesheet that could not be loaded. The full
+order is
+.BR \-\-theme ,
+then this variable, then
+.IR ~/.config/HobbyCAD/theme.qss ,
+then the built\-in default.
+.TP
+.B HOBBYCAD_REDUCED_MODE
+Set to
+.B 1
+to force Reduced Mode even where a 3D viewport would be possible. Useful
+for testing, and on systems whose OpenGL support is present but unreliable.
+.TP
+.BR DISPLAY ", " WAYLAND_DISPLAY
+Not read for configuration, but their presence decides the startup mode:
+with neither set, HobbyCAD starts in CLI Mode as though
+.B \-\-no\-gui
+had been given.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+An error occurred: a file could not be read or written, a conversion failed,
+or a script reported an error.
+.SH EXAMPLES
+Start the graphical interface, choosing a mode automatically:
+.PP
+.RS
+.B hobbycad
+.RE
+.PP
+Open a project directory, or a single geometry file:
+.PP
+.RS
+.B hobbycad myproject/
+.br
+.B hobbycad model.brep
+.RE
+.PP
+Work without a display server:
+.PP
+.RS
+.B hobbycad \-\-no\-gui
+.RE
+.PP
+Convert between formats without starting the interface:
+.PP
+.RS
+.B hobbycad convert in.brep out.step
+.RE
+.PP
+Run a script, or pipe one in:
+.PP
+.RS
+.B hobbycad script myscript.txt
+.br
+.B cat myscript.txt | hobbycad script \-
+.RE
+.PP
+Validate a script without running it:
+.PP
+.RS
+.B hobbycad script \-\-dry\-run myscript.txt
+.RE
+.SH FILES
+.TP
+.I ~/.config/hobbycad/cli_history
+Command\-line history kept between CLI sessions. Note the lower\-case
+directory name, which differs from the one below.
+.TP
+.I ~/.config/HobbyCAD/theme.qss
+Stylesheet loaded when neither
+.B \-\-theme
+nor
+.B HOBBYCAD_THEME
+supplied one.
+.TP
+.I ~/.config/HobbyCAD/crash.log
+Written if HobbyCAD terminates abnormally.
+.TP
+.I ~/.config/HobbyCAD/recovery/
+Recovery data for documents open at the time of an abnormal exit.
+.SH BUGS
+Report bugs at
+.UR https://github.com/ayourk/hobbycad/issues
+.UE .
+.SH SEE ALSO
+The user manual installed with the package, and the project page at
+.UR https://github.com/ayourk/hobbycad
+.UE .

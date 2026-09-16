@@ -13,10 +13,12 @@
 #ifndef HOBBYCAD_SKETCH_SNAP_H
 #define HOBBYCAD_SKETCH_SNAP_H
 
+#include "constraint.h"
 #include "entity.h"
 #include "../core.h"
 #include "../types.h"
 
+#include <optional>
 #include <vector>
 
 namespace hobbycad {
@@ -62,6 +64,33 @@ struct HOBBYCAD_EXPORT SnapPoint {
 ///   AxisX/AxisY=1.25, Nearest=1.0
 HOBBYCAD_EXPORT double defaultSnapWeight(SnapType type);
 
+/// The constraint a snap of this kind implies, or nullopt for one that
+/// implies none.
+///
+/// A draw-then-constrain interface turns the snap used to place a point
+/// into a real constraint, so that the sketch is joined rather than merely
+/// looking joined. Which snaps carry that meaning is a property of the
+/// sketch model, not of any one interface, so it lives here:
+///
+///   Endpoint, Point, Center, ArcEndCenter   Coincident
+///   Midpoint                                Midpoint
+///   Nearest, on a line                      PointOnLine
+///   Nearest, on a circle or arc              PointOnCircle
+///   Nearest, on anything else                none: the solver has no
+///                                           point-on-curve for splines,
+///                                           ellipses or polygons
+///   Quadrant, Intersection                   none: a position derived
+///                                           from geometry rather than a
+///                                           point either entity owns
+///   Origin, AxisX, AxisY                    none: no entity to
+///                                           reference (entityId is -1)
+///
+/// Nearest depends on WHAT was snapped to, which is why the target's type
+/// is a parameter: a point on a line and a point on a circle are different
+/// constraints, and on a spline there is no constraint to make at all.
+HOBBYCAD_EXPORT std::optional<ConstraintType> constraintForSnap(
+    SnapType type, EntityType targetType);
+
 // =====================================================================
 //  Snap Point Collection
 // =====================================================================
@@ -75,6 +104,14 @@ HOBBYCAD_EXPORT double defaultSnapWeight(SnapType type);
 /// @param entity The entity to extract snap points from
 /// @return Vector of snap points for this entity
 HOBBYCAD_EXPORT std::vector<SnapPoint> collectSnapPoints(const Entity& entity);
+
+/// The perimeter anchor/snap points of a slot, each tagged with the snap TYPE
+/// that gives it the right icon: cap centers (ArcEndCenter/circle), the
+/// line-segment ends or radial cap junctions (Endpoint/square), and the side
+/// and cap midpoints (Midpoint/triangle). Handles both a linear slot (2 cap
+/// centers) and an arc slot ([center, start, end] + arcFlipped). Returns empty
+/// for a non-slot or a zero half-width. Pure geometry: no interaction state.
+HOBBYCAD_EXPORT std::vector<SnapPoint> slotAnchorPoints(const Entity& slot);
 
 /// Collect all explicit snap points from all entities.
 ///

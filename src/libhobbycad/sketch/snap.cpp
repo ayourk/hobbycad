@@ -3,13 +3,13 @@
 // =====================================================================
 
 #include "../hobbycad/sketch/snap.h"
+#include <hobbycad/geometry/utils.h>
+#include <hobbycad/units.h>
 #include "../hobbycad/geometry/intersections.h"
 
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -34,6 +34,144 @@ double defaultSnapWeight(SnapType type)
     case SnapType::Nearest:      return 1.0;   // Weakest
     }
     return 1.0;
+}
+
+std::optional<ConstraintType> constraintForSnap(SnapType type,
+                                                EntityType targetType)
+{
+    switch (type) {
+    case SnapType::Endpoint:
+    case SnapType::Point:
+    case SnapType::Center:
+    case SnapType::ArcEndCenter:
+        return ConstraintType::Coincident;
+    case SnapType::Midpoint:
+        return ConstraintType::Midpoint;
+    case SnapType::Nearest:
+        // A point ON the curve, which is a different constraint per curve.
+        switch (targetType) {
+        case EntityType::Line:
+            return ConstraintType::PointOnLine;
+        case EntityType::Circle:
+        case EntityType::Arc:
+            return ConstraintType::PointOnCircle;
+        default:
+            return std::nullopt;
+        }
+    case SnapType::Quadrant:
+    case SnapType::Intersection:
+    case SnapType::Origin:
+    case SnapType::AxisX:
+    case SnapType::AxisY:
+        break;
+    }
+    return std::nullopt;
+}
+
+// The corner, edge-midpoint and center snaps of a four-cornered entity (a
+// 4-point rectangle or a parallelogram), in stored corner order.
+static void appendQuadSnaps(std::vector<SnapPoint>& points, const Point2D& c0, const Point2D& c1,
+                            const Point2D& c2, const Point2D& c3, int id)
+{
+    // Four corners (endpoints)
+    points.push_back({c0, SnapType::Endpoint, id});
+    points.push_back({c1, SnapType::Endpoint, id});
+    points.push_back({c2, SnapType::Endpoint, id});
+    points.push_back({c3, SnapType::Endpoint, id});
+    // Four edge midpoints
+    points.push_back({(c0 + c1) / 2.0, SnapType::Midpoint, id});
+    points.push_back({(c1 + c2) / 2.0, SnapType::Midpoint, id});
+    points.push_back({(c2 + c3) / 2.0, SnapType::Midpoint, id});
+    points.push_back({(c3 + c0) / 2.0, SnapType::Midpoint, id});
+    // Center
+    Point2D center = (c0 + c1 + c2 + c3) / 4.0;
+    points.push_back({center, SnapType::Center, id});
+}
+
+// Arc slot: points[0] = arc center, points[1] = start, points[2] = end.
+static void appendArcSlotSnaps(std::vector<SnapPoint>& points, const Entity& entity)
+{
+    Point2D arcCenter = entity.points[0];
+    Point2D start = entity.points[1];
+    Point2D end = entity.points[2];
+    double halfWidth = entity.radius;
+
+    // Arc center (for the centerline arc)
+    points.push_back({arcCenter, SnapType::Center, entity.id});
+
+    // Slot endpoint centers (where the semicircular ends are centered)
+    points.push_back({start, SnapType::ArcEndCenter, entity.id});
+    points.push_back({end, SnapType::ArcEndCenter, entity.id});
+
+    // Midpoint of the centerline arc
+    double arcRadius = std::hypot(start.x - arcCenter.x, start.y - arcCenter.y);
+    double startAngle = std::atan2(start.y - arcCenter.y, start.x - arcCenter.x);
+    double endAngle = std::atan2(end.y - arcCenter.y, end.x - arcCenter.x);
+    double sweep = endAngle - startAngle;
+    sweep = geometry::wrapSweepRad(sweep);
+    if (entity.arcFlipped) {
+        sweep = (sweep > 0) ? sweep - 2 * M_PI : sweep + 2 * M_PI;
+    }
+    double midAngle = startAngle + sweep / 2.0;
+    Point2D midArc = arcCenter + Point2D(arcRadius * std::cos(midAngle), arcRadius * std::sin(midAngle));
+    points.push_back({midArc, SnapType::Midpoint, entity.id});
+
+    // Outer edge endpoints (extreme tips of the slot)
+    Point2D startDir = (start - arcCenter);
+    double startLen = std::hypot(start.x - arcCenter.x, start.y - arcCenter.y);
+    if (startLen > 0.001) {
+        startDir = startDir / startLen;
+    }
+    Point2D endDir = (end - arcCenter);
+    double endLen = std::hypot(end.x - arcCenter.x, end.y - arcCenter.y);
+    if (endLen > 0.001) {
+        endDir = endDir / endLen;
+    }
+    Point2D startOuter = start + startDir * halfWidth;
+    Point2D endOuter = end + endDir * halfWidth;
+    points.push_back({startOuter, SnapType::Endpoint, entity.id});
+    points.push_back({endOuter, SnapType::Endpoint, entity.id});
+}
+
+// Linear slot: points[0] and points[1] are the two cap centers.
+static void appendLinearSlotSnaps(std::vector<SnapPoint>& points, const Entity& entity)
+{
+    Point2D p1 = entity.points[0];
+    Point2D p2 = entity.points[1];
+    double halfWidth = entity.radius;
+
+    // Arc centers (slot end centers)
+    points.push_back({p1, SnapType::ArcEndCenter, entity.id});
+    points.push_back({p2, SnapType::ArcEndCenter, entity.id});
+
+    // Centerline midpoint
+    Point2D mid = (p1 + p2) / 2.0;
+    points.push_back({mid, SnapType::Midpoint, entity.id});
+
+    // Slot extreme endpoints (the axial cap apexes)
+    double len = std::hypot(p2.x - p1.x, p2.y - p1.y);
+    if (len > 0.001) {
+        Point2D dir = (p2 - p1) / len;
+        Point2D end1 = p1 - dir * halfWidth;
+        Point2D end2 = p2 + dir * halfWidth;
+        // The cap apexes are the MIDPOINTS of the two semicircular ends
+        // (Aaron): mark them Midpoint so grips and snaps agree.
+        points.push_back({end1, SnapType::Midpoint, entity.id});
+        points.push_back({end2, SnapType::Midpoint, entity.id});
+
+        // Anchor/snap points around the perimeter (Aaron): the 4 ends of
+        // the two straight sides (where each cap arc meets a side) and
+        // the midpoint of each side. Together with the two cap centers
+        // (ArcEndCenter above) this is the 8-point set for a straight
+        // slot. Snap/anchor points only, not constraint anchors.
+        const Point2D perp(-dir.y * halfWidth, dir.x * halfWidth);
+        points.push_back({p1 + perp, SnapType::Endpoint, entity.id});
+        points.push_back({p1 - perp, SnapType::Endpoint, entity.id});
+        points.push_back({p2 + perp, SnapType::Endpoint, entity.id});
+        points.push_back({p2 - perp, SnapType::Endpoint, entity.id});
+        points.push_back({mid + perp, SnapType::Midpoint, entity.id});
+        points.push_back({mid - perp, SnapType::Midpoint, entity.id});
+    }
 }
 
 // =====================================================================
@@ -62,65 +200,19 @@ std::vector<SnapPoint> collectSnapPoints(const Entity& entity)
         }
         break;
 
-    case EntityType::Rectangle:
-        if (entity.points.size() >= 4) {
-            // 4-point rotated rectangle
-            Point2D c0 = entity.points[0];
-            Point2D c1 = entity.points[1];
-            Point2D c2 = entity.points[2];
-            Point2D c3 = entity.points[3];
-            // Four corners (endpoints)
-            points.push_back({c0, SnapType::Endpoint, entity.id});
-            points.push_back({c1, SnapType::Endpoint, entity.id});
-            points.push_back({c2, SnapType::Endpoint, entity.id});
-            points.push_back({c3, SnapType::Endpoint, entity.id});
-            // Four edge midpoints
-            points.push_back({(c0 + c1) / 2.0, SnapType::Midpoint, entity.id});
-            points.push_back({(c1 + c2) / 2.0, SnapType::Midpoint, entity.id});
-            points.push_back({(c2 + c3) / 2.0, SnapType::Midpoint, entity.id});
-            points.push_back({(c3 + c0) / 2.0, SnapType::Midpoint, entity.id});
-            // Center
-            Point2D center = (c0 + c1 + c2 + c3) / 4.0;
-            points.push_back({center, SnapType::Center, entity.id});
-        } else if (entity.points.size() >= 2) {
-            // Axis-aligned rectangle (2 opposite corners)
-            Point2D p0 = entity.points[0];
-            Point2D p1 = entity.points[1];
-            // Four corners (endpoints)
-            points.push_back({p0, SnapType::Endpoint, entity.id});
-            points.push_back({Point2D(p1.x, p0.y), SnapType::Endpoint, entity.id});
-            points.push_back({p1, SnapType::Endpoint, entity.id});
-            points.push_back({Point2D(p0.x, p1.y), SnapType::Endpoint, entity.id});
-            // Four edge midpoints
-            points.push_back({Point2D((p0.x + p1.x) / 2, p0.y), SnapType::Midpoint, entity.id});
-            points.push_back({Point2D(p1.x, (p0.y + p1.y) / 2), SnapType::Midpoint, entity.id});
-            points.push_back({Point2D((p0.x + p1.x) / 2, p1.y), SnapType::Midpoint, entity.id});
-            points.push_back({Point2D(p0.x, (p0.y + p1.y) / 2), SnapType::Midpoint, entity.id});
-            // Center
-            Point2D center = (p0 + p1) / 2.0;
-            points.push_back({center, SnapType::Center, entity.id});
+    case EntityType::Rectangle: {
+        // Stored corners (4-point) or the two diagonal corners expanded.
+        Point2D c[4];
+        if (rectangleCorners(entity, c)) {
+            appendQuadSnaps(points, c[0], c[1], c[2], c[3], entity.id);
         }
         break;
+    }
 
     case EntityType::Parallelogram:
         if (entity.points.size() >= 4) {
-            Point2D c0 = entity.points[0];
-            Point2D c1 = entity.points[1];
-            Point2D c2 = entity.points[2];
-            Point2D c3 = entity.points[3];
-            // Four corners (endpoints)
-            points.push_back({c0, SnapType::Endpoint, entity.id});
-            points.push_back({c1, SnapType::Endpoint, entity.id});
-            points.push_back({c2, SnapType::Endpoint, entity.id});
-            points.push_back({c3, SnapType::Endpoint, entity.id});
-            // Four edge midpoints
-            points.push_back({(c0 + c1) / 2.0, SnapType::Midpoint, entity.id});
-            points.push_back({(c1 + c2) / 2.0, SnapType::Midpoint, entity.id});
-            points.push_back({(c2 + c3) / 2.0, SnapType::Midpoint, entity.id});
-            points.push_back({(c3 + c0) / 2.0, SnapType::Midpoint, entity.id});
-            // Center
-            Point2D center = (c0 + c1 + c2 + c3) / 4.0;
-            points.push_back({center, SnapType::Center, entity.id});
+            appendQuadSnaps(points, entity.points[0], entity.points[1],
+                            entity.points[2], entity.points[3], entity.id);
         }
         break;
 
@@ -145,8 +237,8 @@ std::vector<SnapPoint> collectSnapPoints(const Entity& entity)
             // Center
             points.push_back({center, SnapType::Center, entity.id});
             // Arc endpoints
-            double startRad = entity.startAngle * M_PI / 180.0;
-            double endRad = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
+            double startRad = degreesToRadians(entity.startAngle);
+            double endRad = degreesToRadians(entity.startAngle + entity.sweepAngle);
             Point2D start = center + Point2D(r * std::cos(startRad), r * std::sin(startRad));
             Point2D end = center + Point2D(r * std::cos(endRad), r * std::sin(endRad));
             points.push_back({start, SnapType::Endpoint, entity.id});
@@ -160,71 +252,9 @@ std::vector<SnapPoint> collectSnapPoints(const Entity& entity)
 
     case EntityType::Slot:
         if (entity.points.size() >= 3) {
-            // Arc slot: points[0] = arc center, points[1] = start, points[2] = end
-            Point2D arcCenter = entity.points[0];
-            Point2D start = entity.points[1];
-            Point2D end = entity.points[2];
-            double halfWidth = entity.radius;
-
-            // Arc center (for the centerline arc)
-            points.push_back({arcCenter, SnapType::Center, entity.id});
-
-            // Slot endpoint centers (where the semicircular ends are centered)
-            points.push_back({start, SnapType::ArcEndCenter, entity.id});
-            points.push_back({end, SnapType::ArcEndCenter, entity.id});
-
-            // Midpoint of the centerline arc
-            double arcRadius = std::hypot(start.x - arcCenter.x, start.y - arcCenter.y);
-            double startAngle = std::atan2(start.y - arcCenter.y, start.x - arcCenter.x);
-            double endAngle = std::atan2(end.y - arcCenter.y, end.x - arcCenter.x);
-            double sweep = endAngle - startAngle;
-            while (sweep > M_PI) sweep -= 2 * M_PI;
-            while (sweep < -M_PI) sweep += 2 * M_PI;
-            if (entity.arcFlipped) {
-                sweep = (sweep > 0) ? sweep - 2 * M_PI : sweep + 2 * M_PI;
-            }
-            double midAngle = startAngle + sweep / 2.0;
-            Point2D midArc = arcCenter + Point2D(arcRadius * std::cos(midAngle), arcRadius * std::sin(midAngle));
-            points.push_back({midArc, SnapType::Midpoint, entity.id});
-
-            // Outer edge endpoints (extreme tips of the slot)
-            Point2D startDir = (start - arcCenter);
-            double startLen = std::hypot(start.x - arcCenter.x, start.y - arcCenter.y);
-            if (startLen > 0.001) {
-                startDir = startDir / startLen;
-            }
-            Point2D endDir = (end - arcCenter);
-            double endLen = std::hypot(end.x - arcCenter.x, end.y - arcCenter.y);
-            if (endLen > 0.001) {
-                endDir = endDir / endLen;
-            }
-            Point2D startOuter = start + startDir * halfWidth;
-            Point2D endOuter = end + endDir * halfWidth;
-            points.push_back({startOuter, SnapType::Endpoint, entity.id});
-            points.push_back({endOuter, SnapType::Endpoint, entity.id});
+            appendArcSlotSnaps(points, entity);
         } else if (entity.points.size() >= 2) {
-            // Linear slot: points[0] and points[1] are arc centers
-            Point2D p1 = entity.points[0];
-            Point2D p2 = entity.points[1];
-            double halfWidth = entity.radius;
-
-            // Arc centers (slot end centers)
-            points.push_back({p1, SnapType::ArcEndCenter, entity.id});
-            points.push_back({p2, SnapType::ArcEndCenter, entity.id});
-
-            // Centerline midpoint
-            Point2D mid = (p1 + p2) / 2.0;
-            points.push_back({mid, SnapType::Midpoint, entity.id});
-
-            // Slot extreme endpoints
-            double len = std::hypot(p2.x - p1.x, p2.y - p1.y);
-            if (len > 0.001) {
-                Point2D dir = (p2 - p1) / len;
-                Point2D end1 = p1 - dir * halfWidth;
-                Point2D end2 = p2 + dir * halfWidth;
-                points.push_back({end1, SnapType::Endpoint, entity.id});
-                points.push_back({end2, SnapType::Endpoint, entity.id});
-            }
+            appendLinearSlotSnaps(points, entity);
         }
         break;
 
@@ -307,9 +337,27 @@ static std::vector<Point2D> computePolygonVertices(const Entity& entity)
     std::vector<Point2D> verts;
     if (entity.type != EntityType::Polygon || entity.points.empty())
         return verts;
+    const int sides = entity.sides > 0 ? entity.sides : 6;
+    const int n = static_cast<int>(entity.points.size());
+    // Prefer the stored vertices: they carry the real geometry the tool
+    // produced (inscribed vs circumscribed, orientation, or a freeform
+    // outline); regenerating from center+radius+sides would miss all of that.
+    // Regular polygon: points[0] = center, points[1..sides] = vertices.
+    // Freeform polygon: every point is a vertex (sides == point count).
+    if (n == sides + 1) {                       // regular: skip the center
+        for (int i = 1; i < n; ++i)
+            verts.push_back(Point2D(entity.points[i].x, entity.points[i].y));
+        return verts;
+    }
+    if (n >= 3 && n == sides) {                 // freeform: every point is a vertex
+        for (const auto& p : entity.points)
+            verts.push_back(Point2D(p.x, p.y));
+        return verts;
+    }
+    // Fallback (center + radius only, e.g. a not-yet-normalized regular
+    // polygon): a regular inscribed polygon starting at the top.
     Point2D center = entity.points[0];
     double r = entity.radius;
-    int sides = entity.sides > 0 ? entity.sides : 6;
     double angleStep = 2.0 * M_PI / sides;
     for (int i = 0; i < sides; ++i) {
         double angle = i * angleStep - M_PI / 2;  // Start at top
@@ -354,6 +402,19 @@ static std::vector<std::pair<Point2D, Point2D>> entityEdges(const Entity& entity
     return edges;
 }
 
+/// Canonical operand order for computeEntityIntersectionPoints: lower rank first.
+static int intersectionRank(EntityType type)
+{
+    switch (type) {
+    case EntityType::Line:          return 0;
+    case EntityType::Circle:        return 1;
+    case EntityType::Arc:           return 2;
+    case EntityType::Rectangle:
+    case EntityType::Parallelogram: return 3;
+    default:                        return isEdgeBasedEntity(type) ? 4 : 5;
+    }
+}
+
 // =====================================================================
 //  computeEntityIntersectionPoints
 // =====================================================================
@@ -361,6 +422,15 @@ static std::vector<std::pair<Point2D, Point2D>> entityEdges(const Entity& entity
 std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Entity& e2)
 {
     std::vector<Point2D> result;
+
+    // Every mixed pair is handled once, in canonical order (line, circle, arc,
+    // rectangle/parallelogram, other edge-based); the mirrored pair swaps its
+    // operands and recurses. The same primitives run with the same arguments,
+    // so the same points come back; only a circle/arc pair may list its two
+    // points in the other order.
+    if (intersectionRank(e1.type) > intersectionRank(e2.type)) {
+        return computeEntityIntersectionPoints(e2, e1);
+    }
 
     // Line-Line intersection
     if (e1.type == EntityType::Line && e2.type == EntityType::Line) {
@@ -379,19 +449,6 @@ std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Ent
             auto isect = geometry::lineCircleIntersection(
                 e1.points[0], e1.points[1],
                 e2.points[0], e2.radius);
-            if (isect.count >= 1 && isect.point1InSegment) {
-                result.push_back(isect.point1);
-            }
-            if (isect.count >= 2 && isect.point2InSegment) {
-                result.push_back(isect.point2);
-            }
-        }
-    }
-    else if (e1.type == EntityType::Circle && e2.type == EntityType::Line) {
-        if (!e1.points.empty() && e2.points.size() >= 2) {
-            auto isect = geometry::lineCircleIntersection(
-                e2.points[0], e2.points[1],
-                e1.points[0], e1.radius);
             if (isect.count >= 1 && isect.point1InSegment) {
                 result.push_back(isect.point1);
             }
@@ -431,22 +488,6 @@ std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Ent
             }
         }
     }
-    else if (e1.type == EntityType::Arc && e2.type == EntityType::Line) {
-        if (!e1.points.empty() && e2.points.size() >= 2) {
-            geometry::Arc arc;
-            arc.center = e1.points[0];
-            arc.radius = e1.radius;
-            arc.startAngle = e1.startAngle;
-            arc.sweepAngle = e1.sweepAngle;
-            auto isect = geometry::lineArcIntersection(e2.points[0], e2.points[1], arc);
-            if (isect.count >= 1 && isect.point1InSegment && isect.point1OnArc) {
-                result.push_back(isect.point1);
-            }
-            if (isect.count >= 2 && isect.point2InSegment && isect.point2OnArc) {
-                result.push_back(isect.point2);
-            }
-        }
-    }
     // Line-Rectangle/Parallelogram intersection (treat as 4 edges)
     else if (e1.type == EntityType::Line &&
              (e2.type == EntityType::Rectangle || e2.type == EntityType::Parallelogram)) {
@@ -456,20 +497,6 @@ std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Ent
                 Point2D p2 = e2.points[(edge + 1) % 4];
                 auto isect = geometry::lineLineIntersection(
                     e1.points[0], e1.points[1], p1, p2);
-                if (isect.intersects && isect.withinSegment1 && isect.withinSegment2) {
-                    result.push_back(isect.point);
-                }
-            }
-        }
-    }
-    else if ((e1.type == EntityType::Rectangle || e1.type == EntityType::Parallelogram) &&
-             e2.type == EntityType::Line) {
-        if (e1.points.size() >= 4 && e2.points.size() >= 2) {
-            for (int edge = 0; edge < 4; ++edge) {
-                Point2D p1 = e1.points[edge];
-                Point2D p2 = e1.points[(edge + 1) % 4];
-                auto isect = geometry::lineLineIntersection(
-                    p1, p2, e2.points[0], e2.points[1]);
                 if (isect.intersects && isect.withinSegment1 && isect.withinSegment2) {
                     result.push_back(isect.point);
                 }
@@ -493,56 +520,21 @@ std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Ent
             }
         }
     }
-    else if ((e1.type == EntityType::Rectangle || e1.type == EntityType::Parallelogram) &&
-             e2.type == EntityType::Circle) {
-        if (e1.points.size() >= 4 && !e2.points.empty()) {
-            for (int edge = 0; edge < 4; ++edge) {
-                Point2D p1 = e1.points[edge];
-                Point2D p2 = e1.points[(edge + 1) % 4];
-                auto isect = geometry::lineCircleIntersection(p1, p2, e2.points[0], e2.radius);
-                if (isect.count >= 1 && isect.point1InSegment) {
-                    result.push_back(isect.point1);
-                }
-                if (isect.count >= 2 && isect.point2InSegment) {
-                    result.push_back(isect.point2);
-                }
-            }
-        }
-    }
-    // Arc-Circle intersection (circle-circle filtered by arc sweep)
-    else if (e1.type == EntityType::Arc && e2.type == EntityType::Circle) {
-        if (!e1.points.empty() && !e2.points.empty()) {
-            geometry::Arc arc = entityToArc(e1);
-            auto isect = geometry::circleCircleIntersection(
-                e1.points[0], e1.radius, e2.points[0], e2.radius);
-            if (isect.count >= 1) {
-                double angle = std::atan2(isect.point1.y - arc.center.y,
-                                          isect.point1.x - arc.center.x) * 180.0 / M_PI;
-                if (arc.containsAngle(angle))
-                    result.push_back(isect.point1);
-            }
-            if (isect.count >= 2) {
-                double angle = std::atan2(isect.point2.y - arc.center.y,
-                                          isect.point2.x - arc.center.x) * 180.0 / M_PI;
-                if (arc.containsAngle(angle))
-                    result.push_back(isect.point2);
-            }
-        }
-    }
+    // Circle-Arc intersection (circle-circle filtered by arc sweep)
     else if (e1.type == EntityType::Circle && e2.type == EntityType::Arc) {
         if (!e1.points.empty() && !e2.points.empty()) {
             geometry::Arc arc = entityToArc(e2);
             auto isect = geometry::circleCircleIntersection(
                 e1.points[0], e1.radius, e2.points[0], e2.radius);
             if (isect.count >= 1) {
-                double angle = std::atan2(isect.point1.y - arc.center.y,
-                                          isect.point1.x - arc.center.x) * 180.0 / M_PI;
+                double angle = radiansToDegrees(std::atan2(isect.point1.y - arc.center.y,
+                                          isect.point1.x - arc.center.x));
                 if (arc.containsAngle(angle))
                     result.push_back(isect.point1);
             }
             if (isect.count >= 2) {
-                double angle = std::atan2(isect.point2.y - arc.center.y,
-                                          isect.point2.x - arc.center.x) * 180.0 / M_PI;
+                double angle = radiansToDegrees(std::atan2(isect.point2.y - arc.center.y,
+                                          isect.point2.x - arc.center.x));
                 if (arc.containsAngle(angle))
                     result.push_back(isect.point2);
             }
@@ -574,19 +566,6 @@ std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Ent
             }
         }
     }
-    else if (isEdgeBasedEntity(e1.type) && e2.type == EntityType::Arc) {
-        if (!e2.points.empty()) {
-            geometry::Arc arc = entityToArc(e2);
-            auto edges = entityEdges(e1);
-            for (const auto& [p1, p2] : edges) {
-                auto isect = geometry::lineArcIntersection(p1, p2, arc);
-                if (isect.count >= 1 && isect.point1InSegment && isect.point1OnArc)
-                    result.push_back(isect.point1);
-                if (isect.count >= 2 && isect.point2InSegment && isect.point2OnArc)
-                    result.push_back(isect.point2);
-            }
-        }
-    }
     // Line x Polygon (Rect/Para already caught above)
     else if (e1.type == EntityType::Line && isEdgeBasedEntity(e2.type)) {
         if (e1.points.size() >= 2) {
@@ -598,34 +577,12 @@ std::vector<Point2D> computeEntityIntersectionPoints(const Entity& e1, const Ent
             }
         }
     }
-    else if (isEdgeBasedEntity(e1.type) && e2.type == EntityType::Line) {
-        if (e2.points.size() >= 2) {
-            auto edges = entityEdges(e1);
-            for (const auto& [p1, p2] : edges) {
-                auto isect = geometry::lineLineIntersection(p1, p2, e2.points[0], e2.points[1]);
-                if (isect.intersects && isect.withinSegment1 && isect.withinSegment2)
-                    result.push_back(isect.point);
-            }
-        }
-    }
     // Circle x Polygon (Rect/Para already caught above)
     else if (e1.type == EntityType::Circle && isEdgeBasedEntity(e2.type)) {
         if (!e1.points.empty()) {
             auto edges = entityEdges(e2);
             for (const auto& [p1, p2] : edges) {
                 auto isect = geometry::lineCircleIntersection(p1, p2, e1.points[0], e1.radius);
-                if (isect.count >= 1 && isect.point1InSegment)
-                    result.push_back(isect.point1);
-                if (isect.count >= 2 && isect.point2InSegment)
-                    result.push_back(isect.point2);
-            }
-        }
-    }
-    else if (isEdgeBasedEntity(e1.type) && e2.type == EntityType::Circle) {
-        if (!e2.points.empty()) {
-            auto edges = entityEdges(e1);
-            for (const auto& [p1, p2] : edges) {
-                auto isect = geometry::lineCircleIntersection(p1, p2, e2.points[0], e2.radius);
                 if (isect.count >= 1 && isect.point1InSegment)
                     result.push_back(isect.point1);
                 if (isect.count >= 2 && isect.point2InSegment)
@@ -658,13 +615,13 @@ std::vector<SnapPoint> collectAxisCrossingSnapPoints(
     int excludeEntityId)
 {
     std::vector<SnapPoint> points;
-    constexpr double kEps = 1e-9;
+    constexpr double kEps = geometry::kZeroEps;
 
     for (const Entity& entity : entities) {
         if (entity.id == excludeEntityId) continue;
 
         auto addAxisPoint = [&](const Point2D& pt) {
-            // Skip if at origin -- Origin snap already covers (0,0)
+            // Skip if at origin: Origin snap already covers (0,0)
             if (std::abs(pt.x) < kEps && std::abs(pt.y) < kEps)
                 return;
             points.push_back({pt, SnapType::Intersection, entity.id});
@@ -755,7 +712,7 @@ std::vector<SnapPoint> collectAxisCrossingSnapPoints(
                     double sweep = std::abs(sweepDeg);
                     double offset = std::fmod(a - s + 720.0, 360.0);
                     if (sweepDeg < 0) offset = std::fmod(s - a + 720.0, 360.0);
-                    return offset <= sweep + 1e-6;
+                    return offset <= sweep + geometry::kAngleEpsDeg;
                 };
 
                 // Arc crosses Y axis at x=0
@@ -764,8 +721,8 @@ std::vector<SnapPoint> collectAxisCrossingSnapPoints(
                     if (disc >= 0.0) {
                         double sq = std::sqrt(disc);
                         // Two candidate points
-                        double angle1 = std::atan2(sq, -c.x) * 180.0 / M_PI;
-                        double angle2 = std::atan2(-sq, -c.x) * 180.0 / M_PI;
+                        double angle1 = radiansToDegrees(std::atan2(sq, -c.x));
+                        double angle2 = radiansToDegrees(std::atan2(-sq, -c.x));
                         if (angleOnArc(angle1)) addAxisPoint(Point2D(0.0, c.y + sq));
                         if (sq > kEps && angleOnArc(angle2)) addAxisPoint(Point2D(0.0, c.y - sq));
                     }
@@ -775,8 +732,8 @@ std::vector<SnapPoint> collectAxisCrossingSnapPoints(
                     double disc = r * r - c.y * c.y;
                     if (disc >= 0.0) {
                         double sq = std::sqrt(disc);
-                        double angle1 = std::atan2(-c.y, sq) * 180.0 / M_PI;
-                        double angle2 = std::atan2(-c.y, -sq) * 180.0 / M_PI;
+                        double angle1 = radiansToDegrees(std::atan2(-c.y, sq));
+                        double angle2 = radiansToDegrees(std::atan2(-c.y, -sq));
                         if (angleOnArc(angle1)) addAxisPoint(Point2D(c.x + sq, 0.0));
                         if (sq > kEps && angleOnArc(angle2)) addAxisPoint(Point2D(c.x - sq, 0.0));
                     }
@@ -827,7 +784,7 @@ std::vector<SnapPoint> collectAxisCrossingSnapPoints(
             break;
 
         default:
-            // Slots, splines -- can be extended later
+            // Slots, splines: can be extended later
             break;
         }
     }
@@ -981,7 +938,7 @@ SnapPoint findNearestOnPerimeter(
             break;
 
         default:
-            // Ellipses, splines -- can be extended later
+            // Ellipses, splines: can be extended later
             break;
         }
 
@@ -1052,6 +1009,80 @@ SnapResult findBestSnap(
     }
 
     return snapResult;
+}
+
+
+std::vector<SnapPoint> slotAnchorPoints(const Entity& slot)
+{
+    std::vector<SnapPoint> pts;
+    if (slot.type != EntityType::Slot) return pts;
+    const double hw = slot.radius;
+    if (hw <= 0.0) return pts;
+    auto add = [&](double x, double y, SnapType t) {
+        SnapPoint sp;
+        sp.position = Point2D(x, y);
+        sp.type = t;
+        sp.entityId = slot.id;
+        pts.push_back(sp);
+    };
+
+    if (slot.points.size() == 2) {
+        // LINEAR slot: 2 cap centers (circle), 4 line-segment ends (square), 2
+        // side midpoints + 2 cap-arc midpoints (triangles) = 10.
+        const auto& a = slot.points[0];
+        const auto& b = slot.points[1];
+        const double dx = b.x - a.x, dy = b.y - a.y;
+        const double len = std::hypot(dx, dy);
+        if (len < geometry::kZeroEps) return pts;
+        const double px = -dy / len * hw, py = dx / len * hw;   // perp * halfwidth
+        const double ux = dx / len, uy = dy / len;             // axis unit
+        const double mx = (a.x + b.x) / 2.0, my = (a.y + b.y) / 2.0;
+        add(a.x, a.y, SnapType::ArcEndCenter);
+        add(b.x, b.y, SnapType::ArcEndCenter);
+        add(a.x + px, a.y + py, SnapType::Endpoint);
+        add(a.x - px, a.y - py, SnapType::Endpoint);
+        add(b.x + px, b.y + py, SnapType::Endpoint);
+        add(b.x - px, b.y - py, SnapType::Endpoint);
+        add(mx + px, my + py, SnapType::Midpoint);
+        add(mx - px, my - py, SnapType::Midpoint);
+        add(a.x - ux * hw, a.y - uy * hw, SnapType::Midpoint);
+        add(b.x + ux * hw, b.y + uy * hw, SnapType::Midpoint);
+    } else if (slot.points.size() >= 3) {
+        // ARC slot: [arcCenter, start, end], radius = half-width. Same 10-point
+        // set on the concentric-arc geometry: 2 cap centers (circle); 4
+        // junctions where each cap meets the inner/outer side arc, along the
+        // radial (square); 2 side-arc midpoints at the mid-angle on the R+/-hw
+        // arcs, and 2 cap-arc apexes tangential to the path (triangles).
+        const auto& c = slot.points[0];
+        const auto& sp0 = slot.points[1];
+        const auto& ep0 = slot.points[2];
+        const double R = std::hypot(sp0.x - c.x, sp0.y - c.y);
+        if (R < geometry::kZeroEps) return pts;
+        const double a0 = std::atan2(sp0.y - c.y, sp0.x - c.x);
+        const double a1 = std::atan2(ep0.y - c.y, ep0.x - c.x);
+        double sweep = a1 - a0;
+        sweep = geometry::wrapSweepRad(sweep);
+        if (slot.arcFlipped) sweep = (sweep > 0) ? sweep - 2.0 * M_PI : sweep + 2.0 * M_PI;
+        const double midA = a0 + sweep / 2.0;
+        const double sgn = (sweep >= 0) ? 1.0 : -1.0;
+        const double rsx = (sp0.x - c.x) / R, rsy = (sp0.y - c.y) / R;
+        const double rex = (ep0.x - c.x) / R, rey = (ep0.y - c.y) / R;
+        add(sp0.x, sp0.y, SnapType::ArcEndCenter);
+        add(ep0.x, ep0.y, SnapType::ArcEndCenter);
+        add(sp0.x + rsx * hw, sp0.y + rsy * hw, SnapType::Endpoint);
+        add(sp0.x - rsx * hw, sp0.y - rsy * hw, SnapType::Endpoint);
+        add(ep0.x + rex * hw, ep0.y + rey * hw, SnapType::Endpoint);
+        add(ep0.x - rex * hw, ep0.y - rey * hw, SnapType::Endpoint);
+        add(c.x + (R + hw) * std::cos(midA), c.y + (R + hw) * std::sin(midA),
+            SnapType::Midpoint);
+        add(c.x + (R - hw) * std::cos(midA), c.y + (R - hw) * std::sin(midA),
+            SnapType::Midpoint);
+        add(sp0.x + sgn * std::sin(a0) * hw, sp0.y - sgn * std::cos(a0) * hw,
+            SnapType::Midpoint);
+        add(ep0.x - sgn * std::sin(a1) * hw, ep0.y + sgn * std::cos(a1) * hw,
+            SnapType::Midpoint);
+    }
+    return pts;
 }
 
 }  // namespace sketch

@@ -14,6 +14,7 @@
 #define HOBBYCAD_SKETCH_QUERIES_H
 
 #include "entity.h"
+#include "group.h"
 #include "constraint.h"
 #include "../core.h"
 #include "../geometry/types.h"
@@ -93,9 +94,26 @@ struct ValidationResult {
 /// @param entities Sketch entities
 /// @param constraints Sketch constraints
 /// @return Validation result with any errors/warnings
+/// Is the debug escape hatch on? Set HOBBYCAD_DEBUG=1 to enable it.
+///
+/// An invalid sketch is corruption, not work in progress: duplicate ids,
+/// dangling constraint references, primitives collapsed to points. There is
+/// no ordinary reason to write one to disk, so saving is refused.
+///
+/// Two exceptions exist and only two. The crash handler must write whatever
+/// is in memory without judging it, because a partial file beats none. And
+/// someone with a damaged sketch needs to be able to hand it over: refusing
+/// to save corruption also refuses to let anyone show you the corruption,
+/// which is how a bug report becomes "it breaks sometimes". That second
+/// case is what this flag is for.
+///
+/// Read once, on first call.
+HOBBYCAD_EXPORT bool debugModeEnabled();
+
 HOBBYCAD_EXPORT ValidationResult validateSketch(
     const std::vector<Entity>& entities,
-    const std::vector<Constraint>& constraints);
+    const std::vector<Constraint>& constraints,
+    const std::vector<Group>& groups = {});
 
 /// Check if sketch is fully constrained (DOF == 0)
 /// @note Requires solver to be available; returns false if not
@@ -124,12 +142,35 @@ HOBBYCAD_EXPORT std::vector<int> findUnderconstrainedEntities(
 /// Calculate total area of all closed profiles in the sketch
 /// @param entities Sketch entities
 /// @return Total area (always positive)
+/// Where a line-to-circle tangency actually touches, when the touch point
+/// falls OUTSIDE the drawn line segment.
+///
+/// Tangency is to the circle's perimeter and to the line's INFINITE extent.
+/// Those are not the same thing as the segment the user drew: the constraint
+/// can be perfectly satisfied while the segment stops short of the circle
+/// entirely, touching only where its extension would reach. The sketch is
+/// correct and the picture is not, which is the worst combination to leave
+/// unmarked.
+///
+/// It cannot be constrained away ("between the endpoints" is an inequality
+/// and the solver takes equations), so the canvas reports it instead.
+///
+/// @return the tangent point on the circle's perimeter when the touch lies
+///         off the segment, or nothing when it lies on it (or the operands
+///         are not a line and a circle, or the geometry is degenerate).
+HOBBYCAD_EXPORT std::optional<Point2D> offSegmentTangentPoint(
+    const Entity& line, const Entity& circle);
+
 HOBBYCAD_EXPORT double sketchArea(const std::vector<Entity>& entities);
 
 /// Calculate total length of all entities in the sketch
 /// @param entities Sketch entities
 /// @return Total length
 HOBBYCAD_EXPORT double sketchLength(const std::vector<Entity>& entities);
+
+/// The circle or arc whose perimeter passes closest to `pos` (by
+/// |distance to center - radius|), or -1 when there is none.
+HOBBYCAD_EXPORT int nearestCircleOrArc(const std::vector<Entity>& entities, const Point2D& pos);
 
 /// Get bounding box of entire sketch
 /// @param entities Sketch entities
@@ -185,6 +226,10 @@ HOBBYCAD_EXPORT Point2D normalAtParameter(const Entity& entity, double t);
 HOBBYCAD_EXPORT std::vector<Point2D> tessellate(
     const Entity& entity,
     double tolerance = 0.1);
+
+/// Tessellate with a fixed segment count per curve: `segments` for a circle,
+/// arc or ellipse, `segments / 2` for each slot end cap.
+HOBBYCAD_EXPORT std::vector<Point2D> tessellate(const Entity& entity, int segments);
 
 /// Tessellate multiple entities into line segments
 /// @param entities Entities to tessellate

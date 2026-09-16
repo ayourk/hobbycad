@@ -12,7 +12,9 @@ finish-args:
   - --talk-name=org.freedesktop.Notifications
 
 modules:
-  # OpenCASCADE 7.9.2
+  # OpenCASCADE 8.0.1 with the HobbyCAD +p1 series, the PPA's orig tarball
+  # (a release asset of ayourk/hobbycad-vcpkg), the same source every
+  # other channel builds against.
   - name: opencascade
     buildsystem: cmake-ninja
     config-opts:
@@ -27,22 +29,12 @@ modules:
       - -DUSE_VTK=OFF
     sources:
       - type: archive
-        url: https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_9_2.tar.gz
-        sha256: 3cd080d3fc33ba0c6c157e110afe3e015859524c4694dbb09812ec9d61595639
+        url: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/opencascade_8.0.1+p1.orig.tar.xz
+        sha256: 966a79fb0fbed4f947b6a3cc456eed61dd584f8a165869afa9f9d232f275172e
 
-  # libgit2 1.9.2 (security release)
-  - name: libgit2
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DBUILD_TESTS=OFF
-      - -DBUILD_CLI=OFF
-    sources:
-      - type: archive
-        url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.9.2.tar.gz
-        sha256: 6f097c82fc06ece4f40539fb17e9d41baf1a5a2fc26b1b8562d21b89bc355fe6
-
-  # libslvs (SolveSpace constraint solver library)
+  # libslvs (SolveSpace constraint solver library). The PPA's orig tarball,
+  # published as a release asset of ayourk/hobbycad-vcpkg because Launchpad
+  # drops superseded source files; the HobbyCAD series (3.2p1) is baked in.
   - name: libslvs
     buildsystem: cmake-ninja
     builddir: true
@@ -55,64 +47,37 @@ modules:
       - -DENABLE_TESTS=OFF
     sources:
       - type: archive
-        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz
-        sha256: 89221ff3a92f9e4d59f61ca86cf82bb38cf313183be660fdd7b628da66790864
-      - type: archive
-        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz
-        sha256: 47ad7bab74b7e9738a4df4b9103f6777846eea5342a8f6f092853d3bc0ba8554
-        dest: debian-patches
+        url: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/libslvs_3.2.git.20260914+p1.orig.tar.gz
+        sha256: c6ccc639b43113733b39d7adaa0d0b05061194fcb0abc22abf758b08a6f42a98
       - type: archive
         url: https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
         sha256: 8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
         dest: extlib/eigen
       - type: shell
         commands:
-          - patch -p1 < debian-patches/patches/0001-handle-missing-git-directory.patch
           - for submod in zlib libpng freetype cairo pixman angle; do mkdir -p extlib/$submod && echo "# stub" > extlib/$submod/CMakeLists.txt; done
           - sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
 
-  # lib3mf (3D Manufacturing Format)
-  - name: lib3mf
+  # libwebp, the pinned version, so the WebP path is the same as every
+  # other channel's rather than the runtime's copy.
+  - name: libwebp
     buildsystem: cmake-ninja
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
-      - -DLIB3MF_TESTS=OFF
+      - -DBUILD_SHARED_LIBS=ON
+      - -DWEBP_BUILD_ANIM_UTILS=OFF
+      - -DWEBP_BUILD_CWEBP=OFF
+      - -DWEBP_BUILD_DWEBP=OFF
+      - -DWEBP_BUILD_GIF2WEBP=OFF
+      - -DWEBP_BUILD_IMG2WEBP=OFF
+      - -DWEBP_BUILD_VWEBP=OFF
+      - -DWEBP_BUILD_WEBPINFO=OFF
+      - -DWEBP_BUILD_WEBPMUX=OFF
+      - -DWEBP_BUILD_EXTRAS=OFF
     sources:
       - type: archive
-        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/lib3mf/2.4.1.git~20260208-1~ppa1~noble1/lib3mf_2.4.1.git~20260208.orig.tar.gz
-        sha256: 469f4b8780ee4c369b695210611d70fc70e8e4b22da6ea97265f69c9a50828b1
-
-  # OpenMesh
-  - name: openmesh
-    buildsystem: cmake-ninja
-    builddir: true
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DOPENMESH_BUILD_SHARED=ON
-      - -DOPENMESH_BUILD_PYTHON_BINDINGS=OFF
-    sources:
-      - type: archive
-        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz
-        sha256: b6f0a3eb3078984ca651b6bf38a781a072049222f77bac1025101371fca18899
-
-  # MeshFix
-  - name: meshfix
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DMESHFIX_BUILD_SHARED=ON
-      - -DMESHFIX_BUILD_CLI=OFF
-    sources:
-      - type: archive
-        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz
-        sha256: 27d135e85e320439df49d96c8de79042d2cbb524f9aa952eb7a8544571131fbf
-      - type: archive
-        url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz
-        sha256: cbb3b70289d24c817d55f4cbcdf9a72b20038fe4a88cd711394042a669705a32
-        dest: debian-patches
-      - type: shell
-        commands:
-          - patch -p1 < debian-patches/patches/0001-build-shared-library.patch
+        url: https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz
+        sha256: e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564
 
   # nlohmann_json (header-only JSON library)
   - name: nlohmann-json
@@ -122,8 +87,33 @@ modules:
       - -DJSON_BuildTests=OFF
     sources:
       - type: archive
-        url: https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
-        sha256: 0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
+        url: https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
+        sha256: 4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187
+
+  # MeshFix is not built: nothing in HobbyCAD uses it (devtest only probes
+  # for it), and it is the planned auto-repair backend for HobbyMesh
+  # (docs/cad_library_recommendations.txt, section 14). Kept commented out,
+  # not removed. Before enabling it again: carry the shared-library patch in
+  # the orig (the patch archive below is a Launchpad +sourcefiles URL, which
+  # disappears) and fix the two loader memory-safety defects
+  # (MarcoAttene/MeshFix-V2.1 issue #19).
+  # - name: meshfix
+  #   buildsystem: cmake-ninja
+  #   config-opts:
+  #     - -DCMAKE_BUILD_TYPE=Release
+  #     - -DMESHFIX_BUILD_SHARED=ON
+  #     - -DMESHFIX_BUILD_CLI=OFF
+  #   sources:
+  #     - type: archive
+  #       url: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/meshfix_2.1.git.20260208.orig.tar.gz
+  #       sha256: 27d135e85e320439df49d96c8de79042d2cbb524f9aa952eb7a8544571131fbf
+  #     - type: archive
+  #       url: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz
+  #       sha256: cbb3b70289d24c817d55f4cbcdf9a72b20038fe4a88cd711394042a669705a32
+  #       dest: debian-patches
+  #     - type: shell
+  #       commands:
+  #         - patch -p1 < debian-patches/patches/0001-build-shared-library.patch
 
   # HobbyCAD
   - name: hobbycad

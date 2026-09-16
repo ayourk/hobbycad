@@ -8,14 +8,13 @@
 // =====================================================================
 
 #include <hobbycad/sketch/patterns.h>
+#include <hobbycad/units.h>
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/geometry/intersections.h>
 
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -136,7 +135,7 @@ LinearPatternResult createLinearPattern(
     }
 
     // Calculate direction vector
-    double rad = params.angle * M_PI / 180.0;
+    double rad = degreesToRadians(params.angle);
     Point2D dir(std::cos(rad), std::sin(rad));
 
     // Create pattern copies
@@ -188,21 +187,23 @@ MirrorPatternResult createMirrorPattern(
         copy.id = nextId();
 
         // Mirror each point
-        for (Point2D& p : copy.points) {
-            // Project point onto line
-            Point2D toPoint = p - params.linePoint1;
+        for (Point3& p : copy.points) {
+            // Project point onto line (mirror is an in-plane operation)
+            const Point2D p2 = p.xy();
+            Point2D toPoint = p2 - params.linePoint1;
             double proj = dot(toPoint, lineDir);
             Point2D projPoint = params.linePoint1 + lineDir * proj;
 
-            // Mirror: reflect across the projection point
-            p = projPoint * 2.0 - p;
+            // Mirror: reflect across the projection point; z (off-plane) preserved
+            const Point2D mirrored = projPoint * 2.0 - p2;
+            p.x = mirrored.x; p.y = mirrored.y;
         }
 
         // Handle special cases
         if (copy.type == EntityType::Arc) {
             // Mirror arc angles
             // The start angle needs to be reflected and sweep reversed
-            double lineAngle = std::atan2(lineDir.y, lineDir.x) * 180.0 / M_PI;
+            double lineAngle = radiansToDegrees(std::atan2(lineDir.y, lineDir.x));
 
             // Reflect start angle about the line
             double startRel = copy.startAngle - lineAngle;

@@ -1,5 +1,5 @@
 =====================================================================
-  src/plugins/README.txt — Plugin System (Future — Phase 3+)
+  src/plugins/README.txt — Plugin System (Future, Phase 3+)
 =====================================================================
 
   Shared plugin infrastructure accessible to both the libraries

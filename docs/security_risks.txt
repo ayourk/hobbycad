@@ -7,7 +7,7 @@
   Document:        Security Risks and Mitigations
   Author:          Aaron (project author)
   Created:         2026-02-07
-  Status:          Living document — updated as features are added
+  Status:          Living document, updated as features are added
 
   Table of Contents:
   1. Overview
@@ -181,7 +181,7 @@
       headers, used to confuse parsers.
 
   Mitigations:
-    - Validate all entry paths before extraction — reject
+    - Validate all entry paths before extraction: reject
       entries containing "..", absolute paths, or symlinks
     - Set a maximum decompressed size limit (configurable,
       default: 4 GB)
@@ -263,24 +263,24 @@
     Global script execution settings (in application
     preferences):
 
-      - "Never run scripts" — scripts cannot be executed at
+      - "Never run scripts": scripts cannot be executed at
         all, even manually. The Python console is disabled.
         Suitable for users who only want to view/edit geometry.
 
-      - "Allow manual execution only" (DEFAULT) — scripts can
+      - "Allow manual execution only" (DEFAULT): scripts can
         be run by the user via the Python console or Run menu,
         but never automatically on project open.
 
-      - "Prompt on project open" — if a project contains an
+      - "Prompt on project open": if a project contains an
         autorun.py or manifest-declared autorun script, prompt
         the user with the notification described above.
 
-      - "Allow autorun for trusted projects" — projects in a
+      - "Allow autorun for trusted projects": projects in a
         user-maintained trusted list (by directory path or git
         remote URL) can autorun scripts without prompting.
         All other projects prompt.
 
-      - "Always allow autorun" — scripts/autorun.py runs
+      - "Always allow autorun": scripts/autorun.py runs
         automatically for all projects without prompting.
         A warning is shown in preferences explaining the risk:
         "This setting allows any project you open to execute
@@ -292,7 +292,7 @@
       "autorun": "scripts/autorun.py"
 
     This field is ignored unless the user's script execution
-    setting permits it. The autorun field is informational —
+    setting permits it. The autorun field is informational:
     it tells HobbyCAD which script the project author intends
     to run on open, but execution is always gated by the
     user's security preferences.
@@ -327,7 +327,7 @@
     - The console is gated by the script execution preference
       (disabled in "Never run scripts" mode)
     - The console is clearly labeled as having full system
-      access — it is a developer/power-user feature, not a
+      access; it is a developer/power-user feature, not a
       sandboxed environment
     - No additional sandboxing is planned, consistent with
       FreeCAD, Blender, and other applications with embedded
@@ -367,11 +367,11 @@
 
   Mitigations:
     - Keep libgit2 updated to latest stable release
-    - Validate remote URLs before use — reject obviously
+    - Validate remote URLs before use: reject obviously
       malicious patterns (e.g., file:// URLs pointing to
       local sensitive paths, URLs with embedded credentials)
     - The "Synchronize with version control" feature reads
-      from .git/config — sanitize values read from this file
+      from .git/config; sanitize values read from this file
     - Display the remote URL to the user before cloning and
       ask for confirmation when the URL was provided by an
       external source (e.g., opening a ZIP that contains a
@@ -389,7 +389,7 @@
     - Do not provide a UI option to disable certificate
       validation
     - If certificate validation fails, show a clear error
-      message — do not silently fall back to unencrypted
+      message; do not silently fall back to unencrypted
       connections
 
   5.3  SSH KEY HANDLING
@@ -400,9 +400,9 @@
   Mitigations:
     - Use libgit2's built-in SSH support (libssh2) or
       delegate to system SSH agent
-    - HobbyCAD does not manage SSH keys — it uses whatever
+    - HobbyCAD does not manage SSH keys; it uses whatever
       the user has configured on their system
-    - Verify host keys on first connection (TOFU — Trust On
+    - Verify host keys on first connection (TOFU, Trust On
       First Use) and warn on host key changes, consistent
       with standard SSH behavior
     - Never store SSH passphrases
@@ -420,7 +420,7 @@
     - Request minimum necessary OAuth scopes (repo access
       only, not account management)
     - Tokens are never written to the manifest or any
-      project file — they are stored in the system keyring
+      project file; they are stored in the system keyring
     - Display the token's scope and expiration in the UI
 
 ================================================================================
@@ -436,18 +436,18 @@
   ---------------------------
 
   Critical dependencies (compromise = direct code execution):
-    - OpenCASCADE (OCCT) — geometry kernel
-    - Qt 6 — GUI framework
-    - CPython — scripting engine
-    - libgit2 — version control
-    - pybind11 — Python/C++ bridge
+    - OpenCASCADE (OCCT): geometry kernel
+    - Qt 6: GUI framework
+    - CPython: scripting engine
+    - libgit2: version control
+    - pybind11: Python/C++ bridge
 
   Important dependencies (compromise = data processing risk):
-    - libzip / libminizip — ZIP handling
-    - libpng / libjpeg — image processing
-    - SolveSpace solver — constraint solving
-    - Assimp — mesh I/O (HobbyMesh)
-    - CGAL — computational geometry (HobbyMesh)
+    - libzip / libminizip: ZIP handling
+    - libpng / libjpeg: image processing
+    - SolveSpace solver: constraint solving
+    - Assimp: mesh I/O (HobbyMesh)
+    - CGAL: computational geometry (HobbyMesh)
 
   6.2  MITIGATIONS
   ------------------
@@ -455,7 +455,7 @@
     - Pin dependency versions in the build system (CMakeLists.txt)
     - Monitor CVE databases for all dependencies
     - Prefer system-packaged versions (Ubuntu repos, Homebrew)
-      over self-built versions where possible — system packages
+      over self-built versions where possible; system packages
       receive security updates via the OS update mechanism
     - Verify checksums/signatures when downloading source tarballs
     - For PPA distribution: build in a clean environment, sign
@@ -493,14 +493,14 @@
       (e.g., "README.md" that is actually a symlink to
       ~/.ssh/id_rsa)
     - "Open in external editor" delegates to the OS file
-      association — a file named "notes.pdf" could actually
+      association; a file named "notes.pdf" could actually
       be a crafted file exploiting a PDF reader vulnerability
     - Double-click on non-CAD files launches the system
       default handler
 
   Mitigations:
-    - Resolve and display symlink targets in the files browser
-      — show where a symlink actually points
+    - Resolve and display symlink targets in the files browser,
+      showing where a symlink actually points
     - Warn before opening files outside the project directory
       (symlinks pointing elsewhere)
     - Consider not following symlinks at all for foreign files
@@ -562,7 +562,7 @@
     - Token values are not displayed in the UI (masked
       with asterisks, with a "reveal" toggle)
     - When a token is revoked or expired, the user is
-      prompted to re-authenticate — the old token is
+      prompted to re-authenticate; the old token is
       deleted from the keyring
 
   8.3  FALLBACK WHEN NO KEYRING IS AVAILABLE
@@ -584,18 +584,18 @@
 
   The following are NOT security concerns for HobbyCAD:
 
-    - Multi-user access control — single-user desktop app,
+    - Multi-user access control: single-user desktop app,
       the operating system handles user isolation
-    - SQL injection — no database
-    - Cross-site scripting (XSS) — no web UI
-    - Cross-site request forgery (CSRF) — no web UI
-    - Authentication to HobbyCAD itself — no user accounts
-    - Server-side vulnerabilities — no server component
-    - DDoS protection — no listening ports
-    - Data encryption at rest — the user's OS provides
+    - SQL injection: no database
+    - Cross-site scripting (XSS): no web UI
+    - Cross-site request forgery (CSRF): no web UI
+    - Authentication to HobbyCAD itself: no user accounts
+    - Server-side vulnerabilities: no server component
+    - DDoS protection: no listening ports
+    - Data encryption at rest: the user's OS provides
       full-disk encryption if desired; HobbyCAD project
       files are not individually encrypted
-    - GDPR/privacy compliance — HobbyCAD collects no user
+    - GDPR/privacy compliance: HobbyCAD collects no user
       data and has no telemetry (if telemetry is ever added,
       this section must be revisited)
 

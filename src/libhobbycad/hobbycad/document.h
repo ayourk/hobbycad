@@ -19,6 +19,8 @@
 #include <TopoDS_Shape.hxx>
 
 #include <string>
+
+#include "body.h"
 #include <vector>
 
 namespace hobbycad {
@@ -42,13 +44,24 @@ public:
     /// Mark the document as modified.
     void setModified(bool modified = true);
 
-    // ---- Shapes -----------------------------------------------------
+    // ---- Bodies -----------------------------------------------------
 
-    /// All shapes in the document.
-    const std::vector<TopoDS_Shape>& shapes() const;
+    /// All bodies in the document, with their identity intact.
+    const std::vector<BodyData>& bodies() const;
 
-    /// Add a shape to the document.  Marks document as modified.
-    void addShape(const TopoDS_Shape& shape);
+    /// Add a body, preserving the id, name and design it already carries.
+    /// An id of -1 gets the next free one. Marks the document modified.
+    void addBody(const BodyData& body);
+
+    /// Add a bare shape, assigning it a fresh id and a default name.
+    /// Marks the document modified.
+    int addShape(const TopoDS_Shape& shape);
+
+    /// Replace every body. Marks the document modified.
+    void setBodies(const std::vector<BodyData>& bodies);
+
+    /// Lowest unused body id.
+    int nextBodyId() const;
 
     /// Remove all shapes.  Marks document as modified.
     void clear();
@@ -64,14 +77,10 @@ public:
     /// Returns true on success.
     bool saveBrep(const std::string& path = {});
 
-    /// Create a default test solid (a box) for initial display.
-    /// Clears existing shapes and adds a single box.
-    void createTestSolid();
-
 private:
     std::string       m_filePath;
     bool              m_modified = false;
-    std::vector<TopoDS_Shape> m_shapes;
+    std::vector<BodyData> m_bodies;
 };
 
 }  // namespace hobbycad

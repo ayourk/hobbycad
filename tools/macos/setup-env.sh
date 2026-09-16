@@ -1,6 +1,6 @@
 #!/bin/bash
 # =====================================================================
-#  tools/macos/setup-env.sh -- macOS development environment setup
+#  tools/macos/setup-env.sh — macOS development environment setup
 # =====================================================================
 #
 #  Checks for required tools and offers to install anything missing.
@@ -332,7 +332,7 @@ ALL_OK=true
 #   5. Offers to remove build tools
 
 if [ "$UNINSTALL" = "1" ]; then
-    header "Uninstall -- rolling back changes"
+    header "Uninstall: rolling back changes"
 
     CHANGED=false
     detect_shell_rc
@@ -411,9 +411,9 @@ if [ "$UNINSTALL" = "1" ]; then
             if confirm "Uninstall tap formulas and remove tap?"; then
                 info "Removing tap formulas..."
                 "$BREW" uninstall --force \
-                    ayourk/hobbycad/opencascade@7.9.2 \
+                    ayourk/hobbycad/opencascade@8.0.1 \
                     ayourk/hobbycad/libzip@1.7.3 \
-                    ayourk/hobbycad/libgit2@1.7.2 \
+                    ayourk/hobbycad/libgit2@1.9.2 \
                     2>/dev/null || true
                 "$BREW" untap ayourk/hobbycad 2>/dev/null || true
                 ok "Tap and formulas removed."
@@ -430,7 +430,7 @@ if [ "$UNINSTALL" = "1" ]; then
         info "Checking HobbyCAD core formulas..."
 
         CORE_INSTALLED=()
-        for f in qt@6 librsvg; do
+        for f in qt@6; do
             if "$BREW" list "$f" &>/dev/null 2>&1; then
                 CORE_INSTALLED+=("$f")
             fi
@@ -451,7 +451,7 @@ if [ "$UNINSTALL" = "1" ]; then
             ok "No HobbyCAD core formulas installed."
         fi
     else
-        ok "Homebrew not found -- nothing to do."
+        ok "Homebrew not found: nothing to do."
     fi
 
     # --- Summary -------------------------------------------------------
@@ -482,7 +482,7 @@ else
 
     if confirm "Install Xcode Command Line Tools?"; then
         info "Running xcode-select --install..."
-        info "(A dialog will appear -- click 'Install'.)"
+        info "(A dialog will appear. Click 'Install'.)"
         xcode-select --install 2>/dev/null || true
 
         # Wait for installation to complete
@@ -607,7 +607,7 @@ if [ -x "$BREW" ]; then
         fi
     fi
 else
-    info "Homebrew not available -- skipping build tools."
+    info "Homebrew not available: skipping build tools."
     ALL_OK=false
 fi
 
@@ -635,16 +635,32 @@ if [ -x "$BREW" ]; then
 
     # Pinned keg-only formulas
     PINNED_FORMULAS=(
-        "ayourk/hobbycad/opencascade@7.9.2"
+        "ayourk/hobbycad/opencascade@8.0.1"
         "ayourk/hobbycad/libzip@1.7.3"
-        "ayourk/hobbycad/libgit2@1.7.2"
+        "ayourk/hobbycad/libgit2@1.9.2"
     )
 
-    # Core formulas
-    CORE_FORMULAS=(
-        "qt@6"
-        "librsvg"
-    )
+    # Qt. The project pins 6.4.2, which Homebrew does not carry, and on Intel
+    # macOS 15 Homebrew has no bottle for its rolling qt at all, so "brew
+    # install qt@6" there means compiling Qt from source for most of a day.
+    # The documented route (docs/dev_environment_setup.txt 16.2, the tap's
+    # README) is the prebuilt 6.4.2 in ~/Qt/6.4.2/macos, for example:
+    #     aqt install-qt mac desktop 6.4.2 clang_64 --archives qtbase qtsvg qttools -O ~/Qt
+    # When that (or $HOBBYCAD_QT_DIR) is present, qt@6 is not installed.
+    # qt@6 stays the fallback: it includes Qt Svg, which renders the icons
+    # (tools/render-icons.cpp); librsvg is no longer needed.
+    QT_PREBUILT="${HOBBYCAD_QT_DIR:-}"
+    if [ -z "$QT_PREBUILT" ] && [ -d "$HOME/Qt/6.4.2/macos/lib/cmake/Qt6" ]; then
+        QT_PREBUILT="$HOME/Qt/6.4.2/macos"
+    fi
+    # nlohmann-json: find_package(nlohmann_json CONFIG REQUIRED) in
+    # src/libhobbycad and devtest; header-only, bottled everywhere.
+    CORE_FORMULAS=("nlohmann-json")
+    if [ -n "$QT_PREBUILT" ]; then
+        ok "Qt 6.4.2 (prebuilt) at $QT_PREBUILT; brew qt@6 not needed."
+    else
+        CORE_FORMULAS+=("qt@6")
+    fi
 
     PINNED_MISSING=()
     for formula in "${PINNED_FORMULAS[@]}"; do
@@ -656,8 +672,12 @@ if [ -x "$BREW" ]; then
         fi
     done
 
+    # ${arr[@]+"${arr[@]}"} instead of "${arr[@]}": with set -u, the
+    # bash 3.2 that macOS ships treats an EMPTY array as unset and aborts
+    # ("CORE_FORMULAS[@]: unbound variable"), and the array is empty
+    # whenever the prebuilt Qt is present.
     CORE_MISSING=()
-    for formula in "${CORE_FORMULAS[@]}"; do
+    for formula in ${CORE_FORMULAS[@]+"${CORE_FORMULAS[@]}"}; do
         if ! "$BREW" list "$formula" &>/dev/null 2>&1; then
             CORE_MISSING+=("$formula")
         else
@@ -705,7 +725,7 @@ if [ -x "$BREW" ]; then
     fi
 
 else
-    info "Homebrew not available -- skipping dependencies."
+    info "Homebrew not available: skipping dependencies."
     ALL_OK=false
 fi
 
@@ -764,7 +784,7 @@ else
             fi
 
             if [ ! -d "$TARGET_PARENT" ]; then
-                : # Creation failed or was skipped -- skip clone
+                : # Creation failed or was skipped: skip clone
             elif [ -d "$TARGET_DIR/.git" ]; then
                 ok "Repository already exists at $TARGET_DIR"
                 CLONE_PATH="$TARGET_DIR"
@@ -802,7 +822,7 @@ else
             info "  git clone $REPO_URL"
         fi
     else
-        warn "Git not available yet -- cannot clone."
+        warn "Git not available yet: cannot clone."
         info "Install Xcode CLT first (step 1), then re-run."
         ALL_OK=false
     fi
@@ -817,12 +837,12 @@ header "6/7  CMAKE_PREFIX_PATH"
 if [ -x "$BREW" ]; then
     # Build the expected value
     OCCT_PFX="$("$BREW" --prefix \
-        ayourk/hobbycad/opencascade@7.9.2 2>/dev/null || true)"
+        ayourk/hobbycad/opencascade@8.0.1 2>/dev/null || true)"
     LZIP_PFX="$("$BREW" --prefix \
         ayourk/hobbycad/libzip@1.7.3 2>/dev/null || true)"
     LGIT_PFX="$("$BREW" --prefix \
-        ayourk/hobbycad/libgit2@1.7.2 2>/dev/null || true)"
-    QT6_PFX="$("$BREW" --prefix qt@6 2>/dev/null || true)"
+        ayourk/hobbycad/libgit2@1.9.2 2>/dev/null || true)"
+    QT6_PFX="${QT_PREBUILT:-$("$BREW" --prefix qt@6 2>/dev/null || true)}"
 
     EXPECTED_PATH=""
     for pfx in "$OCCT_PFX" "$LZIP_PFX" "$LGIT_PFX" "$QT6_PFX"; do
@@ -897,7 +917,7 @@ if [ -x "$BREW" ]; then
         fi
     fi
 else
-    info "Homebrew not available -- skipping CMAKE_PREFIX_PATH."
+    info "Homebrew not available: skipping CMAKE_PREFIX_PATH."
     ALL_OK=false
 fi
 
@@ -978,7 +998,7 @@ if [ "$ALL_OK" = true ]; then
     info "  $STEP. Run:"
     info "       ./build/src/hobbycad/hobbycad"
 else
-    fail "Some items need attention -- see above."
+    fail "Some items need attention: see above."
     echo ""
     info "Fix the issues, then run this script again."
 fi

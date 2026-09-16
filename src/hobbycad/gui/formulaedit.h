@@ -68,6 +68,13 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+
+    /// Refuse Enter while the expression will not evaluate.
+    ///
+    /// Committing an invalid formula would hand the caller a stale value
+    /// while the field shows something else. Refusing keeps the two in
+    /// step, and the caret does not move: the user is mid-correction.
+    void keyPressEvent(QKeyEvent* event) override;
     void focusInEvent(QFocusEvent* event) override;
     void focusOutEvent(QFocusEvent* event) override;
 

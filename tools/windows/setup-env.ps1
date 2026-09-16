@@ -339,7 +339,7 @@ $ucrt64Bin = Join-Path $Msys2Root "ucrt64\bin"
 #   5. Offers to delete vcpkg and HobbyCAD clone directories
 
 if ($Uninstall) {
-    Write-Header "Uninstall -- rolling back changes"
+    Write-Header "Uninstall: rolling back changes"
 
     $changed = $false
 
@@ -556,7 +556,7 @@ if ($Uninstall) {
 
         # Check if the directory still exists after uninstaller
         if (Test-Path $Msys2Root) {
-            # Re-check registry -- if the uninstall entry is still
+            # Re-check registry: if the uninstall entry is still
             # there, the user likely canceled the uninstaller, so
             # we should not offer to delete the folder.
             $recheck = Find-Msys2Install
@@ -704,7 +704,7 @@ if (Test-Path $msys2Exe) {
             # Verify installation at the specified root
             $testExe = Join-Path $Msys2Root "msys2.exe"
             if (-not (Test-Path $testExe)) {
-                # Fallback -- check registry in case --root
+                # Fallback: check registry in case --root
                 # was ignored or the installer placed it elsewhere
                 $detected = Find-Msys2Install
                 if ($detected.Path -and
@@ -857,7 +857,7 @@ if ($msys2Present) {
         }
     }
 } else {
-    Write-Info "MSYS2 not installed -- skipping package check."
+    Write-Info "MSYS2 not installed: skipping package check."
     $allOk = $false
 }
 
@@ -865,7 +865,7 @@ if ($msys2Present) {
 #  3. PATH
 # ===================================================================
 
-Write-Header "3/7  PATH -- UCRT64 binaries"
+Write-Header "3/7  PATH: UCRT64 binaries"
 
 # Re-check in case MSYS2 location was updated by step 1
 # or the user already has it at a non-default path.
@@ -948,7 +948,7 @@ $verifyTools = @(
        Required = $false }
 )
 
-# Resolved full paths -- used by later steps so they work
+# Resolved full paths, used by later steps so they work
 # even if MSYS2 is not in the session PATH.
 $gitExe   = $null
 $cmakeExe = $null
@@ -962,7 +962,7 @@ foreach ($tool in $verifyTools) {
             Write-Ok "$($tool.Name) : $ver"
         } else {
             Write-Ok "$($tool.Name) : $ver (via $exe)"
-            Write-Info "(Not in PATH -- using full path.)"
+            Write-Info "(Not in PATH, using full path.)"
         }
         # Store for later steps
         if ($tool.Name -eq "git")   { $gitExe   = $exe }
@@ -1049,7 +1049,7 @@ if ($isInRepo) {
             }
 
             if (-not (Test-Path $targetParent)) {
-                # Creation failed or was skipped -- skip clone
+                # Creation failed or was skipped: skip clone
             } elseif (Test-Path (Join-Path $targetDir ".git")) {
                 Write-Ok "Repository already exists at $targetDir"
                 $clonePath = $targetDir
@@ -1081,7 +1081,7 @@ if ($isInRepo) {
             Write-Info "  git clone $RepoUrl"
         }
     } else {
-        Write-Warn "Git not available yet -- cannot clone."
+        Write-Warn "Git not available yet: cannot clone."
         Write-Info "Install MSYS2 and packages (steps 1-2),"
         Write-Info "then re-run this script."
         $allOk = $false
@@ -1240,7 +1240,7 @@ if ($allOk) {
     Write-Info "  $step. Run:"
     Write-Info "       .\build\src\hobbycad\hobbycad.exe"
 } else {
-    Write-Fail "Some items need attention -- see above."
+    Write-Fail "Some items need attention: see above."
     Write-Host ""
     Write-Info "Fix the issues, then run this script again."
 }

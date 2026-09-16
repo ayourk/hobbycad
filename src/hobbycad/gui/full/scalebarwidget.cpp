@@ -14,14 +14,14 @@
 #include <cmath>
 #include <cstdio>
 
+#include <hobbycad/units.h>   // kScaleBar*Px (shared with the 2D bar)
+
 namespace {
     // Layout constants (in pixel units).
     constexpr double kFontHeight = 18.0;
     constexpr double kTickH      = 12.0;   // end tick total height
     constexpr double kLineWidth  =  2.0;
     constexpr double kTextGap    =  6.0;   // gap between text and tick
-    constexpr int    kMaxBarPx   = 180;     // max bar pixel length
-    constexpr int    kTargetPx   =  75;     // target bar pixel length
 
     // Colors.
     Quantity_Color barColor() {
@@ -57,20 +57,20 @@ void ScaleBarWidget::updateScale()
     double worldPerPixel = m_view->Convert(1);  // mm per pixel
     if (worldPerPixel <= 0.0) return;
 
-    double rawWorld = worldPerPixel * kTargetPx;
+    double rawWorld = worldPerPixel * hobbycad::kScaleBarTargetPx;
 
     // Snap to a "nice" round number.
     m_worldLength = niceNumber(rawWorld);
     m_pixelLength = m_worldLength / worldPerPixel;
 
     // If bar would be too wide, step down.
-    while (m_pixelLength > kMaxBarPx && m_worldLength > 0.001) {
+    while (m_pixelLength > hobbycad::kScaleBarMaxPx && m_worldLength > 0.001) {
         m_worldLength = niceNumberBelow(m_worldLength);
         m_pixelLength = m_worldLength / worldPerPixel;
     }
 
     // Floor at minimum visible size.
-    if (m_pixelLength < 20.0) m_pixelLength = 20.0;
+    if (m_pixelLength < hobbycad::kScaleBarMinPx) m_pixelLength = hobbycad::kScaleBarMinPx;
 
     buildLabel();
 }
@@ -79,65 +79,8 @@ void ScaleBarWidget::updateScale()
 
 void ScaleBarWidget::buildLabel()
 {
-    char buf[64];
-
-    // Convert internal mm to display units and format
-    double value = m_worldLength;
-    const char* unitStr = "mm";
-
-    switch (m_unitSystem) {
-    case LengthUnit::Millimeters:
-        // Already in mm, but show m for large values
-        if (value >= 1000.0) {
-            value /= 1000.0;
-            unitStr = "m";
-        } else if (value < 1.0) {
-            value *= 1000.0;
-            unitStr = "um";
-        }
-        break;
-    case LengthUnit::Centimeters:
-        value /= 10.0;  // mm to cm
-        unitStr = "cm";
-        if (value >= 100.0) {
-            value /= 100.0;
-            unitStr = "m";
-        }
-        break;
-    case LengthUnit::Meters:
-        value /= 1000.0;  // mm to m
-        unitStr = "m";
-        if (value < 0.01) {
-            value *= 100.0;
-            unitStr = "cm";
-        }
-        break;
-    case LengthUnit::Inches:
-        value /= 25.4;  // mm to inches
-        unitStr = "in";
-        if (value >= 12.0) {
-            value /= 12.0;
-            unitStr = "ft";
-        }
-        break;
-    case LengthUnit::Feet:
-        value /= 304.8;  // mm to feet
-        unitStr = "ft";
-        if (value < 1.0) {
-            value *= 12.0;
-            unitStr = "in";
-        }
-        break;
-    }
-
-    // Format the value
-    if (value == std::floor(value) && value < 10000.0)
-        std::snprintf(buf, sizeof(buf), "%d %s",
-                      static_cast<int>(value), unitStr);
-    else
-        std::snprintf(buf, sizeof(buf), "%.3g %s", value, unitStr);
-
-    m_label = buf;
+    // Shared with the 2D sketch scale bar (units.h) so both read identically.
+    m_label = hobbycad::formatScaleBarLabel(m_worldLength, m_unitSystem);
 }
 
 // ---- onPaint --------------------------------------------------------

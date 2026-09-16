@@ -2,6 +2,25 @@
 HobbyCAD Changelog
 ================================================================================
 
+Entries are newest first. A release entry is headed by its version, with
+the date in parentheses, between the rules; the release workflow lifts that
+entry into the GitHub release notes and refuses to tag a version that has
+none. Work in progress goes under "Unreleased" and is renamed to the
+version when it is tagged. Subsections: Added, Changed, Fixed, Removed,
+Known issues.
+
+================================================================================
+Unreleased
+================================================================================
+
+Known issues
+------------
+- Windows and macOS binaries are not code-signed: SmartScreen asks for
+  confirmation on first launch (More info, Run anyway); macOS refuses the
+  app once and needs Privacy & Security, Open Anyway.
+- The ARM64 Windows and Apple Silicon builds compile in CI but have had
+  less hands-on testing than x64.
+
 ================================================================================
 2026-02-08
 ================================================================================
@@ -10,7 +29,7 @@ Added
 -----
 - Initial commit: project documentation
 - PPA created for Debian/Ubuntu packaging
-- Initial release (Phase 0 -- Foundation)
+- Initial release (Phase 0: Foundation)
 - BREP file open, display, and save
 - Qt 6 GUI with OCCT AIS 3D viewport
 - Tiered startup: Full Mode, Reduced Mode, Command-Line Mode

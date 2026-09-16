@@ -15,8 +15,13 @@
 
 #include "../core.h"
 #include "../types.h"
+#include "../units.h"
+#include "constraint.h"
 
+#include <array>
 #include <cctype>
+#include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -48,11 +53,15 @@ struct ParsedValue {
 /// - "(width/2)" -> { valid=true, expression="(width/2)", isExpression=true }
 HOBBYCAD_EXPORT ParsedValue parseValue(const std::string& str);
 
-/// Parse a value string and return numeric value if possible
-/// @param str Input string to parse
-/// @param value Output numeric value
-/// @param expression Output expression string (for non-numeric values)
+/// Parse a value string into either a number or a deferred formula.
+/// @param str        Input string to parse
+/// @param value      Output numeric value: set ONLY for a plain number;
+///                   left 0 for an expression or parameter (not evaluated here)
+/// @param expression Output formula: EMPTY for a plain number, the formula
+///                   string for an expression or parameter name
 /// @return True if parsing succeeded
+/// @note If `expression` comes back non-empty the input is a formula the caller
+///       must resolve; `value` is meaningful only when `expression` is empty.
 HOBBYCAD_EXPORT bool parseValue(const std::string& str, double& value, std::string& expression);
 
 // =====================================================================
@@ -93,6 +102,102 @@ HOBBYCAD_EXPORT bool parseCoordinate(const std::string& str, double& x, double& 
 HOBBYCAD_EXPORT std::optional<Point2D> parsePoint(const std::string& str);
 
 // =====================================================================
+//  Resolving against a document
+// =====================================================================
+
+/// Named coordinates ("origin", "corner") as a front end has evaluated them.
+using NamedPoints = std::map<std::string, std::array<double, 3>>;
+
+/// Resolve a value token to a number: a literal (unit suffix applied), a
+/// parameter name, or a formula, evaluated against `params`. `expression`,
+/// when given, receives the formula text (empty for a literal) so a caller
+/// can store the parametric form.
+HOBBYCAD_EXPORT bool resolveValue(const std::string& str,
+                                  const std::map<std::string, double>& params,
+                                  double& value, std::string* expression = nullptr);
+
+/// Resolve "x,y" to numbers. A lone named-coordinate identifier expands to
+/// its x and y (named points are tried before the coordinate grammar, so a
+/// parameter called "origin" cannot shadow the point). Each half may be a
+/// literal, a parameter, a parenthesized formula, or a bare formula ("w/2").
+/// `xExpr` / `yExpr` receive the halves' formula text when the coordinate
+/// grammar classified them (empty for literals).
+HOBBYCAD_EXPORT bool resolveCoordinate(const std::string& str,
+                                       const std::map<std::string, double>& params,
+                                       const NamedPoints& named,
+                                       double& x, double& y,
+                                       std::string* xExpr = nullptr, std::string* yExpr = nullptr);
+
+/// Resolve "x,y,z" (or a named point) to numbers; each component a literal,
+/// parameter or formula. Bracket-aware: a function's internal commas are
+/// respected.
+HOBBYCAD_EXPORT bool resolveCoordinate3(const std::string& str,
+                                        const std::map<std::string, double>& params,
+                                        const NamedPoints& named,
+                                        double& x, double& y, double& z);
+
+/// Why resolveConstraintValue() refused.
+enum class ConstraintValueProblem {
+    None,
+    AngleForLength,   ///< an angle suffix on a length constraint
+    LengthForAngle,   ///< a length suffix on an angular constraint
+    NotANumber,       ///< an angle suffix on something that is not a number (see badPart)
+    Invalid           ///< not a number, parameter or expression
+};
+
+/// Resolve a constraint's value token, honoring and CHECKING its unit: an
+/// angle suffix ("45deg", "0.5rad") is converted to degrees and only
+/// accepted on an angular constraint; a length suffix is refused on one.
+/// Otherwise the token resolves like any value (number, parameter,
+/// formula) through resolveValue(), lengths in millimeters. `text`
+/// receives the token's parametric form. `badPart`, when given, receives
+/// the offending fragment for NotANumber.
+HOBBYCAD_EXPORT ConstraintValueProblem resolveConstraintValue(const std::string& token,
+                                                              ConstraintType type,
+                                                              const std::map<std::string, double>& params,
+                                                              double& value, std::string& text,
+                                                              std::string* badPart = nullptr);
+
+// =====================================================================
+//  Measurements typed into a field
+// =====================================================================
+
+/// What a field measures, which decides its unit handling.
+enum class MeasureKind {
+    Length,   ///< millimeters out; a unit suffix converts, none means `defaultUnit`
+    Angle,    ///< degrees out; "deg" / "°" / "rad" accepted, a length unit refused
+    Count     ///< a plain number (sides), no unit
+};
+
+/// Read a field the way the Parameters dialog reads an expression: the text
+/// is an expression over the document's parameters (bare formulas allowed,
+/// "width/2", "2*r + 1"), optionally followed by a unit ("10 mm", "2 in",
+/// "45 deg", "90°"). Lengths come back in millimeters, a length with no unit
+/// being in `defaultUnit` (what the field displays). Angles come back in
+/// degrees. A length unit on an angle, or an angle unit on a length, is
+/// refused, as is anything that does not evaluate.
+HOBBYCAD_EXPORT bool resolveMeasurement(const std::string& text, MeasureKind kind,
+                                        LengthUnit defaultUnit,
+                                        const std::map<std::string, double>& params,
+                                        double& out);
+
+/// "(x, y) mm", "x, y" or "(x, y)": two lengths read as above, one unit for
+/// both when it trails the pair. Millimeters out.
+HOBBYCAD_EXPORT bool resolveMeasuredPoint(const std::string& text, LengthUnit defaultUnit,
+                                          const std::map<std::string, double>& params,
+                                          Point2D& out);
+
+/// Why parsePointRef() refused.
+enum class PointRefProblem { None, BadEntityId, BadPointIndex };
+
+/// Parse "<entityId>" or "<entityId>.<pointIndex>" (the CLI's way of naming
+/// a point on an entity). pointIndex is 0 when absent and must not be
+/// negative; `hadPoint`, when given, says whether one was written.
+HOBBYCAD_EXPORT PointRefProblem parsePointRef(const std::string& text,
+                                              int& entityId, int& pointIndex,
+                                              bool* hadPoint = nullptr);
+
+// =====================================================================
 //  Identifier Validation
 // =====================================================================
 
@@ -111,6 +216,18 @@ HOBBYCAD_EXPORT bool looksNumeric(const std::string& str);
 /// @param str String to check
 /// @return True if starts with '(' and ends with ')'
 HOBBYCAD_EXPORT bool isParenthesizedExpression(const std::string& str);
+
+/// Measure a reference-parameter source string against solved geometry.
+/// The only form understood today is "distance <ptA> <ptB>", each point written
+/// "<entityId>" or "<entityId>.<pointIndex>". @p resolve maps an
+/// (entityId, pointIndex) to its solved Point2D (returning false when it does
+/// not exist); passing the resolver keeps this helper free of any entity-
+/// container type, so the CLI and the GUI share one implementation. Returns
+/// true and sets @p out (the measured distance) on success.
+HOBBYCAD_EXPORT bool measureReferenceSource(
+    const std::string& source,
+    const std::function<bool(int entityId, int pointIndex, Point2D& out)>& resolve,
+    double& out);
 
 // =====================================================================
 //  Command Tokenization
@@ -136,7 +253,7 @@ inline std::vector<std::string> tokenizeLine(const std::string& line)
         char c = line[i];
 
         if (c == '"' && parenDepth == 0) {
-            // Toggle quote mode -- quotes are stripped, content kept as one token
+            // Toggle quote mode: quotes are stripped, content kept as one token
             inQuote = !inQuote;
             inToken = true;
         } else if (inQuote) {
@@ -169,6 +286,31 @@ inline std::vector<std::string> tokenizeLine(const std::string& line)
     }
 
     return tokens;
+}
+
+/// Rejoin coordinate fragments that tokenizeLine split at spaces around
+/// commas, so every coordinate parser is space-tolerant without per-command
+/// code: ["3,","4,","5"] and ["3",",","4"] each merge to one token.
+/// Two tokens join when the boundary between them is a comma (left ends
+/// with ',' or right begins with ','). splitCoordinate handles the rest,
+/// bracket-aware.
+inline std::vector<std::string> mergeCoordinateTokens(std::vector<std::string> tokens)
+{
+    std::vector<std::string> merged;
+    merged.reserve(tokens.size());
+    for (size_t k = 0; k < tokens.size(); ++k) {
+        std::string cur = std::move(tokens[k]);
+        while (k + 1 < tokens.size()) {
+            const std::string& nxt = tokens[k + 1];
+            const bool curEndsComma = !cur.empty() && cur.back() == ',';
+            const bool nxtStartsComma = !nxt.empty() && nxt.front() == ',';
+            if (!curEndsComma && !nxtStartsComma) break;
+            cur += nxt;
+            ++k;
+        }
+        merged.push_back(std::move(cur));
+    }
+    return merged;
 }
 
 }  // namespace sketch

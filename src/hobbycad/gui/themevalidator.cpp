@@ -10,7 +10,7 @@
 namespace hobbycad {
 
 // Parse a QSS string into selector → property map entries.
-// This is a lightweight parser — it handles the common cases
+// This is a lightweight parser; it handles the common cases
 // (selectors with { } blocks, property: value; pairs) but does
 // not attempt to be a full CSS parser.
 
@@ -61,7 +61,7 @@ ThemeValidationResult validateTheme(const QString& qss)
             result.valid = false;
             result.warnings.append(
                 QStringLiteral("Selector \"%1\": background-color "
-                    "and color are both \"%2\" — text would be "
+                    "and color are both \"%2\"; text would be "
                     "invisible.")
                     .arg(selector, bgColor));
         }

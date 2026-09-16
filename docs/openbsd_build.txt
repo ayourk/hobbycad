@@ -1,0 +1,326 @@
+================================================================================
+  HobbyCAD - BUILDING ON OPENBSD
+================================================================================
+
+  Project          : HobbyCAD
+  File             : docs/openbsd_build.txt
+  Document Version : 0.0.1.0
+  Date             : 2026-08-30
+  Format           : Plain Text (all project documentation is plain text)
+  AI Attribution   : This document was primarily generated with the assistance
+                     of Claude AI (Anthropic). Human review and editorial
+                     direction provided by the project author.
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+    1. Overview
+    2. Install Layout: Use One Big Root
+    3. Package Installation
+    4. Paths That Are Not Where CMake Expects
+    5. The Missing <malloc.h>
+    6. Other Base System Differences
+    7. libslvs 3.2p1
+    8. OpenCASCADE 8.0.1
+    9. Building HobbyCAD
+    10. Verifying the GUI and W^X
+    11. Troubleshooting
+    12. Source Packages
+
+================================================================================
+  1. Overview
+================================================================================
+
+  Verified on OpenBSD 7.9, amd64. Everything here was established by building
+  on that system and is not derived from upstream documentation.
+
+  OpenBSD works, including the GUI, but needs more care than FreeBSD. It ships
+  no <xlocale.h>, no strtod_l, no <malloc.h>, and neither librt nor libdl. Its
+  X11 lives under /usr/X11R6. The one genuinely OpenBSD-specific concern is
+  W^X, which the software OpenGL stack trips over on a filesystem that is not
+  mounted wxallowed.
+
+================================================================================
+  2. Install Layout: Use One Big Root
+================================================================================
+
+  Install with a single root partition plus swap rather than the installer's
+  default split layout.
+
+  Beyond avoiding stranded free space, the installer marks / itself wxallowed
+  when it is the only partition, and that is what allows the software OpenGL
+  stack to run at all. See section 10. With the default layout only
+  /usr/local receives that flag.
+
+  For an unattended install, autoinstall(8) accepts:
+
+    URL to autopartitioning template for disklabel = <url>
+
+  pointing at a disklabel(8) template:
+
+    /	1G-*	100%
+    SWAP	2G	0%
+
+  IMPORTANT: / must be listed first. Template order decides partition letters
+  and the boot loader looks for the root filesystem on hd0a. Listing SWAP
+  first installs cleanly and then fails to boot, with:
+
+    open(hd0a:/etc/boot.conf): Invalid argument
+    booting hd0a:/bsd: open hd0a:/bsd: Invalid argument
+    failed(22). will try /bsd
+
+================================================================================
+  3. Package Installation
+================================================================================
+
+    pkg_add cmake ninja eigen3 qt6-qtbase qt6-qtsvg qt6-qttools \
+            nlohmann-json freetype
+
+  Note the package names: "freetype", not freetype2; "eigen3", not eigen.
+
+  Everything else needed is in base. Xenocara supplies Xvfb, Xorg, glxinfo,
+  xwd and swrast_dri.so, so no additional packages are required for the GUI.
+
+================================================================================
+  4. Paths That Are Not Where CMake Expects
+================================================================================
+
+    X11        /usr/X11R6/include, /usr/X11R6/lib
+    FreeType   /usr/X11R6/include/freetype2
+
+  -DCMAKE_INCLUDE_PATH= does not reach compile flags. Export CPATH instead. It
+  also has the useful property of not touching the CMake cache, so an
+  interrupted build resumes rather than reconfiguring and restarting:
+
+    export CPATH=/usr/X11R6/include
+    export LIBRARY_PATH=/usr/X11R6/lib
+
+  OpenCASCADE compiles with -DHAVE_XLIB but never adds an X11 include
+  directory to the compile line; it assumes X11 is in the default search path,
+  which is true on Linux and on no BSD.
+
+================================================================================
+  5. The Missing <malloc.h>
+================================================================================
+
+  OpenBSD ships no <malloc.h>; its allocator declarations are in <stdlib.h>.
+  Eight OpenCASCADE sources include it, seven of them with no platform guard.
+
+  Rather than patch eight sites, put a compatibility header on the include
+  path:
+
+    mkdir -p ~/compat-include
+    printf '#include <stdlib.h>\n' > ~/compat-include/malloc.h
+    export CPATH=$CPATH:~/compat-include
+
+  The mallinfo() calls those files make are already guarded by HAS_MALLINFO,
+  so only the include itself is a problem.
+
+  This is deliberately an environment fix rather than a source change. A
+  missing libc header is a property of the build host, not of OpenCASCADE,
+  and the orig tarball is shared with Debian, vcpkg and Homebrew, none of
+  which need it. Guarding the include in the sources would also have to be
+  done at every site that includes it, and would be missed at the next one
+  upstream adds.
+
+================================================================================
+  6. Other Base System Differences
+================================================================================
+
+  tar has no -J option
+      Use: xz -dc file.tar.xz | tar xf -
+
+  patch(1) does not accept --no-backup-if-mismatch
+      That flag is GNU-specific.
+
+  grep does not support \b
+      A capability probe written with \b silently matches nothing and makes
+      the whole platform look as though it lacks the functions being tested.
+      Determine capabilities by compiling against them, not by grepping
+      headers.
+
+  Default login class caps per-process data at 4 GB
+      Large C++ translation units may need a login class with higher limits.
+
+================================================================================
+  7. libslvs 3.2p1
+================================================================================
+
+  Builds unpatched, given eigen3:
+
+  WHAT "3.2p1" MEANS
+
+  This is NOT an upstream release. Upstream SolveSpace has no 3.2p1.
+
+    3.2       the upstream SolveSpace version the snapshot is based on
+    .git~     taken from git rather than a release tarball
+    20260914  the day the HobbyCAD series was cut against upstream
+    +p1       revision 1 of the HobbyCAD changes
+
+  The two parts move independently: the snapshot says which upstream this
+  came from, and +pN says which revision of our changes is applied on top.
+  Bumping one does not imply bumping the other.
+
+  The changes are baked into the orig tarball rather than carried alongside
+  it, for portability: vcpkg, Homebrew and the BSDs all consume
+  the same tarball, and only Debian packaging can carry a debian/patches
+  series. That is also why it "builds unpatched" here. It does not need
+  patching because the patching already happened upstream of the tarball.
+
+  A build can detect this at compile time, from include/slvs.h:
+
+    SLVS_IS_HOBBYCAD_BUILD     1
+    SLVS_HOBBYCAD_PATCHLEVEL   1
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DENABLE_GUI=OFF -DENABLE_CLI=OFF -DENABLE_TESTS=OFF \
+      -DENABLE_OPENMP=OFF -DEIGEN3_INCLUDE_DIR=/usr/local/include/eigen3
+
+  The orig tarball does NOT bundle Eigen; extlib/eigen/ is an empty submodule
+  placeholder. A missing Eigen fails partway through at Eigen/SparseCore, not
+  at configure time.
+
+================================================================================
+  8. OpenCASCADE 8.0.1
+================================================================================
+
+  Stock OpenCASCADE 8.0.1 does NOT build. It stops at:
+
+    Standard_CString.cxx:55: error: System does not support xlocale.
+
+
+  Use the baked tarball:
+
+    opencascade_8.0.1+p1.orig.tar.xz
+
+  The +p1 suffix means the same thing it does for libslvs: revision 1 of the
+  HobbyCAD changes, applied inside the orig tarball rather than carried
+  alongside it. 8.0.1 is the upstream release, +p1 the local changes. Nothing
+  needs patching; the patching already happened upstream of the tarball.
+
+  The changes are baked in rather than carried alongside because vcpkg,
+  Homebrew and the BSD ports all consume the orig tarball directly and cannot
+  read a debian/patches series. Nothing is stripped from the tarball either,
+  so every consumer builds from identical bytes.
+
+  The changes that matter on this platform:
+
+    Standard_CLocaleSentry.hxx
+        OpenBSD has the POSIX-2008 locale API in <locale.h> and ships no
+        <xlocale.h>, so it belongs in the macro list but NOT the header list.
+
+    OSD_Path.cxx
+        whereAmI() omits OpenBSD, so it reaches an #else that calls uname()
+        without including <sys/utsname.h>.
+
+    OSD_MemInfo.cxx
+        Unconditional <malloc.h>. See section 5.
+
+    adm/cmake/occt_csf.cmake
+        Links rt and dl. OpenBSD provides both in libc and ships neither as a
+        separate library, so the link fails with "unable to find library".
+
+  Then:
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/local;/usr/X11R6" \
+      -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,/usr/X11R6/lib" \
+      -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,/usr/X11R6/lib" \
+      -DUSE_FREETYPE=ON -DUSE_TK=OFF -DUSE_TCL=OFF \
+      -DBUILD_MODULE_Draw=OFF -DBUILD_DOC_Overview=OFF \
+      -DINSTALL_TEST_CASES=OFF
+
+  IMPORTANT: build with USE_FREETYPE=ON. Verified both ways on this platform:
+
+    USE_FREETYPE=OFF   view cube unlabeled, scale bar has tick marks and no
+                       numbers
+    USE_FREETYPE=ON    view cube reads TOP / FRONT / RIGHT, scale bar reads
+                       0 ... 20 mm
+
+  Qt's own widgets keep their text either way, which is what makes this
+  deceptive: menus and the status bar look correct, so the missing viewport
+  labels read as a platform font problem rather than a build flag.
+
+================================================================================
+  9. Building HobbyCAD
+================================================================================
+
+    cmake -S <src> -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/local;/usr/X11R6;/path/to/occt-build"
+    cmake --build build -j$(sysctl -n hw.ncpuonline)
+
+  Builds with no OpenBSD-specific source changes. Reports Qt 6.10.2 and
+  OpenCASCADE 8.0.1.
+
+  Verify with --version, --no-gui, and QT_QPA_PLATFORM=offscreen --help. None
+  of the three needs a display.
+
+================================================================================
+  10. Verifying the GUI and W^X
+================================================================================
+
+    Xvfb :99 -screen 0 1400x900x24 &
+    DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb hobbycad &
+    DISPLAY=:99 xwd -root -silent > shot.xwd
+
+  Renders, reporting:
+
+    OpenGL 4.5 - llvmpipe (LLVM 19.1.7, 256 bits), Mesa 25.0.7
+
+
+  W^X IS THE THING TO KNOW. llvmpipe is an LLVM JIT, and OpenBSD kills
+  write-then-execute mappings on any filesystem not mounted wxallowed. With
+  the single-root install described in section 2 this works out of the box,
+  because the installer sets that flag on /:
+
+    /dev/sd0a on / type ffs (local, wxallowed)
+
+  If OpenGL fails on a machine installed with the default split layout, check
+  this before suspecting Mesa.
+
+================================================================================
+  11. Troubleshooting
+================================================================================
+
+  "System does not support xlocale" at Standard_CString.cxx
+      This is a stock 8.0.1 tree, not the +p1 tarball. See section 8.
+
+  "unable to find library -lrt" or "-ldl" when linking
+      Same cause; occt_csf.cmake links libraries OpenBSD does not ship.
+
+  "malloc.h: No such file or directory"
+      The compatibility header is not on CPATH. See section 5.
+
+  "X11/Xlib.h: No such file or directory"
+      CPATH does not include /usr/X11R6/include. See section 4.
+
+  OpenGL fails or the process dies starting the GUI
+      The filesystem is probably not mounted wxallowed. See section 10.
+
+  A capability probe reports functions missing that clearly exist
+      OpenBSD grep does not support \b. Compile-test instead of grepping.
+
+================================================================================
+  12. Source Packages
+================================================================================
+
+  The patched sources are published to the HobbyCAD PPA:
+
+    https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad
+
+  The orig tarballs there are the same ones consumed by vcpkg, Homebrew and
+  the BSDs. That is deliberate: patches are baked into the orig tarball rather
+  than carried in a debian/patches series precisely so that every consumer
+  gets identical sources. See "WHAT 3.2p1 MEANS" above.
+
+  CHECK THE VERSIONS BEFORE ASSUMING A MATCH. The instructions in this
+  document need:
+
+    libslvs        3.2.git~20260914+p1   (note the +p1)
+    opencascade    8.0.1+p1
+
+  A copy without +p1 is the stock upstream source and will not build here.
+  Neither will an opencascade older than 8.0.1, which predates the BSD work
+  entirely. If what is published does not carry those versions yet, wait for
+  it rather than substituting a stock tarball.

@@ -22,6 +22,8 @@
 #include <QIcon>
 #include <QWidget>
 
+#include "../i18n/retranslatable.h"
+
 class QHBoxLayout;
 
 namespace hobbycad {
@@ -118,36 +120,29 @@ inline ModelTool defaultToolForGroup(ToolbarGroup group) {
     }
 }
 
-// ============================================================================
-// Future: ToolbarConfig class for user-customizable toolbar layouts
-// ============================================================================
-// struct ToolbarConfig {
-//     struct ButtonConfig {
-//         ToolbarGroup group;
-//         int position;                    // Order in toolbar
-//         QVector<ModelTool> dropdownItems; // Custom dropdown contents
-//         ModelTool defaultTool;           // Override default
-//     };
-//     QVector<ButtonConfig> buttons;
-//     QString name;                        // "Default", "Modeling", etc.
-//
-//     void loadFromSettings(QSettings& settings);
-//     void saveToSettings(QSettings& settings) const;
-//     static ToolbarConfig factoryDefault();
-// };
-// ============================================================================
-
-class ModelToolbar : public QWidget {
+class ModelToolbar : public QWidget, public Retranslatable {
     Q_OBJECT
 
 public:
     explicit ModelToolbar(QWidget* parent = nullptr);
+
+    /// Re-apply every caption and tooltip on the toolbar and in its
+    /// dropdowns. Rebuilt from the tool each button currently shows, not
+    /// from a remembered string, because the user may have picked a
+    /// different one from the dropdown since this last ran.
+    void retranslate() override;
 
     /// Get the currently active tool
     ModelTool activeTool() const { return m_activeTool; }
 
     /// Programmatically set the active tool
     void setActiveTool(ModelTool tool);
+
+    /// Translated label and tooltip for a tool, from the one table that
+    /// holds them. Static-like helpers, but members so tr() resolves in this
+    /// class's context.
+    QString toolLabel(ModelTool tool);
+    QString toolTip(ModelTool tool);
 
     /// Reset all buttons to their default state (called on ESC)
     void resetAllButtons();
@@ -220,6 +215,18 @@ private:
     // All buttons are default-first: starts with default, ESC resets to default
     // This matches industry standard (SolidWorks, Fusion 360) where clicking
     // a button always does something immediately.
+
+    /// The tool whose name is currently on each group button, or
+    /// ModelTool::None when the button is showing its group default. Needed
+    /// because the caption has to be rebuilt in the new language and the old
+    /// string cannot be parsed back into a tool.
+    ModelTool m_captionSketch = ModelTool::None;
+    ModelTool m_captionPlane  = ModelTool::None;
+    ModelTool m_captionSolid  = ModelTool::None;
+    ModelTool m_captionFillet = ModelTool::None;
+    ModelTool m_captionHole   = ModelTool::None;
+    ModelTool m_captionMove   = ModelTool::None;
+    ModelTool m_captionMirror = ModelTool::None;
 
     ModelTool m_lastSketchTool    = ModelTool::Sketch;            // Default to Sketch
     ModelTool m_lastPlaneTool     = ModelTool::ConstructionPlane; // Default to Construction Plane

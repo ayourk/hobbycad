@@ -49,7 +49,6 @@ struct OperationResult {
 /// @param direction Extrusion direction (unit vector)
 /// @param distance Extrusion distance (positive = along direction)
 /// @return Result with extruded solid
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult extrudeProfile(
     const sketch::Profile& profile,
     const std::vector<sketch::Entity>& entities,
@@ -63,7 +62,6 @@ HOBBYCAD_EXPORT OperationResult extrudeProfile(
 /// @param distance Total distance
 /// @param symmetric If true, extrude distance/2 in both directions
 /// @return Result with extruded solid
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult extrudeProfileSymmetric(
     const sketch::Profile& profile,
     const std::vector<sketch::Entity>& entities,
@@ -77,7 +75,6 @@ HOBBYCAD_EXPORT OperationResult extrudeProfileSymmetric(
 /// @param axis Revolution axis
 /// @param angleDegrees Revolution angle in degrees (360 for full revolution)
 /// @return Result with revolved solid
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult revolveProfile(
     const sketch::Profile& profile,
     const std::vector<sketch::Entity>& entities,
@@ -89,7 +86,6 @@ HOBBYCAD_EXPORT OperationResult revolveProfile(
 /// @param entities Entities for building the profile wire
 /// @param pathEntities Entities defining the sweep path
 /// @return Result with swept solid
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult sweepProfile(
     const sketch::Profile& profile,
     const std::vector<sketch::Entity>& entities,
@@ -100,7 +96,6 @@ HOBBYCAD_EXPORT OperationResult sweepProfile(
 /// @param entities All entities
 /// @param solid If true, create solid; if false, create shell
 /// @return Result with lofted shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult loftProfiles(
     const std::vector<sketch::Profile>& profiles,
     const std::vector<sketch::Entity>& entities,
@@ -114,7 +109,6 @@ HOBBYCAD_EXPORT OperationResult loftProfiles(
 /// @param shape1 First shape
 /// @param shape2 Second shape
 /// @return Result with fused shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult fuseShapes(
     const TopoDS_Shape& shape1,
     const TopoDS_Shape& shape2);
@@ -123,7 +117,6 @@ HOBBYCAD_EXPORT OperationResult fuseShapes(
 /// @param shape Main shape
 /// @param tool Shape to subtract
 /// @return Result with cut shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult cutShape(
     const TopoDS_Shape& shape,
     const TopoDS_Shape& tool);
@@ -132,7 +125,6 @@ HOBBYCAD_EXPORT OperationResult cutShape(
 /// @param shape1 First shape
 /// @param shape2 Second shape
 /// @return Result with intersection
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult intersectShapes(
     const TopoDS_Shape& shape1,
     const TopoDS_Shape& shape2);
@@ -146,7 +138,6 @@ HOBBYCAD_EXPORT OperationResult intersectShapes(
 /// @param radius Fillet radius
 /// @param edgeIndices Indices of edges to fillet (empty = all edges)
 /// @return Result with filleted shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult filletShape(
     const TopoDS_Shape& shape,
     double radius,
@@ -157,7 +148,6 @@ HOBBYCAD_EXPORT OperationResult filletShape(
 /// @param distance Chamfer distance
 /// @param edgeIndices Indices of edges to chamfer (empty = all edges)
 /// @return Result with chamfered shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult chamferShape(
     const TopoDS_Shape& shape,
     double distance,
@@ -168,7 +158,6 @@ HOBBYCAD_EXPORT OperationResult chamferShape(
 /// @param thickness Wall thickness
 /// @param facesToRemove Indices of faces to remove (openings)
 /// @return Result with shelled shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult shellShape(
     const TopoDS_Shape& shape,
     double thickness,
@@ -178,7 +167,6 @@ HOBBYCAD_EXPORT OperationResult shellShape(
 /// @param shape Shape to offset
 /// @param distance Offset distance (positive = outward)
 /// @return Result with offset shape
-/// @note TODO: Not yet implemented
 HOBBYCAD_EXPORT OperationResult offsetShape(
     const TopoDS_Shape& shape,
     double distance);

@@ -97,6 +97,32 @@ struct BackgroundImage {
     int originalPixelWidth = 0;
     int originalPixelHeight = 0;
 
+    // ---- The picture's scale ------------------------------------------
+    // The point of a background picture is to sketch over it at a known
+    // scale, so the scale is a first-class value: millimeters of sketch per
+    // image pixel. One number when the picture keeps its own proportions;
+    // two when the aspect lock is off and it has been stretched.
+
+    /// Millimeters per image pixel along each image axis; 0 when the pixel
+    /// size is unknown.
+    double mmPerPixelX() const;
+    double mmPerPixelY() const;
+
+    /// True when both axes share one scale (within tolerance), so a length
+    /// measured on the picture means the same thing in every direction.
+    bool hasUniformScale(double tolerance = 1e-9) const;
+
+    /// Set one scale for both axes: width and height follow from the pixel
+    /// size. Ignored when the pixel size is unknown or the value is not
+    /// positive.
+    void setMmPerPixel(double mmPerPixel);
+
+    /// The height that keeps the picture's own proportions at `width`, and
+    /// the width that does so at `height` (what the aspect lock holds).
+    /// Falls back to the current proportions when the pixel size is unknown.
+    double heightForWidthLocked(double width) const;
+    double widthForHeightLocked(double height) const;
+
     // Calibration (for scaling from known dimensions)
     bool calibrated = false;           ///< Whether calibration has been set
     double calibrationScale = 1.0;     ///< Pixels per mm after calibration

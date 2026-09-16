@@ -227,3 +227,11 @@ docs/html/
 docs/latex/
 docs/xml/
 
+# dpkg-buildpackage leftovers (tools/linux/build-deb.sh, debian/rules)
+obj-*/
+build-deb.log
+debian/debhelper-build-stamp
+debian/*.debhelper
+debian/*.substvars
+debian/libhobbycad-dev/
+debian/hobbycad-dbgsym/

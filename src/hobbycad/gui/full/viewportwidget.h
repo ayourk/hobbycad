@@ -20,9 +20,13 @@
 #include <QWidget>
 #include <QTimer>
 
+#include <Bnd_Box.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ViewCube.hxx>
+#include <AIS_Trihedron.hxx>
+#include <AIS_Line.hxx>
 #include <V3d_View.hxx>
+#include <Graphic3d_Camera.hxx>
 #include <V3d_Viewer.hxx>
 #include <AIS_ViewController.hxx>
 #include <gp_Pnt.hxx>
@@ -57,6 +61,16 @@ public:
 
     /// Access the V3d_View (needed by scale bar, etc.).
     Handle(V3d_View) view() const;
+
+    /// Deep copy of the current camera (orientation + scale). A null view
+    /// yields a null handle; a saved handle is not mutated by later changes.
+    Handle(Graphic3d_Camera) cameraState() const;
+    /// Restore a camera saved by cameraState(); no-op on a null view/handle.
+    void setCameraState(const Handle(Graphic3d_Camera)& cam);
+
+    /// Recolor the origin axes: neutral gray in a flat sketch view, or the
+    /// default X=red/Y=green/Z=blue otherwise. Cones are always off.
+    void setAxisColorsNeutral(bool neutral);
 
     /// Reset the camera to view all displayed objects.
     void fitAll();
@@ -139,6 +153,16 @@ signals:
     /// Emitted when the active rotation axis changes.
     void rotationAxisChanged(RotationAxis axis);
 
+    /// Emitted from the first paint if the OCCT view could not be created
+    /// (CreateView left it null without throwing). The host drops the viewport.
+    void viewInitFailed();
+
+    /// Emitted from the first paint once the OCCT view is successfully created.
+    void viewInitialized();
+
+    /// The nav Home button was pressed; the host decides where 'home' is.
+    void homeRequested();
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -154,6 +178,7 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
+    Bnd_Box selectedBoundingBox() const;
     void initViewer();
     void setupAxisTrihedron();
     void setupGrid();
@@ -171,6 +196,10 @@ private:
 
     Handle(V3d_Viewer)             m_viewer;
     Handle(V3d_View)               m_view;
+    Handle(AIS_Trihedron)          m_trihedron;   ///< origin axes (recolorable)
+    Handle(AIS_Line)               m_negX;        ///< negative-axis extensions
+    Handle(AIS_Line)               m_negY;
+    Handle(AIS_Line)               m_negZ;
     Handle(AIS_InteractiveContext)  m_context;
     Handle(AIS_ViewCube)           m_viewCube;
     Handle(NavOrbitRing)           m_ringX;

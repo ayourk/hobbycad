@@ -10,7 +10,8 @@
 //  the splitter.  When hidden, the disabled viewport fills the space.
 //
 //  The toolbar and timeline are still available for feature editing,
-//  even though the 3D preview is not functional.
+//  even though the 3D preview is not functional, and the CLI panel works
+//  on the whole model: bodies, planes and 3D features included.
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //
@@ -43,7 +44,6 @@ public:
                                QWidget* parent = nullptr);
 
 public slots:
-    void enterSketchMode(SketchPlane plane = SketchPlane::XY) override;
     void exitSketchMode() override;
 
 protected:
@@ -55,13 +55,10 @@ private slots:
     void onConstraintSelectionChanged(int constraintId);
 
 private:
-    // Overrides from MainWindow
-    void onCreateSketchClicked() override;
-    void saveCurrentSketch() override;
-    void discardCurrentSketch() override;
-
+    // Sketches, the timeline and file handling are MainWindow's, over the
+    // same ProjectSession Full mode and the CLI use; this window adds only its
+    // layout. Its terminal reaches the 3D model it cannot show.
     void showDiagnosticDialog();
-    void createTimeline();
 
     // Main container layout
     QVBoxLayout*     m_mainLayout      = nullptr;

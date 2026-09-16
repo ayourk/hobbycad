@@ -32,7 +32,7 @@ public:
     bool dontShowAgain() const;
 
 protected:
-    /// ESC key exits the application — continuing requires explicit action.
+    /// ESC key exits the application; continuing requires explicit action.
     void reject() override;
 
 private:

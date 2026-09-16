@@ -35,6 +35,8 @@
             <array>
                 <string>hcad</string>
             </array>
+            <key>CFBundleTypeIconFile</key>
+            <string>hobbycad.icns</string>
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
             <key>LSHandlerRank</key>

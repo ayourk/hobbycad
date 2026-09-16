@@ -23,9 +23,11 @@ find_package(OpenCASCADE REQUIRED)
 find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} QUIET COMPONENTS Core Gui OpenGL)
 set(HOBBYCAD_LIB_HAS_QT ${Qt6_FOUND})
 
-# nlohmann/json — header-only JSON library used as a Qt-free fallback
+# nlohmann/json: header-only JSON library used as a Qt-free fallback
 # for project serialization, parameter import/export, etc.
 find_package(nlohmann_json CONFIG REQUIRED)
+# Surface the version to the parent scope so the About dialog can name it.
+set(nlohmann_json_VERSION "${nlohmann_json_VERSION}" PARENT_SCOPE)
 
 # Optional EGL for headless OpenGL probing without Qt
 set(HOBBYCAD_HAS_EGL FALSE)
@@ -33,9 +35,9 @@ if(NOT HOBBYCAD_LIB_HAS_QT)
     find_package(OpenGL COMPONENTS EGL QUIET)
     if(OpenGL_EGL_FOUND)
         set(HOBBYCAD_HAS_EGL TRUE)
-        message(STATUS "libhobbycad: EGL found — OpenGL probing enabled without Qt")
+        message(STATUS "libhobbycad: EGL found, OpenGL probing enabled without Qt")
     else()
-        message(STATUS "libhobbycad: EGL not found — OpenGL probing will return stub data")
+        message(STATUS "libhobbycad: EGL not found, OpenGL probing will return stub data")
     endif()
 endif()
 
@@ -45,11 +47,13 @@ include(FindPkgConfig OPTIONAL)
 set(HAVE_SLVS FALSE)
 set(SLVS_TARGET "")
 
-# Method 1: pkg-config (try libslvs first, then slvs)
+# Method 1: pkg-config (try libslvs first, then slvs). Both probes are QUIET:
+# a miss on the first name is expected, and pkgconf would otherwise print
+# "required by 'virtual:world', not found" for it.
 if(PKG_CONFIG_FOUND)
-    pkg_check_modules(SLVS IMPORTED_TARGET libslvs)
+    pkg_check_modules(SLVS QUIET IMPORTED_TARGET libslvs)
     if(NOT SLVS_FOUND)
-        pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+        pkg_check_modules(SLVS QUIET IMPORTED_TARGET slvs)
     endif()
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
@@ -110,7 +114,10 @@ set(LIBHOBBYCAD_SOURCES
     parameters.cpp
     crashhandler.cpp
     opengl_info.cpp
+    occt_viewer_probe.cpp
     project.cpp
+    plane_frame.cpp
+    file_format.cpp
     # Geometry module
     geometry/types.cpp
     geometry/intersections.cpp
@@ -120,19 +127,35 @@ set(LIBHOBBYCAD_SOURCES
     sketch/entity.cpp
     sketch/constraint.cpp
     sketch/operations.cpp
+    sketch/slotpath.cpp
     sketch/patterns.cpp
+    sketch/transform.cpp
     sketch/profiles.cpp
     sketch/solver.cpp
     sketch/queries.cpp
     sketch/export.cpp
+    sketch/dxf_import.cpp
     sketch/background.cpp
     sketch/parsing.cpp
     sketch/group.cpp
+    document_undo.cpp
+    project_undo.cpp
+    project_session.cpp
+    browser.cpp
+    naming.cpp
     sketch/undo.cpp
     sketch/snap.cpp
+    sketch/inference.cpp
+    sketch/handles.cpp
     sketch/decomposition.cpp
+    sketch/bezier.cpp
+    sketch/align.cpp
+    sketch/properties.cpp
     # BREP module
     brep/operations.cpp
+    brep/fit.cpp
+    brep/slice.cpp
+    brep/mesh_to_step.cpp
 )
 
 set(LIBHOBBYCAD_HEADERS
@@ -145,7 +168,10 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/parameters.h
     hobbycad/crashhandler.h
     hobbycad/opengl_info.h
+    hobbycad/occt_failure.h
     hobbycad/project.h
+    hobbycad/project_undo.h
+    hobbycad/project_session.h
     hobbycad/base64.h
     hobbycad/image_buffer.h
     # Geometry module
@@ -155,9 +181,11 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/geometry/algorithms.h
     # Sketch module
     hobbycad/sketch/entity.h
+    hobbycad/sketch/slotpath.h
     hobbycad/sketch/constraint.h
     hobbycad/sketch/operations.h
     hobbycad/sketch/patterns.h
+    hobbycad/sketch/transform.h
     hobbycad/sketch/profiles.h
     hobbycad/sketch/solver.h
     hobbycad/sketch/queries.h
@@ -166,9 +194,13 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/sketch/group.h
     hobbycad/sketch/undo.h
     hobbycad/sketch/snap.h
+    hobbycad/sketch/handles.h
     hobbycad/sketch/decomposition.h
     # BREP module
     hobbycad/brep/operations.h
+    hobbycad/brep/fit.h
+    hobbycad/brep/slice.h
+    hobbycad/brep/mesh_to_step.h
 )
 
 # ---- Library target --------------------------------------------------
@@ -187,14 +219,14 @@ target_include_directories(hobbycad-lib
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
-    SYSTEM PRIVATE
-        ${OpenCASCADE_INCLUDE_DIR}
 )
 
-# Suppress deprecation warnings from OCCT headers (std::iterator in
-# NCollection_StlIterator.hxx).  These are upstream issues we can't fix.
-target_compile_options(hobbycad-lib PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-deprecated-declarations>
+# SYSTEM has to come before the first visibility keyword. Written after
+# one, CMake took it for a directory name and every compile line carried
+# a bogus -I<source>/SYSTEM, while OCCT was included non-system and its
+# warnings were ours to read.
+target_include_directories(hobbycad-lib SYSTEM PRIVATE
+    ${OpenCASCADE_INCLUDE_DIR}
 )
 
 # OCCT libraries needed by the core (no visualization)
@@ -208,6 +240,19 @@ target_compile_options(hobbycad-lib PRIVATE
 # We use OpenCASCADE_DataExchange_LIBRARIES (set by find_package) to
 # detect which libraries are available.  This is more reliable than
 # checking CMake targets, which may not be defined on all platforms.
+#
+# Checked against OCCT 8.0.1: the toolkit names this file links are IDENTICAL
+# in 7.9.x and 8.0.x, so nothing here needs a version branch.  Note that
+# TKDEXCAF and TKDERWMESH (the "new" names in the table above) exist in
+# NEITHER version; occt_pick_lib falls back to TKXCAF/TKRWMesh, which is why
+# it must keep tolerating a missing NEW name rather than assuming the rename
+# happened.  find_package(OpenCASCADE) is deliberately left unversioned, as
+# are the libocct-*-dev build-deps in debian/control, so both majors resolve.
+# Source-level compatibility with 7.x is exercised by the Debian 12 CI leg,
+# which builds against Debian's OpenCASCADE 7.6.3, and by the MSYS2 build on
+# MSYS2's packaged OpenCASCADE; every other Linux package builds the pinned
+# 8.0.1+p1. The message accessor that differs between the majors lives in
+# hobbycad/occt_failure.h.
 #
 macro(occt_pick_lib VAR OLD NEW)
     if(OLD IN_LIST OpenCASCADE_DataExchange_LIBRARIES)
@@ -241,6 +286,16 @@ if("TKXDEIGES" IN_LIST OpenCASCADE_DataExchange_LIBRARIES OR TARGET TKXDEIGES)
     set(_OCCT_XDEIGES TKXDEIGES)
 endif()
 
+# OBJ reading/writing (RWObj_CafReader) moved from TKRWMesh (7.6) to
+# TKDEOBJ (7.8+). TKRWMesh still exists in 7.8+ for other formats, so this
+# cannot go through occt_pick_lib (which prefers the old name): link TKDEOBJ
+# whenever it exists. Without it the SHARED library build fails to link
+# (the static build hid it, since the executable links every OCCT library).
+set(_OCCT_OBJ "")
+if("TKDEOBJ" IN_LIST OpenCASCADE_DataExchange_LIBRARIES OR TARGET TKDEOBJ)
+    set(_OCCT_OBJ TKDEOBJ)
+endif()
+
 # TKXSBase was removed in 7.8+; only link if present.
 set(_OCCT_XSBASE "")
 if("TKXSBase" IN_LIST OpenCASCADE_DataExchange_LIBRARIES OR TARGET TKXSBase)
@@ -250,7 +305,7 @@ endif()
 set(HOBBYCAD_OCCT_LIBS
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo
     TKBRep TKTopAlgo TKPrim TKShHealing TKBO TKFillet TKOffset TKMesh
-    ${_OCCT_STEP} ${_OCCT_STL} ${_OCCT_IGES} ${_OCCT_RWMESH}
+    ${_OCCT_STEP} ${_OCCT_STL} ${_OCCT_IGES} ${_OCCT_RWMESH} ${_OCCT_OBJ}
     ${_OCCT_XSBASE} ${_OCCT_XCAF} TKLCAF TKCAF
     ${_OCCT_XDESTEP} ${_OCCT_XDEIGES}
 )
@@ -261,6 +316,25 @@ target_link_libraries(hobbycad-lib
         nlohmann_json::nlohmann_json
 )
 
+# backtrace()/backtrace_symbols() are in libc on glibc, but on the BSDs they
+# live in a separate libexecinfo. crashhandler.cpp guards the include with
+# __has_include(<execinfo.h>), which SUCCEEDS on FreeBSD because the header is
+# installed, so the code compiles and then fails at link with
+# "undefined symbol: backtrace". Testing for the header answers the wrong
+# question; test for the symbol and link the library when it is separate.
+include(CheckCXXSymbolExists)
+check_cxx_symbol_exists(backtrace "execinfo.h" HOBBYCAD_BACKTRACE_IN_LIBC)
+if(NOT HOBBYCAD_BACKTRACE_IN_LIBC)
+    find_library(HOBBYCAD_EXECINFO_LIBRARY execinfo)
+    if(HOBBYCAD_EXECINFO_LIBRARY)
+        target_link_libraries(hobbycad-lib PRIVATE ${HOBBYCAD_EXECINFO_LIBRARY})
+        message(STATUS "backtrace(): linking ${HOBBYCAD_EXECINFO_LIBRARY}")
+    else()
+        message(STATUS "backtrace(): not in libc and no libexecinfo; "
+                       "crash reports will omit the stack")
+    endif()
+endif()
+
 # Conditionally link Qt when available
 if(HOBBYCAD_LIB_HAS_QT)
     target_link_libraries(hobbycad-lib
@@ -269,26 +343,29 @@ if(HOBBYCAD_LIB_HAS_QT)
             Qt6::Gui
             Qt6::OpenGL
     )
-    # qtimageformats — runtime plugin for additional formats (WebP, TIFF, etc.)
+    # qtimageformats: runtime plugin for additional formats (WebP, TIFF, etc.)
     # No linking needed; Qt discovers imageformat plugins automatically at runtime.
     # We just check whether the WebP plugin is available and report status.
-    find_file(_WEBP_PLUGIN libqwebp.so
+    # The plugin is libqwebp.so on Linux, qwebp.dll on Windows (MSYS2 keeps
+    # plugins under share/qt6) and libqwebp.dylib on macOS.
+    find_file(_WEBP_PLUGIN NAMES libqwebp.so qwebp.dll libqwebp.dylib
         PATHS "${QT6_INSTALL_PREFIX}/plugins/imageformats"
+              "${QT6_INSTALL_PREFIX}/share/qt6/plugins/imageformats"
               "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qt6/plugins/imageformats"
         NO_DEFAULT_PATH)
     if(_WEBP_PLUGIN)
         message(STATUS "libhobbycad: Qt ${Qt6_VERSION} enabled (JSON, image, OpenGL support)")
-        message(STATUS "libhobbycad: Qt WebP plugin found — WebP image support enabled")
+        message(STATUS "libhobbycad: Qt WebP plugin found, WebP image support enabled")
     else()
         message(STATUS "libhobbycad: Qt ${Qt6_VERSION} enabled (JSON, image, OpenGL support)")
-        message(STATUS "libhobbycad: Qt WebP plugin NOT found — install qtimageformats for WebP")
+        message(STATUS "libhobbycad: Qt WebP plugin NOT found; install qtimageformats for WebP")
         message(STATUS "  Ubuntu: sudo apt install qt6-image-formats-plugins")
     endif()
     unset(_WEBP_PLUGIN CACHE)
 else()
-    message(STATUS "libhobbycad: Qt not found — building with nlohmann/json fallback")
+    message(STATUS "libhobbycad: Qt not found, building with nlohmann/json fallback")
 
-    # stb_image — header-only image loader for background image support.
+    # stb_image: header-only image loader for background image support.
     # Only needed without Qt (the Qt path uses QImage/QImageReader).
     # Provides: image_buffer.cpp with stb_image decoding.
     find_path(STB_INCLUDE_DIR stb/stb_image.h
@@ -297,13 +374,16 @@ else()
         target_sources(hobbycad-lib PRIVATE image_buffer.cpp)
         target_include_directories(hobbycad-lib SYSTEM PRIVATE ${STB_INCLUDE_DIR})
         target_compile_definitions(hobbycad-lib PRIVATE HOBBYCAD_HAS_STB_IMAGE=1)
-        message(STATUS "libhobbycad: stb_image found — background image support enabled")
+        # stb_image is header-only and carries no version macro, so the fact
+        # of its presence is all that can honestly be reported.
+        set(HOBBYCAD_ABOUT_STB "present" PARENT_SCOPE)
+        message(STATUS "libhobbycad: stb_image found, background image support enabled")
     else()
-        message(STATUS "libhobbycad: stb_image not found — background image loading disabled")
+        message(STATUS "libhobbycad: stb_image not found, background image loading disabled")
         message(STATUS "  Install: sudo apt install libstb-dev")
     endif()
 
-    # libwebp — optional WebP image format support.
+    # libwebp: optional WebP image format support.
     # Only needed without Qt (the Qt path can use qtimageformats for WebP).
     if(PkgConfig_FOUND)
         pkg_check_modules(LIBWEBP IMPORTED_TARGET libwebp)
@@ -311,9 +391,10 @@ else()
     if(LIBWEBP_FOUND)
         target_link_libraries(hobbycad-lib PRIVATE PkgConfig::LIBWEBP)
         target_compile_definitions(hobbycad-lib PRIVATE HOBBYCAD_HAS_WEBP=1)
-        message(STATUS "libhobbycad: libwebp found — WebP image support enabled")
+        set(HOBBYCAD_ABOUT_WEBP "${LIBWEBP_VERSION}" PARENT_SCOPE)
+        message(STATUS "libhobbycad: libwebp found, WebP image support enabled")
     else()
-        message(STATUS "libhobbycad: libwebp not found — WebP support disabled")
+        message(STATUS "libhobbycad: libwebp not found, WebP support disabled")
         message(STATUS "  Install: sudo apt install libwebp-dev")
     endif()
 
@@ -321,6 +402,7 @@ else()
     if(HOBBYCAD_HAS_EGL)
         target_link_libraries(hobbycad-lib PRIVATE OpenGL::EGL OpenGL::GL)
         target_compile_definitions(hobbycad-lib PRIVATE HOBBYCAD_HAS_EGL=1)
+        set(HOBBYCAD_ABOUT_EGL "present" PARENT_SCOPE)
     endif()
 endif()
 
@@ -329,6 +411,31 @@ if(SLVS_TARGET)
     target_link_libraries(hobbycad-lib PRIVATE ${SLVS_TARGET})
 endif()
 target_compile_definitions(hobbycad-lib PRIVATE HAVE_SLVS)
+# The libslvs fatal-error extension advertises itself in slvs.h
+# (SLVS_HAS_FATAL_ERROR_HANDLER, SLVS_RESULT_INTERNAL_ERROR), so no
+# build-time probe is needed; see sketch/solver.cpp.  Report what we got:
+if(EXISTS "${SLVS_INCLUDE_DIR}/slvs.h")
+    file(READ "${SLVS_INCLUDE_DIR}/slvs.h" _slvs_hdr)
+elseif(SLVS_INCLUDE_DIRS)
+    file(READ "${SLVS_INCLUDE_DIRS}/slvs.h" _slvs_hdr)
+else()
+    set(_slvs_hdr "")
+endif()
+if(_slvs_hdr MATCHES "SLVS_RESULT_INTERNAL_ERROR")
+    message(STATUS "libhobbycad: libslvs can recover from solver faults")
+elseif(_slvs_hdr MATCHES "SLVS_HAS_FATAL_ERROR_HANDLER")
+    message(STATUS "libhobbycad: libslvs reports faults but cannot recover")
+else()
+    message(STATUS "libhobbycad: stock libslvs; a solver fault ends the process")
+endif()
+if(_slvs_hdr MATCHES "SLVS_HAS_DRAG_WEIGHTS")
+    # The fork's per-point drag-weight extension advertises itself in slvs.h.
+    # solver.cpp already sees it via the header; propagate the macro PUBLIC so the
+    # GUI TUs (which never include slvs.h) also compile their weight paths.
+    target_compile_definitions(hobbycad-lib PUBLIC SLVS_HAS_DRAG_WEIGHTS=1)
+    message(STATUS "libhobbycad: libslvs supports per-point drag weights")
+endif()
+unset(_slvs_hdr)
 
 # Shared library: export symbols
 if(HOBBYCAD_CORE_LINKAGE STREQUAL "SHARED")

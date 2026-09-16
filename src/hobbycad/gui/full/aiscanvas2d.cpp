@@ -6,7 +6,7 @@
 //  rendered in Graphic3d_TMF_2d screen-space.
 //
 //  TMF_2d anchors geometry at a pixel position (from viewport center)
-//  and does NOT apply camera rotation — making it truly screen-fixed.
+//  and does NOT apply camera rotation, making it truly screen-fixed.
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //
@@ -22,11 +22,16 @@
 #include <Graphic3d_Group.hxx>
 #include <Graphic3d_Text.hxx>
 #include <Graphic3d_TransformPers.hxx>
+// NCollection_Vec2<int> is used instead of Graphic3d_Vec2i below: identical
+// type in both 7.9.x and 8.0.x, but 8.0 demoted the Graphic3d_Vec2i spelling
+// to a deprecated alias in a header no longer pulled in transitively.
+#include <NCollection_Vec2.hxx>
 #include <Prs3d_Presentation.hxx>
 #include <PrsMgr_PresentationManager.hxx>
 #include <Select3D_SensitiveFace.hxx>
 #include <SelectMgr_Selection.hxx>
-#include <TColgp_Array1OfPnt.hxx>
+#include <NCollection_Array1.hxx>
+#include <gp_Pnt.hxx>
 
 #include <cmath>
 
@@ -47,12 +52,12 @@ AIS_Canvas2D::AIS_Canvas2D(Aspect_TypeOfTriedronPosition theCorner,
     , m_offsetY(theOffsetY)
 {
     // TMF_2d uses the same corner + offset API as TMF_TriedronPers,
-    // but does NOT apply camera rotation — geometry stays screen-fixed.
+    // but does NOT apply camera rotation; geometry stays screen-fixed.
     SetTransformPersistence(
         new Graphic3d_TransformPers(Graphic3d_TMF_2d,
                                     theCorner,
-                                    Graphic3d_Vec2i(theOffsetX,
-                                                    theOffsetY)));
+                                    NCollection_Vec2<int>(theOffsetX,
+                                                          theOffsetY)));
 }
 
 // ---- Coordinate conversion ------------------------------------------
@@ -145,7 +150,7 @@ void AIS_Canvas2D::clearPrimitives()
 void AIS_Canvas2D::Compute(
     const Handle(PrsMgr_PresentationManager)& /*thePM*/,
     const Handle(Prs3d_Presentation)& thePrs,
-    const Standard_Integer /*theMode*/)
+    const int /*theMode*/)
 {
     clearPrimitives();
     onPaint();
@@ -156,7 +161,7 @@ void AIS_Canvas2D::Compute(
 
 void AIS_Canvas2D::ComputeSelection(
     const Handle(SelectMgr_Selection)& theSel,
-    const Standard_Integer /*theMode*/)
+    const int /*theMode*/)
 {
     clearPrimitives();
     onPaint();
@@ -173,7 +178,7 @@ void AIS_Canvas2D::renderVisuals(const Handle(Prs3d_Presentation)& thePrs)
         Handle(Graphic3d_AspectLine3d) asp =
             new Graphic3d_AspectLine3d(
                 a.color, Aspect_TOL_SOLID,
-                static_cast<Standard_Real>(a.lineWidth));
+                static_cast<double>(a.lineWidth));
         grp->SetPrimitivesAspect(asp);
 
         int n = a.segments;
@@ -195,7 +200,7 @@ void AIS_Canvas2D::renderVisuals(const Handle(Prs3d_Presentation)& thePrs)
         Handle(Graphic3d_AspectLine3d) asp =
             new Graphic3d_AspectLine3d(
                 l.color, Aspect_TOL_SOLID,
-                static_cast<Standard_Real>(l.lineWidth));
+                static_cast<double>(l.lineWidth));
         grp->SetPrimitivesAspect(asp);
 
         Handle(Graphic3d_ArrayOfPolylines) poly =
@@ -213,6 +218,13 @@ void AIS_Canvas2D::renderVisuals(const Handle(Prs3d_Presentation)& thePrs)
         asp->SetInteriorStyle(Aspect_IS_SOLID);
         asp->SetInteriorColor(t.color);
         asp->SetEdgeOff();
+        // Flat 2D fills: no normals are supplied, and what a missing normal
+        // means is up to the driver. NVIDIA lit these as if facing the
+        // light (the colors came out as written); Intel on macOS and the
+        // software renderer on Windows gave ambient only, so the white
+        // house body drew at 42% gray. Unlit uses the interior color as is
+        // everywhere.
+        asp->SetShadingModel(Graphic3d_TypeOfShadingModel_Unlit);
         grp->SetPrimitivesAspect(asp);
 
         Handle(Graphic3d_ArrayOfTriangles) tri =
@@ -231,6 +243,7 @@ void AIS_Canvas2D::renderVisuals(const Handle(Prs3d_Presentation)& thePrs)
         asp->SetInteriorStyle(Aspect_IS_SOLID);
         asp->SetInteriorColor(c.color);
         asp->SetEdgeOff();
+        asp->SetShadingModel(Graphic3d_TypeOfShadingModel_Unlit);   // see above
         grp->SetPrimitivesAspect(asp);
 
         int n = c.segments;
@@ -259,7 +272,7 @@ void AIS_Canvas2D::renderVisuals(const Handle(Prs3d_Presentation)& thePrs)
         grp->SetPrimitivesAspect(asp);
 
         Handle(Graphic3d_Text) txt =
-            new Graphic3d_Text(static_cast<Standard_ShortReal>(t.height));
+            new Graphic3d_Text(static_cast<float>(t.height));
         txt->SetText(t.text.c_str());
         txt->SetPosition(to3D(t.x, t.y));
         grp->AddText(txt);
@@ -274,7 +287,7 @@ void AIS_Canvas2D::renderSensitives(
     for (const auto& s : m_sensitives) {
         if (s.pts3d.empty()) continue;
 
-        TColgp_Array1OfPnt pts(1, static_cast<int>(s.pts3d.size()));
+        NCollection_Array1<gp_Pnt> pts(1, static_cast<int>(s.pts3d.size()));
         for (int i = 0; i < static_cast<int>(s.pts3d.size()); ++i)
             pts.SetValue(1 + i, s.pts3d[static_cast<size_t>(i)]);
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "HobbyCAD vcpkg registry configuration — located at <project-root>/vcpkg-configuration.json",
+  "$comment": "HobbyCAD vcpkg registry configuration, located at <project-root>/vcpkg-configuration.json",
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg-configuration.schema.json",
   "default-registry": {
     "kind": "builtin",
@@ -9,8 +9,8 @@
     {
       "kind": "git",
       "repository": "https://github.com/ayourk/hobbycad-vcpkg",
-      "baseline": "278cd9fe149923643e3f3949019b331f8fc7adeb",
-      "packages": ["freetype", "lib3mf", "libgit2", "libslvs", "meshfix", "opencascade", "openmesh", "qtbase", "qtsvg"]
+      "baseline": "7ba84aa174f483afd7888de1d9c738b7f40d8953",
+      "packages": ["freetype", "lib3mf", "libgit2", "libslvs", "meshfix", "opencascade", "openmesh", "qtbase", "qtsvg", "qttools"]
     }
   ]
 }

@@ -19,6 +19,7 @@
 
 #include <string>
 #include <vector>
+#include <limits>
 
 namespace hobbycad {
 namespace sketch {
@@ -56,13 +57,16 @@ struct HOBBYCAD_EXPORT Entity {
     EntityType type = EntityType::Line;   ///< Entity type
 
     // Geometry data (interpretation depends on type)
-    std::vector<Point2D> points;          ///< Control/definition points
+    std::vector<Point3> points;           ///< Control/definition points (3D; z==0 = on-plane / 2D)
     double radius = 0.0;                  ///< For circles, arcs, slots, polygons
     double startAngle = 0.0;              ///< For arcs (degrees)
     double sweepAngle = 360.0;            ///< For arcs (degrees)
     int sides = 6;                        ///< For polygons
     double majorRadius = 0.0;             ///< For ellipses
     double minorRadius = 0.0;             ///< For ellipses
+    double ellipseRotation = 0.0;         ///< Ellipse major-axis angle (degrees, CCW from +X)
+    double ellipseStart = 0.0;            ///< Elliptical-arc start parameter (degrees; 0 = major +axis)
+    double ellipseSweep = 360.0;          ///< Elliptical-arc sweep (degrees; 360 = full ellipse)
     std::string text;                     ///< For text entities
     std::string fontFamily;               ///< Font family (empty = default)
     double fontSize = 12.0;               ///< Font size in mm
@@ -72,9 +76,59 @@ struct HOBBYCAD_EXPORT Entity {
 
     // Arc slot specific
     bool arcFlipped = false;              ///< For arc slots: true = >180 degree arc
+    // Spline flavor
+    bool splineBezier = false;
+    bool splineClosed = false;            ///< Bezier spline is a closed loop (last segment wraps to control point 0)            ///< Spline is piecewise cubic Bezier (control points are handles, a solver curve) vs Catmull-Rom (interpolating, points-only)
+    bool splineRational = false;          ///< Bezier spline is rational (weighted): weights[] per control point, registered as SLVS_E_RATIONAL_CUBIC
+    std::vector<double> weights;          ///< Rational spline control-point weights (one per control point; empty = non-rational, all 1)
+
+    /// For a Slot: the id(s) of the centerline segment(s) this slot follows,
+    /// empty when it is not path-following.
+    ///
+    /// Slots are CENTERLINE-DRIVEN references, not baked geometry. Every slot-
+    /// creation path builds construction centerline geometry and links the slot
+    /// to it here (GUI tool -> createCenterlineSlot; GUI sweep + CLI ->
+    /// addSlotCenterline; tree -> createTreeSlotFromSelection). ONE unified
+    /// model: exactly one id = a simple slot along a single Line or Arc, re-
+    /// derived by updateSlotFromPath into `points` (smooth capsule caps); more
+    /// than one id = a chain/loop/branching tree, re-derived by
+    /// updateSlotOutlineFromPaths into `outlineCache` (the swept outline
+    /// polygon). Re-derived after every solve (updateSlotsFromPaths / cmdSolve);
+    /// the solver skips a path-following slot's own points and the user
+    /// constrains/drags the centerline. Serialized as "path_entity_ids". A
+    /// SPLINE centerline is not yet supported.
+    std::vector<int> pathEntityIds;
+
+    /// Cached swept outline for a multi-segment slot: a closed polygon (CCW)
+    /// from sketch::slotOutline(). Empty for a simple slot, which renders
+    /// from `points`. Derived, so it is recomputed on solve, not authored.
+    std::vector<Point2D> outlineCache;
+
+    /// Associative offset link. When >= 0, this entity is an offset copy of
+    /// entity offsetParentId, kept at offsetDistance on offsetSide; a solve
+    /// re-derives it from the parent the way a slot follows its path.
+    /// offsetSide is +1/-1 (line: which perpendicular side; circle/arc: +1
+    /// outward, -1 inward).
+    int    offsetParentId = -1;
+    double offsetDistance = 0.0;
+    int    offsetSide     = 0;
+
+    /// Associative projection link. When >= 0, this entity is a projection of
+    /// entity projectionSourceId onto this sketch's plane; a solve re-derives
+    /// its points from the source through the two planes' bases (see
+    /// updateProjectionFromSource). The source may live on a DIFFERENT plane;
+    /// projection is the cross-plane analogue of the offset link. The projected
+    /// entity is reference geometry: driven by its source, not the solver.
+    int    projectionSourceId = -1;
+    /// Which sketch owns the projection source (-1 = same sketch / unset).
+    /// Entity ids are unique only within a sketch, so cross-sketch projection
+    /// needs both ids to resolve the source at solve time.
+    int    projectionSourceSketchId = -1;
 
     // State
     bool isConstruction = false;          ///< Construction geometry flag
+    bool isCenterline = false;            ///< Centerline linetype (dash-dot reference axis)
+    int  color = -1;                      ///< Per-entity RGB (0xRRGGBB); -1 = default / by-layer
     bool constrained = false;             ///< Has constraints applied
     int groupId = -1;                     ///< Owning decomposition group (-1 if none)
 
@@ -87,10 +141,25 @@ struct HOBBYCAD_EXPORT Entity {
     /// Returns empty vector for other types
     std::vector<Point2D> endpoints() const;
 
+    /// The points at which another entity may join this one: endpoints(),
+    /// plus a point's position and a rectangle's four corners. This is what
+    /// chain selection follows; endpoints() stays the open-curve notion that
+    /// profile detection needs.
+    std::vector<Point2D> connectionPoints() const;
+
     /// Check if a point is on this entity within tolerance
     bool containsPoint(const Point2D& point, double tolerance = 0.5) const;
 
     /// Get the closest point on this entity to a given point
+    /// Build the geometric Arc this entity describes.
+    ///
+    /// Only meaningful when `type == EntityType::Arc`; the fields it reads
+    /// (points[0], radius, startAngle, sweepAngle) are shared with other
+    /// types, so callers must check the type first. Exists because this exact
+    /// four-field reconstruction was written out by hand at a dozen call
+    /// sites, in both the library and the GUI.
+    geometry::Arc toArc() const;
+
     Point2D closestPoint(const Point2D& point) const;
 
     /// Get distance from a point to this entity
@@ -132,9 +201,80 @@ HOBBYCAD_EXPORT Entity createArcFromThreePoints(int id, const Point2D& start,
 
 /// Create a spline entity
 HOBBYCAD_EXPORT Entity createSpline(int id, const std::vector<Point2D>& controlPoints);
+/// Create a piecewise cubic Bezier spline (control points are Bezier handles; a
+/// solver curve, so tangent/curvature constraints can act on it). 3N+1 points = N segments.
+HOBBYCAD_EXPORT Entity createBezierSpline(int id, const std::vector<Point2D>& controlPoints);
+/// Create a RATIONAL (weighted) cubic Bezier spline: control points + one weight
+/// each. Registered as SLVS_E_RATIONAL_CUBIC segments; represents exact conics.
+HOBBYCAD_EXPORT Entity createRationalBezierSpline(int id, const std::vector<Point2D>& controlPoints, const std::vector<double>& weights);
+
+/// One anchor of a Bezier authoring path: a point with optional in/out handle
+/// control points. A missing handle defaults to the anchor itself (a corner).
+/// inHandle is the control point BEFORE the anchor (the previous segment's
+/// C_in); outHandle is the control point AFTER it (the next segment's C_out).
+struct BezierAnchor {
+    Point2D pos;
+    bool hasIn = false;
+    bool hasOut = false;
+    Point2D inHandle;
+    Point2D outHandle;
+    double weight = 1.0;   ///< rational weight for this anchor's control points (1 = non-rational)
+};
+
+/// Assemble the cubic Bezier control polygon [P0, out0, in1, P1, out1, in2, ...,
+/// inN, PN] (3N+1 points, N = anchors-1) from an authoring path, ready for
+/// createBezierSpline(). A missing handle defaults to its anchor position.
+/// Returns empty if fewer than two anchors are given.
+HOBBYCAD_EXPORT std::vector<Point2D> bezierControlPolygon(const std::vector<BezierAnchor>& anchors);
+/// Per-control-point weights parallel to bezierControlPolygon(): each control
+/// point takes the weight of the anchor it belongs to (3N+1 values).
+HOBBYCAD_EXPORT std::vector<double> bezierControlPolygonWeights(const std::vector<BezierAnchor>& anchors);
+
+/// Inverse of bezierControlPolygon(): recover the authoring anchors (with their
+/// in/out handle control points) from a stored Bezier control polygon. Returns
+/// empty if the polygon is not a valid Bezier (must be 3N+1 points, N >= 1).
+/// A handle coincident with its anchor is reported present but zero-length.
+HOBBYCAD_EXPORT std::vector<BezierAnchor> bezierAnchorsFromControlPolygon(const std::vector<Point2D>& poly);
+
+/// Which handle of an anchor a polar edit addresses.
+enum class BezierHandleSide { In, Out, Tangent };
+
+/// Place a handle by angle (degrees) and length from its anchor: Out sets
+/// the out handle, In the in handle, Tangent sets the out handle and mirrors
+/// the in handle through the anchor (a smooth node). `canIn` / `canOut`
+/// gate the ends of an open path: the first anchor has no in handle, the
+/// last no out handle.
+HOBBYCAD_EXPORT void setAnchorHandle(BezierAnchor& a, BezierHandleSide side,
+                                     double angleDeg, double length,
+                                     bool canIn = true, bool canOut = true);
+
+/// Polar form of a handle relative to its anchor. False when the handle is
+/// absent or coincides with the anchor (a corner). The angle is in degrees
+/// in atan2's range; normalize it if a display wants 0..360.
+HOBBYCAD_EXPORT bool anchorHandlePolar(const BezierAnchor& a, BezierHandleSide side,
+                                       double& angleDeg, double& length);
+
+/// How an interior anchor's two handles relate: Corner when either is
+/// missing or zero-length or they are not collinear through the anchor,
+/// Smooth when collinear and equal in length, Asymmetric when collinear only.
+enum class AnchorContinuity { Corner, Smooth, Asymmetric };
+HOBBYCAD_EXPORT AnchorContinuity anchorContinuity(const BezierAnchor& a);
 
 /// Create a polygon entity
 HOBBYCAD_EXPORT Entity createPolygon(int id, const Point2D& center, double radius, int sides);
+
+/// True when a Polygon is the PARAMETRIC kind (inscribed or circumscribed)
+/// rather than a freeform one.
+///
+/// The two are stored differently and the difference is easy to get wrong:
+///   * regular:    points[0] is the CENTER, points[1..sides] are the vertices,
+///                 and `radius` is set;
+///   * freeform:   points[0..sides-1] are the vertices, there is no center
+///                 point, and `radius` is left at 0.
+///
+/// A near-zero radius is therefore the discriminator. This rule was being
+/// re-derived at each call site; call this instead.
+HOBBYCAD_EXPORT bool isRegularPolygon(const Entity& entity);
 
 /// Create a linear slot entity (obround/stadium shape)
 /// @param id Entity ID
@@ -151,11 +291,181 @@ HOBBYCAD_EXPORT Entity createSlot(int id, const Point2D& center1, const Point2D&
 /// @param end End endpoint (on the arc)
 /// @param radius Half-width of the slot
 /// @param flipped True for >180 degree arcs (inverts the sweep direction)
+/// The sweep at which an arc slot closes on itself.
+///
+/// Aaron's rule, 2026-02-20: "Full circle minus 2x radius of arc end."
+/// The point of it, 2026-08-28: "an arc slot that could serve as a dial
+/// indicator where the 2 ends of the arc slot meet."
+///
+/// So this is the useful MAXIMUM, not a safety margin.
+///
+/// Aaron was precise about what "meet" means, 2026-08-28: "the arc ends
+/// would never touch, but 1 arc end could touch the perimeter of the slot
+/// and vice versa." The two centerline ENDPOINTS stay exactly two cap
+/// radii apart and never coincide; what comes into contact is the
+/// PERIMETER: one end's cap arc against the other's. Two circles of
+/// radius halfWidth whose centers are 2 x halfWidth apart are tangent, so
+/// those two statements describe the same configuration.
+///
+/// That separation is a CHORD of the centerline circle, so it subtends
+/// 2 * asin(halfWidth / pathRadius) at the center. The endpoints therefore
+/// end up exactly the slot's WIDTH apart: the gap left in the ring is as
+/// wide as the slot itself.
+///
+/// WHY THE EXACT VALUE MATTERS, and why the obvious formula is not good
+/// enough. Aaron, 2026-08-28: "The point of this max distance is to
+/// produce an almost triangle tip around the perimeter allowing the center
+/// piece to be seperated from the outer shell."
+///
+/// At this sweep the two cap circles are tangent, and the material left
+/// between them and the outer wall is a curvilinear triangle tapering to a
+/// CUSP at the point of tangency. That cusp is the last thing joining the
+/// center piece to the outer shell.
+///
+/// Reading "minus 2x radius" as an ARC length instead (the obvious
+/// 360 - 2*halfWidth/pathRadius) makes the caps OVERLAP, because an arc
+/// is longer than the chord it spans. At r=30, width=8 that is 0.024mm of
+/// overlap: enough to cut the tip off and detach the center piece early.
+/// The two formulas differ by 0.046 degrees, which is exactly the sort of
+/// difference that looks like rounding and is not.
+///
+/// tests/cli/slots.cpp measures the gap between the endpoints rather than
+/// the angle, so the arc-length form fails it.
+///
+/// Sweeping FURTHER makes the caps overlap and the outline
+/// self-intersect, so this is also the limit.
+///
+/// The rule was agreed in 2026 and then never implemented; the shape was
+/// constructible past this point in every front end.
+///
+/// @param pathRadius  Radius out to the slot's centerline. Must be > 0.
+/// @param halfWidth   Half the slot's width, i.e. the cap radius.
+/// @return the limit in DEGREES, always below 360. Zero if the inputs
+///         cannot describe a slot at all.
+HOBBYCAD_EXPORT double maxArcSlotSweepDegrees(double pathRadius,
+                                              double halfWidth);
+
+/// The angle at which an arc slot's two ends are TANGENT.
+///
+/// The same quantity as maxArcSlotSweepDegrees() seen from the other side:
+/// that is a full turn less this. Both exist because the two front ends ask
+/// the question in different directions: placement wants a MINIMUM
+/// separation as the ends are brought together, and a typed sweep wants a
+/// MAXIMUM before they close.
+///
+/// Aaron, 2026-08-28, deriving it from the requirement rather than the
+/// arithmetic: "Point 1 of the arc should be able to be tangent to the
+/// perimeter of the slot near point 2 and vice versa. This should be able
+/// to produce a cusp." Two caps of radius halfWidth are tangent when their
+/// centers are 2 x halfWidth apart, one full slot width.
+///
+/// @return the separation in DEGREES, or 0 if no slot is possible.
+HOBBYCAD_EXPORT double arcSlotCuspSeparationDegrees(double pathRadius,
+                                                    double halfWidth);
+
+/// The smallest angle the two ends may be apart at all: one cap radius.
+///
+/// Named apart from the cusp separation because they are different
+/// questions and were briefly the same answer. Closer than the cusp
+/// separation the caps OVERLAP, which is allowed and is how the middle is
+/// freed; closer than THIS the ends have merged and the outline stops
+/// describing the shape.
+HOBBYCAD_EXPORT double arcSlotFloorSeparationDegrees(double pathRadius,
+                                                     double halfWidth);
+
+/// An arc-slot centerline arc center after the angular-separation floor.
+struct SlotArcCenter {
+    Point2D center;
+    double  radius = 0.0;
+};
+
+/// Enforce the minimum angular separation of an arc slot's two ends: given the
+/// chord (start,end), the current centerline-arc center and the slot half-width,
+/// push the center out along the chord's bisector until the ends are at least
+/// arcSlotFloorSeparationDegrees() apart. Returns the (possibly unchanged)
+/// center and its radius. A half-width below 0.1 is treated as the UI default
+/// (5.0), matching the sketch tool.
+HOBBYCAD_EXPORT SlotArcCenter enforceSlotArcSeparation(
+    const Point2D& start, const Point2D& end,
+    const Point2D& center, double slotHalfWidth);
+
+/// Recompute an arc's stored endpoints from its parameters: points[1] (start)
+/// and points[2] (end) from the center (points[0]), radius, startAngle and
+/// sweepAngle (degrees). No-op unless the entity is an Arc with >= 3 points.
+HOBBYCAD_EXPORT void resyncArcEndpoints(Entity& arc);
+
+/// Write an arc as [center, start, end] from its center, radius and angles
+/// (what the solver and the canvas both expect), setting the angle fields.
+HOBBYCAD_EXPORT void setArcFromAngles(Entity& arc, const Point2D& center, double radius,
+                                      double startAngleDeg, double sweepAngleDeg);
+
+/// A text entity's second point is its rotation handle: at least two font
+/// sizes (or 0.6 per character) from the anchor along textRotation. Call
+/// after text, fontSize or textRotation change.
+HOBBYCAD_EXPORT void resyncTextHandle(Entity& text);
+
+/// Which of an arc's two ends (1 or 2) is nearer `p`; 1 for a non-arc.
+HOBBYCAD_EXPORT int nearestArcEndIndex(const Entity& arc, const Point2D& p);
+
+/// Rescale a circle's stored perimeter points to `radius` about its center
+/// (points[0]), and set the radius field. No-op for a non-circle.
+HOBBYCAD_EXPORT void rescaleCircleToRadius(Entity& circle, double radius);
+
+/// Re-derive a slot's geometry from the path it follows.
+///
+/// A Line path gives a straight slot whose end centers are the line's
+/// endpoints; an Arc path gives an arc slot sharing the arc's center,
+/// radius and sweep. The slot's WIDTH is left alone; the path says where
+/// the slot goes, not how thick it is.
+///
+/// @param slot  Modified in place. Must be EntityType::Slot.
+/// @param path  The line or arc to follow.
+/// @return false, leaving `slot` untouched, if the path is not a line or
+///         an arc, or does not carry enough points to describe one.
+HOBBYCAD_EXPORT bool updateSlotFromPath(Entity& slot, const Entity& path);
+
+/// The construction centerline a slot follows: a Line through the two cap
+/// centers of a linear slot, or an Arc through center, start and end of an arc
+/// slot. The arc's radius and angles are derived from the slot's points and
+/// arcFlipped (arc slots leave sweepAngle unset) unless the caller knows them
+/// exactly and passes them. The path carries no id; the caller assigns one.
+HOBBYCAD_EXPORT Entity makeSlotCenterline(const Entity& slot, double pathRadius = -1.0,
+                                          double startAngleDeg = std::numeric_limits<double>::quiet_NaN(),
+                                          double sweepDeg = std::numeric_limits<double>::quiet_NaN());
+
+/// The angle subtended when the two ends are `capRadiiApart` cap radii
+/// apart, the general form of the two rules above.
+///
+///   2.0  the caps are TANGENT. The material between them pinches to a
+///        cusp, the tip that still holds the middle of the ring to the
+///        outside. maxArcSlotSweepDegrees() is a full turn less this.
+///   1.0  the caps OVERLAP, each center sitting on the other's rim. No
+///        cusp: the leftover material breaks into two separate slivers
+///        and the middle comes free. Aaron asked for this case
+///        deliberately, 2026-08-28: freeing the center piece is the
+///        point of the exercise, and tangency only holds it by a point.
+///
+/// Below 1.0 the ends have effectively merged and the outline is no
+/// longer telling the truth about the shape, so that is the floor.
+/// A slot width has to be greater than zero, and how much greater is set
+/// by the length precision (Aaron): a width at or below kDegenerateLen is
+/// zero for every purpose here.
+inline bool slotWidthIsPositive(double width) { return geometry::isPositiveLength(width); }
+
+HOBBYCAD_EXPORT double arcSlotGapDegrees(double pathRadius, double halfWidth,
+                                         double capRadiiApart);
+
+/// The furthest an arc slot may sweep at all, as opposed to the furthest
+/// it can sweep and still form a cusp. A full turn less the 1.0 gap.
+HOBBYCAD_EXPORT double absoluteMaxArcSlotSweepDegrees(double pathRadius,
+                                                      double halfWidth);
+
 HOBBYCAD_EXPORT Entity createArcSlot(int id, const Point2D& arcCenter, const Point2D& start,
                                       const Point2D& end, double radius, bool flipped = false);
 
 /// Create an ellipse entity
-HOBBYCAD_EXPORT Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius);
+HOBBYCAD_EXPORT Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius,
+                                     double rotationDeg = 0.0);
 
 /// Create a text entity
 HOBBYCAD_EXPORT Entity createText(int id, const Point2D& position, const std::string& text,
@@ -192,12 +502,39 @@ HOBBYCAD_EXPORT int nearestPointIndex(const Entity& entity, const Point2D& point
 /// @return Angle in degrees, or 0.0 if not a line
 HOBBYCAD_EXPORT double getEntityAngle(const Entity& entity);
 
-/// Get all control/definition points of an entity as a polygon
-/// For complex entities (arcs, circles, ellipses), returns approximated points
-/// @param entity The entity
-/// @param segments Number of segments for curved entities (default 32)
-/// @return Vector of points representing the entity
-HOBBYCAD_EXPORT std::vector<Point2D> entityToPolygon(const Entity& entity, int segments = 32);
+/// Find the entity with a given ID in a vector.
+/// @return Pointer to the entity, or nullptr if not found.
+HOBBYCAD_EXPORT const Entity* findEntityById(const std::vector<Entity>& entities, int id);
+HOBBYCAD_EXPORT Entity* findEntityById(std::vector<Entity>& entities, int id);
+
+/// Highest entity id in the container plus one (1 when empty). Derived from
+/// the container rather than a running counter so a discarded and rebuilt
+/// sketch never hands out ids with gaps.
+HOBBYCAD_EXPORT int nextFreeEntityId(const std::vector<Entity>& entities);
+
+/// The four corners of a Rectangle, in edge order: the stored corners of a
+/// 4-point (rotated) rectangle, or the two diagonal corners of an axis-aligned
+/// one expanded. Returns false for any other entity.
+HOBBYCAD_EXPORT bool rectangleCorners(const Entity& rect, Point2D out[4]);
+
+/// The four corners of a four-sided entity, in edge order: a Rectangle (as
+/// rectangleCorners) or a Parallelogram (its four stored corners). The query,
+/// export and B-rep code share it so the two shapes are handled alike.
+/// Returns false for any other entity or too few points.
+HOBBYCAD_EXPORT bool quadCorners(const Entity& entity, Point2D out[4]);
+
+/// The four corners of the rotated rectangle whose first edge is p1 -> p2
+/// and whose width is p3's perpendicular distance from that edge (the
+/// three-point rectangle tool): p1, p2, p2 + w, p1 + w. False when p1 and
+/// p2 coincide.
+HOBBYCAD_EXPORT bool rectangleFromThreePoints(const Point2D& p1, const Point2D& p2,
+                                              const Point2D& p3, Point2D out[4]);
+
+/// The fourth corner of the parallelogram p1, p2, p3, p4: p1 + (p3 - p2).
+inline Point2D parallelogramFourthCorner(const Point2D& p1, const Point2D& p2, const Point2D& p3)
+{
+    return p1 + (p3 - p2);
+}
 
 }  // namespace sketch
 }  // namespace hobbycad

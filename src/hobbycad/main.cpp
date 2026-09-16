@@ -7,30 +7,103 @@
 //    1. Subcommands (convert, script)    → Command-Line Mode
 //    2. --no-gui flag                    → Interactive CLI Mode
 //    3. No display server detected       → Interactive CLI Mode
-//    4. OpenGL 3.3+ available            → Full Mode (3D)
-//    5. OpenGL below 3.3 or unavailable  → Reduced Mode (2D)
+//    4. OCCT can initialize a GL context  → Full Mode (3D)
+//    5. OCCT cannot, or was not asked     → Reduced Mode (2D)
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //
 // =====================================================================
 
+#include <Standard_Failure.hxx>
+#include "hobbycad/occt_failure.h"
+
+#include "softcrash.h"
+#include <QFileInfo>
+#include <hobbycad/sketch/solver.h>
 #include <hobbycad/core.h>
 #include <hobbycad/crashhandler.h>
 #include <hobbycad/opengl_info.h>
 
 #include "cli/climode.h"
+#include "cli_translator.h"
 #include "gui/full/fullmodewindow.h"
 #include "gui/reduced/reducedmodewindow.h"
 #include "gui/themevalidator.h"
+#include "i18n/translations.h"
 
 #include <QApplication>
+#include <QStyleFactory>
+#include <cstring>
+#include <filesystem>
 #include <QDir>
 #include <QFile>
 #include <QIcon>
 #include <QLocale>
+#include <QSettings>
 #include <QMessageBox>
 #include <QTimer>
-#include <QTranslator>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <cstdio>
+#include <iostream>
+
+// hobbycad.exe is a GUI-subsystem program (WIN32_EXECUTABLE), so a
+// double-click opens no console window. A GUI-subsystem process started
+// from cmd or PowerShell gets no console of its own either, so here it
+// attaches to the parent's: --version, --help and --no-gui then talk to
+// the terminal they were typed in. Handles the caller redirected (a
+// pipe, a file, the test scripts' capture) are valid already and stay.
+// One consequence of the subsystem: an interactive shell does not wait
+// for the program, so its prompt can return before the output; "start
+// /wait hobbycad --version" waits.
+static bool stdHandleValid(DWORD id)
+{
+    HANDLE h = GetStdHandle(id);
+    return h != nullptr && h != INVALID_HANDLE_VALUE;
+}
+
+static void attachParentConsole()
+{
+    const bool hadIn  = stdHandleValid(STD_INPUT_HANDLE);
+    const bool hadOut = stdHandleValid(STD_OUTPUT_HANDLE);
+    const bool hadErr = stdHandleValid(STD_ERROR_HANDLE);
+    // A GUI-subsystem process never inherits its parent's console, only
+    // the parent's handles (pipes, files, or console handles from the
+    // hobbycad.com launcher). Attach to the console whenever there is
+    // one, so console functions work, but keep every inherited handle:
+    // only streams that had none are bound to the console.
+    if (GetConsoleWindow() == nullptr &&
+        !AttachConsole(ATTACH_PARENT_PROCESS)) {
+        return;   // started from Explorer or the Start menu: no console
+    }
+    if (!hadIn)  { std::freopen("CONIN$",  "r", stdin);  }
+    if (!hadOut) { std::freopen("CONOUT$", "w", stdout); }
+    if (!hadErr) { std::freopen("CONOUT$", "w", stderr); }
+    std::ios::sync_with_stdio(true);
+}
+
+// The interactive CLI needs somewhere to read and write. With inherited
+// handles (a pipe, a file, the launcher's console) it has that already;
+// only a shortcut with --no-gui, started with nothing at all, gets a
+// fresh console window.
+static void ensureConsoleForCli()
+{
+    if (GetConsoleWindow() != nullptr) {
+        return;
+    }
+    if (stdHandleValid(STD_INPUT_HANDLE) && stdHandleValid(STD_OUTPUT_HANDLE)) {
+        return;
+    }
+    if (!AllocConsole()) {
+        return;
+    }
+    std::freopen("CONIN$",  "r", stdin);
+    std::freopen("CONOUT$", "w", stdout);
+    std::freopen("CONOUT$", "w", stderr);
+    std::ios::sync_with_stdio(true);
+}
+#endif
 
 #include <hobbycad/project.h>
 #include <hobbycad/sketch/parsing.h>
@@ -216,10 +289,9 @@ static void printHelp(const char* programPath)
               << "Environment Variables:\n"
               << "  HOBBYCAD_THEME           Path to Qt stylesheet (.qss) file\n"
               << "  HOBBYCAD_REDUCED_MODE=1  Force Reduced Mode (2D canvas only)\n"
-              << "  HOBBYCAD_GEOMETRY=WxH    Set initial window size (e.g., 1280x720)\n"
               << "\n"
               << "Startup Modes:\n"
-              << "  Full Mode       OpenGL 3.3+ with 3D viewport (default when available)\n"
+              << "  Full Mode       3D viewport, when OCCT can initialize one (default)\n"
               << "  Reduced Mode    2D canvas only (when OpenGL unavailable or forced)\n"
               << "  CLI Mode        Interactive terminal (--no-gui or no display server)\n"
               << "\n"
@@ -303,24 +375,76 @@ static void printVersion()
               << "Copyright (C) 2024-2026 HobbyCAD Contributors\n"
               << "License: GPL-3.0-only\n"
               << "\n"
-              << "Built with:\n"
-              << "  Qt " << QT_VERSION_STR << "\n"
-              << "  OpenCASCADE Technology (OCCT)\n";
+              << "Built with:\n";
+
+    // --version is the command-line equivalent of the About dialog, so it
+    // names the SAME dependency set under the same rule: a dependency that
+    // is linked in is listed, one that is not is absent entirely. If a row
+    // is added to one of these, add it to the other.
+    std::cout << "  Qt                        " << QT_VERSION_STR
+              << " (runtime " << qVersion() << ")\n";
+
+#ifdef HOBBYCAD_OCCT_VERSION
+    std::cout << "  OpenCASCADE               " << HOBBYCAD_OCCT_VERSION << "\n";
+#else
+    std::cout << "  OpenCASCADE               (unknown)\n";
+#endif
+
+    if (hobbycad::sketch::Solver::isAvailable()) {
+        std::cout << "  Solver (libslvs)          "
+                  << hobbycad::sketch::solverVersionString();
+        if (hobbycad::sketch::solverCanRecoverFromFaults()) {
+            std::cout << "  (recovers from solver faults)";
+        } else if (hobbycad::sketch::solverFatalHandlerAvailable()) {
+            std::cout << "  (reports solver faults, cannot recover)";
+        } else {
+            std::cout << "  (stock: a solver fault ends the process)";
+        }
+        std::cout << "\n";
+    }
+
+#ifdef HOBBYCAD_JSON_VERSION
+    std::cout << "  nlohmann/json             " << HOBBYCAD_JSON_VERSION << "\n";
+#endif
+#ifdef HOBBYCAD_WEBP_VERSION
+    std::cout << "  libwebp                   " << HOBBYCAD_WEBP_VERSION << "\n";
+#endif
+#ifdef HOBBYCAD_STB_VERSION
+    std::cout << "  stb_image                 " << HOBBYCAD_STB_VERSION << "\n";
+#endif
+#ifdef HOBBYCAD_EGL_VERSION
+    std::cout << "  EGL                       " << HOBBYCAD_EGL_VERSION << "\n";
+#endif
+#ifdef HOBBYCAD_CMAKE_VERSION
+    std::cout << "  CMake                     " << HOBBYCAD_CMAKE_VERSION << "\n";
+#endif
+
+#if defined(__GNUC__) && !defined(__clang__)
+    std::cout << "  Compiler                  GCC " << __GNUC__ << "."
+              << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__ << "\n";
+#elif defined(__clang__)
+    std::cout << "  Compiler                  Clang " << __clang_major__ << "."
+              << __clang_minor__ << "." << __clang_patchlevel__ << "\n";
+#endif
 }
 
 // ---- Helper: detect display server -----------------------------------
 
 static bool hasDisplayServer()
 {
-#if defined(Q_OS_LINUX) || defined(Q_OS_UNIX)
-    // Check for X11 or Wayland
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    // Windows and macOS have a window server whenever there is a login
+    // session; neither sets DISPLAY or WAYLAND_DISPLAY. Qt defines
+    // Q_OS_UNIX on macOS too, so this test has to come first: with the
+    // X11/Wayland check applied to macOS, a double-click in Finder fell
+    // straight into the command-line fallback and no window ever showed.
+    return true;
+#else
+    // X11 or Wayland
     const char* display  = std::getenv("DISPLAY");
     const char* wayland  = std::getenv("WAYLAND_DISPLAY");
     return (display && display[0] != '\0') ||
            (wayland && wayland[0] != '\0');
-#else
-    // Windows and macOS always have a display
-    return true;
 #endif
 }
 
@@ -328,6 +452,9 @@ static bool hasDisplayServer()
 
 int main(int argc, char* argv[])
 {
+#ifdef Q_OS_WIN
+    attachParentConsole();
+#endif
     // Step 1: Parse CLI flags
     StartupFlags flags = parseFlags(argc, argv);
 
@@ -351,25 +478,41 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    // Install crash handler early — catches SIGABRT/SIGSEGV from
+    // Install crash handler early; it catches SIGABRT/SIGSEGV from
     // third-party libraries (e.g., libslvs assertion failures) and
     // exits gracefully with a diagnostic message instead of a raw crash.
     hobbycad::CrashHandler::install();
 
-    // Set crash log path to user's config directory
+    // Crash log location, per platform convention, with its directory
+    // created here. The handler opens the file with a bare fopen() from a
+    // signal context and cannot create directories; on Linux the directory
+    // happened to exist because QSettings writes its file there, on macOS
+    // and Windows it never did, and every crash log was silently lost.
     {
-        std::string logPath;
+        std::string logDir;
         const char* home = std::getenv("HOME");
-        if (home) {
-            logPath = std::string(home) + "/.config/HobbyCAD/crash.log";
+#if defined(_WIN32)
+        if (const char* appdata = std::getenv("APPDATA")) {
+            logDir = std::string(appdata) + "\\HobbyCAD";
         }
-#ifdef _WIN32
-        const char* appdata = std::getenv("APPDATA");
-        if (appdata) {
-            logPath = std::string(appdata) + "\\HobbyCAD\\crash.log";
+#elif defined(__APPLE__)
+        if (home) {
+            logDir = std::string(home) + "/Library/Logs/HobbyCAD";
+        }
+#else
+        if (home) {
+            logDir = std::string(home) + "/.config/HobbyCAD";
         }
 #endif
-        if (!logPath.empty()) {
+        if (!logDir.empty()) {
+            std::error_code ec;
+            std::filesystem::create_directories(logDir, ec);
+            const std::string logPath = logDir +
+#ifdef _WIN32
+                "\\crash.log";
+#else
+                "/crash.log";
+#endif
             hobbycad::CrashHandler::setCrashLogPath(logPath.c_str());
         }
     }
@@ -389,22 +532,29 @@ int main(int argc, char* argv[])
             hobbycad::shutdown();
             return 1;
         }
+        hobbycad::installCliTranslator();
         hobbycad::CliMode cli;
-        int result = cli.runConvert(flags.convertInput, flags.convertOutput);
+        int result = cli.runConvert(flags.convertInput.toStdString(),
+                                    flags.convertOutput.toStdString());
         hobbycad::shutdown();
         return result;
     }
 
     if (flags.scriptCmd) {
         // scriptPath can be empty (for stdin) or "-" or a filename
+        hobbycad::installCliTranslator();
         hobbycad::CliMode cli;
-        int result = cli.runScript(flags.scriptPath, flags.scriptCheck);
+        int result = cli.runScript(flags.scriptPath.toStdString(), flags.scriptCheck);
         hobbycad::shutdown();
         return result;
     }
 
     // Step 1d: Interactive CLI mode
     if (flags.noGui) {
+#ifdef Q_OS_WIN
+        ensureConsoleForCli();
+#endif
+        hobbycad::installCliTranslator();
         hobbycad::CliMode cli;
         int result = cli.runInteractive();
         hobbycad::shutdown();
@@ -422,6 +572,10 @@ int main(int argc, char* argv[])
                   << "Type 'help' for available commands, or 'exit' to quit."
                   << std::endl;
 
+#ifdef Q_OS_WIN
+        ensureConsoleForCli();
+#endif
+        hobbycad::installCliTranslator();
         hobbycad::CliMode cli;
         int result = cli.runInteractive();
         hobbycad::shutdown();
@@ -429,10 +583,37 @@ int main(int argc, char* argv[])
     }
 
     // Step 3: Initialize Qt
-    QApplication app(argc, argv);
+    // A QApplication subclass, so an exception escaping an event handler
+    // becomes a soft crash (logged, degraded if possible, saved and
+    // closed cleanly if not) rather than std::terminate.
+    // Did the user pick a widget style on the command line? QApplication
+    // consumes -style, so look before constructing it.
+    bool styleChosen = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "-style") == 0 ||
+            std::strncmp(argv[i], "-style=", 7) == 0) {
+            styleChosen = true;
+        }
+    }
+
+    hobbycad::SoftCrashApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("HobbyCAD"));
     app.setApplicationVersion(QString::fromLatin1(hobbycad::version()));
     app.setOrganizationName(QStringLiteral("HobbyCAD"));
+
+    // Widget style. The stylesheet themes are written against Qt's Fusion
+    // style, which is also what Linux runs by default, so that is where
+    // they have always been seen. macOS and Windows apply their native
+    // styles underneath the same stylesheet and the mix shows: on macOS
+    // the Objects/Files tab bar drew over the Project dock's title, the
+    // dock buttons kept the light native glyphs and the tabs became a blue
+    // segmented control. Fusion on every platform, unless the user chose
+    // a style with -style or QT_STYLE_OVERRIDE.
+    if (!styleChosen && !qEnvironmentVariableIsSet("QT_STYLE_OVERRIDE")) {
+        if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion"))) {
+            app.setStyle(fusion);
+        }
+    }
 
     // Set application icon for taskbar/dock/window decorations
     // This enables the icon to display like Chrome/Firefox on Linux
@@ -442,18 +623,25 @@ int main(int argc, char* argv[])
 
     // Step 3a: Load translations
     //   Priority: user preference > system locale > English (built-in)
-    QTranslator translator;
-    QString locale = QLocale::system().name();  // e.g., "de_DE"
-
-    // Try embedded resource, then external file
-    if (translator.load(
-            QStringLiteral(":/translations/hobbycad_") + locale)) {
-        app.installTranslator(&translator);
-    } else if (translator.load(
-                   QStringLiteral("translations/hobbycad_") + locale)) {
-        app.installTranslator(&translator);
+    //
+    // An empty setting means "follow the system", which is the default and
+    // what QLocale() already resolves to, so it is passed through as-is
+    // rather than being turned into a concrete locale here. Doing that would
+    // freeze the answer at whatever the system said the first time the
+    // program ran.
+    //
+    // This has to happen before anything composes a translated string.
+    // QCommandLineParser builds its help text as it is constructed, so
+    // installing after that point leaves --help in English however complete
+    // the catalog is.
+    {
+        QSettings settings;
+        settings.beginGroup(QStringLiteral("preferences"));
+        const QString locale =
+            settings.value(QStringLiteral("language")).toString();
+        settings.endGroup();
+        hobbycad::translations::install(app, locale);
     }
-    // If neither loads, English tr() strings are used as-is.
 
     // Step 3b: Load theme stylesheet
     //   Priority: --theme flag > HOBBYCAD_THEME env > user config >
@@ -519,11 +707,38 @@ int main(int argc, char* argv[])
             QStringLiteral(":/themes/default.qss"));
     }
 
+    // The sketch canvas paints with QPainter, which a QSS stylesheet cannot
+    // reach, so tell it whether the widget theme is dark and it picks its own
+    // dark palette (SketchCanvas::isDarkContext reads this qApp property).
+    // Heuristic: the loaded theme names a dark theme; HOBBYCAD_DARK=1/0
+    // overrides explicitly.
+    {
+        bool dark = themeSource.contains(QStringLiteral("dark"), Qt::CaseInsensitive);
+        const char* envDark = std::getenv("HOBBYCAD_DARK");
+        if (envDark && envDark[0] != '\0') {
+            const char c = envDark[0];
+            dark = (c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y');
+        }
+        app.setProperty("hobbycad_dark_theme", dark);
+
+        // Remember whether the launch chose the theme explicitly, so the saved
+        // in-app Light/Dark choice does not override an intentional override.
+        const bool fromFlag = !flags.themePath.isEmpty()
+            || (std::getenv("HOBBYCAD_THEME") && std::getenv("HOBBYCAD_THEME")[0])
+            || (envDark && envDark[0]);
+        app.setProperty("hobbycad_theme_from_flag", fromFlag);
+    }
+
     // Step 4: Probe OpenGL capabilities
     hobbycad::OpenGLInfo glInfo = hobbycad::probeOpenGL();
+    // OCCT is the component that has to succeed, so it decides. The GL
+    // probe above still runs, but only to gather version/renderer/vendor
+    // for the About dialog and the status bar; it no longer gates
+    // anything.
+    hobbycad::probeOcctViewer(glInfo);
 
     // Step 5: Check for forced Reduced Mode via environment variable
-    //   HOBBYCAD_REDUCED_MODE=1  — force Reduced Mode even if OpenGL
+    //   HOBBYCAD_REDUCED_MODE=1:   force Reduced Mode even if OpenGL
     //                              is available (useful for testing)
     bool forceReduced = false;
     const char* envReduced = std::getenv("HOBBYCAD_REDUCED_MODE");
@@ -532,8 +747,22 @@ int main(int argc, char* argv[])
     }
 
     // Step 5b: Check for forced window geometry via environment variable
-    //   HOBBYCAD_GEOMETRY=WxH  — force window to specific dimensions
+    //   HOBBYCAD_GEOMETRY=WxH:   force window to specific dimensions
     //                            (e.g. HOBBYCAD_GEOMETRY=800x600)
+    //
+    // Deliberately NOT listed in --help or the man page. This exists for the
+    // screenshot harness, which needs a fixed window size; ordinary users
+    // size the window through their window manager. Please do not
+    // re-advertise it.
+    //
+    // Note: Qt honors the X11 "-geometry WxH" form, so users have a way to
+    // size the window without this variable. Two caveats, both verified:
+    //   * Our own parser does not know "-geometry", so the WxH value falls
+    //     through to the positional file argument and prints
+    //     "Error: no such file or directory: 1280x900" while still resizing.
+    //   * "--geometry=WxH" is not honored at all.
+    // Either route is clamped by setMinimumSize(800, 600) in MainWindow, so
+    // a request smaller than that yields 800x600.
     int forceWidth = 0, forceHeight = 0;
     const char* envGeometry = std::getenv("HOBBYCAD_GEOMETRY");
     if (envGeometry) {
@@ -589,13 +818,37 @@ int main(int argc, char* argv[])
         return SketchPlane::XY;  // name-only, default plane
     };
 
+    // Helper: open the positional file argument once the window exists.
+    //
+    // This used to be missing entirely: the argument was parsed into
+    // flags.fileToOpen and then never read by anything, so `hobbycad
+    // myproject/` opened an empty document while --help advertised it.
+    // Scheduled the same way as --exec so the window is shown first and any
+    // failure dialog has a parent.
+    auto scheduleOpen = [&](auto* window) {
+        if (flags.fileToOpen.isEmpty()) {
+            return;
+        }
+        const QString path = flags.fileToOpen;
+        if (!QFileInfo::exists(path)) {
+            std::cerr << "Error: no such file or directory: "
+                      << path.toStdString() << std::endl;
+            return;
+        }
+        QTimer::singleShot(0, window, [window, path]() {
+            window->openPath(path);
+        });
+    };
+
     // Helper: schedule --exec command to run after the event loop starts
     auto scheduleExec = [&](auto* window) {
         if (!flags.execCommand.isEmpty()) {
             auto plane = resolveExecSketchPlane(flags.execCommand);
             if (plane.has_value()) {
                 QTimer::singleShot(0, window, [window, p = *plane]() {
-                    window->enterSketchMode(p);
+                    // Let the full startup (viewport init and all) finish, THEN
+                    // switch to the 2D sketch, through the one sketch-begin path.
+                    window->beginStartupSketch(p);
                 });
             } else {
                 std::cerr << "Warning: unrecognized --exec command: "
@@ -606,20 +859,73 @@ int main(int argc, char* argv[])
 
     int result = 0;
 
-    if (glInfo.meetsMinimum() && !forceReduced) {
-        // Step 6a: Full Mode — OpenGL 3.3+ available
-        hobbycad::FullModeWindow window(glInfo);
-        if (forceWidth > 0 && forceHeight > 0)
-            window.resize(forceWidth, forceHeight);
-        window.show();
-        scheduleExec(&window);
-        result = app.exec();
-    } else {
-        // Step 6b: Reduced Mode — OpenGL insufficient or forced
+    // The startup probe says OCCT *can* bring up a context. Actually
+    // building the viewport can still fail: a different context, a driver
+    // that dies under load, a display that goes away between the probe and
+    // the window. Without this guard that throw left main() and terminated
+    // the process, which is the worst outcome available: the 2D workspace
+    // would have run perfectly.
+    bool ranFullMode = false;
+
+    if (glInfo.canRunViewport() && !forceReduced) {
+        try {
+            hobbycad::FullModeWindow window(glInfo);
+            if (forceWidth > 0 && forceHeight > 0)
+                window.resize(forceWidth, forceHeight);
+            window.show();
+            window.checkForCrashRecovery();
+            scheduleOpen(&window);
+            scheduleExec(&window);
+
+            // Past construction and show: the viewport exists. Falling back
+            // after the event loop starts would mean running a second one
+            // over a half-torn-down window, so from here a failure is not
+            // ours to swallow.
+            ranFullMode = true;
+
+            // From here the event loop owns the failure path: drop the
+            // viewport and keep sketching if we can, save and exit cleanly
+            // if we cannot.
+            app.setDegradeHandler([&window]() { return window.dropViewport(); });
+            app.setEmergencySave([&window]() { window.saveEmergencyCopy(); });
+
+            result = app.exec();
+        } catch (const Standard_Failure& e) {
+            // OCCT's own type. 7.x does not derive it from std::exception,
+            // so it must be caught by name to work across versions.
+            if (ranFullMode) throw;
+            const char* what = hobbycad::occtFailureMessage(e);
+            glInfo.occtViewerWorks = false;
+            glInfo.errorMessage =
+                std::string("The 3D viewport failed to start: ")
+                + (what ? what : "unknown OCCT error");
+        } catch (const std::exception& e) {
+            if (ranFullMode) throw;
+            glInfo.occtViewerWorks = false;
+            glInfo.errorMessage =
+                std::string("The 3D viewport failed to start: ") + e.what();
+        } catch (...) {
+            if (ranFullMode) throw;
+            glInfo.occtViewerWorks = false;
+            glInfo.errorMessage =
+                "The 3D viewport failed to start with an unknown error";
+        }
+
+        if (!ranFullMode) {
+            std::fprintf(stderr, "%s\nFalling back to Reduced Mode.\n",
+                         glInfo.errorMessage.c_str());
+        }
+    }
+
+    if (!ranFullMode) {
+        // Step 6b: Reduced Mode (OCCT declined, the viewport failed to
+        // start, or Reduced Mode was forced).
         hobbycad::ReducedModeWindow window(glInfo);
         if (forceWidth > 0 && forceHeight > 0)
             window.resize(forceWidth, forceHeight);
         window.show();
+        window.checkForCrashRecovery();
+        scheduleOpen(&window);
         scheduleExec(&window);
         result = app.exec();
     }

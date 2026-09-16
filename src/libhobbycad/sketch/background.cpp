@@ -8,6 +8,7 @@
 // =====================================================================
 
 #include <hobbycad/sketch/background.h>
+#include <hobbycad/units.h>
 
 #include <algorithm>
 #include <cmath>
@@ -34,9 +35,7 @@
 #include <nlohmann/json.hpp>
 #endif
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -51,14 +50,29 @@ geometry::BoundingBox BackgroundImage::bounds() const
         return geometry::BoundingBox();
     }
 
-    // Simple bounds without rotation
-    // TODO: Handle rotation properly
-    return geometry::BoundingBox(
-        position.x,
-        position.y,
-        position.x + width,
-        position.y + height
-    );
+    if (rotation == 0.0) {
+        return geometry::BoundingBox(
+            position.x, position.y,
+            position.x + width, position.y + height);
+    }
+
+    // Rotated: AABB of the four corners rotated about the center.
+    const Point2D c = center();
+    const double rad = degreesToRadians(rotation);
+    const double cs = std::cos(rad), sn = std::sin(rad);
+    const double hw = width / 2.0, hh = height / 2.0;
+    const double cx[4] = {-hw,  hw, hw, -hw};
+    const double cy[4] = {-hh, -hh, hh,  hh};
+    double minX = 1e300, minY = 1e300, maxX = -1e300, maxY = -1e300;
+    for (int i = 0; i < 4; ++i) {
+        const double wx = c.x + cx[i] * cs - cy[i] * sn;
+        const double wy = c.y + cx[i] * sn + cy[i] * cs;
+        if (wx < minX) minX = wx;
+        if (wx > maxX) maxX = wx;
+        if (wy < minY) minY = wy;
+        if (wy > maxY) maxY = wy;
+    }
+    return geometry::BoundingBox(minX, minY, maxX, maxY);
 }
 
 Point2D BackgroundImage::center() const
@@ -71,12 +85,22 @@ bool BackgroundImage::containsPoint(const Point2D& point) const
 {
     if (!enabled) return false;
 
-    // Simple check without rotation
-    // TODO: Handle rotation properly
-    return point.x >= position.x &&
-           point.x <= position.x + width &&
-           point.y >= position.y &&
-           point.y <= position.y + height;
+    if (rotation == 0.0) {
+        return point.x >= position.x &&
+               point.x <= position.x + width &&
+               point.y >= position.y &&
+               point.y <= position.y + height;
+    }
+
+    // Rotate the point into the image's local (un-rotated) frame about the
+    // center, then test the axis-aligned half-extents.
+    const Point2D c = center();
+    const double rad = -degreesToRadians(rotation);   // inverse rotation
+    const double cs = std::cos(rad), sn = std::sin(rad);
+    const double dx = point.x - c.x, dy = point.y - c.y;
+    const double lx = dx * cs - dy * sn;
+    const double ly = dx * sn + dy * cs;
+    return std::fabs(lx) <= width / 2.0 && std::fabs(ly) <= height / 2.0;
 }
 
 double BackgroundImage::getScaleFactor() const
@@ -95,6 +119,44 @@ double BackgroundImage::getScaleFactor() const
         return width / naturalWidth;
     }
     return 1.0;
+}
+
+double BackgroundImage::mmPerPixelX() const
+{
+    return originalPixelWidth > 0 ? width / originalPixelWidth : 0.0;
+}
+
+double BackgroundImage::mmPerPixelY() const
+{
+    return originalPixelHeight > 0 ? height / originalPixelHeight : 0.0;
+}
+
+bool BackgroundImage::hasUniformScale(double tolerance) const
+{
+    const double sx = mmPerPixelX(), sy = mmPerPixelY();
+    if (sx <= 0.0 || sy <= 0.0) return true;   // nothing to disagree
+    return std::fabs(sx - sy) <= tolerance * std::max(sx, sy);
+}
+
+void BackgroundImage::setMmPerPixel(double mmPerPixel)
+{
+    if (originalPixelWidth <= 0 || originalPixelHeight <= 0 || !(mmPerPixel > 0.0)) return;
+    width = originalPixelWidth * mmPerPixel;
+    height = originalPixelHeight * mmPerPixel;
+}
+
+double BackgroundImage::heightForWidthLocked(double w) const
+{
+    if (originalPixelWidth > 0 && originalPixelHeight > 0)
+        return w * static_cast<double>(originalPixelHeight) / originalPixelWidth;
+    return width > 0.0 ? w * height / width : height;
+}
+
+double BackgroundImage::widthForHeightLocked(double h) const
+{
+    if (originalPixelWidth > 0 && originalPixelHeight > 0)
+        return h * static_cast<double>(originalPixelWidth) / originalPixelHeight;
+    return height > 0.0 ? h * width / height : width;
 }
 
 void BackgroundImage::setScaleFactor(double scale)
@@ -653,33 +715,23 @@ double calculateLineAngle(const Point2D& point1, const Point2D& point2)
 {
     double dx = point2.x - point1.x;
     double dy = point2.y - point1.y;
-    return std::atan2(dy, dx) * 180.0 / M_PI;
+    return radiansToDegrees(std::atan2(dy, dx));
 }
 
 double calculateAlignmentRotation(double currentAngle, double targetAngle)
 {
-    double rotation = targetAngle - currentAngle;
-
-    // Normalize to -180 to +180 for shortest rotation path
-    while (rotation > 180.0) rotation -= 360.0;
-    while (rotation < -180.0) rotation += 360.0;
-
-    return rotation;
+    // Shortest rotation path: normalized to [-180, 180).
+    return hobbycad::normalizeAngle180(targetAngle - currentAngle);
 }
 
 double normalizeAngle360(double degrees)
 {
-    degrees = fmod(degrees, 360.0);
-    if (degrees < 0) degrees += 360.0;
-    return degrees;
+    return hobbycad::normalizeAngle360(degrees);   // one implementation, units.h
 }
 
 double normalizeAngle180(double degrees)
 {
-    degrees = fmod(degrees, 360.0);
-    if (degrees > 180.0) degrees -= 360.0;
-    if (degrees < -180.0) degrees += 360.0;
-    return degrees;
+    return hobbycad::normalizeAngle180(degrees);
 }
 
 // =====================================================================
@@ -949,7 +1001,7 @@ BackgroundImage backgroundFromJson(const std::string& json)
     return bg;
 }
 
-#else  // !HOBBYCAD_HAS_QT — nlohmann/json path
+#else  // !HOBBYCAD_HAS_QT: nlohmann/json path
 
 std::string backgroundToJson(
     const BackgroundImage& background,
@@ -1079,7 +1131,7 @@ bool isImageFormatSupported(const std::string& filePath)
     return false;
 }
 
-#else  // !HOBBYCAD_HAS_QT — stb_image (+ optional libwebp) supported formats
+#else  // !HOBBYCAD_HAS_QT: stb_image (+ optional libwebp) supported formats
 
 std::vector<std::string> supportedImageFormats()
 {

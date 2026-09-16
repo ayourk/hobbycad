@@ -608,10 +608,9 @@ void ProjectBrowserWidget::loadProjectFiles()
 
     // Collect all CAD file paths from the project
     // Geometry files
-    for (const auto& shape : m_project->shapes()) {
-        Q_UNUSED(shape);
-        // Geometry files are in geometry/ subdirectory
-    }
+    // Geometry file paths come from the manifest, not from iterating the
+    // bodies: the manifest is what actually records where each was written,
+    // including a design's path prefix.
 
     // Get the file lists from the project (these are stored in manifest)
     // For now, we'll build the list from known subdirectories
@@ -1048,7 +1047,15 @@ void ProjectBrowserWidget::onRevealInFileManager()
     QFileInfo info(path);
     QString dirPath = info.isDir() ? path : info.absolutePath();
 
-#ifdef Q_OS_LINUX
+    // FreeBSD and the other BSDs ship xdg-open from the same freedesktop
+    // xdg-utils package Linux uses, so they want this branch rather than the
+    // generic fallback. Without it QDesktopServices is used instead, which
+    // works but does not honour the desktop's configured file manager.
+// Qt does not fold DragonFly into Q_OS_FREEBSD, so it needs naming
+// explicitly. This is the same incomplete-platform-list pattern reported
+// upstream in OCCT issue #1515; worth not repeating here.
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD) || defined(Q_OS_OPENBSD) || \
+    defined(Q_OS_NETBSD) || defined(__DragonFly__)
     QProcess::startDetached(QStringLiteral("xdg-open"), {dirPath});
 #elif defined(Q_OS_WIN)
     QProcess::startDetached(QStringLiteral("explorer"), {QDir::toNativeSeparators(dirPath)});

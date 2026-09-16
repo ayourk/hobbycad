@@ -1,6 +1,4 @@
 usr/bin/hobbycad
-usr/lib/libhobbycad*
-usr/include/hobbycad/*
 usr/share/applications/hobbycad.desktop
 usr/share/icons/hicolor/scalable/apps/hobbycad.svg
 usr/share/icons/hicolor/16x16/apps/hobbycad.png
@@ -12,4 +10,5 @@ usr/share/icons/hicolor/128x128/apps/hobbycad.png
 usr/share/icons/hicolor/256x256/apps/hobbycad.png
 usr/share/icons/hicolor/512x512/apps/hobbycad.png
 usr/share/pixmaps/hobbycad.xpm
-usr/share/menu/hobbycad
+usr/share/hobbycad/translations/*.qm
+usr/share/man/man1/hobbycad.1

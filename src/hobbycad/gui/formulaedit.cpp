@@ -3,6 +3,9 @@
 // =====================================================================
 
 #include "formulaedit.h"
+#include "erroroutlinedelegate.h"
+#include "editinplace.h"
+#include <QKeyEvent>
 
 #include <map>
 #include <string>
@@ -127,6 +130,18 @@ void FormulaEdit::paintEvent(QPaintEvent* event)
 {
     QLineEdit::paintEvent(event);
 
+    // The same outline the parameters table and the objects browser draw:
+    // present always, red when the expression will not evaluate.
+    //
+    // The widget already set a "hasError" dynamic property and repolished
+    // itself for this, but nothing anywhere styled that property, so an
+    // invalid formula produced no visible change to the field at all. The
+    // small result text turned red, and only while focused.
+    {
+        QPainter outlinePainter(this);
+        outline::draw(&outlinePainter, rect(), !m_value.isValid());
+    }
+
     // Draw result display on the right side when editing a formula
     if (!m_resultDisplay.isEmpty() && hasFocus()) {
         QPainter painter(this);
@@ -140,6 +155,25 @@ void FormulaEdit::paintEvent(QPaintEvent* event)
         textRect.setRight(textRect.right() - 4);
         painter.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, m_resultDisplay);
     }
+}
+
+void FormulaEdit::keyPressEvent(QKeyEvent* event)
+{
+    const bool committing = event
+                            && (event->key() == Qt::Key_Return
+                                || event->key() == Qt::Key_Enter);
+
+    if (committing && !m_value.isValid() && !text().trimmed().isEmpty()) {
+        // Swallow it: no returnPressed, no editingFinished, no focus change.
+        // The caret stays exactly where it was and nothing is selected, so
+        // the field looks as though Enter simply did not happen; the
+        // shake and the red outline are what say it was refused.
+        event->accept();
+        shakeWidget(this);
+        return;
+    }
+
+    QLineEdit::keyPressEvent(event);
 }
 
 void FormulaEdit::focusInEvent(QFocusEvent* event)

@@ -3,6 +3,11 @@
 # Uncomment for verbose build output:
 # export DH_VERBOSE=1
 
+# Defines DEB_HOST_GNU_TYPE, which names the build directory dh creates
+# (obj-<triplet>). Without this include the variable is empty to make and
+# the test step below would look in "obj-".
+include /usr/share/dpkg/architecture.mk
+
 %:
 	dh $@
 
@@ -14,3 +19,26 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	dh_auto_build -- -j$$(nproc)
+
+# tests/ is deliberately outside CMake: each suite is a dependency-free
+# run.sh that compiles its own sources against the built static library, so
+# "ninja test" does not exist and dh_auto_test's default would fail. Run the
+# suites directly instead. Letting this step do nothing would leave the
+# package build with a test phase that cannot fail, which is worth less than
+# no test phase at all.
+override_dh_auto_test:
+	set -e; \
+	for d in tests/*/; do \
+		[ -x "$$d/run.sh" ] || { echo "  $$d has no executable run.sh: a suite that does not run cannot fail" >&2; exit 1; }; \
+		echo "  running $$d"; \
+		"$$d/run.sh" obj-$(DEB_HOST_GNU_TYPE); \
+	done
+
+# Install into debian/tmp so the .install files can select from it: the
+# application package takes the binary, desktop integration, translations
+# and man page; libhobbycad-dev takes the static library and the headers.
+# (With one binary package dh_auto_install would install straight into
+# debian/hobbycad/, where an .install file, which looks in debian/tmp,
+# finds nothing and fails every line; explicit is safer either way.)
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp

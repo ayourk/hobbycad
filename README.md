@@ -17,10 +17,10 @@
   <a href="https://github.com/ayourk/hobbycad-vcpkg/actions/workflows/build-ports.yml"><img src="https://img.shields.io/github/actions/workflow/status/ayourk/hobbycad-vcpkg/build-ports.yml?label=vcpkg%20ports" alt="vcpkg ports"></a>
 </p>
 
-**A Linux-native, open-source, parametric 3D CAD application — for hobbyists, by hobbyists.**
+**A Linux-native, open-source, parametric 3D CAD application, for hobbyists, by hobbyists.**
 
 <p align="center">
-  <img src="resources/screenshot.png" alt="HobbyCAD Phase 0 — 3D viewport with test geometry" width="720">
+  <img src="resources/screenshot.png" alt="HobbyCAD Phase 0: 3D viewport with test geometry" width="720">
 </p>
 
 HobbyCAD is a parametric 3D solid modeler designed for mechanical engineering, product design, and hobbyist fabrication. It delivers professional-quality tools without proprietary software, cloud lock-in, or subscription fees.
@@ -31,11 +31,11 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 
 ## Key Principles
 
-- **Offline-first** — No cloud dependency, no account, no telemetry. Your data stays on your machine.
-- **Version control is our cloud** — All collaboration and sharing flows through git and GitHub/GitLab, not a proprietary backend.
-- **Linux-first, cross-platform ready** -- Developed and optimized for Linux. Windows CI builds with MSYS2/GCC (dynamic) and MSVC/vcpkg (static). macOS CI builds with vcpkg/Clang (static). Release binaries are fully self-contained.
-- **Depth over breadth** — Core mechanical CAD done exceptionally well, rather than a sprawling, half-finished feature set.
-- **Open standards** — BREP native format (open, documented), STEP/STL/OBJ interchange. No vendor lock-in.
+- **Offline-first:** No cloud dependency, no account, no telemetry. Your data stays on your machine.
+- **Version control is our cloud:** All collaboration and sharing flows through git and GitHub/GitLab, not a proprietary backend.
+- **Linux-first, cross-platform ready:** Developed and optimized for Linux. Windows CI builds with MSYS2/GCC (dynamic) and MSVC/vcpkg (static). macOS CI builds with vcpkg/Clang (static). Release binaries are fully self-contained.
+- **Depth over breadth:** Core mechanical CAD done exceptionally well, rather than a sprawling, half-finished feature set.
+- **Open standards:** BREP native format (open, documented), STEP/STL/OBJ interchange. No vendor lock-in.
 
 ## Features
 
@@ -60,7 +60,7 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 - Assembly design with mates and constraints (planned)
 - Python scripting and plugin system with macro recording (planned)
 - Built-in git integration for project history and collaboration (planned)
-- Directory-first project format (`.hcad` manifest + plain-text files) — fully inspectable, hand-editable, and diff-friendly
+- Directory-first project format (`.hcad` manifest + plain-text files), fully inspectable, hand-editable, and diff-friendly
 - Tiered startup: Full Mode (OpenGL 3.3+), Reduced Mode (GUI without 3D viewport), Command-Line Mode (headless/batch)
 
 ### HobbyMesh Companion Tool (Planned)
@@ -93,20 +93,20 @@ HobbyCAD is accompanied by **HobbyMesh**, a companion mesh editing and 3D printi
 
 **Primary development platform:** Ubuntu 24.04 LTS
 
-**HobbyCAD PPA** — some dependencies are not in the Ubuntu repositories and are provided via a Launchpad PPA:
+**HobbyCAD PPA:** Some dependencies are not in the Ubuntu repositories and are provided via a Launchpad PPA:
 
 ```
 sudo add-apt-repository ppa:ayourk/hobbycad
 sudo apt-get update
 ```
 
-Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix — all built for Jammy (22.04) and Noble (24.04). See [`docs/dev_environment_setup.txt` §7–8](docs/dev_environment_setup.txt#L718) for details.
+Current PPA packages (as of 2026-02-08): libslvs, libopenmesh, lib3mf, meshfix, all built for Jammy (22.04) and Noble (24.04). See [`docs/dev_environment_setup.txt` §7–8](docs/dev_environment_setup.txt#L718) for details.
 
-**HobbyCAD vcpkg Registry** — the same four libraries are available for Windows (and macOS) via a custom vcpkg registry. The repository ships `vcpkg.json` and `vcpkg-configuration.json` in the project root — vcpkg resolves the custom registry automatically during the build. See [`docs/dev_environment_setup.txt` §15.2](docs/dev_environment_setup.txt#L1755) for details.
+**HobbyCAD vcpkg Registry:** The same four libraries are available for Windows (and macOS) via a custom vcpkg registry. The repository ships `vcpkg.json` and `vcpkg-configuration.json` in the project root; vcpkg resolves the custom registry automatically during the build. See [`docs/dev_environment_setup.txt` §15.2](docs/dev_environment_setup.txt#L1755) for details.
 
 Registry: https://github.com/ayourk/hobbycad-vcpkg
 
-**HobbyCAD Homebrew Tap** — the same four libraries are available for macOS via a Homebrew tap. See [`docs/dev_environment_setup.txt` §22.6](docs/dev_environment_setup.txt#L2511) for details.
+**HobbyCAD Homebrew Tap:** The same four libraries are available for macOS via a Homebrew tap. See [`docs/dev_environment_setup.txt` §22.6](docs/dev_environment_setup.txt#L2511) for details.
 
 ```
 brew tap ayourk/hobbycad
@@ -134,22 +134,6 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 
 **CI:** The [Linux Build](.github/workflows/linux-build.yml) workflow builds on Ubuntu 24.04 with GCC and apt packages, matching the primary development platform.
 
-### Windows
-
-| | Section | Description |
-|---|---|---|
-| **Quick Start** | Run [`tools\windows\setup-env.ps1`](tools/windows/setup-env.ps1) | Installs MSYS2, toolchain, vcpkg, and all dependencies |
-| **Build** | `cmake --preset msys2-debug` | Or `msvc-debug` for MSVC; also [`tools\windows\build-dev.bat`](tools/windows/build-dev.bat) |
-| | [Overview](docs/dev_environment_setup.txt#L1490) (§13) | Platform status and known limitations |
-| | [Prerequisites](docs/dev_environment_setup.txt#L1580) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
-| | [vcpkg setup](docs/dev_environment_setup.txt#L1727) (§15) | Package manager and custom registry configuration |
-| | [vcpkg dependencies](docs/dev_environment_setup.txt#L1836) (§16) | Installing Phase 0 dependencies |
-| | [Custom registry ports](docs/dev_environment_setup.txt#L1978) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
-| | [Building](docs/dev_environment_setup.txt#L2038) (§18) | Build instructions for Windows |
-| | [Troubleshooting](docs/dev_environment_setup.txt#L2178) (§19) | Windows-specific issues |
-
-**CI:** The [Windows MSYS2 Build](.github/workflows/windows-build-msys2.yml) workflow builds with MSYS2 UCRT64 / GCC, matching the local developer setup. The [Windows MSVC Build](.github/workflows/windows-build-msvc.yml) workflow builds with Visual Studio / vcpkg using static triplets (`x64-windows-static-md`, `arm64-windows-static-md`), producing self-contained executables with no DLL dependencies. Installer workflows ([Inno Setup](.github/workflows/windows-inno.yml), [WiX MSI](.github/workflows/windows-msi.yml)) package the static builds.
-
 ### macOS
 
 | | Section | Description |
@@ -165,6 +149,22 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 | | [Troubleshooting](docs/dev_environment_setup.txt#L2749) (§26) | macOS-specific issues |
 
 **CI:** The [macOS Build](.github/workflows/macos-build.yml) workflow builds with vcpkg/Clang using static triplets (`arm64-osx-static`, `x64-osx-static`), producing self-contained binaries with only macOS system frameworks as dynamic dependencies. The [macOS Universal](.github/workflows/macos-universal.yml) workflow cross-compiles both architectures and merges them via `lipo` into a single universal binary. Local developer setup uses Homebrew (see `setup-env.sh`).
+
+### Windows
+
+| | Section | Description |
+|---|---|---|
+| **Quick Start** | Run [`tools\windows\setup-env.ps1`](tools/windows/setup-env.ps1) | Installs MSYS2, toolchain, vcpkg, and all dependencies |
+| **Build** | `cmake --preset msys2-debug` | Or `msvc-debug` for MSVC; also [`tools\windows\build-dev.bat`](tools/windows/build-dev.bat) |
+| | [Overview](docs/dev_environment_setup.txt#L1490) (§13) | Platform status and known limitations |
+| | [Prerequisites](docs/dev_environment_setup.txt#L1580) (§14) | MSYS2/MinGW-w64 or MSVC requirements |
+| | [vcpkg setup](docs/dev_environment_setup.txt#L1727) (§15) | Package manager and custom registry configuration |
+| | [vcpkg dependencies](docs/dev_environment_setup.txt#L1836) (§16) | Installing Phase 0 dependencies |
+| | [Custom registry ports](docs/dev_environment_setup.txt#L1978) (§17.3) | libslvs, openmesh, lib3mf, meshfix (Phase 1+) |
+| | [Building](docs/dev_environment_setup.txt#L2038) (§18) | Build instructions for Windows |
+| | [Troubleshooting](docs/dev_environment_setup.txt#L2178) (§19) | Windows-specific issues |
+
+**CI:** The [Windows MSYS2 Build](.github/workflows/windows-build-msys2.yml) workflow builds with MSYS2 UCRT64 / GCC, matching the local developer setup. The [Windows MSVC Build](.github/workflows/windows-build-msvc.yml) workflow builds with Visual Studio / vcpkg using static triplets (`x64-windows-static-md`, `arm64-windows-static-md`), producing self-contained executables with no DLL dependencies. Installer workflows ([Inno Setup](.github/workflows/windows-inno.yml), [WiX MSI](.github/workflows/windows-msi.yml)) package the static builds.
 
 ### General
 
@@ -197,16 +197,16 @@ Full setup instructions are in [`docs/dev_environment_setup.txt`](docs/dev_envir
 - OpenGL 3.3+ capable GPU with 1 GB+ VRAM
 - 8 GB RAM, 2 GB disk space
 
-**Reduced Mode** works without OpenGL 3.3 — the GUI launches with all non-visual features functional (sketch editing, file conversion, scripting). The 3D viewport is replaced with an informational panel.
+**Reduced Mode** works without OpenGL 3.3: the GUI launches with all non-visual features functional (sketch editing, file conversion, scripting). The 3D viewport is replaced with an informational panel.
 
-**Command-Line Mode** requires no display server or GPU at all — suitable for headless servers, CI/CD, and batch processing.
+**Command-Line Mode** requires no display server or GPU at all, suitable for headless servers, CI/CD, and batch processing.
 
 ## Licensing
 
 HobbyCAD and HobbyMesh are licensed under the **GNU General Public License v3.0 only** (not "or later").
 
 - **Plugins** that link against HobbyCAD libraries must be GPL 3.0
-- **Python scripts** that call the scripting API are user content, not derivative works — you may license them however you choose
+- **Python scripts** that call the scripting API are user content, not derivative works; you may license them however you choose
 - **Forks** must use a different name (the HobbyCAD and HobbyMesh names are project trademarks)
 - A **commercial license** may be offered in the future for entities redistributing HobbyCAD or derivatives commercially
 - **AGPL 3.0** is under consideration and may be adopted at any time; the copyright assignment policy preserves this option
@@ -238,14 +238,14 @@ All project documentation is in plain text format:
 
 HobbyCAD aims to fill a specific gap in the open-source CAD ecosystem:
 
-- **vs. Fusion 360 / Onshape** — Excellent commercial tools, but require cloud connectivity, subscriptions, and send telemetry. HobbyCAD is fully offline — your files are local, version control runs through git, and there's no account to create.
-- **vs. FreeCAD** — FreeCAD is the most established open-source parametric CAD. HobbyCAD takes a different approach: a single unified workflow rather than separate workbenches, built from a clean codebase with opinionated UX decisions. FreeCAD's maturity and community are significant advantages; HobbyCAD trades that ecosystem for architectural cohesion.
-- **vs. OpenSCAD** — OpenSCAD's code-first approach is powerful for programmatic modeling. HobbyCAD provides a visual parametric GUI with an optional Python scripting layer for automation.
-- **vs. SolidWorks / Inventor** — Industry-standard tools with deep feature sets. HobbyCAD targets hobbyists and makers who need solid modeling without commercial license costs or platform restrictions.
+- **vs. Fusion 360 / Onshape:** Excellent commercial tools, but require cloud connectivity, subscriptions, and send telemetry. HobbyCAD is fully offline: your files are local, version control runs through git, and there's no account to create.
+- **vs. FreeCAD:** FreeCAD is the most established open-source parametric CAD. HobbyCAD takes a different approach: a single unified workflow rather than separate workbenches, built from a clean codebase with opinionated UX decisions. FreeCAD's maturity and community are significant advantages; HobbyCAD trades that ecosystem for architectural cohesion.
+- **vs. OpenSCAD:** OpenSCAD's code-first approach is powerful for programmatic modeling. HobbyCAD provides a visual parametric GUI with an optional Python scripting layer for automation.
+- **vs. SolidWorks / Inventor:** Industry-standard tools with deep feature sets. HobbyCAD targets hobbyists and makers who need solid modeling without commercial license costs or platform restrictions.
 
 HobbyMesh aims to fill the gap left by Autodesk Meshmixer (discontinued, never fully supported on Linux) for mesh editing and 3D print preparation.
 
 ## Contact
 
-Aaron Yourk — ayourk@gmail.com
+Aaron Yourk (ayourk@gmail.com)
 

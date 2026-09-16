@@ -20,6 +20,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -46,23 +49,23 @@ jobs:
           # AlmaLinux 9 (RHEL 9 compatible)
           - distro: almalinux9
             arch: x86_64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
             container: almalinux:9
             artifact_name: hobbycad-almalinux9-x64
           - distro: almalinux9
             arch: aarch64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
             container: almalinux:9
             artifact_name: hobbycad-almalinux9-arm64
           # Fedora 40
           - distro: fedora40
             arch: x86_64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
             container: fedora:40
             artifact_name: hobbycad-fedora40-x64
           - distro: fedora40
             arch: aarch64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
             container: fedora:40
             artifact_name: hobbycad-fedora40-arm64
 
@@ -76,175 +79,90 @@ jobs:
           fi
 
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Install build dependencies (AlmaLinux 9)
+      - name: Enable EPEL and CRB (AlmaLinux 9)
         if: startsWith(matrix.distro, 'almalinux')
         run: |
-          # Enable EPEL and CRB for additional packages
           dnf install -y epel-release
           dnf config-manager --set-enabled crb
-
-          # Swap curl-minimal for full curl to avoid conflicts
           dnf swap -y curl-minimal curl || true
 
-          # Build tools
-          dnf install -y --allowerasing \
-            gcc-c++ cmake ninja-build rpm-build \
-            pkg-config git curl xz patch
+      # The build dependencies are the BuildRequires of
+      # packaging/rpm/hobbycad.spec; the extras are what the scripts/ci/
+      # dependency builds need beyond them.
+      - name: Install build dependencies
+        run: scripts/ci/install-build-deps.sh rpm --extra eigen3-devel curl xz tar patch
 
-          # Qt6 (from EPEL)
-          dnf install -y \
-            qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel \
-            qt6-qtimageformats
-
-          # Other dependencies
-          dnf install -y \
-            mesa-libGL-devel mesa-libGLU-devel libxkbcommon-devel \
-            tbb-devel libpng-devel libjpeg-devel libwebp-devel \
-            libzip-devel minizip-devel \
-            json-devel \
-            libgit2-devel \
-            lib3mf-devel \
-            librsvg2-tools \
-            freetype-devel fontconfig-devel \
-            libX11-devel libXmu-devel libXi-devel libXext-devel \
-            eigen3-devel
-
-          # Build OpenCASCADE 7.9.2 from PPA source (not in EPEL for AlmaLinux 9)
-          curl -L -o /tmp/occt.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/opencascade/7.9.2+dfsg-4~ppa1~noble1/opencascade_7.9.2+dfsg.orig.tar.xz"
-          mkdir -p /tmp/occt && tar -xJf /tmp/occt.tar.xz -C /tmp/occt --strip-components=1
-          cmake -B /tmp/occt/build -S /tmp/occt -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_LIBRARY_TYPE=Shared \
-            -DBUILD_MODULE_Draw=OFF \
-            -DBUILD_MODULE_Visualization=ON \
-            -DBUILD_MODULE_ApplicationFramework=ON \
-            -DBUILD_MODULE_DataExchange=ON \
-            -DUSE_TBB=OFF \
-            -DUSE_VTK=OFF \
-            -DUSE_FREETYPE=ON
-          cmake --build /tmp/occt/build
-          cmake --install /tmp/occt/build
-
-          # Build OpenMesh from PPA source (not in EPEL for AlmaLinux 9)
-          curl -L -o /tmp/openmesh.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libopenmesh/11.0.0.git~20260208-1~ppa1~noble1/libopenmesh_11.0.0.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/openmesh && tar -xzf /tmp/openmesh.tar.gz -C /tmp/openmesh --strip-components=1
-          cd /tmp/openmesh
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_APPS=OFF
-          cmake --build build
-          cmake --install build
-
-          # Build libslvs from PPA source (not packaged for RHEL)
-          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
-          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
-          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
-          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
-
-          # Stub empty submodule directories and populate Eigen from system package
-          for submod in zlib libpng freetype cairo pixman angle; do
-            mkdir -p extlib/$submod
-            echo "# stub" > extlib/$submod/CMakeLists.txt
-          done
-          mkdir -p extlib/eigen
-          cp -r /usr/include/eigen3/. extlib/eigen/
-
-          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
-          # override a normal variable, so we must patch the source directly
-          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
-
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_LIB=ON \
-            -DENABLE_GUI=OFF \
-            -DENABLE_CLI=OFF \
-            -DENABLE_OPENMP=OFF \
-            -DENABLE_TESTS=OFF
-          cmake --build build
-          cmake --install build
-
-          # Build meshfix from PPA source (not packaged for RHEL)
-          curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
-          curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
-          tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
-          cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DMESHFIX_BUILD_SHARED=ON \
-            -DMESHFIX_BUILD_CLI=OFF
-          cmake --build build
-          cmake --install build
-
-      - name: Install build dependencies (Fedora)
-        if: startsWith(matrix.distro, 'fedora')
+      # OpenCASCADE is by far the slowest dependency, so its install tree is
+      # cached. The key names the image, architecture and compiler, the
+      # pinned source checksum and the build script, and it is exact: an older
+      # tree must never stand in for a new pin. A miss builds with its real
+      # /usr/local prefix but installs through DESTDIR into /opt/occt, and
+      # saves that tree at once, so a later failure in the job cannot lose it.
+      # Every run then copies the tree into /usr/local.
+      - name: OpenCASCADE cache key
+        id: occt-key
         run: |
-          dnf install -y \
-            gcc-c++ cmake ninja-build rpm-build \
-            pkg-config git curl xz patch \
-            qt6-qtbase-devel qt6-qtsvg-devel qt6-qttools-devel \
-            qt6-qtimageformats \
-            opencascade-devel \
-            mesa-libGL-devel mesa-libGLU-devel mesa-libEGL-devel \
-            libxkbcommon-devel \
-            tbb-devel libpng-devel libjpeg-devel libwebp-devel \
-            libzip-devel minizip-devel \
-            json-devel \
-            libgit2-devel \
-            lib3mf-devel OpenMesh-devel \
-            librsvg2-tools \
-            eigen3-devel
+          . scripts/ci/pins.sh
+          echo "key=occt-${{ matrix.container }}-${{ matrix.arch }}-gcc$(gcc -dumpfullversion)-${PIN_OPENCASCADE_SHA256}-${{ hashFiles('scripts/ci/build-opencascade.sh') }}" >> "$GITHUB_OUTPUT"
 
-          # Build libslvs from PPA source (solvespace package is GUI only)
-          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
-          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
-          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
-          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+      - name: Restore OpenCASCADE
+        id: occt
+        uses: actions/cache/restore@v6
+        with:
+          path: /opt/occt
+          key: ${{ steps.occt-key.outputs.key }}
 
-          # Stub empty submodule directories and populate Eigen from system package
-          for submod in zlib libpng freetype cairo pixman angle; do
-            mkdir -p extlib/$submod
-            echo "# stub" > extlib/$submod/CMakeLists.txt
-          done
-          mkdir -p extlib/eigen
-          cp -r /usr/include/eigen3/. extlib/eigen/
+      - name: Build OpenCASCADE
+        if: steps.occt.outputs.cache-hit != 'true'
+        run: DESTDIR=/opt/occt scripts/ci/build-opencascade.sh
 
-          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
-          # override a normal variable, so we must patch the source directly
-          sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
+      - name: Save OpenCASCADE
+        if: steps.occt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/occt
+          key: ${{ steps.occt-key.outputs.key }}
 
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_LIB=ON \
-            -DENABLE_GUI=OFF \
-            -DENABLE_CLI=OFF \
-            -DENABLE_OPENMP=OFF \
-            -DENABLE_TESTS=OFF
-          cmake --build build
-          cmake --install build
+      - name: Install OpenCASCADE
+        run: cp -a /opt/occt/usr/local/. /usr/local/
 
-          # Build meshfix from PPA source (not packaged for Fedora)
-          curl -L -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
-          curl -L -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
-          tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
-          cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DMESHFIX_BUILD_SHARED=ON \
-            -DMESHFIX_BUILD_CLI=OFF
-          cmake --build build
-          cmake --install build
+      # Every Linux package is built against the versions.json pins, from
+      # checksum-verified sources, statically where the distribution ships
+      # none (it ships no OpenCASCADE 8 and no libslvs).
+      - name: Build pinned dependencies
+        run: |
+          scripts/ci/build-nlohmann-json.sh
+          scripts/ci/build-libwebp.sh
+          scripts/ci/build-libslvs.sh --static
+
+          # MeshFix is not built: nothing in the package uses it (devtest
+          # only probes for it), and it is the planned auto-repair backend
+          # for HobbyMesh (docs/cad_library_recommendations.txt, section 14).
+          # Kept commented out, not removed. Before enabling it again: pin its
+          # orig in versions.json and fetch it through scripts/ci (Launchpad
+          # +sourcefiles URLs disappear), carry the shared-library patch in
+          # the orig, and fix the two loader memory-safety defects
+          # (MarcoAttene/MeshFix-V2.1 issue #19).
+          # curl -fL --retry 3 --retry-all-errors -o /tmp/meshfix.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208.orig.tar.gz"
+          # mkdir -p /tmp/meshfix && tar -xzf /tmp/meshfix.tar.gz -C /tmp/meshfix --strip-components=1
+          # curl -fL --retry 3 --retry-all-errors -o /tmp/meshfix.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/meshfix/2.1.git~20260208-1~ppa1~noble1/meshfix_2.1.git~20260208-1~ppa1~noble1.debian.tar.xz"
+          # tar -xJf /tmp/meshfix.debian.tar.xz -C /tmp/meshfix
+          # cd /tmp/meshfix && patch -p1 < debian/patches/0001-build-shared-library.patch
+          # cmake -B build -G Ninja \
+          #   -DCMAKE_BUILD_TYPE=Release \
+          #   -DMESHFIX_BUILD_SHARED=ON \
+          #   -DMESHFIX_BUILD_CLI=OFF
+          # cmake --build build
+          # cmake --install build
 
       - name: Configure CMake
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DPKG_CONFIG_ARGN=--static
 
       - name: Build
         run: cmake --build build
@@ -255,55 +173,28 @@ jobs:
           DESTDIR=$(pwd)/rpm-root cmake --install build
 
           # Create RPM spec file
-          VERSION=$(grep 'project.*VERSION' CMakeLists.txt | sed -E 's/.*VERSION[[:space:]]+([0-9.]+).*/\1/' | head -1)
-          VERSION=${VERSION:-0.0.1}
+          VERSION=$(sed -nE 's/^[[:space:]]*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)
+          if [ -z "$VERSION" ]; then echo "::warning::version not found in CMakeLists.txt; using the 0.0.0 sentinel"; VERSION=0.0.0; fi
 
           mkdir -p rpmbuild/{SPECS,SOURCES,BUILD,RPMS,SRPMS}
-
-          cat > rpmbuild/SPECS/hobbycad.spec << EOF
-          Name:           hobbycad
-          Version:        ${VERSION}
-          Release:        1%{?dist}
-          Summary:        Parametric 3D CAD Application
-          License:        GPL-3.0-only
-          URL:            https://github.com/ayourk/hobbycad
-
-          %description
-          HobbyCAD is a Linux-native open-source parametric 3D CAD application
-          built with Qt6 and OpenCASCADE.
-
-          %install
-          cp -a %{_builddir}/rpm-root/* %{buildroot}/
-
-          %files
-          /usr/bin/hobbycad
-          /usr/lib*/libhobbycad*
-          /usr/include/hobbycad/
-          /usr/share/applications/hobbycad.desktop
-          /usr/share/icons/hicolor/*/apps/hobbycad.*
-          /usr/share/pixmaps/hobbycad.xpm
-
-          %changelog
-          * $(date '+%a %b %d %Y') HobbyCAD CI <ci@hobbycad.org> - ${VERSION}-1
-          - Automated build from CI
-          EOF
-
-          # Copy installed files to BUILD directory for rpmbuild
+          cp packaging/rpm/hobbycad.spec rpmbuild/SPECS/
           cp -a rpm-root rpmbuild/BUILD/
+          echo "HC_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Build RPM
         run: |
           rpmbuild --define "_topdir $(pwd)/rpmbuild" \
                    --define "_builddir $(pwd)/rpmbuild/BUILD" \
+                   --define "hc_version ${HC_VERSION}" \
                    -bb rpmbuild/SPECS/hobbycad.spec
 
           # Move RPM to workspace root for upload
           find rpmbuild/RPMS -name "*.rpm" -exec cp {} . \;
 
       - name: Upload RPM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}-rpm
           path: "*.rpm"
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

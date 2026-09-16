@@ -46,8 +46,9 @@
 #ifndef HOBBYCAD_TERMINALINPUT_H
 #define HOBBYCAD_TERMINALINPUT_H
 
-#include <QString>
-#include <QStringList>
+#include <optional>
+#include <string>
+#include <vector>
 
 #if !defined(_WIN32)
   #include <termios.h>
@@ -64,19 +65,33 @@ public:
     ~TerminalInput();
 
     /// Set the list of known commands for tab completion.
-    void setCommands(const QStringList& commands);
+    void setCommands(const std::vector<std::string>& commands);
 
     /// Set the CLI engine for argument completion hints.
     void setEngine(CliEngine* engine);
 
     /// Read one line from the terminal with editing and history.
-    /// Returns the entered text, or a null QString on EOF (Ctrl+D
-    /// on empty line).  cancelled is set to true if Ctrl+C was
-    /// pressed.
-    QString readLine(const QString& prompt, bool* cancelled = nullptr);
+    /// Returns the entered text, or nothing on EOF (Ctrl+D on an empty
+    /// line).  canceled is set to true if Ctrl+C was pressed, which also
+    /// returns nothing: an empty line and end of input are different
+    /// answers, and std::string cannot tell them apart on its own.
+    std::optional<std::string> readLine(const std::string& prompt,
+                                        bool* canceled = nullptr);
 
     /// True if stdin is an interactive terminal.
     bool isInteractive() const;
+
+    /// Rows in the terminal, or 24 when it cannot be determined.
+    /// Public because the pager lives in the output layer, not here: only
+    /// that layer knows whether a given result is worth paging.
+    int terminalHeight() const;
+
+    /// Read a single keypress, without waiting for Enter.
+    ///
+    /// Enters raw mode for the duration and restores the terminal
+    /// afterwards, so callers do not have to manage it. Returns -1 when
+    /// stdin is not interactive; a pager must not block a piped run.
+    int readKey();
 
 private:
     // ---- Raw terminal mode ------------------------------------------
@@ -91,7 +106,7 @@ private:
     int    terminalWidth() const;
 
     // ---- Line editing -----------------------------------------------
-    void   insertChar(QChar ch);
+    void   insertChar(char ch);
     void   deleteCharBack();
     void   deleteCharForward();
     void   moveCursorLeft();
@@ -114,24 +129,27 @@ private:
 
     // ---- Tab completion ---------------------------------------------
     void   handleTab();
-    QStringList completeFilenames(const QString& prefix) const;
-    QStringList completeCommands(const QString& prefix) const;
+    std::vector<std::string> completeFilenames(const std::string& prefix) const;
+    std::vector<std::string> completeCommands(const std::string& prefix) const;
 
     // ---- Bang expansion ---------------------------------------------
-    QString expandBangs(const QString& line) const;
+    std::string expandBangs(const std::string& line) const;
 
     // ---- State ------------------------------------------------------
     CliHistory&  m_history;
     CliEngine*   m_engine = nullptr;
-    QStringList  m_commands;
+    std::vector<std::string> m_commands;
 
-    QString      m_line;             // Current edit buffer
-    int          m_cursor = 0;       // Cursor position in m_line
-    QString      m_prompt;           // Current prompt string
-    QString      m_killRing;         // Last killed text (for yank)
+    std::string  m_line;             // Current edit buffer, UTF-8
+    int          m_cursor = 0;       // Byte offset into m_line; the
+                                     // movement helpers step whole
+                                     // UTF-8 characters, never into
+                                     // the middle of one
+    std::string  m_prompt;           // Current prompt string
+    std::string  m_killRing;         // Last killed text (for yank)
 
     int          m_historyIndex = -1; // -1 = current input
-    QString      m_savedLine;         // Saved input when browsing history
+    std::string  m_savedLine;        // Saved input when browsing history
 
     bool         m_rawMode = false;
     bool         m_isTty   = false;

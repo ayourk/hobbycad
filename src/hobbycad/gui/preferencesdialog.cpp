@@ -240,6 +240,35 @@ QWidget* PreferencesDialog::createGeneralPage()
     orbitForm->addRow(m_orbitSelected);
 
     layout->addWidget(orbitGroup);
+
+    // Terminal group
+    auto* termGroup = new QGroupBox(tr("Terminal"));
+    auto* termForm = new QFormLayout(termGroup);
+
+    m_cliScrollback = new QSpinBox;
+    m_cliScrollback->setRange(0, 1000000);
+    m_cliScrollback->setSingleStep(1000);
+    m_cliScrollback->setSpecialValueText(tr("Unlimited"));
+    m_cliScrollback->setSuffix(tr(" lines"));
+    m_cliScrollback->setToolTip(
+        tr("Lines of output the CLI panel keeps.\n"
+           "Unlimited grows without bound; it is a deliberate choice,\n"
+           "not the default."));
+    termForm->addRow(tr("Scrollback:"), m_cliScrollback);
+
+    layout->addWidget(termGroup);
+
+    // Sketch group
+    auto* sketchGroup = new QGroupBox(tr("Sketch"));
+    auto* sketchForm = new QFormLayout(sketchGroup);
+
+    m_showCursorHints = new QCheckBox(tr("Show cursor hints"));
+    m_showCursorHints->setToolTip(
+        tr("Show the short hint that trails the cursor while a\n"
+           "drawing tool is active (e.g. \"Click to place center\")."));
+    sketchForm->addRow(m_showCursorHints);
+
+    layout->addWidget(sketchGroup);
     layout->addStretch();
 
     return page;
@@ -271,10 +300,14 @@ void PreferencesDialog::loadSettings()
         s.value(QStringLiteral("showGrid"), true).toBool());
     m_restoreSession->setChecked(
         s.value(QStringLiteral("restoreSession"), true).toBool());
+    m_cliScrollback->setValue(
+        s.value(QStringLiteral("cliScrollback"), 10000).toInt());
     m_zUpOrientation->setChecked(
         s.value(QStringLiteral("zUpOrientation"), true).toBool());
     m_orbitSelected->setChecked(
         s.value(QStringLiteral("orbitSelected"), false).toBool());
+    m_showCursorHints->setChecked(
+        s.value(QStringLiteral("showCursorHints"), true).toBool());
 
     s.endGroup();
 }
@@ -296,10 +329,13 @@ void PreferencesDialog::saveSettings()
     s.setValue(QStringLiteral("showGrid"), m_showGridOnStart->isChecked());
     s.setValue(QStringLiteral("restoreSession"),
               m_restoreSession->isChecked());
+    s.setValue(QStringLiteral("cliScrollback"), m_cliScrollback->value());
     s.setValue(QStringLiteral("zUpOrientation"),
               m_zUpOrientation->isChecked());
     s.setValue(QStringLiteral("orbitSelected"),
               m_orbitSelected->isChecked());
+    s.setValue(QStringLiteral("showCursorHints"),
+               m_showCursorHints->isChecked());
 
     s.endGroup();
     s.sync();

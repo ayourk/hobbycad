@@ -78,7 +78,7 @@ fetch_tool() {
     if [ -x "${path}" ]; then
         log "  ${name}: present"
     else
-        log "  ${name}: not found — downloading..."
+        log "  ${name}: not found, downloading..."
         log "    ${url}"
         if ! wget -q --show-progress -O "${path}" "${url}" 2>> "${LOG}"; then
             log "  ERROR: download failed for ${name}"
@@ -234,7 +234,7 @@ else
     APPDIR_OK=false
 fi
 
-# Icon (any format — .png or .svg)
+# Icon (any format: .png or .svg)
 ICON=$(find "${APP_DIR}" -path "*/icons/*hobbycad*" -print -quit 2>/dev/null)
 if [ -n "${ICON}" ]; then
     log "  [OK] ${ICON#${APP_DIR}/}"

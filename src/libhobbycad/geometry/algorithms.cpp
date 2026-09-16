@@ -3,6 +3,7 @@
 // =====================================================================
 
 #include <hobbycad/geometry/algorithms.h>
+#include <hobbycad/units.h>
 #include <hobbycad/geometry/utils.h>
 
 #include <algorithm>
@@ -12,9 +13,7 @@
 #include <random>
 #include <stack>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace geometry {
@@ -38,7 +37,7 @@ std::vector<Point2D> convexHull(const std::vector<Point2D>& points)
     // Remove duplicates
     sorted.erase(std::unique(sorted.begin(), sorted.end(),
         [](const Point2D& a, const Point2D& b) {
-            return std::abs(a.x - b.x) < 1e-12 && std::abs(a.y - b.y) < 1e-12;
+            return std::abs(a.x - b.x) < kExactEps && std::abs(a.y - b.y) < kExactEps;
         }), sorted.end());
 
     if (sorted.size() < 3) {
@@ -224,8 +223,8 @@ std::vector<Point2D> simplifyByArea(const std::vector<Point2D>& points, double m
 
     // Visvalingam-Whyatt: iteratively remove point forming smallest triangle
     struct PointData {
-        int index;
-        double area;
+        int index = 0;
+        double area = 0.0;
         bool removed = false;
     };
 
@@ -384,8 +383,8 @@ MinimalBoundingCircle minimalBoundingCircle(const std::vector<Point2D>& points)
 std::vector<Point2D> OrientedBoundingBox::corners() const
 {
     std::vector<Point2D> result(4);
-    double c = std::cos(angle * M_PI / 180.0);
-    double s = std::sin(angle * M_PI / 180.0);
+    double c = std::cos(degreesToRadians(angle));
+    double s = std::sin(degreesToRadians(angle));
 
     Point2D xAxis(c * halfExtents.x, s * halfExtents.x);
     Point2D yAxis(-s * halfExtents.y, c * halfExtents.y);
@@ -407,8 +406,8 @@ bool OrientedBoundingBox::contains(const Point2D& point) const
 {
     // Transform point to local coordinates
     Point2D local = point - center;
-    double c = std::cos(-angle * M_PI / 180.0);
-    double s = std::sin(-angle * M_PI / 180.0);
+    double c = std::cos(-degreesToRadians(angle));
+    double s = std::sin(-degreesToRadians(angle));
     Point2D rotated(local.x * c - local.y * s, local.x * s + local.y * c);
 
     return std::abs(rotated.x) <= halfExtents.x + DEFAULT_TOLERANCE &&
@@ -438,11 +437,11 @@ OrientedBoundingBox minimalOrientedBoundingBox(const std::vector<Point2D>& point
     // For each edge of the hull, compute the bounding box aligned to that edge
     for (size_t i = 0; i < hull.size(); ++i) {
         Point2D edge = hull[(i + 1) % hull.size()] - hull[i];
-        double edgeAngle = std::atan2(edge.y, edge.x) * 180.0 / M_PI;
+        double edgeAngle = radiansToDegrees(std::atan2(edge.y, edge.x));
 
         // Rotate all points to align this edge with x-axis
-        double c = std::cos(-edgeAngle * M_PI / 180.0);
-        double s = std::sin(-edgeAngle * M_PI / 180.0);
+        double c = std::cos(-degreesToRadians(edgeAngle));
+        double s = std::sin(-degreesToRadians(edgeAngle));
 
         double minX = std::numeric_limits<double>::max();
         double maxX = std::numeric_limits<double>::lowest();
@@ -465,8 +464,8 @@ OrientedBoundingBox minimalOrientedBoundingBox(const std::vector<Point2D>& point
             // Compute center in original coordinates
             double cx = (minX + maxX) / 2;
             double cy = (minY + maxY) / 2;
-            double cr = std::cos(edgeAngle * M_PI / 180.0);
-            double sr = std::sin(edgeAngle * M_PI / 180.0);
+            double cr = std::cos(degreesToRadians(edgeAngle));
+            double sr = std::sin(degreesToRadians(edgeAngle));
 
             best.center = Point2D(cx * cr - cy * sr, cx * sr + cy * cr);
             best.halfExtents = Point2D((maxX - minX) / 2, (maxY - minY) / 2);
@@ -536,11 +535,11 @@ std::vector<Point2D> clipPolygonByEdge(
 // Find all intersection points between two polygon edges
 struct EdgeIntersection {
     Point2D point;
-    int edge1;      // Edge index in poly1
-    double t1;      // Parameter on edge1
-    int edge2;      // Edge index in poly2
-    double t2;      // Parameter on edge2
-    bool entering;  // True if entering poly2 from outside
+    int edge1 = 0;      // Edge index in poly1
+    double t1 = 0.0;      // Parameter on edge1
+    int edge2 = 0;      // Edge index in poly2
+    double t2 = 0.0;      // Parameter on edge2
+    bool entering = false;  // True if entering poly2 from outside
 };
 
 std::vector<EdgeIntersection> findPolygonIntersections(
@@ -968,7 +967,7 @@ std::vector<std::vector<Point2D>> offsetPolygon(
             int segments = std::max(2, static_cast<int>(std::abs(sweep) / 15.0));
             for (int j = 0; j <= segments; ++j) {
                 double t = static_cast<double>(j) / segments;
-                double a = (angle1 + t * sweep) * M_PI / 180.0;
+                double a = degreesToRadians(angle1 + t * sweep);
                 result.push_back(curr + Point2D(std::cos(a), std::sin(a)) * std::abs(distance));
             }
         } else {
@@ -1006,7 +1005,7 @@ std::vector<std::vector<Point2D>> offsetPolyline(
     if (endType == 1) {
         // Round end
         for (int j = 0; j <= 8; ++j) {
-            double angle = (90.0 - 180.0 * j / 8) * M_PI / 180.0;
+            double angle = degreesToRadians(90.0 - 180.0 * j / 8);
             Point2D offset = rotatePoint(lastNormal * distance, -j * 180.0 / 8);
             closed.push_back(polyline.back() + offset);
         }
@@ -1033,7 +1032,7 @@ std::vector<std::vector<Point2D>> offsetPolyline(
 
     if (endType == 1) {
         for (int j = 0; j <= 8; ++j) {
-            double angle = (-90.0 + 180.0 * j / 8) * M_PI / 180.0;
+            double angle = degreesToRadians(-90.0 + 180.0 * j / 8);
             closed.push_back(polyline[0] - rotatePoint(firstNormal * distance, j * 180.0 / 8));
         }
     } else if (endType == 2) {
@@ -1290,7 +1289,7 @@ bool inCircumcircle(const Point2D& p, const Point2D& a, const Point2D& b, const 
 }
 
 struct DelaunayTriangle {
-    int v[3];
+    int v[3] = {};
     bool bad = false;
 
     bool hasVertex(int idx) const {

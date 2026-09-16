@@ -22,7 +22,7 @@
 
 namespace hobbycad {
 
-// Grey color for non-selectable binding items (50% of black)
+// Gray color for non-selectable binding items (50% of black)
 static const QColor kBindingTextColor(128, 128, 128);
 
 // ---- Default action bindings ----------------------------------------
@@ -61,19 +61,23 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "edit.undo", tr("Undo"), tr("Edit"),
         QKeySequence(QKeySequence::Undo).toString()));
 
-    // Use platform Redo sequence as binding1 (Ctrl+Shift+Z on Linux,
-    // Cmd+Shift+Z on macOS), with explicit Ctrl+Y as binding2.
-    // If QKeySequence::Redo is empty on this platform, fall back to
-    // Ctrl+Shift+Z so that both shortcuts are always available.
-    {
-        QString redoDefault = QKeySequence(QKeySequence::Redo).toString();
-        if (redoDefault.isEmpty())
-            redoDefault = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z).toString();
-        defaults.insert("edit.redo", ActionBinding(
-            "edit.redo", tr("Redo"), tr("Edit"),
-            redoDefault,
-            QKeySequence(Qt::CTRL | Qt::Key_Y).toString()));
-    }
+    // Redo is bound BOTH ways on every platform, deliberately, rather than
+    // deferring to QKeySequence::Redo.
+    //
+    // The platform sequence is Ctrl+Y on Windows, so using it as binding1
+    // made Windows users get Ctrl+Y twice and lose Ctrl+Shift+Z entirely,
+    // while Linux users got both. The audience for a CAD application splits
+    // between AutoCAD / SolidWorks / Fusion habits (Ctrl+Y) and
+    // FreeCAD / Blender / Inkscape habits (Ctrl+Shift+Z), and there is no
+    // reason that split should be decided by which OS someone is on.
+    //
+    // Qt maps Qt::CTRL to Command on macOS, so these read as Cmd+Shift+Z and
+    // Cmd+Y there; the first is the macOS standard and the second is a
+    // harmless extra.
+    defaults.insert("edit.redo", ActionBinding(
+        "edit.redo", tr("Redo"), tr("Edit"),
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z).toString(),
+        QKeySequence(Qt::CTRL | Qt::Key_Y).toString()));
 
     defaults.insert("edit.cut", ActionBinding(
         "edit.cut", tr("Cut"), tr("Edit"),
@@ -175,6 +179,10 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "sketch.trim", tr("Trim"), tr("Sketch"),
         QKeySequence(Qt::Key_T).toString()));
 
+    defaults.insert("sketch.fillet", ActionBinding(
+        "sketch.fillet", tr("Fillet"), tr("Sketch"),
+        QKeySequence(Qt::Key_F).toString()));
+
     defaults.insert("sketch.toggleGrid", ActionBinding(
         "sketch.toggleGrid", tr("Toggle Grid"), tr("Sketch"),
         QKeySequence(Qt::Key_G).toString()));
@@ -234,7 +242,7 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "view.preferences", tr("Preferences..."), tr("View"),
         QKeySequence(QKeySequence::Preferences).toString()));
 
-    // Navigation — Continuous rotation
+    // Navigation: Continuous rotation
     defaults.insert("nav.rotateUp", ActionBinding(
         "nav.rotateUp", tr("Rotate Up (continuous)"), tr("Navigation"),
         QKeySequence(Qt::Key_Up).toString()));
@@ -243,7 +251,7 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "nav.rotateDown", tr("Rotate Down (continuous)"), tr("Navigation"),
         QKeySequence(Qt::Key_Down).toString()));
 
-    // Navigation — Rotation axis
+    // Navigation: Rotation axis
     defaults.insert("nav.axisX", ActionBinding(
         "nav.axisX", tr("Set Rotation Axis to X"), tr("Navigation"),
         QKeySequence(Qt::Key_X).toString()));
@@ -256,7 +264,7 @@ QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
         "nav.axisZ", tr("Set Rotation Axis to Z"), tr("Navigation"),
         QKeySequence(Qt::Key_Z).toString()));
 
-    // Navigation — Snap rotations (grouped together)
+    // Navigation: Snap rotations (grouped together)
     defaults.insert("nav.rotateLeft", ActionBinding(
         "nav.rotateLeft", tr("Snap Rotate Left 90\xC2\xB0"), tr("Navigation"),
         QKeySequence(Qt::Key_Left).toString()));
@@ -482,7 +490,7 @@ void BindingsDialog::populateActions()
         "sketch.select", "sketch.line", "sketch.rectangle", "sketch.circle",
         "sketch.arc", "sketch.point", "sketch.dimension",
         // Sketch - Modifiers
-        "sketch.construction", "sketch.offset", "sketch.trim",
+        "sketch.construction", "sketch.offset", "sketch.trim", "sketch.fillet",
         // Sketch - View
         "sketch.rotateCCW", "sketch.rotateCW", "sketch.rotateReset",
         "sketch.toggleGrid",

@@ -8,6 +8,10 @@
 // =====================================================================
 
 #include <hobbycad/sketch/operations.h>
+#include <hobbycad/sketch/slotpath.h>
+#include <hobbycad/units.h>
+#include <hobbycad/sketch/constraint.h>
+#include <hobbycad/sketch/solver.h>
 #include <hobbycad/geometry/intersections.h>
 #include <hobbycad/geometry/utils.h>
 
@@ -16,9 +20,7 @@
 #include <algorithm>
 #include <cmath>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <hobbycad/math_constants.h>
 
 namespace hobbycad {
 namespace sketch {
@@ -236,14 +238,14 @@ OffsetResult offsetEntity(
             entity.points[0] + offset,
             entity.points[1] + offset);
         result.entity.isConstruction = entity.isConstruction;
+        result.side = side;
         result.success = true;
     }
     else if (entity.type == EntityType::Circle && !entity.points.empty()) {
         // Determine if offset is inward or outward
         double distToCenter = std::hypot(clickPos.x - entity.points[0].x, clickPos.y - entity.points[0].y);
-        double newRadius = (distToCenter > entity.radius)
-            ? entity.radius + distance
-            : entity.radius - distance;
+        int side = (distToCenter > entity.radius) ? 1 : -1;
+        double newRadius = entity.radius + side * distance;
 
         if (newRadius < 0.1) {
             result.errorMessage = "Offset would create invalid radius";
@@ -252,13 +254,13 @@ OffsetResult offsetEntity(
 
         result.entity = createCircle(newId, entity.points[0], newRadius);
         result.entity.isConstruction = entity.isConstruction;
+        result.side = side;
         result.success = true;
     }
     else if (entity.type == EntityType::Arc && !entity.points.empty()) {
         double distToCenter = std::hypot(clickPos.x - entity.points[0].x, clickPos.y - entity.points[0].y);
-        double newRadius = (distToCenter > entity.radius)
-            ? entity.radius + distance
-            : entity.radius - distance;
+        int side = (distToCenter > entity.radius) ? 1 : -1;
+        double newRadius = entity.radius + side * distance;
 
         if (newRadius < 0.1) {
             result.errorMessage = "Offset would create invalid radius";
@@ -268,6 +270,7 @@ OffsetResult offsetEntity(
         result.entity = createArc(newId, entity.points[0], newRadius,
             entity.startAngle, entity.sweepAngle);
         result.entity.isConstruction = entity.isConstruction;
+        result.side = side;
         result.success = true;
     }
     else {
@@ -298,6 +301,313 @@ OffsetResult offsetEntity(
     }
 
     return offsetEntity(entity, distance, clickPos, newId);
+}
+
+bool updateOffsetFromParent(Entity& child, const Entity& parent)
+{
+    const double d = child.offsetDistance;
+    const int side = child.offsetSide;
+
+    if (parent.type == EntityType::Line && parent.points.size() >= 2) {
+        const Point2D dir = parent.points[1] - parent.points[0];
+        const Point2D perp = normalize(perpendicular(dir));
+        const Point2D off = perp * (d * side);
+        child.type = EntityType::Line;
+        child.points = { parent.points[0] + off, parent.points[1] + off };
+        return true;
+    }
+    if (parent.type == EntityType::Circle && !parent.points.empty()) {
+        const double nr = parent.radius + side * d;
+        if (nr < 0.1) return false;
+        const Entity c = createCircle(child.id, parent.points[0], nr);
+        child.type = EntityType::Circle;
+        child.points = c.points;
+        child.radius = c.radius;
+        return true;
+    }
+    if (parent.type == EntityType::Arc && !parent.points.empty()) {
+        const double nr = parent.radius + side * d;
+        if (nr < 0.1) return false;
+        const Entity a = createArc(child.id, parent.points[0], nr,
+                                   parent.startAngle, parent.sweepAngle);
+        child.type = EntityType::Arc;
+        child.points = a.points;
+        child.radius = a.radius;
+        child.startAngle = a.startAngle;
+        child.sweepAngle = a.sweepAngle;
+        return true;
+    }
+    return false;  // parent type not offsettable
+}
+
+namespace {
+
+// Project a source-plane conic (center-local, semi-axes a>=b at angle phiDeg in
+// the source plane) onto the target plane. The two rotated semi-axes become
+// conjugate semi-diameters of the projected ellipse; a 2x2 SVD of [a1 a2] gives
+// its major/minor (singular values) and rotation (left-singular-vector angle).
+void projectConic(const Point3& centerLocal, double a, double b, double phiDeg,
+                  const PlaneBasis& src, const PlaneBasis& tgt,
+                  Point2D& outCenter, double& outMajor, double& outMinor, double& outRotDeg)
+{
+    auto dot3 = [](const Vec3& A, const Vec3& B) {
+        return double(A.x)*B.x + double(A.y)*B.y + double(A.z)*B.z;
+    };
+    const double ph = degreesToRadians(phiDeg), cp = std::cos(ph), sp = std::sin(ph);
+    auto comb = [&](double s1, double s2) {
+        return Vec3(float(s1*src.uAxis.x + s2*src.vAxis.x),
+                    float(s1*src.uAxis.y + s2*src.vAxis.y),
+                    float(s1*src.uAxis.z + s2*src.vAxis.z));
+    };
+    const Vec3 ax1 = comb(a*cp,  a*sp);    // major axis, world
+    const Vec3 ax2 = comb(-b*sp, b*cp);    // minor axis, world
+    const double a1x = dot3(ax1, tgt.uAxis), a1y = dot3(ax1, tgt.vAxis);
+    const double a2x = dot3(ax2, tgt.uAxis), a2y = dot3(ax2, tgt.vAxis);
+    const double P = a1x*a1x + a2x*a2x, R = a1y*a1y + a2y*a2y, Q = a1x*a1y + a2x*a2y;
+    const double mid = (P + R) / 2.0;
+    const double disc = std::sqrt(((P - R)/2.0)*((P - R)/2.0) + Q*Q);
+    outMajor = std::sqrt(mid + disc > 0 ? mid + disc : 0.0);
+    outMinor = std::sqrt(mid - disc > 0 ? mid - disc : 0.0);
+    outRotDeg = radiansToDegrees(0.5 * std::atan2(2.0*Q, P - R));
+    const Point3 ct = centerLocal.world(src).project(tgt);
+    outCenter = {ct.x, ct.y};
+}
+
+// Parameter (degrees) of a target-2D point on an ellipse (center c, rotation
+// rotDeg, semi-axes M,m): its angle in the ellipse's local frame.
+double paramOnEllipse(const Point2D& q, const Point2D& c, double rotDeg, double M, double m)
+{
+    const double th = degreesToRadians(rotDeg), ct = std::cos(th), st = std::sin(th);
+    const double dx = q.x - c.x, dy = q.y - c.y;
+    const double lx =  dx*ct + dy*st;   // into local frame
+    const double ly = -dx*st + dy*ct;
+    return radiansToDegrees(std::atan2(ly / (m > geometry::kExactEps ? m : geometry::kExactEps),
+                      lx / (M > geometry::kExactEps ? M : geometry::kExactEps)));
+}
+
+// Emit the projected conic into `child`: a Circle when it comes out round and
+// full (the "circle feel"), otherwise an Ellipse (partial if sweep < 360).
+void emitConic(Entity& child, const Point2D& c, double M, double m,
+               double rotDeg, double startDeg, double sweepDeg)
+{
+    child.points.clear();
+    child.points.push_back({c.x, c.y, 0.0});
+    const bool full = std::fabs(std::fabs(sweepDeg) - 360.0) < 1e-4;
+    if (full && std::fabs(M - m) <= 1e-4 * (M > 1.0 ? M : 1.0)) {
+        child.type = EntityType::Circle;
+        child.radius = (M + m) / 2.0;
+        child.majorRadius = child.minorRadius = 0.0;
+        child.ellipseRotation = child.ellipseStart = 0.0;
+        child.ellipseSweep = 360.0;
+    } else {
+        child.type = EntityType::Ellipse;
+        child.majorRadius = M;
+        child.minorRadius = m;
+        child.ellipseRotation = rotDeg;
+        child.ellipseStart = startDeg;
+        child.ellipseSweep = sweepDeg;
+        child.radius = 0.0;
+    }
+}
+
+}  // namespace
+
+bool updateProjectionFromSource(Entity& child, const Entity& source,
+                                const PlaneBasis& sourcePlane,
+                                const PlaneBasis& targetPlane)
+{
+    // The conic family (circle / arc / ellipse) maps into the conic family under
+    // an angled projection: a circle foreshortens to an ellipse, an arc to an
+    // elliptical arc, and an ellipse can come back round (a circle) when the
+    // fold undoes its foreshortening. All share projectConic() + emitConic().
+    if (source.type == EntityType::Circle && !source.points.empty() && source.radius > 0) {
+        Point2D c; double M, m, rot;
+        projectConic(source.points[0], source.radius, source.radius, 0.0,
+                     sourcePlane, targetPlane, c, M, m, rot);
+        emitConic(child, c, M, m, rot, 0.0, 360.0);
+        return true;
+    }
+    if (source.type == EntityType::Ellipse && !source.points.empty() && source.majorRadius > 0) {
+        Point2D c; double M, m, rot;
+        projectConic(source.points[0], source.majorRadius, source.minorRadius,
+                     source.ellipseRotation, sourcePlane, targetPlane, c, M, m, rot);
+        if (source.ellipseSweep >= 359.999) {
+            emitConic(child, c, M, m, rot, 0.0, 360.0);
+        } else {
+            // Partial ellipse: map its start/mid/end onto the projected ellipse.
+            const double ph = degreesToRadians(source.ellipseRotation);
+            const double cp = std::cos(ph), sp = std::sin(ph);
+            const Point3 ctr = source.points[0];
+            auto srcPt = [&](double tDeg) {
+                const double t = degreesToRadians(tDeg);
+                const double ex = source.majorRadius * std::cos(t);
+                const double ey = source.minorRadius * std::sin(t);
+                // rotate by phi into source-plane local coords, offset by center
+                return Point3(ctr.x + ex*cp - ey*sp, ctr.y + ex*sp + ey*cp, ctr.z);
+            };
+            const double t0 = source.ellipseStart;
+            const double t2 = source.ellipseStart + source.ellipseSweep;
+            const double t1 = source.ellipseStart + source.ellipseSweep / 2.0;
+            const Point3 q0 = srcPt(t0).world(sourcePlane).project(targetPlane);
+            const Point3 q1 = srcPt(t1).world(sourcePlane).project(targetPlane);
+            const Point3 q2 = srcPt(t2).world(sourcePlane).project(targetPlane);
+            const double p0 = paramOnEllipse({q0.x,q0.y}, c, rot, M, m);
+            const double p1 = paramOnEllipse({q1.x,q1.y}, c, rot, M, m);
+            const double p2 = paramOnEllipse({q2.x,q2.y}, c, rot, M, m);
+            const double ccwSweep = std::fmod(p2 - p0 + 720.0, 360.0);
+            const double ccwMid   = std::fmod(p1 - p0 + 720.0, 360.0);
+            double start = p0, sweep = ccwSweep;
+            if (ccwMid > ccwSweep + geometry::kAngleEpsDeg) { start = p2; sweep = 360.0 - ccwSweep; }
+            emitConic(child, c, M, m, rot, start, sweep);
+        }
+        return true;
+    }
+    if (source.type == EntityType::Arc && source.points.size() >= 3 && source.radius > 0) {
+        Point2D c; double M, m, rot;
+        projectConic(source.points[0], source.radius, source.radius, 0.0,
+                     sourcePlane, targetPlane, c, M, m, rot);
+        // Project the arc's start / mid / end points, find their params on the
+        // projected ellipse, and pick the sweep that passes through the mid.
+        const Point3 ctr = source.points[0];
+        const double midA = degreesToRadians(source.startAngle + source.sweepAngle / 2.0);
+        const Point3 midLocal(ctr.x + source.radius * std::cos(midA),
+                              ctr.y + source.radius * std::sin(midA), ctr.z);
+        const Point3 q0 = source.points[1].world(sourcePlane).project(targetPlane);
+        const Point3 q1 = midLocal.world(sourcePlane).project(targetPlane);
+        const Point3 q2 = source.points[2].world(sourcePlane).project(targetPlane);
+        const double p0 = paramOnEllipse({q0.x,q0.y}, c, rot, M, m);
+        const double p1 = paramOnEllipse({q1.x,q1.y}, c, rot, M, m);
+        const double p2 = paramOnEllipse({q2.x,q2.y}, c, rot, M, m);
+        const double ccwSweep = std::fmod(p2 - p0 + 720.0, 360.0);
+        const double ccwMid   = std::fmod(p1 - p0 + 720.0, 360.0);
+        double start = p0, sweep = ccwSweep;
+        if (ccwMid > ccwSweep + geometry::kAngleEpsDeg) { start = p2; sweep = 360.0 - ccwSweep; }
+        emitConic(child, c, M, m, rot, start, sweep);
+        return true;
+    }
+
+    // Point-list entities project point-by-point.
+    switch (source.type) {
+    case EntityType::Line:
+    case EntityType::Point:
+    case EntityType::Spline:
+    case EntityType::Polygon:
+        break;
+    default:
+        return false;
+    }
+
+    child.type = source.type;
+    child.points.clear();
+    child.points.reserve(source.points.size());
+    for (const Point3& s : source.points) {
+        // Lift the source point to world through its plane, then project
+        // orthographically onto the target plane (drop the normal component,
+        // so the result lies ON the target plane: w = 0). Handles a 3D source
+        // point too, since world() uses its off-plane w as well.
+        const Point3 tl = s.world(sourcePlane).project(targetPlane);
+        child.points.push_back({tl.x, tl.y, 0.0});
+    }
+    return true;
+}
+
+bool makeProjectionChild(Entity& child, const Entity& source,
+                         int sourceSketchId, int newId,
+                         const PlaneBasis& sourcePlane,
+                         const PlaneBasis& targetPlane)
+{
+    child = source;                 // inherit type and point structure
+    child.id = newId;
+    child.isConstruction = false;   // projected geometry is reference, not
+    child.isCenterline = false;     // construction/centerline of its own
+    child.projectionSourceId = source.id;
+    child.projectionSourceSketchId = sourceSketchId;
+    // Recompute the child's points from the source through both planes.
+    return updateProjectionFromSource(child, source, sourcePlane, targetPlane);
+}
+
+std::vector<Point3> tessellateSpline(const std::vector<Point3>& ctrl,
+                                     int segmentsPerSpan, bool bezier, bool closed)
+{
+    const int n = static_cast<int>(ctrl.size());
+    if (segmentsPerSpan < 1) return ctrl;
+    if (bezier) {
+        // Piecewise cubic Bezier: control points are the Bezier control polygon,
+        // segment s = ctrl[3s..3s+3] (endpoints shared). De Casteljau per segment.
+        // Closed: n = 3N points, N segments, the last wraps to ctrl[0].
+        if (n < 4) return ctrl;
+        const int nseg = closed ? (n / 3) : ((n - 1) / 3);
+        std::vector<Point3> out;
+        out.reserve(static_cast<std::size_t>(nseg * segmentsPerSpan + 1));
+        for (int s = 0; s < nseg; ++s) {
+            const Point3& b0 = ctrl[3*s]; const Point3& b1 = ctrl[3*s+1];
+            const Point3& b2 = ctrl[3*s+2]; const Point3& b3 = ctrl[(3*s+3) % n];
+            for (int j = 0; j < segmentsPerSpan; ++j) {
+                const double t = static_cast<double>(j) / segmentsPerSpan, u = 1.0 - t;
+                const double c0=u*u*u, c1=3*u*u*t, c2=3*u*t*t, c3=t*t*t;
+                out.push_back({ c0*b0.x + c1*b1.x + c2*b2.x + c3*b3.x,
+                                c0*b0.y + c1*b1.y + c2*b2.y + c3*b3.y,
+                                c0*b0.z + c1*b1.z + c2*b2.z + c3*b3.z });
+            }
+        }
+        out.push_back(closed ? ctrl[0] : ctrl[3 * ((n - 1) / 3)]);   // close/final endpoint
+        return out;
+    }
+    if (n < 3) return ctrl;   // line/point: nothing to smooth
+    std::vector<Point3> out;
+    out.reserve(static_cast<std::size_t>((n - 1) * segmentsPerSpan + 1));
+    auto at = [&](int i) -> const Point3& { return ctrl[std::clamp(i, 0, n - 1)]; };
+    for (int i = 0; i < n - 1; ++i) {
+        const Point3& p0 = at(i - 1);
+        const Point3& p1 = at(i);
+        const Point3& p2 = at(i + 1);
+        const Point3& p3 = at(i + 2);
+        for (int seg = 0; seg < segmentsPerSpan; ++seg) {
+            const double t  = static_cast<double>(seg) / segmentsPerSpan;
+            const double t2 = t * t, t3 = t2 * t;
+            // Catmull-Rom (tension 0.5): interpolates p1..p2 using p0,p3 as tangents.
+            auto comp = [&](double a, double b, double c, double d) {
+                return 0.5 * ((2.0 * b) + (-a + c) * t
+                              + (2.0 * a - 5.0 * b + 4.0 * c - d) * t2
+                              + (-a + 3.0 * b - 3.0 * c + d) * t3);
+            };
+            out.push_back({ comp(p0.x, p1.x, p2.x, p3.x),
+                            comp(p0.y, p1.y, p2.y, p3.y),
+                            comp(p0.z, p1.z, p2.z, p3.z) });
+        }
+    }
+    out.push_back(ctrl.back());   // include the final control point exactly
+    return out;
+}
+
+std::vector<Point3> tessellateRationalSpline(const std::vector<Point3>& ctrl,
+                                             const std::vector<double>& weights,
+                                             int segmentsPerSpan)
+{
+    const int n = static_cast<int>(ctrl.size());
+    if (segmentsPerSpan < 1) return ctrl;
+    if (n < 4 || static_cast<int>(weights.size()) != n)
+        return tessellateSpline(ctrl, segmentsPerSpan, /*bezier=*/true);  // fall back
+    std::vector<Point3> out;
+    out.reserve(static_cast<std::size_t>((n / 3) * segmentsPerSpan + 1));
+    for (int seg = 0; 3 * seg + 3 < n; ++seg) {
+        const int b = 3 * seg;
+        for (int j = 0; j < segmentsPerSpan; ++j) {
+            const double t = static_cast<double>(j) / segmentsPerSpan, u = 1.0 - t;
+            const double B[4] = { u*u*u, 3*u*u*t, 3*u*t*t, t*t*t };
+            double den = 0.0, x = 0.0, y = 0.0, z = 0.0;
+            for (int k = 0; k < 4; ++k) {
+                const double wb = weights[b + k] * B[k];
+                den += wb;
+                x += wb * ctrl[b + k].x;
+                y += wb * ctrl[b + k].y;
+                z += wb * ctrl[b + k].z;
+            }
+            if (den > geometry::kExactEps) out.push_back({ x / den, y / den, z / den });
+        }
+    }
+    out.push_back(ctrl[3 * ((n - 1) / 3)]);  // exact final endpoint
+    return out;
 }
 
 // =====================================================================
@@ -391,16 +701,15 @@ FilletResult createFillet(
     Point2D arcCenter = corner + bisector * centerDist;
 
     // Calculate arc angles
-    double startAngle = std::atan2(
+    double startAngle = radiansToDegrees(std::atan2(
         tangent1.y - arcCenter.y,
-        tangent1.x - arcCenter.x) * 180.0 / M_PI;
-    double endAngle = std::atan2(
+        tangent1.x - arcCenter.x));
+    double endAngle = radiansToDegrees(std::atan2(
         tangent2.y - arcCenter.y,
-        tangent2.x - arcCenter.x) * 180.0 / M_PI;
+        tangent2.x - arcCenter.x));
 
     double sweep = endAngle - startAngle;
-    while (sweep > 180.0) sweep -= 360.0;
-    while (sweep < -180.0) sweep += 360.0;
+    sweep = geometry::wrapSweepDeg(sweep);
 
     // Create modified lines
     result.line1 = line1;
@@ -557,18 +866,18 @@ TrimResult trimEntity(
         // Calculate angles for each intersection
         std::vector<double> angles;
         for (const Point2D& pt : intersections) {
-            double angle = std::atan2(
+            double angle = radiansToDegrees(std::atan2(
                 pt.y - entity.points[0].y,
-                pt.x - entity.points[0].x) * 180.0 / M_PI;
+                pt.x - entity.points[0].x));
             angles.push_back(normalizeAngle(angle));
         }
 
         std::sort(angles.begin(), angles.end());
 
         // Find which arc segment the click is in
-        double clickAngle = normalizeAngle(std::atan2(
+        double clickAngle = normalizeAngle(radiansToDegrees(std::atan2(
             clickPos.y - entity.points[0].y,
-            clickPos.x - entity.points[0].x) * 180.0 / M_PI);
+            clickPos.x - entity.points[0].x)));
 
         result.removedEntityId = entity.id;
 
@@ -693,19 +1002,18 @@ SplitResult splitEntityAt(
         result.success = true;
     }
     else if (entity.type == EntityType::Circle && !entity.points.empty()) {
-        // Split circle into two arcs
-        double angle = normalizeAngle(std::atan2(
-            splitPoint.y - entity.points[0].y,
-            splitPoint.x - entity.points[0].x) * 180.0 / M_PI);
-
-        Entity arc1 = createArc(nextId(), entity.points[0], entity.radius, angle, 180.0);
-        arc1.isConstruction = entity.isConstruction;
-
-        Entity arc2 = createArc(nextId(), entity.points[0], entity.radius, angle + 180.0, 180.0);
-        arc2.isConstruction = entity.isConstruction;
-
-        result.newEntities.push_back(arc1);
-        result.newEntities.push_back(arc2);
+        // A single point cannot divide a closed circle into two arcs (that would
+        // force an arbitrary second cut, e.g. two 180-degree halves). It can open
+        // the circle into one full-sweep (360-degree) arc that starts and ends at
+        // the point; the two endpoints are deliberately left UNwelded (no
+        // Coincident) so the arc can be pulled open afterwards. Cutting a circle
+        // into multiple arcs needs two or more points (splitEntityAtIntersections).
+        const Point2D c = entity.points[0];
+        const double angle = normalizeAngle(radiansToDegrees(std::atan2(
+            splitPoint.y - c.y, splitPoint.x - c.x)));
+        Entity arc = createArc(nextId(), c, entity.radius, angle, 360.0);
+        arc.isConstruction = entity.isConstruction;
+        result.newEntities.push_back(arc);
         result.removedEntityId = entity.id;
         result.success = true;
     }
@@ -790,10 +1098,69 @@ SplitResult splitEntityAtIntersections(
 
         result.success = true;
     }
+    else if (entity.type == EntityType::Circle && !entity.points.empty()) {
+        // A circle is cut into arcs at its crossing points. Two or more points
+        // are required (one point cannot divide a closed loop); the arcs run
+        // between consecutive points and their sweeps sum to 360, so the split
+        // follows where the cuts fall rather than being forced into equal halves.
+        const Point2D c = entity.points[0];
+        std::vector<double> angles;
+        for (const Point2D& pt : intersections)
+            angles.push_back(normalizeAngle(
+                radiansToDegrees(std::atan2(pt.y - c.y, pt.x - c.x))));
+        std::sort(angles.begin(), angles.end());
+        angles.erase(std::unique(angles.begin(), angles.end(),
+            [](double a, double b) { return std::abs(a - b) < geometry::kAngleEpsDeg; }), angles.end());
+        if (angles.size() < 2) {
+            result.errorMessage = "A circle needs two or more split points";
+            return result;
+        }
+        result.removedEntityId = entity.id;
+        for (std::size_t i = 0; i < angles.size(); ++i) {
+            const double a0 = angles[i];
+            const double a1 = (i + 1 < angles.size()) ? angles[i + 1] : angles[0] + 360.0;
+            Entity arc = createArc(nextId(), c, entity.radius, a0, a1 - a0);
+            arc.isConstruction = entity.isConstruction;
+            result.newEntities.push_back(arc);
+        }
+        result.success = true;
+    }
+    else if (entity.type == EntityType::Arc && !entity.points.empty()) {
+        // An arc is cut into sub-arcs at its interior crossing points; the start
+        // and end stay put, so the sub-arc sweeps sum to the original sweep. The
+        // arc's own direction (sign of the sweep) is preserved.
+        const Point2D c = entity.points[0];
+        const double start = entity.startAngle;
+        const double sweep = entity.sweepAngle;
+        const double dir = (sweep < 0.0) ? -1.0 : 1.0;
+        const double span = std::abs(sweep);
+        std::vector<double> offs;   // offsets 0..span from the start, along the arc
+        offs.push_back(0.0);
+        for (const Point2D& pt : intersections) {
+            const double a = radiansToDegrees(std::atan2(pt.y - c.y, pt.x - c.x));
+            const double off = normalizeAngle((a - start) * dir);   // forward along arc
+            if (off > geometry::kAngleEpsDeg && off < span - geometry::kAngleEpsDeg) offs.push_back(off);
+        }
+        offs.push_back(span);
+        std::sort(offs.begin(), offs.end());
+        offs.erase(std::unique(offs.begin(), offs.end(),
+            [](double a, double b) { return std::abs(a - b) < geometry::kAngleEpsDeg; }), offs.end());
+        if (offs.size() <= 2) {
+            result.errorMessage = "No valid split points on arc";
+            return result;
+        }
+        result.removedEntityId = entity.id;
+        for (std::size_t i = 0; i + 1 < offs.size(); ++i) {
+            const double a0 = start + dir * offs[i];
+            const double segSweep = dir * (offs[i + 1] - offs[i]);
+            Entity arc = createArc(nextId(), c, entity.radius, a0, segSweep);
+            arc.isConstruction = entity.isConstruction;
+            result.newEntities.push_back(arc);
+        }
+        result.success = true;
+    }
     else {
-        // For other types, split at each intersection sequentially
-        // This is a simplified approach
-        result.errorMessage = "Multi-point split only fully supported for lines";
+        result.errorMessage = "Split not supported for this entity type";
     }
 
     return result;
@@ -802,6 +1169,109 @@ SplitResult splitEntityAtIntersections(
 // =====================================================================
 //  Chain Selection
 // =====================================================================
+
+AddGroupResult addGroup(Group g, std::vector<Entity>& entities,
+                        const std::vector<Constraint>& constraints, std::vector<Group>& groups)
+{
+    AddGroupResult res;
+    if (g.entityIds.empty() && g.constraintIds.empty() && g.childGroupIds.empty()) {
+        res.problem = AddGroupProblem::Empty;
+        return res;
+    }
+    for (int id : g.entityIds) {
+        if (!findEntityById(entities, id)) { res.problem = AddGroupProblem::MissingEntity; res.id = id; return res; }
+    }
+    for (int id : g.constraintIds) {
+        if (!findConstraintById(constraints, id)) { res.problem = AddGroupProblem::MissingConstraint; res.id = id; return res; }
+    }
+    for (int id : g.childGroupIds) {
+        if (!findGroupById(groups, id)) { res.problem = AddGroupProblem::MissingChildGroup; res.id = id; return res; }
+    }
+    if (const Group* other = findGroupByName(groups, g.name)) {
+        res.problem = AddGroupProblem::NameInUse; res.id = other->id; return res;
+    }
+    if (g.id > 0) {
+        if (findGroupById(groups, g.id)) { res.problem = AddGroupProblem::IdInUse; res.id = g.id; return res; }
+    } else {
+        g.id = nextFreeGroupId(groups);
+    }
+    for (int child : g.childGroupIds) {
+        if (Group* c = findGroupById(groups, child)) c->parentGroupId = g.id;
+    }
+    for (int eid : g.entityIds) {
+        if (Entity* e = findEntityById(entities, eid)) e->groupId = g.id;
+    }
+    res.id = g.id;
+    groups.push_back(std::move(g));
+    return res;
+}
+
+std::vector<Point2D> intersectionPointsTouching(const std::vector<Intersection>& all, int entityId)
+{
+    std::vector<Point2D> pts;
+    for (const Intersection& inter : all) {
+        if (inter.entityId1 == entityId || inter.entityId2 == entityId) pts.push_back(inter.point);
+    }
+    return pts;
+}
+
+std::vector<Point2D> bracketingSplitPoints(const Entity& line, const std::vector<Intersection>& all,
+                                           const Point2D& click)
+{
+    std::vector<Point2D> splitPoints;
+    if (line.type != EntityType::Line || line.points.size() < 2) return splitPoints;
+    const Point2D p0(line.points[0]), p1(line.points[1]);
+
+    // Parameter (0..1) along the line of each interior crossing.
+    std::vector<std::pair<double, Point2D>> paramPts;
+    for (const Intersection& inter : all) {
+        if (inter.entityId1 != line.id && inter.entityId2 != line.id) continue;
+        const double t = geometry::projectPointOnLine(inter.point, p0, p1);
+        if (t > 0.001 && t < 0.999) paramPts.push_back({t, inter.point});
+    }
+    if (paramPts.empty()) return splitPoints;
+
+    const double clickT = geometry::projectPointOnLine(click, p0, p1);
+    double bestBefore = -1.0, bestAfter = 2.0;
+    Point2D ptBefore, ptAfter;
+    for (const auto& [t, pt] : paramPts) {
+        if (t <= clickT && t > bestBefore) { bestBefore = t; ptBefore = pt; }
+        if (t >= clickT && t < bestAfter)  { bestAfter = t;  ptAfter = pt; }
+    }
+    if (bestBefore >= 0.0) splitPoints.push_back(ptBefore);
+    if (bestAfter <= 1.0 && std::abs(bestAfter - bestBefore) > 0.001) splitPoints.push_back(ptAfter);
+    return splitPoints;
+}
+
+std::vector<EndpointPair> proximityWelds(const std::vector<Entity>& entities,
+                                         const std::vector<Constraint>& constraints,
+                                         int newEntityId, double tolerance)
+{
+    std::vector<EndpointPair> welds;
+    const Entity* ne = findEntityById(entities, newEntityId);
+    if (!ne || ne->type != EntityType::Line || ne->points.size() < 2) return welds;
+    auto alreadyCoincident = [&](int e1, int i1, int e2, int i2) {
+        for (const Constraint& c : constraints)
+            if (isCoincidentBetween(c, e1, i1, e2, i2)) return true;
+        return false;
+    };
+    for (int ni : {0, 1}) {
+        const Point2D np(ne->points[ni]);
+        bool done = false;
+        for (const Entity& oe : entities) {
+            if (done) break;
+            if (oe.id == newEntityId || oe.type != EntityType::Line || oe.points.size() < 2) continue;
+            for (int oi : {0, 1}) {
+                if (geometry::lineLength(np, oe.points[oi]) >= tolerance) continue;
+                if (!alreadyCoincident(newEntityId, ni, oe.id, oi))
+                    welds.push_back({newEntityId, ni, oe.id, oi});
+                done = true;
+                break;
+            }
+        }
+    }
+    return welds;
+}
 
 std::vector<int> findConnectedChain(
     int startId,
@@ -830,13 +1300,20 @@ std::vector<int> findConnectedChain(
             }
         }
         if (!current) continue;
+        const std::vector<Point2D> currentPts = current->connectionPoints();
+        if (currentPts.empty()) continue;
 
         // Find connected entities
         for (const Entity& other : entities) {
             if (visited.count(other.id) > 0) continue;
-            if (entitiesConnected(*current, other, tolerance)) {
-                queue.push(other.id);
+            bool joined = false;
+            for (const Point2D& p : other.connectionPoints()) {
+                for (const Point2D& q : currentPts) {
+                    if (pointsCoincident(p, q, tolerance)) { joined = true; break; }
+                }
+                if (joined) break;
             }
+            if (joined) queue.push(other.id);
         }
     }
 
@@ -928,7 +1405,7 @@ ReestablishTangencyResult reestablishTangency(
     }
 
     double edgeLen = length(edgeDir);
-    if (edgeLen < 1e-6) {
+    if (edgeLen < geometry::kDegenerateLen) {
         result.errorMessage = "Parent entity edge has zero length";
         return result;
     }
@@ -943,12 +1420,12 @@ ReestablishTangencyResult reestablishTangency(
     Point2D newCenter(tanPt.x + normal.x * radius,
                       tanPt.y + normal.y * radius);
 
-    double newStartAngle = std::atan2(
+    double newStartAngle = radiansToDegrees(std::atan2(
         tanPt.y - newCenter.y,
-        tanPt.x - newCenter.x) * 180.0 / M_PI;
+        tanPt.x - newCenter.x));
 
     double sweepAngle = arc.sweepAngle;
-    double endRad = (newStartAngle + sweepAngle) * M_PI / 180.0;
+    double endRad = degreesToRadians(newStartAngle + sweepAngle);
 
     result.arc = arc;
     result.arc.points[0] = newCenter;
@@ -990,7 +1467,7 @@ RejoinResult validateCollinearRejoin(
     // Reference direction from first line
     Point2D refDir = entities[0].points[1] - entities[0].points[0];
     double refLen = length(refDir);
-    if (refLen < 1e-9) {
+    if (refLen < geometry::kZeroEps) {
         result.errorMessage = "Selected line has zero length.";
         return result;
     }
@@ -1000,7 +1477,7 @@ RejoinResult validateCollinearRejoin(
     for (size_t i = 1; i < entities.size(); ++i) {
         Point2D d = entities[i].points[1] - entities[i].points[0];
         double len = length(d);
-        if (len < 1e-9) continue;
+        if (len < geometry::kZeroEps) continue;
         d = Point2D(d.x / len, d.y / len);
         double crossVal = std::abs(refDir.x * d.y - refDir.y * d.x);
         if (crossVal > angleTolerance) {
@@ -1012,8 +1489,8 @@ RejoinResult validateCollinearRejoin(
     // Project all endpoints onto reference line and sort by parameter
     Point2D refP0 = entities[0].points[0];
     struct Seg {
-        int id;
-        double t0, t1;
+        int id = 0;
+        double t0 = 0.0, t1 = 0.0;
         Point2D p0, p1;
     };
     std::vector<Seg> segs;
@@ -1057,6 +1534,361 @@ RejoinResult validateCollinearRejoin(
     result.success = true;
 
     return result;
+}
+
+RejoinResult validateCollinearRejoin(const std::vector<Entity>& entities,
+                                     const std::vector<Entity>& all,
+                                     int* attachedEntityId,
+                                     double angleTolerance, double endpointTolerance)
+{
+    RejoinResult result = validateCollinearRejoin(entities, angleTolerance, endpointTolerance);
+    if (!result.success) return result;
+    const double tol = geometry::kCoincidentTol;
+    for (const Point2D& jp : result.junctionPoints) {
+        for (const Entity& e : all) {
+            if (findEntityById(entities, e.id)) continue;
+            for (const auto& ep : e.points) {
+                if (geometry::lineLength(Point2D(ep), jp) < tol) {
+                    result.success = false;
+                    result.errorMessage = "Another entity is attached at an interior junction point.\n"
+                                          "Cannot rejoin without breaking connectivity.";
+                    if (attachedEntityId) *attachedEntityId = e.id;
+                    return result;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+
+// ---- Geometric auto-constrain --------------------------------------------
+
+std::vector<Constraint> autoConstrain(const std::vector<Entity>& entities,
+                                      const std::vector<Constraint>& existing,
+                                      int& nextConstraintId,
+                                      double tolDist, double tolAngleDeg)
+{
+    std::vector<Constraint> added;
+    std::vector<Constraint> all = existing;   // grows; used for the over-constrain guard
+    const bool useSolver = Solver::isAvailable();
+    Solver solver;
+
+    auto lineDirAngle = [](const Entity& e) {   // degrees, 0..180 (undirected)
+        const double dx = e.points[1].x - e.points[0].x;
+        const double dy = e.points[1].y - e.points[0].y;
+        double a = radiansToDegrees(std::atan2(dy, dx));
+        while (a < 0) a += 180.0; while (a >= 180.0) a -= 180.0;
+        return a;
+    };
+    auto lineLen = [](const Entity& e) {
+        return std::hypot(e.points[1].x - e.points[0].x, e.points[1].y - e.points[0].y);
+    };
+    auto sortedPairs = [](const Constraint& c) {
+        std::vector<std::pair<int,int>> v;
+        for (size_t i = 0; i < c.entityIds.size(); ++i)
+            v.push_back({c.entityIds[i], i < c.pointIndices.size() ? c.pointIndices[i] : -1});
+        std::sort(v.begin(), v.end());
+        return v;
+    };
+    auto sameAs = [&](const Constraint& a, const Constraint& b) {
+        return a.type == b.type && sortedPairs(a) == sortedPairs(b);
+    };
+    auto tryAdd = [&](Constraint c) {
+        for (const auto& e : all) if (sameAs(e, c)) return;   // already present
+        if (useSolver && solver.checkOverConstrain(entities, all, c).wouldOverConstrain)
+            return;                                           // would break the sketch
+        c.id = nextConstraintId++;
+        c.isDriving = true; c.enabled = true; c.satisfied = true; c.labelVisible = false;
+        added.push_back(c);
+        all.push_back(c);
+    };
+    auto mk = [](ConstraintType t, std::vector<int> ids, std::vector<int> pts = {}) {
+        Constraint c; c.type = t; c.entityIds = std::move(ids); c.pointIndices = std::move(pts);
+        return c;
+    };
+
+    // 1. Coincident endpoints (different entities, near-identical position).
+    struct EP { int id; int idx; double x, y; };
+    std::vector<EP> eps;
+    for (const auto& e : entities) {
+        if (e.type == EntityType::Line && e.points.size() >= 2) {
+            eps.push_back({e.id, 0, e.points[0].x, e.points[0].y});
+            eps.push_back({e.id, 1, e.points[1].x, e.points[1].y});
+        } else if (e.type == EntityType::Arc && e.points.size() >= 3) {
+            eps.push_back({e.id, 1, e.points[1].x, e.points[1].y});
+            eps.push_back({e.id, 2, e.points[2].x, e.points[2].y});
+        } else if (e.type == EntityType::Point && !e.points.empty()) {
+            eps.push_back({e.id, 0, e.points[0].x, e.points[0].y});
+        }
+    }
+    for (size_t i = 0; i < eps.size(); ++i)
+        for (size_t j = i + 1; j < eps.size(); ++j) {
+            if (eps[i].id == eps[j].id) continue;
+            if (std::hypot(eps[i].x - eps[j].x, eps[i].y - eps[j].y) <= tolDist)
+                tryAdd(mk(ConstraintType::Coincident, {eps[i].id, eps[j].id}, {eps[i].idx, eps[j].idx}));
+        }
+
+    // 2. Horizontal / Vertical for near-axis lines.
+    for (const auto& e : entities) {
+        if (e.type != EntityType::Line || e.points.size() < 2) continue;
+        const double a = lineDirAngle(e);
+        if (a <= tolAngleDeg || a >= 180.0 - tolAngleDeg)
+            tryAdd(mk(ConstraintType::Horizontal, {e.id}));
+        else if (std::fabs(a - 90.0) <= tolAngleDeg)
+            tryAdd(mk(ConstraintType::Vertical, {e.id}));
+    }
+
+    // 3. Parallel / Perpendicular line pairs (redundant ones, e.g. two
+    //    horizontals, are dropped by the over-constrain guard).
+    std::vector<const Entity*> lines;
+    for (const auto& e : entities) if (e.type == EntityType::Line && e.points.size() >= 2) lines.push_back(&e);
+    for (size_t i = 0; i < lines.size(); ++i)
+        for (size_t j = i + 1; j < lines.size(); ++j) {
+            double d = std::fabs(lineDirAngle(*lines[i]) - lineDirAngle(*lines[j]));
+            if (d > 90.0) d = 180.0 - d;   // 0..90
+            if (d <= tolAngleDeg)
+                tryAdd(mk(ConstraintType::Parallel, {lines[i]->id, lines[j]->id}));
+            else if (std::fabs(d - 90.0) <= tolAngleDeg)
+                tryAdd(mk(ConstraintType::Perpendicular, {lines[i]->id, lines[j]->id}));
+        }
+
+    // 4. Equal length (line pairs) and equal radius (circle/arc pairs).
+    for (size_t i = 0; i < lines.size(); ++i)
+        for (size_t j = i + 1; j < lines.size(); ++j)
+            if (std::fabs(lineLen(*lines[i]) - lineLen(*lines[j])) <= tolDist)
+                tryAdd(mk(ConstraintType::Equal, {lines[i]->id, lines[j]->id}));
+    std::vector<const Entity*> curves;
+    for (const auto& e : entities)
+        if ((e.type == EntityType::Circle || e.type == EntityType::Arc) && !e.points.empty())
+            curves.push_back(&e);
+    for (size_t i = 0; i < curves.size(); ++i)
+        for (size_t j = i + 1; j < curves.size(); ++j)
+            if (std::fabs(curves[i]->radius - curves[j]->radius) <= tolDist)
+                tryAdd(mk(ConstraintType::Equal, {curves[i]->id, curves[j]->id}));
+
+    return added;
+}
+
+std::vector<Constraint> computeCutConstraints(
+    const std::vector<Entity>& pieces,
+    const std::vector<Entity>& others,
+    const std::vector<Point2D>& junctionPoints,
+    const std::function<int()>& nextConstraintId,
+    double eps)
+{
+    std::vector<Constraint> out;
+
+    auto pocTypeFor = [](EntityType t, ConstraintType& pt) -> bool {
+        switch (t) {
+            case EntityType::Line:   pt = ConstraintType::PointOnLine;   return true;
+            case EntityType::Circle:
+            case EntityType::Arc:    pt = ConstraintType::PointOnCircle; return true;
+            case EntityType::Spline: pt = ConstraintType::PointOnSpline; return true;
+            default: return false;
+        }
+    };
+
+    for (const Point2D& jp : junctionPoints) {
+        // Piece endpoints sitting at this junction.
+        std::vector<std::pair<int, int>> hits;   // (entityId, pointIndex)
+        for (const Entity& piece : pieces) {
+            for (int i = 0; i < static_cast<int>(piece.points.size()); ++i) {
+                const Point2D p{ piece.points[i].x, piece.points[i].y };
+                if (std::hypot(p.x - jp.x, p.y - jp.y) <= eps)
+                    hits.push_back({ piece.id, i });
+            }
+        }
+        if (hits.empty()) continue;
+
+        // Join pieces that meet here: Coincident, first-to-rest across ids.
+        for (size_t k = 1; k < hits.size(); ++k) {
+            if (hits[k].first == hits[0].first) continue;   // same piece is not a join
+            Constraint c;
+            c.id = nextConstraintId();
+            c.type = ConstraintType::Coincident;
+            c.entityIds = { hits[0].first, hits[k].first };
+            c.pointIndices = { hits[0].second, hits[k].second };
+            out.push_back(c);
+        }
+
+        // Tie a piece endpoint at this junction to any OTHER entity that also
+        // meets it. Only the representative endpoint (hits[0]) is tied: where
+        // several pieces meet they are already Coincident-joined above so the
+        // rest follow, and where a lone piece touches itself here (a circle
+        // opened into one 360-degree arc) only one of its two ends should be
+        // pinned, never both. Which of the two is a free choice.
+        const std::pair<int, int> rep = hits[0];
+        for (const Entity& other : others) {
+            // A point entity sitting exactly here ties by Coincident; a curve
+            // passing through ties by point-on-object.
+            if (other.type == EntityType::Point && !other.points.empty()) {
+                const Point2D op{ other.points[0].x, other.points[0].y };
+                if (std::hypot(op.x - jp.x, op.y - jp.y) > eps) continue;
+                Constraint c;
+                c.id = nextConstraintId();
+                c.type = ConstraintType::Coincident;
+                c.entityIds = { rep.first, other.id };
+                c.pointIndices = { rep.second, 0 };
+                out.push_back(c);
+                continue;
+            }
+            ConstraintType pt;
+            if (!pocTypeFor(other.type, pt)) continue;
+            if (other.distanceTo(jp) > eps) continue;
+            const int oIdx = nearestPointIndex(other, jp);
+            if (oIdx < 0) continue;
+            Constraint c;
+            c.id = nextConstraintId();
+            c.type = pt;
+            c.entityIds = { rep.first, other.id };
+            c.pointIndices = { rep.second, oIdx };
+            out.push_back(c);
+        }
+    }
+    return out;
+}
+
+std::vector<Constraint> remapCutConstraints(
+    const std::vector<Constraint>& constraints,
+    const Entity& original,
+    const std::vector<Entity>& pieces,
+    const std::function<int()>& nextConstraintId,
+    double eps)
+{
+    std::vector<Constraint> out;
+    const int oldId = original.id;
+
+    // Position constraints anchored to a specific point of the original: the
+    // reference moves to whichever piece still owns that point.
+    auto isPointAnchored = [](ConstraintType t) {
+        switch (t) {
+            case ConstraintType::Coincident:
+            case ConstraintType::PointOnLine:
+            case ConstraintType::PointOnCircle:
+            case ConstraintType::PointOnSpline:
+            case ConstraintType::FixedPoint:
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    // Direction constraints hold for every collinear line piece: replicate.
+    auto isOrientation = [](ConstraintType t) {
+        switch (t) {
+            case ConstraintType::Horizontal:
+            case ConstraintType::Vertical:
+            case ConstraintType::Parallel:
+            case ConstraintType::Perpendicular:
+            case ConstraintType::Collinear:
+            case ConstraintType::FixedAngle:
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    // The piece (and its local point index) that carries a given point of the
+    // original entity, or {-1,-1} when the cut removed that point.
+    auto ownerOfPoint = [&](int origPtIdx) -> std::pair<int, int> {
+        if (origPtIdx < 0 || origPtIdx >= static_cast<int>(original.points.size()))
+            return { -1, -1 };
+        const Point2D q{ original.points[origPtIdx].x, original.points[origPtIdx].y };
+        for (const Entity& piece : pieces)
+            for (int i = 0; i < static_cast<int>(piece.points.size()); ++i)
+                if (std::hypot(piece.points[i].x - q.x, piece.points[i].y - q.y) <= eps)
+                    return { piece.id, i };
+        return { -1, -1 };
+    };
+
+    for (const Constraint& c : constraints) {
+        bool refsOriginal = false;
+        for (int eid : c.entityIds)
+            if (eid == oldId) { refsOriginal = true; break; }
+        if (!refsOriginal) continue;
+
+        if (isPointAnchored(c.type)) {
+            // Re-anchor every reference to the original onto its owning piece.
+            // Drop the whole constraint if any anchored point was cut away.
+            Constraint nc = c;
+            nc.id = nextConstraintId();
+            bool ok = true;
+            for (std::size_t k = 0; k < nc.entityIds.size(); ++k) {
+                if (nc.entityIds[k] != oldId) continue;
+                const int pi = (k < nc.pointIndices.size()) ? nc.pointIndices[k] : -1;
+                const std::pair<int, int> owner = ownerOfPoint(pi);
+                if (owner.first < 0) { ok = false; break; }
+                nc.entityIds[k] = owner.first;
+                nc.pointIndices[k] = owner.second;
+            }
+            if (ok) out.push_back(nc);
+            continue;
+        }
+
+        if (isOrientation(c.type)) {
+            // Each collinear line piece keeps the original's direction.
+            for (const Entity& piece : pieces) {
+                if (piece.type != EntityType::Line) continue;
+                Constraint nc = c;
+                nc.id = nextConstraintId();
+                for (std::size_t k = 0; k < nc.entityIds.size(); ++k)
+                    if (nc.entityIds[k] == oldId) nc.entityIds[k] = piece.id;
+                out.push_back(nc);
+            }
+            continue;
+        }
+
+        // Any other constraint (a length or angular dimension, Equal, Tangent,
+        // Midpoint, Symmetric, Concentric, curvature) does not survive the cut:
+        // the piece it would measure, or the count of pieces it would name, has
+        // changed. Omit it.
+    }
+    return out;
+}
+
+int rederiveDependents(std::vector<Entity>& entities, const PlaneBasis& targetBasis,
+                       const ProjectionSourceResolver& resolve)
+{
+    // Slots first: a slot stores its path's shape inline, so the solver moves
+    // the centerline and leaves the slot behind. After the solve, not before:
+    // the point is to follow where the path ENDED UP.
+    int followed = 0;
+    for (Entity& slot : entities) {
+        if (slot.type != EntityType::Slot || slot.pathEntityIds.empty()) continue;
+        if (slot.pathEntityIds.size() > 1) {
+            if (updateSlotOutlineFromPaths(slot, entities)) ++followed;
+            continue;
+        }
+        if (const Entity* path = findEntityById(entities, slot.pathEntityIds[0])) {
+            if (updateSlotFromPath(slot, *path)) ++followed;
+        }
+    }
+
+    // Associative offsets follow their parent the same way.
+    for (Entity& child : entities) {
+        if (child.offsetParentId < 0) continue;
+        if (const Entity* parent = findEntityById(entities, child.offsetParentId))
+            updateOffsetFromParent(child, *parent);
+    }
+
+    // Projections re-derive from their source through the two plane bases.
+    for (Entity& child : entities) {
+        if (child.projectionSourceId < 0) continue;
+        Entity source;
+        PlaneBasis sourceBasis = targetBasis;
+        bool resolved = false;
+        if (child.projectionSourceSketchId >= 0 && resolve)
+            resolved = resolve(child.projectionSourceSketchId, child.projectionSourceId, source, sourceBasis);
+        if (!resolved) {
+            const Entity* s = findEntityById(entities, child.projectionSourceId);
+            if (!s) continue;   // source unresolved: leave the projection frozen
+            source = *s;
+            sourceBasis = targetBasis;
+        }
+        updateProjectionFromSource(child, source, sourceBasis, targetBasis);
+    }
+    return followed;
 }
 
 }  // namespace sketch

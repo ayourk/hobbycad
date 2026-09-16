@@ -58,8 +58,8 @@ void NavOrbitRing::onPaint()
     drawArc(0, 0, m_radius, arc2Start, arc2End - arc2Start,
             m_color, kLineWidth, 24);
 
-    // Arrow at arc1 inner end — points CCW (toward gap center)
-    // Arrow at arc2 inner end — points CW (toward gap center)
+    // Arrow at arc1 inner end: points CCW (toward gap center)
+    // Arrow at arc2 inner end: points CW (toward gap center)
     // When flipped (camera looking against axis), swap which control each arrow triggers
     if (m_flipped) {
         paintArrow(arc1End, +1.0, m_ccwCtrl);
@@ -114,7 +114,7 @@ void NavOrbitRing::paintArrow(double angleDeg, double tangentSign,
 
     drawFilledTriangle(tipX, tipY, b1X, b1Y, b2X, b2Y, m_color);
 
-    // Sensitive region — padded rectangle around the arrow center.
+    // Sensitive region: padded rectangle around the arrow center.
     double cx = (tipX + b1X + b2X) / 3.0;
     double cy = (tipY + b1Y + b2Y) / 3.0;
     double pad = kArrowLen * 0.8;

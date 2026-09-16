@@ -14,6 +14,7 @@
 
 #include "entity.h"
 #include "constraint.h"
+#include "group.h"
 #include "../core.h"
 #include "../types.h"
 
@@ -72,12 +73,35 @@ struct DXFExportOptions {
     int colorIndex = 7;                               ///< DXF color index (7 = white/black)
     int constructionColorIndex = 5;                   ///< Color index for construction
     bool usePolylines = true;                         ///< Use LWPOLYLINE for complex shapes
+    Vec3 extrusion{0.0f, 0.0f, 1.0f};                 ///< Sketch plane normal -> DXF OCS extrusion (210/220/230); +Z = flat XY, omitted
 };
 
 /// Export sketch to DXF string
 /// @param entities Sketch entities
 /// @param options Export options
 /// @return DXF document as string
+// =====================================================================
+//  Command script
+// =====================================================================
+
+/// The sketch as the command lines that recreate it: "create sketch",
+/// one line per entity (the stored form that replays exactly: a slot on a
+/// path as "slot along", an arc slot by its cap centers, a Bezier by its
+/// anchors and handles), then the constraints (every one names entities,
+/// so all geometry comes first), then the groups with explicit ids (their
+/// identity is referenced by children; a rig's kind travels as "sweep"),
+/// then "finish". A slot's
+/// own auto-group is skipped: "slot along" recreates it. An entity with no
+/// command yet is counted in `skipped` and announced in a comment line
+/// rather than dropped silently.
+/// @param precision  digits for coordinates and values (formatDouble)
+HOBBYCAD_EXPORT std::vector<std::string> sketchToScript(const std::string& name,
+                                                        const std::vector<Entity>& entities,
+                                                        const std::vector<Constraint>& constraints,
+                                                        const std::vector<Group>& groups,
+                                                        int precision,
+                                                        int* skipped = nullptr);
+
 HOBBYCAD_EXPORT std::string sketchToDXF(
     const std::vector<Entity>& entities,
     const DXFExportOptions& options = {});
@@ -145,50 +169,8 @@ HOBBYCAD_EXPORT SVGImportResult importSVGString(
     const SVGImportOptions& options = {});
 
 // =====================================================================
-//  DXF Import
+//  DXF Import: see sketch/dxf_import.h
 // =====================================================================
-
-/// Options for DXF import
-struct DXFImportOptions {
-    double scale = 1.0;                      ///< Scale factor (1.0 = 1 DXF unit = 1mm)
-    Point2D offset;                          ///< Offset to apply to all points
-    bool importBlocks = true;                ///< Import block references (INSERT)
-    bool importHatch = false;                ///< Import hatch boundaries
-    std::vector<std::string> layerFilter;    ///< Only import these layers (empty = all)
-    bool ignoreConstructionLayers = false;    ///< Skip layers named "CONSTRUCTION", "DEFPOINTS", etc.
-    double splineTolerance = 0.1;            ///< Tolerance for spline approximation
-};
-
-/// Result of DXF import
-struct DXFImportResult {
-    bool success = false;
-    std::vector<Entity> entities;
-    std::string errorMessage;
-    int entityCount = 0;                     ///< Number of entities created
-    geometry::BoundingBox bounds;            ///< Bounds of imported geometry
-    std::vector<std::string> layers;         ///< Layers found in file
-    std::vector<std::string> blocks;         ///< Block names found in file
-};
-
-/// Import entities from DXF file
-/// @param filePath Path to DXF file
-/// @param startId Starting ID for created entities
-/// @param options Import options
-/// @return Import result with entities
-HOBBYCAD_EXPORT DXFImportResult importDXFFile(
-    const std::string& filePath,
-    int startId = 1,
-    const DXFImportOptions& options = {});
-
-/// Import entities from DXF string content
-/// @param dxfContent DXF document as string
-/// @param startId Starting ID for created entities
-/// @param options Import options
-/// @return Import result with entities
-HOBBYCAD_EXPORT DXFImportResult importDXFString(
-    const std::string& dxfContent,
-    int startId = 1,
-    const DXFImportOptions& options = {});
 
 }  // namespace sketch
 }  // namespace hobbycad

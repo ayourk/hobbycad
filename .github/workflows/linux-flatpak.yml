@@ -21,6 +21,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -44,17 +47,29 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runner: ubuntu-22.04
+            runner: ubuntu-24.04
             flatpak_arch: x86_64
             artifact_name: hobbycad-flatpak-x86_64
           - arch: aarch64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
             flatpak_arch: aarch64
             artifact_name: hobbycad-flatpak-aarch64
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      # Ubuntu 24.04 confines unprivileged user namespaces through AppArmor
+      # (kernel.apparmor_restrict_unprivileged_userns=1), and bubblewrap, which
+      # flatpak uses for its install triggers and flatpak-builder for every build
+      # command, needs one. This job builds on the runner itself rather than in a
+      # container, so lift the restriction before flatpak is installed. The check
+      # skips the step on an image without the setting.
+      - name: Allow unprivileged user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
 
       - name: Install Flatpak and flatpak-builder
         run: |
@@ -77,10 +92,41 @@ jobs:
           cp packaging/flatpak/org.hobbycad.HobbyCAD.yml .
           # The manifest already has "path: ." for HobbyCAD source
 
+      # flatpak-builder reuses a module when its manifest entry, the SDK and
+      # every earlier module are unchanged, from its .flatpak-builder state
+      # directory; keeping that directory between runs makes OpenCASCADE, the
+      # first module, a one-time build per pin and SDK. The key names the
+      # installed SDK commit and the manifest. The fallback key is safe because
+      # flatpak-builder checks each module's checksum before reusing it.
+      - name: flatpak-builder cache key
+        id: fb-key
+        run: |
+          sdk=$(flatpak info --user -c org.kde.Sdk//6.6)
+          echo "key=flatpak-builder-${{ matrix.arch }}-${sdk}-${{ hashFiles('packaging/flatpak/org.hobbycad.HobbyCAD.yml') }}" >> "$GITHUB_OUTPUT"
+          echo "prefix=flatpak-builder-${{ matrix.arch }}-${sdk}-" >> "$GITHUB_OUTPUT"
+
+      - name: Restore flatpak-builder state
+        id: fb
+        uses: actions/cache/restore@v6
+        with:
+          path: .flatpak-builder
+          key: ${{ steps.fb-key.outputs.key }}
+          restore-keys: ${{ steps.fb-key.outputs.prefix }}
+
       - name: Build Flatpak
         run: |
           flatpak-builder --user --force-clean --repo=repo \
             builddir org.hobbycad.HobbyCAD.yml
+
+      # Saved even when a later module failed: flatpak-builder commits a module
+      # to its cache only after it builds, so the modules before the failure
+      # are sound and the next run starts from them.
+      - name: Save flatpak-builder state
+        if: ${{ !cancelled() && steps.fb.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .flatpak-builder
+          key: ${{ steps.fb-key.outputs.key }}
 
       - name: Create Flatpak bundle
         run: |
@@ -88,9 +134,9 @@ jobs:
             org.hobbycad.HobbyCAD
 
       - name: Upload Flatpak bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: "*.flatpak"
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

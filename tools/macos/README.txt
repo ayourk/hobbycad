@@ -1,15 +1,29 @@
 ================================================================================
-  tools/macos/ -- macOS Environment Setup and Build Scripts
+  tools/macos/ — macOS Environment Setup and Build Scripts
 ================================================================================
 
   Scripts for setting up a macOS development environment and
   building HobbyCAD on macOS 12 (Monterey) or later, Intel or
   Apple Silicon.
 
+  Scripts
+  -------
+
+  setup-env.sh / setup-env.csh   environment setup (below)
+  build-dev.sh                   configure, build and run from a shell
+  make-dmg.sh                    wrap a built HobbyCAD.app in a DMG
+                                 installer: the app, an Applications
+                                 shortcut and the application icon as
+                                 the volume icon. Needs only hdiutil,
+                                 PlistBuddy and SetFile. Used by the
+                                 macOS CI workflows and by hand:
+
+      tools/macos/make-dmg.sh <HobbyCAD.app> <arch> [output-dir]
+
   Environment Setup
   -------------------
 
-  Two setup scripts are provided -- choose the one matching your
+  Two setup scripts are provided; choose the one matching your
   shell:
 
   setup-env.sh        Interactive bash script for bash, zsh, and

@@ -1,0 +1,100 @@
+{
+  "$comment": "The one list of dependency versions every channel must agree on (PPA, vcpkg registry, Homebrew tap, Flatpak manifest, RPM and Arch jobs, macOS scripts). tools/check-versions.py reads it and fails on drift. 'tarball' names the PPA orig tarball published as a release asset of ayourk/hobbycad-vcpkg (tag 'sources'); 'vcpkg' is the version string the registry uses when it differs, and 'vcpkg_port_version' the port-version when a new cut keeps that string. 'scope' is runtime for what the shipped program links (every channel must match) or devtest for what only devtest/depcheck and the developer channels (PPA, registry, tap) carry. 'source' gives the URL and SHA-256 of what the Linux and MSYS2 jobs build from source; tools/check-versions.py --write-pins renders those into scripts/ci/pins.sh, which the scripts/ci/ build scripts read and the checker keeps in step. 'ppa_source' names the source package in ppa:ayourk/hobbycad, which scripts/ci/check-launchpad.py compares with the pin.",
+  "dependencies": {
+    "opencascade": {
+      "version": "8.0.1",
+      "patch": "p1",
+      "tarball": "opencascade_8.0.1+p1.orig.tar.xz",
+      "brew": "opencascade@8.0.1",
+      "scope": "runtime",
+      "source": {
+        "url": "https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/opencascade_8.0.1+p1.orig.tar.xz",
+        "sha256": "966a79fb0fbed4f947b6a3cc456eed61dd584f8a165869afa9f9d232f275172e"
+      },
+      "ppa_source": "opencascade"
+    },
+    "libslvs": {
+      "version": "3.2.git.20260914",
+      "patch": "p1",
+      "tarball": "libslvs_3.2.git.20260914+p1.orig.tar.gz",
+      "vcpkg": "3.2p1",
+      "vcpkg_port_version": 1,
+      "brew": "libslvs",
+      "scope": "runtime",
+      "source": {
+        "url": "https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/libslvs_3.2.git.20260914+p1.orig.tar.gz",
+        "sha256": "c6ccc639b43113733b39d7adaa0d0b05061194fcb0abc22abf758b08a6f42a98"
+      },
+      "ppa_source": "libslvs"
+    },
+    "lib3mf": {
+      "version": "2.5.0",
+      "patch": "p1",
+      "tarball": "lib3mf_2.5.0+p1.orig.tar.xz",
+      "vcpkg": "2.5.0",
+      "brew": "lib3mf",
+      "scope": "devtest",
+      "ppa_source": "lib3mf"
+    },
+    "openmesh": {
+      "version": "11.0.0.git.20260208",
+      "tarball": "libopenmesh_11.0.0.git.20260208.orig.tar.gz",
+      "vcpkg": "11.0.0",
+      "brew": "openmesh",
+      "scope": "devtest",
+      "ppa_source": "libopenmesh"
+    },
+    "meshfix": {
+      "version": "2.1.git.20260208",
+      "tarball": "meshfix_2.1.git.20260208.orig.tar.gz",
+      "vcpkg": "2.1",
+      "brew": "meshfix",
+      "scope": "devtest",
+      "ppa_source": "meshfix"
+    },
+    "libgit2": {
+      "version": "1.9.2",
+      "brew": "libgit2@1.9.2",
+      "scope": "devtest",
+      "ppa_source": "libgit2"
+    },
+    "qt": {
+      "version": "6.4.2",
+      "scope": "runtime",
+      "ppa_source": "qt6-base"
+    },
+    "libzip": {
+      "version": "1.7.3",
+      "brew": "libzip@1.7.3",
+      "scope": "devtest"
+    },
+    "libwebp": {
+      "version": "1.6.0",
+      "scope": "runtime",
+      "source": {
+        "url": "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz",
+        "sha256": "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564"
+      },
+      "ppa_source": "libwebp"
+    },
+    "nlohmann-json": {
+      "version": "3.12.0",
+      "scope": "runtime",
+      "ppa_series": [
+        "noble",
+        "jammy"
+      ],
+      "note": "PPA package nlohmann-json3 3.12.0-1~ppa1 for noble and jammy only. Resolute keeps the archive's reverted 3.12.0.really.3.12.0.really.3.11.3 (Aaron, 2026-09-14): a plain 3.12.0 sorts below it and an epoch is not worth the permanence.",
+      "source": {
+        "url": "https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz",
+        "sha256": "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187"
+      },
+      "ppa_source": "nlohmann-json3"
+    }
+  },
+  "brew_versioned_formulas_allowed": [
+    "opencascade@8.0.1",
+    "libgit2@1.9.2",
+    "libzip@1.7.3"
+  ]
+}

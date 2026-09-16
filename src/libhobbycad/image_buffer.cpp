@@ -15,7 +15,7 @@
 
 #include <cstring>    // memcpy
 
-// stb_image — single-header image loader (public domain)
+// stb_image: single-header image loader (public domain)
 // The implementation is compiled exactly once, here.
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_STDIO          // We'll use our own file I/O for loadImageFile
@@ -110,7 +110,7 @@ ImageBuffer loadImageFromMemory(const uint8_t* data, size_t length)
     if (pixels) stbi_image_free(pixels);
 
 #if HOBBYCAD_HAS_WEBP
-    // stb_image doesn't support WebP — try libwebp as fallback
+    // stb_image doesn't support WebP; try libwebp as fallback
     {
         uint8_t* webpPixels = WebPDecodeRGBA(data, length, &w, &h);
         if (webpPixels && w > 0 && h > 0) {
@@ -149,7 +149,7 @@ bool queryImageDimensionsFromMemory(const uint8_t* data, size_t length,
     if (ok) return true;
 
 #if HOBBYCAD_HAS_WEBP
-    // stb_image doesn't recognize WebP — try libwebp header probe
+    // stb_image doesn't recognize WebP; try libwebp header probe
     if (WebPGetInfo(data, length, &width, &height)) {
         return true;
     }

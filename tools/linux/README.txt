@@ -1,5 +1,5 @@
 ================================================================================
-  tools/linux/ -- Linux Build and Packaging Scripts
+  tools/linux/ — Linux Build and Packaging Scripts
 ================================================================================
 
   Scripts for building HobbyCAD on Ubuntu 22.04 / 24.04 LTS.

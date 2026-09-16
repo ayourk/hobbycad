@@ -20,6 +20,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <string>
 
 namespace hobbycad {
@@ -114,6 +115,42 @@ inline double convertLength(double value, LengthUnit fromUnit, LengthUnit toUnit
 /// Parse a unit suffix string to get the unit enum.
 /// @param suffix Unit suffix string (case-insensitive)
 /// @return The corresponding LengthUnit, or Millimeters if not recognized
+/// Whether @p suffix names a unit this program knows.
+///
+/// parseUnitSuffix() answers Millimeters for anything it does not
+/// recognize, which is a sensible default for display but useless for
+/// validation: "10qq" would come back as 10 mm. Ask this first when the
+/// suffix came from a user.
+inline bool isKnownUnitSuffix(const std::string& suffix)
+{
+    std::string lower;
+    for (char c : suffix) {
+        if (!std::isspace(static_cast<unsigned char>(c)))
+            lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return lower == "mm" || lower == "cm" || lower == "m"
+        || lower == "in" || lower == "inch" || lower == "inches"
+        || lower == "ft" || lower == "foot" || lower == "feet";
+}
+
+/// Whether @p suffix names an ANGLE unit.
+///
+/// Angles are not lengths, and the two must not be interchangeable: an
+/// angular constraint given "45mm" is a mistake, and so is a radius given
+/// "45deg". Asking separately is what lets a caller say which it was.
+inline bool isKnownAngleSuffix(const std::string& suffix)
+{
+    std::string lower;
+    for (char c : suffix) {
+        if (!std::isspace(static_cast<unsigned char>(c)))
+            lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return lower == "deg" || lower == "degs" || lower == "degree"
+        || lower == "degrees" || lower == "\xc2\xb0"
+        || lower == "rad" || lower == "rads" || lower == "radian"
+        || lower == "radians";
+}
+
 inline LengthUnit parseUnitSuffix(const std::string& suffix)
 {
     // toLower + trim
@@ -162,12 +199,33 @@ constexpr int DisplayPrecision = 4;
 /// Uses 15 decimal places to preserve full double precision (~15-16 significant digits).
 constexpr int StoragePrecision = 15;
 
-/// Get the display precision (returns DisplayPrecision).
-/// Provided for callers who want to format values manually without trimming zeros.
-/// @param unit The length unit (currently unused, all units use same precision)
-/// @return Number of decimal places for display (4)
-inline int unitDisplayPrecision([[maybe_unused]] LengthUnit unit)
+/// Decimal places to display for a unit.
+///
+/// Per-unit, not one number for everything. Aaron settled the inch side on
+/// 2026-02-16: decimal inches get **4** places. Metric is set to **0.001
+/// mm**, which is what a micrometer reads; a caliper's 0.01 mm was the
+/// original figure, raised because Aaron noted (2026-08-27) that
+/// *"metal workers need lots of precision"*. Erring high costs a trimmed
+/// trailing zero; erring low silently hides a thousandth someone measured.
+///
+/// The metric entries are chosen to give roughly the SAME physical
+/// resolution: 0.01 mm, whether written as mm, cm or m. Otherwise the
+/// displayed precision would change when a user switches units without
+/// anything about the model changing.
+///
+/// This is display only. Storage keeps full double precision
+/// (StoragePrecision), and an exported script uses that too: a script is
+/// read by the program, and rounding it to what a caliper reads would make
+/// a replayed model differ from the one it came from.
+inline int unitDisplayPrecision(LengthUnit unit)
 {
+    switch (unit) {
+    case LengthUnit::Millimeters: return 3;   // 0.001 mm (micrometer)
+    case LengthUnit::Centimeters: return 4;   // 0.0001 cm = 0.001 mm
+    case LengthUnit::Meters:      return 6;   // 0.000001 m = 0.001 mm
+    case LengthUnit::Inches:      return 4;   // Aaron, 2026-02-16
+    case LengthUnit::Feet:        return 4;
+    }
     return DisplayPrecision;
 }
 
@@ -195,7 +253,12 @@ inline std::string formatStorageValue(double value)
 /// @return Formatted string (e.g., "25.4 mm", "1 in")
 inline std::string formatValueWithUnit(double mm, LengthUnit unit)
 {
-    return formatValue(mmToUnit(mm, unit)) + " " + unitSuffix(unit);
+    // Ask for the unit's own precision. This used to call formatValue(),
+    // which takes formatDouble()'s default of 4 places regardless of unit.
+    // So unitDisplayPrecision() existed, described the agreed rule, and
+    // was called by nothing. Millimeters were shown to 0.0001 mm.
+    return formatDouble(mmToUnit(mm, unit), unitDisplayPrecision(unit))
+         + " " + unitSuffix(unit);
 }
 
 /// Parse a value string that may include a unit suffix.
@@ -274,7 +337,7 @@ constexpr double Pi = 3.14159265358979323846;
 /// Convert degrees to radians.
 /// @param degrees Angle in degrees
 /// @return Angle in radians
-inline double degreesToRadians(double degrees)
+constexpr double degreesToRadians(double degrees)
 {
     return degrees * Pi / 180.0;
 }
@@ -282,9 +345,29 @@ inline double degreesToRadians(double degrees)
 /// Convert radians to degrees.
 /// @param radians Angle in radians
 /// @return Angle in degrees
-inline double radiansToDegrees(double radians)
+constexpr double radiansToDegrees(double radians)
 {
     return radians * 180.0 / Pi;
+}
+
+/// Convert a value carrying an angle suffix to DEGREES.
+///
+/// Degrees are the storage convention for angles, the way millimeters are
+/// for lengths, so this is the analog of parseValueWithUnit().
+///
+/// @param value   The numeric part, already parsed.
+/// @param suffix  An angle suffix; must satisfy isKnownAngleSuffix().
+/// @return the value in degrees.
+inline double angleSuffixToDegrees(double value, const std::string& suffix)
+{
+    std::string lower;
+    for (char c : suffix) {
+        if (!std::isspace(static_cast<unsigned char>(c)))
+            lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    const bool radians = lower == "rad" || lower == "rads"
+                      || lower == "radian" || lower == "radians";
+    return radians ? radiansToDegrees(value) : value;
 }
 
 /// Normalize an angle to the range [0, 360).
@@ -432,7 +515,7 @@ inline bool parseDMS(const std::string& input, double& degrees)
 
     // Parse degrees
     double deg = readNumber();
-    skipDegreeSign();  // ° (optional — might be absent if only ' or " used)
+    skipDegreeSign();  // ° (optional, might be absent if only ' or " used)
 
     // Parse minutes
     skipSpaces();
@@ -453,7 +536,7 @@ inline bool parseDMS(const std::string& input, double& degrees)
     // Should be at end of string (after optional whitespace)
     skipSpaces();
     if (pos != s.size())
-        return false;  // Trailing junk — not a clean DMS value
+        return false;  // Trailing junk: not a clean DMS value
 
     degrees = sign * (deg + min / 60.0 + sec / 3600.0);
     return true;
@@ -503,6 +586,15 @@ inline double atan2Radians(double dy, double dx)
 // Display-friendly number rounding (1-2-5 sequence)
 // ============================================================================
 
+/// Scale-bar pixel-length thresholds, shared by the 3D viewport scale bar and
+/// the 2D sketch scale bar so both size identically (they otherwise drift when
+/// one side's literal is tuned).  The bar aims for kScaleBarTargetPx, never
+/// exceeds kScaleBarMaxPx (step the nice-number down), and never shrinks below
+/// kScaleBarMinPx.
+constexpr double kScaleBarTargetPx = 75.0;
+constexpr double kScaleBarMaxPx    = 180.0;
+constexpr double kScaleBarMinPx    = 20.0;
+
 /// Round a value up to the nearest "nice" number in the 1-2-5 sequence.
 /// Useful for scale bars, grid spacing, axis labels, and dimension rounding.
 /// @param value The value to round (must be positive)
@@ -546,6 +638,44 @@ inline double niceNumberBelow(double value)
     }
 
     return nice * std::pow(10.0, exponent);
+}
+
+/// Format a scale-bar length (given in mm) as a short label in a display-unit,
+/// picking a friendlier unit for very large/small magnitudes (mm<->m/um,
+/// cm<->m, m<->cm, in<->ft, ft<->in). Shared by the 3D viewport scale bar and
+/// the 2D sketch scale bar so both read identically. e.g. "100 mm", "2.5 m".
+inline std::string formatScaleBarLabel(double worldLengthMm, LengthUnit unit)
+{
+    double value = worldLengthMm;
+    const char* unitStr = "mm";
+    switch (unit) {
+    case LengthUnit::Millimeters:
+        if (value >= 1000.0)      { value /= 1000.0; unitStr = "m"; }
+        else if (value < 1.0)     { value *= 1000.0; unitStr = "um"; }
+        break;
+    case LengthUnit::Centimeters:
+        value /= 10.0; unitStr = "cm";
+        if (value >= 100.0)       { value /= 100.0; unitStr = "m"; }
+        break;
+    case LengthUnit::Meters:
+        value /= 1000.0; unitStr = "m";
+        if (value < 0.01)         { value *= 100.0; unitStr = "cm"; }
+        break;
+    case LengthUnit::Inches:
+        value /= 25.4; unitStr = "in";
+        if (value >= 12.0)        { value /= 12.0; unitStr = "ft"; }
+        break;
+    case LengthUnit::Feet:
+        value /= 304.8; unitStr = "ft";
+        if (value < 1.0)          { value *= 12.0; unitStr = "in"; }
+        break;
+    }
+    char buf[64];
+    if (value == std::floor(value) && value < 10000.0)
+        std::snprintf(buf, sizeof(buf), "%d %s", static_cast<int>(value), unitStr);
+    else
+        std::snprintf(buf, sizeof(buf), "%.3g %s", value, unitStr);
+    return std::string(buf);
 }
 
 }  // namespace hobbycad

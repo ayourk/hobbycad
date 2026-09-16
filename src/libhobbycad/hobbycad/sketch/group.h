@@ -17,7 +17,6 @@
 #include "../types.h"
 
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 namespace hobbycad {
@@ -28,14 +27,24 @@ namespace sketch {
 // =====================================================================
 
 /// A group of entities (can contain nested groups)
+/// What a group is FOR. A User group is whatever the person gathered; the
+/// other kinds are rigs the program builds and looks up again (the arc
+/// sweep-angle dimension: two construction lines and an Angle constraint;
+/// a slot with its construction centerline), and they must keep that
+/// identity through a rename.
+enum class GroupKind { User, SweepAngle, Slot };
+
 struct HOBBYCAD_EXPORT Group {
     int id = 0;                        ///< Unique group ID
     std::string name;                  ///< Display name
+    GroupKind kind = GroupKind::User;  ///< What the group is for (see GroupKind)
     std::vector<int> entityIds;        ///< Direct entity members
     std::vector<int> constraintIds;    ///< Direct constraint members
     std::vector<int> childGroupIds;    ///< Nested group IDs
     int parentGroupId = -1;            ///< Parent group ID (-1 if top-level)
     bool locked = false;               ///< Prevent modification of members
+    bool hasPivot = false;             ///< A transform pivot has been set; unset means the geometric center
+    Point2D pivot;                     ///< Transform pivot (rotate/scale/mirror about it) when hasPivot
     bool expanded = true;              ///< UI expansion state (for tree views)
 
     /// Check if this group directly contains an entity
@@ -60,80 +69,50 @@ struct HOBBYCAD_EXPORT Group {
 };
 
 // =====================================================================
-//  Group Manager
-// =====================================================================
-
-/// Manages a collection of groups with hierarchy support
-class HOBBYCAD_EXPORT GroupManager {
-public:
-    GroupManager() = default;
-
-    /// Create a new group and return its ID
-    int createGroup(const std::string& name = {});
-
-    /// Delete a group by ID (entities are not deleted, just ungrouped)
-    /// @param groupId Group to delete
-    /// @param deleteChildren If true, delete child groups too; if false, move them to parent
-    void deleteGroup(int groupId, bool deleteChildren = false);
-
-    /// Add an entity to a group
-    void addEntityToGroup(int entityId, int groupId);
-
-    /// Remove an entity from a group
-    void removeEntityFromGroup(int entityId, int groupId);
-
-    /// Add a child group to a parent group
-    /// @return false if this would create a cycle
-    bool addGroupToGroup(int childGroupId, int parentGroupId);
-
-    /// Remove a group from its parent (makes it top-level)
-    void ungroupFromParent(int groupId);
-
-    /// Get a group by ID (nullptr if not found)
-    Group* groupById(int id);
-    const Group* groupById(int id) const;
-
-    /// Get all groups
-    const std::vector<Group>& groups() const { return m_groups; }
-
-    /// Get all top-level groups (no parent)
-    std::vector<int> topLevelGroupIds() const;
-
-    /// Get all entity IDs in a group (recursively includes nested groups)
-    std::unordered_set<int> allEntityIds(int groupId) const;
-
-    /// Get all groups that contain an entity (directly, not through nesting)
-    std::vector<int> groupsContainingEntity(int entityId) const;
-
-    /// Check if adding childId as a child of parentId would create a cycle
-    bool wouldCreateCycle(int childId, int parentId) const;
-
-    /// Clear all groups
-    void clear();
-
-    /// Get next available group ID
-    int nextGroupId() const { return m_nextId; }
-
-private:
-    std::vector<Group> m_groups;
-    int m_nextId = 1;
-
-    /// Helper to check ancestry
-    bool isAncestorOf(int ancestorId, int descendantId) const;
-};
-
-// =====================================================================
 //  Group Utility Functions
 // =====================================================================
 
-/// Get the depth of a group in the hierarchy (0 = top-level)
-HOBBYCAD_EXPORT int groupDepth(const GroupManager& manager, int groupId);
+/// True if `groupId`, or any of its ancestors, is locked, i.e. its members
+/// must not be modified. Walks the parent chain in `groups`. A negative or
+/// unknown groupId (an entity in no group) is not locked.
+HOBBYCAD_EXPORT bool isGroupChainLocked(int groupId, const std::vector<Group>& groups);
 
-/// Get the path from root to a group (list of group IDs)
-HOBBYCAD_EXPORT std::vector<int> groupPath(const GroupManager& manager, int groupId);
+/// Highest group id in the container plus one (1 when empty).
+HOBBYCAD_EXPORT int nextFreeGroupId(const std::vector<Group>& groups);
 
-/// Find the common ancestor of two groups (-1 if none)
-HOBBYCAD_EXPORT int commonAncestor(const GroupManager& manager, int groupId1, int groupId2);
+/// Group lookups. By id, by exact name, or by a reference as typed at a
+/// prompt: "id=<n>" (prefix case-insensitive) or the name.
+HOBBYCAD_EXPORT const Group* findGroupById(const std::vector<Group>& groups, int id);
+HOBBYCAD_EXPORT Group* findGroupById(std::vector<Group>& groups, int id);
+HOBBYCAD_EXPORT const Group* findGroupByName(const std::vector<Group>& groups, const std::string& name);
+HOBBYCAD_EXPORT const Group* findGroupByRef(const std::vector<Group>& groups, const std::string& ref);
+
+// ---- Group kinds ----------------------------------------------------
+
+/// The name prefix that marked sweep-angle rigs before `kind` existed. A
+/// group read from an older file or script that has this prefix and no
+/// kind is taken as a SweepAngle (inferLegacyGroupKind); new records carry
+/// the kind explicitly, so a rename no longer breaks the rig.
+constexpr const char* kSweepAngleGroupPrefix = "Sweep Angle";
+
+/// Stored token for a kind ("sweep_angle"); "" for User, which is never
+/// written. parseGroupKindToken also accepts the script's short "sweep".
+HOBBYCAD_EXPORT const char* groupKindToken(GroupKind kind);
+HOBBYCAD_EXPORT bool parseGroupKindToken(const std::string& token, GroupKind& out);
+HOBBYCAD_EXPORT GroupKind inferLegacyGroupKind(const std::string& name);
+
+HOBBYCAD_EXPORT bool isSweepAngleGroup(const Group& g);
+/// The sweep-angle rig that holds `arcId`, or null.
+HOBBYCAD_EXPORT const Group* sweepAngleGroupForArc(const std::vector<Group>& groups, int arcId);
+/// Display name for the n-th sweep-angle rig ("Sweep Angle 3").
+HOBBYCAD_EXPORT std::string sweepAngleGroupName(int ordinal);
+
+/// The group that ties a slot to its centerline path(s): kind Slot, named
+/// slotGroupName(slotId) ("Slot 7", by the SLOT's id, so the script
+/// exporter and the CLI recognize it), members the path ids then the slot.
+/// A group id of 0 lets addGroup() assign one.
+HOBBYCAD_EXPORT std::string slotGroupName(int slotId);
+HOBBYCAD_EXPORT Group makeSlotGroup(int groupId, int slotId, const std::vector<int>& pathIds);
 
 }  // namespace sketch
 }  // namespace hobbycad

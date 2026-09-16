@@ -1,5 +1,5 @@
 =====================================================================
-  src/hobbymesh/README.txt — HobbyMesh Application (Future — Phase 5)
+  src/hobbymesh/README.txt — HobbyMesh Application (Future, Phase 5)
 =====================================================================
 
   Mesh editing companion application to HobbyCAD.  Will provide

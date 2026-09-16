@@ -8,6 +8,7 @@
 // =====================================================================
 
 #include <hobbycad/stl_io.h>
+#include "hobbycad/occt_failure.h"
 
 // OpenCASCADE STL I/O
 #include <StlAPI_Writer.hxx>
@@ -246,7 +247,7 @@ ReadResult readStl(const std::string& path)
         result.success = true;
 
     } catch (const Standard_Failure& e) {
-        result.errorMessage = std::string("OCCT exception: ") + e.GetMessageString();
+        result.errorMessage = std::string("OCCT exception: ") + occtFailureMessage(e);
     } catch (...) {
         result.errorMessage = "Unknown exception during STL import";
     }

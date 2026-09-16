@@ -23,7 +23,7 @@
 
 namespace hobbycad {
 
-// UnitSystem was a duplicate of LengthUnit — now uses LengthUnit from units.h
+// UnitSystem was a duplicate of LengthUnit; now uses LengthUnit from units.h
 
 class ScaleBarWidget : public AIS_Canvas2D {
     DEFINE_STANDARD_RTTI_INLINE(ScaleBarWidget, AIS_Canvas2D)

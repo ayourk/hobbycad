@@ -39,7 +39,7 @@ jobs:
         shell: bash
 
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -56,9 +56,9 @@ jobs:
             mingw-w64-ucrt-x86_64-qt6-tools
             mingw-w64-ucrt-x86_64-qt6-imageformats
             mingw-w64-ucrt-x86_64-libgit2
-            mingw-w64-ucrt-x86_64-librsvg
             mingw-w64-ucrt-x86_64-ntldd
             mingw-w64-ucrt-x86_64-eigen3
+            mingw-w64-ucrt-x86_64-nlohmann-json
             git
             patch
 
@@ -66,11 +66,10 @@ jobs:
       - name: Build libslvs from source
         shell: msys2 {0}
         run: |
-          curl -L -o /tmp/libslvs.tar.gz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208.orig.tar.gz"
-          mkdir -p /tmp/solvespace && tar -xzf /tmp/libslvs.tar.gz -C /tmp/solvespace --strip-components=1
-          curl -L -o /tmp/libslvs.debian.tar.xz "https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad/+sourcefiles/libslvs/3.2.git~20260208-1~ppa2~noble1/libslvs_3.2.git~20260208-1~ppa2~noble1.debian.tar.xz"
-          tar -xJf /tmp/libslvs.debian.tar.xz -C /tmp/solvespace
-          cd /tmp/solvespace && patch -p1 < debian/patches/0001-handle-missing-git-directory.patch
+          # The pinned orig tarball (versions.json), checksum-verified. The
+          # HobbyCAD series is baked into it, so there is nothing to patch.
+          scripts/ci/fetch.sh libslvs /tmp/solvespace
+          cd /tmp/solvespace
 
           # Stub empty submodule directories
           for submod in zlib libpng freetype cairo pixman angle; do
@@ -82,7 +81,7 @@ jobs:
           mkdir -p extlib/eigen
           cp -r /ucrt64/include/eigen3/. extlib/eigen/
 
-          # Override solvespace's set(CMAKE_CXX_STANDARD 11) — the -D flag cannot
+          # Override solvespace's set(CMAKE_CXX_STANDARD 11); the -D flag cannot
           # override a normal variable, so we must patch the source directly
           sed -i 's/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD 14)/' CMakeLists.txt
 
@@ -131,15 +130,17 @@ jobs:
           # Copy runtime DLLs from UCRT64
           BINDIR="build/install/bin"
           if [ -f "$BINDIR/hobbycad.exe" ]; then
-              # Use ntldd to find DLL dependencies
-              ntldd -R "$BINDIR/hobbycad.exe" 2>/dev/null | \
-                  grep -i '/ucrt64/' | \
-                  awk '{print $3}' | \
-                  while read dll; do
-                      cp -n "$dll" "$BINDIR/" 2>/dev/null || true
-                  done || true
+              # ntldd prints Windows paths (C:\tools\msys64\ucrt64\bin\Qt6Core.dll),
+              # so match the backslash form and convert with cygpath before
+              # copying. A zero count is an error: the artifact would not run.
+              copied=0
+              while read -r dll; do
+                  cp -n "$(cygpath -u "$dll")" "$BINDIR/" && copied=$((copied + 1))
+              done < <(ntldd -R "$BINDIR/hobbycad.exe" 2>/dev/null | grep -io '[a-z]:\\[^ ]*\\ucrt64\\bin\\[^ ]*\.dll' | sort -u)
+              echo "runtime DLLs copied: $copied"
+              if [ "$copied" -eq 0 ]; then echo '::error::no UCRT64 runtime DLLs found by ntldd'; exit 1; fi
 
-              # Qt plugins — copy all runtime-needed plugin directories
+              # Qt plugins: copy all runtime-needed plugin directories
               QT_PLUGIN_DIR="/ucrt64/share/qt6/plugins"
               for plugin_dir in platforms imageformats iconengines styles tls; do
                   if [ -d "$QT_PLUGIN_DIR/$plugin_dir" ]; then
@@ -151,9 +152,9 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hobbycad-windows-x64-msys2
           path: build/install/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

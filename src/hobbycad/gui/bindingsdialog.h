@@ -37,7 +37,7 @@ struct ActionBinding {
     QString displayName;    // Human-readable name (e.g., "New Document")
     QString category;       // Category for grouping (e.g., "File", "View")
 
-    // Up to 3 bindings — each can be a key sequence or mouse binding.
+    // Up to 3 bindings; each can be a key sequence or mouse binding.
     // Empty string means slot is unused.
     QString binding1;
     QString binding2;

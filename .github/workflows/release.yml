@@ -1,0 +1,214 @@
+# .github/workflows/release.yml
+#
+# Build every package from one tag and draft a GitHub release with them.
+#
+# Trigger: a version tag (v0.1.0) pushed to main, or a manual dispatch
+# naming an existing tag. The tag must equal the VERSION line of
+# CMakeLists.txt, which is the single source every package reads.
+#
+# The build and packaging workflows are called through workflow_call, so
+# nothing is compiled twice and the recipes live in their own files. The
+# publish job gathers the artifacts, renames the few whose file names
+# collide across the Linux matrix, writes SHA256SUMS.txt, renders
+# .github/RELEASE_TEMPLATE.md, and creates a DRAFT release, a pre-release
+# while the major version is 0. Publishing is a manual click after the
+# install checklist in docs/dev_environment_setup.txt has been run.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (v0.1.0)
+        type: string
+        required: true
+      draft:
+        description: Create the release as a draft
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+
+  # ---- the tag and the project version must agree ----------------------
+  version:
+    name: Version check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - id: v
+        shell: bash
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          version=$(sed -nE 's/^[[:space:]]*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)
+          if [ -z "$version" ]; then echo "::error::VERSION not found in CMakeLists.txt"; exit 1; fi
+          if [ "v$version" != "$tag" ]; then
+            echo "::error::tag $tag does not match CMakeLists.txt VERSION $version"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          case "$version" in 0.*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
+          echo "Releasing $tag (prerelease while 0.x: $(case $version in 0.*) echo yes;; *) echo no;; esac))"
+
+  # ---- packages, one call per packaging workflow ------------------------
+  windows-installer:
+    needs: version
+    uses: ./.github/workflows/windows-inno.yml
+  windows-msi:
+    needs: version
+    uses: ./.github/workflows/windows-msi.yml
+  linux-rpm:
+    needs: version
+    uses: ./.github/workflows/linux-rpm.yml
+  linux-arch:
+    needs: version
+    uses: ./.github/workflows/linux-arch.yml
+  linux-appimage:
+    needs: version
+    uses: ./.github/workflows/linux-appimage.yml
+  linux-flatpak:
+    needs: version
+    uses: ./.github/workflows/linux-flatpak.yml
+  macos-x64:
+    needs: version
+    uses: ./.github/workflows/macos-build-x64.yml
+  macos-arm64:
+    needs: version
+    uses: ./.github/workflows/macos-build.yml
+  macos-universal:
+    needs: version
+    uses: ./.github/workflows/macos-universal.yml
+
+  # ---- gather, checksum, render notes, draft the release ----------------
+  publish:
+    name: Draft the release
+    needs: [version, windows-installer, windows-msi, linux-rpm, linux-arch, linux-appimage, linux-flatpak, macos-x64, macos-arm64, macos-universal]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Download every artifact
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Collect the release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # What ships: installers and packages, not install trees. Ubuntu is
+          # served by the PPA (ppa:ayourk/hobbycad), so no .deb is attached
+          # and linux-deb.yml is not called. The MSVC build uploads its
+          # portable zip under the Installer's artifact name and again under
+          # the MSI's; the Installer's copy is taken.
+          find artifacts -type f \( -name '*-Setup.exe' -o -name '*.msi' -o -name '*.dmg' \
+               -o -name '*.rpm' -o -name '*.pkg.tar.zst' -o -name '*.AppImage' -o -name '*.flatpak' \) \
+               -not -name '*-debug-*' -not -name '*-dbgsym*' -not -name '*.ddeb' > files.txt
+          find artifacts -path 'artifacts/hobbycad-*-binary-zip/*' -name '*.zip' >> files.txt
+          # A file name that appears in more than one artifact is prefixed
+          # with its matrix token so nothing overwrites anything.
+          while read -r f; do
+            base=$(basename "$f"); art=$(echo "$f" | cut -d/ -f2)
+            n=$(grep -c "/$base\$" files.txt || true)
+            if [ "$n" -gt 1 ]; then
+              # hobbycad-fedora40-x64-rpm -> fedora40-x64
+              tag=${art#hobbycad-}; tag=${tag%-rpm}; tag=${tag%-pkg}
+              cp "$f" "release/${tag}-${base}"
+            else
+              cp "$f" "release/$base"
+            fi
+          done < files.txt
+          (cd release && sha256sum -- * > SHA256SUMS.txt)
+          echo "Assets:"; ls -la release
+          if [ "$(ls release | wc -l)" -lt 8 ]; then echo "::error::fewer assets than expected; a packaging call produced nothing"; exit 1; fi
+
+      - name: Render the release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Table rows grouped Linux, macOS, Windows (the README's order), then
+          # by name within a group.
+          rank() { case "$1" in *.rpm|*.pkg.tar.zst|*.AppImage|*.flatpak) echo 1;; *.dmg) echo 2;; *.exe|*.msi|*.zip) echo 3;; *) echo 4;; esac; }
+          {
+            echo "| File | Size | SHA-256 |"
+            echo "|---|---|---|"
+            while read -r sum name; do
+              [ "$name" = "SHA256SUMS.txt" ] && continue
+              echo "$(rank "$name") $sum $name"
+            done < release/SHA256SUMS.txt | sort -k1,1n -k3,3 | while read -r _ sum name; do
+              size=$(du -h "release/$name" | cut -f1)
+              echo "| [$name](https://github.com/${{ github.repository }}/releases/download/$TAG/$name) | $size | \`${sum:0:16}\` |"
+            done
+          } > assets.md
+          python3 - <<'PY'
+          import os, re, sys, datetime
+          version = os.environ["VERSION"]
+          # The release's own text is the changelog entry headed by its version
+          # (docs/changelog.txt: a heading line of the bare version, optionally
+          # followed by a date in parentheses, between rules of '=' signs).
+          # Anything else in the notes is the same for every release.
+          log = open("docs/changelog.txt", encoding="utf-8").read().split("\n")
+          start = next((i for i, l in enumerate(log)
+                        if re.fullmatch(r"v?" + re.escape(version) + r"(\s*\(.*\))?\s*", l)), None)
+          if start is None:
+              print(f"::error::docs/changelog.txt has no entry headed by {version}; add one (Added/Changed/Fixed/Known issues) before tagging")
+              sys.exit(1)
+          body = []
+          for l in log[start + 2:]:            # skip the heading and its rule
+              if l.startswith("====="):        # the rule above the next entry
+                  if body and body[-1] == "": body.pop()
+                  break
+              body.append(l)
+          # 'Added' + '-----' underline pairs become markdown headings
+          out = []
+          for i, l in enumerate(body):
+              if i + 1 < len(body) and re.fullmatch(r"-{3,}", body[i + 1]) and l.strip():
+                  out.append("### " + l.strip()); continue
+              if re.fullmatch(r"-{3,}", l) and i > 0: continue
+              out.append(l)
+          changes = "\n".join(out).strip()
+          if not changes:
+              print(f"::error::the changelog entry for {version} is empty"); sys.exit(1)
+          t = open(".github/RELEASE_TEMPLATE.md", encoding="utf-8").read()
+          t = t.replace("{{CHANGES}}", changes)
+          pre = "${{ needs.version.outputs.prerelease }}" == "true"
+          t = (t.replace("{{VERSION}}", os.environ["VERSION"])
+                .replace("{{TAG}}", os.environ["TAG"])
+                .replace("{{DATE}}", datetime.date.today().isoformat())
+                .replace("{{ASSETS}}", open("assets.md", encoding="utf-8").read().rstrip())
+                .replace("{{PREVIEW_NOTICE}}", "This is a **preview** release for testing; expect rough edges and report them." if pre else ""))
+          open("notes.md", "w", encoding="utf-8").write(t)
+          PY
+          cat notes.md
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--title "HobbyCAD $VERSION" --notes-file notes.md --generate-notes --verify-tag)
+          [ "${{ needs.version.outputs.prerelease }}" = "true" ] && args+=(--prerelease)
+          [ "${{ inputs.draft != false }}" = "true" ] && args+=(--draft)
+          gh release create "$TAG" "${args[@]}" release/*
+          echo "Draft release $TAG created with $(ls release | wc -l) assets."

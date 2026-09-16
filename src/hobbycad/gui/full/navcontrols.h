@@ -38,7 +38,7 @@ class NavControlOwner : public SelectMgr_EntityOwner {
 public:
     NavControlOwner(const Handle(SelectMgr_SelectableObject)& theObj,
                     NavControlId theCtrl,
-                    Standard_Integer thePriority = 7)
+                    int thePriority = 7)
         : SelectMgr_EntityOwner(theObj, thePriority)
         , m_controlId(theCtrl) {}
 

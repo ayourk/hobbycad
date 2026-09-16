@@ -21,6 +21,9 @@
 #include <QString>
 
 class QTableWidget;
+
+namespace hobbycad { class ErrorOutlineDelegate; }
+class QWidget;
 class QLineEdit;
 class QPushButton;
 class QComboBox;
@@ -51,6 +54,7 @@ signals:
 
 private slots:
     void onAddParameter();
+    void onAddReferenceParameter();
     void onDeleteParameter();
     void onCellChanged(int row, int column);
     void onSelectionChanged();
@@ -69,6 +73,15 @@ private:
     bool hasValidationErrors() const;
     void validateNameCell(int row, const QString& text);
 
+    /// Reject an invalid name: keep the cursor in the cell, shake the
+    /// editor, and leave what the user typed there to be corrected.
+    ///
+    /// Committing an invalid name and silently reverting it is the worst of
+    /// the options: the typing disappears with no explanation of which
+    /// rule it broke.
+    void rejectNameEdit(int row);
+
+
     QList<Parameter> m_parameters;
     QString m_defaultUnit;
 
@@ -76,7 +89,9 @@ private:
     QLineEdit* m_filterEdit = nullptr;
     QComboBox* m_filterCombo = nullptr;
     QTableWidget* m_table = nullptr;
+    ErrorOutlineDelegate* m_outlineDelegate = nullptr;
     QPushButton* m_addButton = nullptr;
+    QPushButton* m_addReferenceButton = nullptr;
     QPushButton* m_deleteButton = nullptr;
     QLabel* m_statusLabel = nullptr;
     QPushButton* m_okButton = nullptr;

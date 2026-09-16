@@ -2,8 +2,17 @@
 //  src/hobbycad/gui/full/fullmodewindow.cpp — Full Mode window
 // =====================================================================
 
+#include <algorithm>
+#include "../propertyrow.h"
+#include <hobbycad/units.h>
 #include "fullmodewindow.h"
+#include "../planetransformpanel.h"
+#include <QPushButton>
 #include "viewportwidget.h"
+
+#include <V3d_View.hxx>
+#include <Graphic3d_ClipPlane.hxx>
+#include <gp_Pln.hxx>
 #include "gui/changelogpanel.h"
 #include "gui/clipanel.h"
 #include "gui/modeltoolbar.h"
@@ -11,9 +20,9 @@
 #include "gui/toolbardropdown.h"
 #include "gui/timelinewidget.h"
 #include "gui/formulafield.h"
+#include <hobbycad/plane_frame.h>
 #include "gui/sketchtoolbar.h"
 #include "gui/sketchcanvas.h"
-#include "gui/sketchactionbar.h"
 #include "gui/sketchplanedialog.h"
 #include "gui/constructionplanedialog.h"
 #include "gui/extrudedialog.h"
@@ -42,13 +51,18 @@
 #include <cmath>
 
 #include <AIS_InteractiveContext.hxx>
-#include <AIS_ListOfInteractive.hxx>
+#include <AIS_InteractiveObject.hxx>
+#include <NCollection_List.hxx>
 #include <AIS_Shape.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <gp_Ax1.hxx>
+#include <hobbycad/project_undo.h>
+#include <gp_Dir.hxx>
+#include <gp_Vec.hxx>
+#include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
@@ -62,46 +76,112 @@
 
 namespace hobbycad {
 
-FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
-    : MainWindow(glInfo, parent)
+namespace {
+
+/// The session's body operation for a dialog's (Extrude and Revolve name
+/// theirs alike).
+template <typename Operation>
+hobbycad::BodyOperation bodyOperationFor(Operation op)
 {
-    setObjectName(QStringLiteral("FullModeWindow"));
+    switch (op) {
+    case Operation::Join:      return hobbycad::BodyOperation::Join;
+    case Operation::Cut:       return hobbycad::BodyOperation::Cut;
+    case Operation::Intersect: return hobbycad::BodyOperation::Intersect;
+    case Operation::NewBody:   break;
+    }
+    return hobbycad::BodyOperation::NewBody;
+}
 
-    // Create central widget container with toolbar + viewport
-    auto* container = new QWidget(this);
-    auto* layout = new QVBoxLayout(container);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+}  // namespace
 
-    // Toolbar stack (normal toolbar vs sketch toolbar)
-    m_toolbarStack = new QStackedWidget(container);
+// constructionPlaneFrame/originPlaneFrame/axisDir now live in the library
+// (hobbycad/plane_frame.h) so the viewport and the sketch mapping share
+// one authoritative right-handed frame.
 
-    m_toolbar = new ModelToolbar(m_toolbarStack);
-    m_toolbarStack->addWidget(m_toolbar);
+// Viewport lifecycle: a failed view is dropped; a startup --exec sketch and a
+// deferred sketch 3D seed wait for the view to come up.
+void FullModeWindow::connectViewportSignals()
+{
+    // A view that fails to come up is dropped (with a notice) rather than left
+    // blank. Queued so the drop runs after the paintEvent that reported it.
+    connect(m_viewport, &ViewportWidget::viewInitFailed, this,
+            [this]() {
+        dropViewport();
+        // The 3D view never came up, but a --exec sketch still has to open; 2D
+        // does not need the viewport. Enter it now that startup has settled.
+        if (m_pendingStartupSketch.has_value()) {
+            const SketchPlane pl = *m_pendingStartupSketch;
+            m_pendingStartupSketch.reset();
+            createSketchOnPlane(pl);
+        }
+    }, Qt::QueuedConnection);
+    // If 3D was toggled before the viewport had painted (e.g. run-script starts
+    // straight in a sketch), seed the sketch 3D view the moment the view is up.
+    connect(m_viewport, &ViewportWidget::viewInitialized, this, [this]() {
+        // Startup --exec sketch: the viewport is now fully up, so switch to the
+        // 2D sketch (deferred so it runs after this first paint completes).
+        if (m_pendingStartupSketch.has_value()) {
+            const SketchPlane pl = *m_pendingStartupSketch;
+            m_pendingStartupSketch.reset();
+            QTimer::singleShot(0, this, [this, pl]() { createSketchOnPlane(pl); });
+        }
+        if (m_pendingSketchSeed && m_inSketchMode) {
+            seedSketch3DView();
+            // The first paint may not have final widget geometry yet, so re-apply
+            // orientation/center/scale/axes once the event loop settles. The view
+            // is non-null here, so this is safe (unlike the removed pre-init one).
+            QTimer::singleShot(0, this, [this]() {
+                if (m_inSketchMode && m_sketch3DSeeded && m_viewport
+                    && m_viewportStack->currentWidget() == m_viewport
+                    && !m_viewport->view().IsNull())
+                    syncViewportToSketchView();
+            });
+        }
+        m_pendingSketchSeed = false;
+    });
+}
 
-    // Connect FullMode-specific ModelToolbar signals
-    connect(m_toolbar, &ModelToolbar::createConstructionPlaneClicked,
-            this, &FullModeWindow::onNewConstructionPlane);
-    connect(m_toolbar, &ModelToolbar::toolSelected,
-            this, &FullModeWindow::onModelToolSelected);
+// The sketch's 2D/3D toggle drives the viewport stack.
+void FullModeWindow::connectSketchModeToggle()
+{
+    // 2D/3D sketch toggle drives the viewport stack (agreed architecture,
+    // 2026-09-05): 3D shows the GL viewport, 2D the QPainter canvas.
+    //
+    // The OCCT view is created lazily on the viewport's first paintEvent, and a
+    // QStackedWidget only paints its visible page. So we must switch TO the
+    // viewport here to let it initialize; gating on view()-is-ready deadlocked
+    // (unshown -> never painted -> never initialized -> never shown, so 3D never
+    // hid the 2D canvas). [Aaron item 9, 2026-09-09; deadlock fixed 2026-09-11]
+    connect(m_sketchCanvas, &SketchCanvas::sketchModeChanged, this,
+            [this](bool threeD) {
+        if (!m_inSketchMode) return;
+        m_viewportStack->setCurrentWidget(
+            (threeD && m_viewport) ? static_cast<QWidget*>(m_viewport)
+                                   : static_cast<QWidget*>(m_sketchCanvas));
+        if (threeD && m_viewport) {
+            // The 3D viewport is one reused OCCT view. The FIRST 3D view of a
+            // sketch seeds the in-sketch orientation (matching the 2D view) and
+            // saves the model camera; every switch to 3D re-matches the 2D view.
+            // The OCCT view initializes lazily on its first paint, so if the
+            // view is not up yet (run-script starts straight in a sketch) the
+            // seed is deferred to the viewInitialized signal.
+            if (!m_sketch3DSeeded) {
+                if (!m_viewport->view().IsNull()) seedSketch3DView();
+                else m_pendingSketchSeed = true;
+            } else if (!m_viewport->view().IsNull()) {
+                // Re-match the current 2D framing on every switch to 3D, so the
+                // scale and center stay seamless with the 2D view (a 2D zoom is
+                // carried over rather than restoring the last 3D framing).
+                syncViewportToSketchView();
+            }
+        }
+    });
+}
 
-    m_sketchToolbar = new SketchToolbar(m_toolbarStack);
-    m_toolbarStack->addWidget(m_sketchToolbar);
-
-    layout->addWidget(m_toolbarStack);
-
-    // Viewport stack (3D viewport vs 2D sketch canvas)
-    m_viewportStack = new QStackedWidget(container);
-
-    m_viewport = new ViewportWidget(m_viewportStack);
-    m_viewportStack->addWidget(m_viewport);
-
-    m_sketchCanvas = new SketchCanvas(m_viewportStack);
-    m_sketchCanvas->setUnitSuffix(unitSuffix());
-    m_viewportStack->addWidget(m_sketchCanvas);
-
-    layout->addWidget(m_viewportStack, 1);  // stretch factor 1
-
+// Sketch toolbar tool selection, with the tangent-arc / tangent-line
+// precondition checks.
+void FullModeWindow::connectSketchToolbarValidation()
+{
     // Connect FullMode-specific sketch toolbar signals (tangent validation)
     connect(m_sketchToolbar, &SketchToolbar::toolSelected,
             this, [this](SketchTool tool, CreationMode mode) {
@@ -147,7 +227,11 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
         m_sketchCanvas->setActiveTool(tool);
         m_sketchCanvas->setCreationMode(mode);
     });
+}
 
+// FullMode-specific sketch canvas signals, plus Edit > Delete / Select All.
+void FullModeWindow::connectSketchCanvasSignals()
+{
     // Connect FullMode-specific sketch canvas signals
     connect(m_sketchCanvas, &SketchCanvas::entityModified,
             this, &FullModeWindow::onSketchEntityModified);
@@ -169,10 +253,9 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     });
     connect(m_sketchCanvas, &SketchCanvas::exitRequested,
             this, [this]() {
-        // Escape pressed with sketch deselected - show Save/Discard and flash
-        if (sketchActionBar()) {
-            sketchActionBar()->showAndFlash();
-        }
+        // Escape with the sketch deselected finishes it, through the one
+        // Save/Discard/Cancel path shared with the toolbar and menu.
+        finishSketchInteractive();
     });
 
     // Connect delete action to sketch canvas
@@ -200,21 +283,61 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
             }
         });
     }
+}
 
-    // Timeline below the viewport
-    m_timeline = new TimelineWidget(container);
-    layout->addWidget(m_timeline);
-    createTimeline();
+// View menu actions that need the 3D viewport or the canvas: Reset View /
+// Home, Look At, Slice, Rotate, Toolbar, Grid, Snap, Z-Up, Orbit, units.
+void FullModeWindow::connectViewActions()
+{
+    // View > Reset View and the nav Home button are sketch-aware: inside a
+    // sketch, "home" is the top-down plane view at the 2D scale; outside, the
+    // default camera reset.
+    auto goHome = [this]() {
+        if (m_inSketchMode) syncViewportToSketchView();
+        else if (m_viewport) m_viewport->resetCamera();
+    };
+    if (resetViewAction())
+        connect(resetViewAction(), &QAction::triggered, this, goHome);
+    connect(m_viewport, &ViewportWidget::homeRequested, this, goHome);
 
-    // Connect shared sketch signals (toolbar, canvas, undo/redo, action bar, etc.)
-    initSketchConnections();
+    // Connect View > Look At Sketch Plane: orient the 3D camera square onto
+    // the active sketch's plane, the way Fusion's "Look At" does.
+    if (lookAtAction()) {
+        connect(lookAtAction(), &QAction::triggered,
+                this, &FullModeWindow::lookAtSketchPlane);
+    }
 
-    setCentralWidget(container);
+    // Connect View > Slice at Sketch Plane: a clip plane that sections the
+    // model at the active sketch's plane so you can sketch against its
+    // interior. Removable; toggling off restores the whole model.
+    if (sliceAction()) {
+        connect(sliceAction(), &QAction::toggled, this, [this](bool on) {
+            if (!m_viewport) return;
+            Handle(V3d_View) v = m_viewport->view();
+            if (v.IsNull()) return;
 
-    // Connect View > Reset View to the viewport
-    if (resetViewAction()) {
-        connect(resetViewAction(), &QAction::triggered,
-                m_viewport, &ViewportWidget::resetCamera);
+            // Clear any previous slice first.
+            if (!m_sliceClipPlane.IsNull()) {
+                v->RemoveClipPlane(m_sliceClipPlane);
+                m_sliceClipPlane.Nullify();
+            }
+
+            if (on && m_sketchCanvas) {
+                gp_Dir normal(0, 0, 1);
+                switch (m_sketchCanvas->sketchPlane()) {
+                case SketchPlane::XY: normal = gp_Dir(0, 0, 1); break;
+                case SketchPlane::XZ: normal = gp_Dir(0, 1, 0); break;
+                case SketchPlane::YZ: normal = gp_Dir(1, 0, 0); break;
+                default:              normal = gp_Dir(0, 0, 1); break;
+                }
+                const gp_Pln plane(gp_Pnt(0, 0, 0), normal);
+                m_sliceClipPlane = new Graphic3d_ClipPlane(plane);
+                m_sliceClipPlane->SetCapping(true);   // fill the cut face
+                m_sliceClipPlane->SetOn(true);
+                v->AddClipPlane(m_sliceClipPlane);
+            }
+            v->Redraw();
+        });
     }
 
     // Connect View > Rotate Left/Right (90° around Z axis)
@@ -260,7 +383,11 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     // Connect units change to viewport scale bar
     connect(this, &MainWindow::unitsChanged,
             m_viewport, &ViewportWidget::setUnitSystem);
+}
 
+// CLI panel viewport commands (zoom, pan, rotate); only work in full mode.
+void FullModeWindow::connectCliViewportCommands()
+{
     // Connect CLI panel viewport commands (only work in full mode)
     if (cliPanel()) {
         connect(cliPanel(), &CliPanel::zoomRequested,
@@ -279,7 +406,12 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
         // Mark viewport as connected so CLI knows commands will work
         cliPanel()->setViewportConnected(true);
     }
+}
 
+// Construction planes and the Project tree: New Construction Plane, plane
+// selection, sketch selection, and the plane transform editor.
+void FullModeWindow::connectConstructionSignals()
+{
     // Connect Construct > New Construction Plane
     if (newConstructionPlaneAction()) {
         connect(newConstructionPlaneAction(), &QAction::triggered,
@@ -289,6 +421,80 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
     // Connect construction plane selection from feature tree
     connect(this, &MainWindow::constructionPlaneSelected,
             this, &FullModeWindow::onConstructionPlaneSelected);
+
+    // Construction plane transform editor: preview, apply, reset.
+    if (PlaneTransformPanel* panel = planeTransformPanel()) {
+        connect(panel, &PlaneTransformPanel::previewRequested,
+                this, &FullModeWindow::previewConstructionPlane);
+        connect(panel, &PlaneTransformPanel::applyRequested,
+                this, &FullModeWindow::applyConstructionPlaneEdit);
+        connect(panel, &PlaneTransformPanel::resetRequested,
+                this, &FullModeWindow::resetConstructionPlanePreview);
+    }
+}
+
+FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
+    : MainWindow(glInfo, parent)
+{
+    setObjectName(QStringLiteral("FullModeWindow"));
+
+    // Create central widget container with toolbar + viewport
+    auto* container = new QWidget(this);
+    auto* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    // Toolbar stack (normal toolbar vs sketch toolbar)
+    m_toolbarStack = new QStackedWidget(container);
+
+    m_toolbar = new ModelToolbar(m_toolbarStack);
+    m_toolbarStack->addWidget(m_toolbar);
+
+    // Connect FullMode-specific ModelToolbar signals
+    connect(m_toolbar, &ModelToolbar::createConstructionPlaneClicked,
+            this, &FullModeWindow::onNewConstructionPlane);
+    connect(m_toolbar, &ModelToolbar::toolSelected,
+            this, &FullModeWindow::onModelToolSelected);
+
+    m_sketchToolbar = new SketchToolbar(m_toolbarStack);
+    m_toolbarStack->addWidget(m_sketchToolbar);
+
+    layout->addWidget(m_toolbarStack);
+
+    // Viewport stack (3D viewport vs 2D sketch canvas)
+    m_viewportStack = new QStackedWidget(container);
+
+    m_viewport = new ViewportWidget(m_viewportStack);
+    m_viewportStack->addWidget(m_viewport);
+    connectViewportSignals();
+
+    m_sketchCanvas = new SketchCanvas(m_viewportStack);
+    installSketchCanvasResolvers();
+    m_sketchCanvas->setUnitSuffix(unitSuffix());
+    m_viewportStack->addWidget(m_sketchCanvas);
+    connectSketchModeToggle();
+
+    layout->addWidget(m_viewportStack, 1);  // stretch factor 1
+
+    connectSketchToolbarValidation();
+    connectSketchCanvasSignals();
+
+    // Wire Edit > Cut/Copy/Paste to the sketch canvas.
+    connectClipboardActions();
+
+    // Timeline below the viewport
+    m_timeline = new TimelineWidget(container);
+    layout->addWidget(m_timeline);
+    connectTimeline();
+
+    // Connect shared sketch signals (toolbar, canvas, undo/redo, action bar, etc.)
+    initSketchConnections();
+
+    setCentralWidget(container);
+
+    connectViewActions();
+    connectCliViewportCommands();
+    connectConstructionSignals();
 
     finalizeLayout();
 
@@ -313,74 +519,65 @@ FullModeWindow::FullModeWindow(const OpenGLInfo& glInfo, QWidget* parent)
 
 void FullModeWindow::onDocumentLoaded()
 {
-    // Display geometry in 3D viewport
-    displayShapes();
+    hidePlaneTransformPanel();
+    MainWindow::onDocumentLoaded();   // timeline, tree, parameters, bodies, wireframes
+    refreshConstructionPlaneVisuals();
+}
 
-    // If we have a project loaded, populate the UI with project data
-    if (!m_project.isNew()) {
-        loadProjectData();
+void FullModeWindow::onDocumentRecipeChanged()
+{
+    MainWindow::onDocumentRecipeChanged();
+
+    // Construction planes live in the project's own list; an undone plane
+    // edit has to move the green square back too.
+    refreshConstructionPlaneVisuals();
+    if (PlaneTransformPanel* panel = planeTransformPanel(); panel && panel->isVisible()) {
+        if (const ConstructionPlaneData* p = m_project.constructionPlaneById(panel->planeId()))
+            onConstructionPlaneSelected(p->id);
+        else
+            hidePlaneTransformPanel();
     }
 }
 
 void FullModeWindow::onDocumentClosed()
 {
+    for (int id : m_constructionPlaneVis.keys()) eraseConstructionPlane(id);
+    hidePlaneTransformPanel();
+    MainWindow::onDocumentClosed();   // empties the timeline, the tree and the viewport
+    if (m_viewport) m_viewport->resetCamera();
+}
+
+void FullModeWindow::showSketchPlaneHighlight(SketchPlane plane, double offset,
+                                              PlaneRotationAxis axis, double angle)
+{
+    showSketchPlane(plane, offset, axis, angle);
+}
+
+void FullModeWindow::refreshModelViews()
+{
+    // Bodies from the project, then each stored sketch's wireframe by id. A
+    // suppressed sketch, or one past the rollback marker, is not drawn.
+    displayShapes();
+    m_sketchWireframes.clear();
     if (!m_viewport || m_viewport->context().IsNull()) return;
 
-    auto ctx = m_viewport->context();
-
-    // Remove only user shapes (AIS_Shape), preserving the trihedron,
-    // grid, and ViewCube.
-    AIS_ListOfInteractive displayed;
-    ctx->DisplayedObjects(displayed);
-    for (auto it = displayed.begin(); it != displayed.end(); ++it) {
-        if ((*it)->IsKind(STANDARD_TYPE(AIS_Shape)))
-            ctx->Remove(*it, false);
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+    const int rollback = m_timeline ? m_timeline->rollbackPosition() : -1;
+    for (const SketchData& s : m_project.sketches()) {
+        if (const FeatureData* f = m_session.featureById(s.id); f && f->suppressed) continue;
+        const int at = m_timeline ? m_timeline->indexOfFeatureId(s.id) : -1;
+        if (rollback >= 0 && at > rollback) continue;
+        Handle(AIS_Shape) wire = createSketchWireframe(s);
+        if (wire.IsNull()) continue;
+        m_sketchWireframes.insert(s.id, wire);
+        ctx->Display(wire, false);
     }
-
     ctx->UpdateCurrentViewer();
-    m_viewport->resetCamera();
 }
 
 SketchCanvas* FullModeWindow::activeSketchCanvas() const
 {
     return m_inSketchMode ? m_sketchCanvas : nullptr;
-}
-
-bool FullModeWindow::getSelectedSketchForExport(
-    QVector<sketch::Entity>& outEntities,
-    QVector<sketch::Constraint>& outConstraints) const
-{
-    // When in sketch mode, the base class uses activeSketchCanvas() instead
-    if (m_inSketchMode)
-        return false;
-
-    // Check if a sketch is selected in the timeline
-    int selectedIndex = m_timeline->selectedIndex();
-    if (selectedIndex < 0)
-        return false;
-
-    TimelineFeature feature = m_timeline->featureAt(selectedIndex);
-    if (feature != TimelineFeature::Sketch)
-        return false;
-
-    int sketchIdx = sketchIndexFromTimelineIndex(selectedIndex);
-    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size())
-        return false;
-
-    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-    if (sketch.entities.isEmpty())
-        return false;
-
-    // Convert GUI entities to library entities
-    std::vector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
-    outEntities = QVector<sketch::Entity>(libEntities.begin(), libEntities.end());
-
-    // Completed sketches don't store constraints separately, so
-    // outConstraints remains empty (constraints are already baked
-    // into the entity positions)
-    Q_UNUSED(outConstraints);
-
-    return true;
 }
 
 void FullModeWindow::applyPreferences()
@@ -434,115 +631,11 @@ void FullModeWindow::applyPreferences()
 
 // createToolbar() is no longer needed - ModelToolbar handles all button setup internally
 
-void FullModeWindow::createTimeline()
+void FullModeWindow::showOriginPlaneProperties(SketchPlane plane)
 {
-    // Start with just the Origin item - other items added as features are created
-    m_timeline->addItem(TimelineFeature::Origin, tr("Origin"));
-    m_timeline->setFeatureId(0, 0);  // Origin has feature ID 0
-
-    // Connect timeline item selection to properties panel
-    connect(m_timeline, &TimelineWidget::itemClicked,
-            this, [this](int index) { showFeatureProperties(index); });
-
-    // Connect context menu signals for feature editing
-    connect(m_timeline, &TimelineWidget::editFeatureRequested,
-            this, &FullModeWindow::onEditFeature);
-    connect(m_timeline, &TimelineWidget::renameFeatureRequested,
-            this, &FullModeWindow::onRenameFeature);
-    connect(m_timeline, &TimelineWidget::deleteFeatureRequested,
-            this, &FullModeWindow::onDeleteFeature);
-    connect(m_timeline, &TimelineWidget::suppressFeatureRequested,
-            this, &FullModeWindow::onSuppressFeature);
-
-    // Connect export signals for sketch context menu
-    connect(m_timeline, &TimelineWidget::exportDXFRequested,
-            this, &FullModeWindow::onExportSketchDXF);
-    connect(m_timeline, &TimelineWidget::exportSVGRequested,
-            this, &FullModeWindow::onExportSketchSVG);
-
-    // Connect double-click to edit feature
-    connect(m_timeline, &TimelineWidget::itemDoubleClicked,
-            this, &FullModeWindow::onEditFeature);
-
-    // Connect drag reorder to update underlying data
-    connect(m_timeline, &TimelineWidget::itemMoved,
-            this, &FullModeWindow::onFeatureMoved);
-
-    // Connect rollback to show/hide geometry
-    connect(m_timeline, &TimelineWidget::rollbackChanged,
-            this, &FullModeWindow::onRollbackChanged);
-}
-
-void FullModeWindow::populateSketchFeatureProperties(QTreeWidgetItem* parent,
-                                                      int timelineIndex,
-                                                      const QString& units)
-{
-    // Find which sketch this timeline item corresponds to
-    int sketchIdx = sketchIndexFromTimelineIndex(timelineIndex);
-
-    // Get real sketch data if available
-    int planeIdx = 0;
-    int entityCount = 0;
-    SketchPlane sketchPlane = SketchPlane::XY;
-    double sketchOffset = 0.0;
-    PlaneRotationAxis rotAxis = PlaneRotationAxis::X;
-    double rotAngle = 0.0;
-
-    if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
-        const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-        sketchPlane = sketch.plane;
-        sketchOffset = sketch.planeOffset;
-        rotAxis = sketch.rotationAxis;
-        rotAngle = sketch.rotationAngle;
-
-        switch (sketch.plane) {
-        case SketchPlane::XY: planeIdx = 0; break;
-        case SketchPlane::XZ: planeIdx = 1; break;
-        case SketchPlane::YZ: planeIdx = 2; break;
-        case SketchPlane::Custom: planeIdx = 3; break;
-        }
-        entityCount = sketch.entities.size();
-
-        // Show the sketch plane visualization in 3D viewport
-        showSketchPlane(sketchPlane, sketchOffset, rotAxis, rotAngle);
-    }
-
-    auto* planeItem = new QTreeWidgetItem(parent);
-    QStringList planeOptions = {tr("XY"), tr("XZ"), tr("YZ"), tr("Custom")};
-    planeItem->setText(0, tr("Plane"));
-    planeItem->setText(1, planeOptions.value(planeIdx));
-    planeItem->setToolTip(0, tr("Plane"));
-    planeItem->setToolTip(1, planeOptions.value(planeIdx));
-    planeItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-    planeItem->setData(1, Qt::UserRole + 1, planeOptions);
-    planeItem->setData(1, Qt::UserRole + 2, planeIdx);
-
-    // Show offset if non-zero
-    if (!qFuzzyIsNull(sketchOffset)) {
-        auto* offsetItem = new QTreeWidgetItem(parent);
-        offsetItem->setText(0, tr("Offset"));
-        offsetItem->setText(1, QStringLiteral("%1 %2").arg(sketchOffset, 0, 'g', 6).arg(units));
-        offsetItem->setToolTip(0, tr("Offset"));
-        offsetItem->setToolTip(1, QStringLiteral("%1 %2").arg(sketchOffset, 0, 'g', 6).arg(units));
-    }
-
-    auto* entitiesItem = new QTreeWidgetItem(parent);
-    entitiesItem->setText(0, tr("Entities"));
-    entitiesItem->setText(1, QString::number(entityCount));
-    entitiesItem->setToolTip(0, tr("Entities"));
-    entitiesItem->setToolTip(1, QString::number(entityCount));
-
-    auto* constraintsItem = new QTreeWidgetItem(parent);
-    constraintsItem->setText(0, tr("Constraints"));
-    constraintsItem->setText(1, tr("0"));
-    constraintsItem->setToolTip(0, tr("Constraints"));
-    constraintsItem->setToolTip(1, tr("0"));
-}
-
-void FullModeWindow::onSketchDeselected()
-{
-    MainWindow::onSketchDeselected();
-    showSketchProperties();
+    MainWindow::showOriginPlaneProperties(plane);
+    if (plane != SketchPlane::Custom)
+        showSketchPlane(plane, 0.0, PlaneRotationAxis::X, 0.0);
 }
 
 void FullModeWindow::displayShapes()
@@ -553,18 +646,26 @@ void FullModeWindow::displayShapes()
 
     // Remove only user shapes (AIS_Shape), preserving the trihedron
     // and any other non-shape interactive objects.
-    AIS_ListOfInteractive displayed;
+    NCollection_List<opencascade::handle<AIS_InteractiveObject>> displayed;
     ctx->DisplayedObjects(displayed);
     for (auto it = displayed.begin(); it != displayed.end(); ++it) {
         if ((*it)->IsKind(STANDARD_TYPE(AIS_Shape)))
             ctx->Remove(*it, false);
     }
 
-    // Display each shape from the document with edge outlines
-    for (const auto& shape : m_document.shapes()) {
+    // Keep the shaded handles index-aligned with m_project.bodies(), so the
+    // Bodies folder can hide and show a body by its row. Extrude and revolve
+    // already append here; without doing it on load too the alignment only
+    // held for bodies made during the current session.
+    m_solidAisShapes.clear();
+
+    // Display each body of the project with edge outlines
+    for (const auto& body : m_project.bodies()) {
+        const TopoDS_Shape& shape = body.shape;
         if (!shape.IsNull()) {
             // Shaded body
             Handle(AIS_Shape) aisShape = new AIS_Shape(shape);
+            m_solidAisShapes.append(aisShape);
             ctx->Display(aisShape, AIS_Shaded, 0, false);
 
             // Wireframe overlay for visible edge outlines
@@ -583,67 +684,17 @@ void FullModeWindow::displayShapes()
     m_viewport->context()->UpdateCurrentViewer();
 }
 
-void FullModeWindow::onCreateSketchClicked()
+void FullModeWindow::beginStartupSketch(SketchPlane plane)
 {
-    // Check if a plane is selected in the objects tree
-    if (m_objectsTree) {
-        QTreeWidgetItem* current = m_objectsTree->currentItem();
-        if (current) {
-            QString itemType = current->data(0, Qt::UserRole).toString();
-
-            if (itemType == QStringLiteral("origin_plane")) {
-                // Origin plane (XY/XZ/YZ) selected - use that plane
-                int planeValue = current->data(0, Qt::UserRole + 1).toInt();
-                SketchPlane plane = static_cast<SketchPlane>(planeValue);
-                m_pendingSketchOffset = 0.0;
-                m_pendingRotationAxis = PlaneRotationAxis::X;
-                m_pendingRotationAngle = 0.0;
-                enterSketchMode(plane);
-                return;
-            }
-
-            if (itemType == QStringLiteral("construction_plane")) {
-                // Construction plane selected - use its parameters
-                int planeId = current->data(0, Qt::UserRole + 1).toInt();
-                const ConstructionPlaneData* cpData = m_project.constructionPlaneById(planeId);
-                if (cpData) {
-                    m_pendingSketchOffset = cpData->offset;
-                    m_pendingRotationAxis = cpData->primaryAxis;
-                    m_pendingRotationAngle = cpData->primaryAngle;
-                    enterSketchMode(SketchPlane::Custom);
-                    return;
-                }
-            }
-        }
+    // Aaron, 2026-09-11: full startup (viewport init and all) should finish
+    // first, THEN switch to the 2D sketch. If the OCCT view is already up, begin
+    // now; otherwise wait for viewInitialized (or viewInitFailed) to enter, so
+    // the run-script path behaves like an interactive sketch on a warmed-up app.
+    if (m_viewport && !m_viewport->view().IsNull()) {
+        createSketchOnPlane(plane);
+    } else {
+        m_pendingStartupSketch = plane;
     }
-
-    // No plane selected - show plane selection dialog
-    SketchPlaneDialog dialog(this);
-    dialog.setAvailableConstructionPlanes(m_project.constructionPlanes());
-
-    if (dialog.exec() != QDialog::Accepted) {
-        return;  // User cancelled
-    }
-
-    SketchPlane plane = dialog.selectedPlane();
-    int constructionPlaneId = dialog.constructionPlaneId();
-
-    m_pendingSketchOffset = dialog.offset();
-    m_pendingRotationAxis = dialog.rotationAxis();
-    m_pendingRotationAngle = dialog.rotationAngle();
-
-    // If using a construction plane, get its parameters
-    if (constructionPlaneId >= 0) {
-        const ConstructionPlaneData* cpData = m_project.constructionPlaneById(constructionPlaneId);
-        if (cpData) {
-            plane = SketchPlane::Custom;
-            m_pendingSketchOffset = dialog.offset() + cpData->offset;
-            m_pendingRotationAxis = cpData->primaryAxis;
-            m_pendingRotationAngle = cpData->primaryAngle;
-        }
-    }
-
-    enterSketchMode(plane);
 }
 
 void FullModeWindow::onNewConstructionPlane()
@@ -664,17 +715,18 @@ void FullModeWindow::onNewConstructionPlane()
     dialog.setPlaneData(defaultData);
 
     if (dialog.exec() != QDialog::Accepted) {
-        return;  // User cancelled
+        return;  // User canceled
     }
 
     ConstructionPlaneData planeData = dialog.planeData();
-    planeData.id = m_project.nextConstructionPlaneId();
 
-    // Add to project
-    m_project.addConstructionPlane(planeData);
+    // The project owns identity: it assigns the id and the design, and
+    // hands the id back. Allocating it here as well meant two places knew
+    // how plane ids are made.
+    planeData.id = m_project.addConstructionPlane(planeData);
 
     // Add to feature tree
-    addConstructionPlaneToTree(QString::fromStdString(planeData.name), planeData.id);
+    rebuildObjectsTree();
 
     // Display in viewport if visible
     if (planeData.visible) {
@@ -796,6 +848,14 @@ void FullModeWindow::onConstructionPlaneSelected(int planeId)
                             .arg(planeData->originY, 0, 'g', 6)
                             .arg(planeData->originZ, 0, 'g', 6));
         originItem->setFlags(originItem->flags() | Qt::ItemIsEditable);
+        if (planeData->centerRelative) {
+            originItem->setText(0, tr("Center (Relative)"));
+            auto* refItem = new QTreeWidgetItem(props);
+            refItem->setText(0, tr("Relative To"));
+            const ConstructionPlaneData* rp = planeData->centerRefPlaneId >= 0
+                ? m_project.constructionPlaneById(planeData->centerRefPlaneId) : nullptr;
+            refItem->setText(1, rp ? QString::fromStdString(rp->name) : tr("Base plane"));
+        }
     }
 
     // Visibility
@@ -808,66 +868,11 @@ void FullModeWindow::onConstructionPlaneSelected(int planeId)
     props->expandAll();
     props->resizeColumnToContents(0);
 
-    // Show the sketch plane in 3D view
-    showSketchPlane(planeData->basePlane, planeData->offset,
-                    planeData->primaryAxis, planeData->primaryAngle);
-}
-
-void FullModeWindow::enterSketchMode(SketchPlane plane)
-{
-    MainWindow::enterSketchMode(plane);
-
-    // Determine if we're creating a new sketch or editing existing
-    bool isNewSketch = (m_currentSketchIndex < 0);
-
-    QString sketchName;
-    if (isNewSketch) {
-        int sketchCount = 0;
-        for (int i = 0; i < m_timeline->itemCount(); ++i) {
-            if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-                ++sketchCount;
-            }
-        }
-        sketchName = tr("Sketch%1").arg(sketchCount + 1);
-        m_pendingSketchTimelineIdx = m_timeline->addItemAtRollback(TimelineFeature::Sketch, sketchName);
-
-        int pendingIndex = m_completedSketches.size();
-        addSketchToTree(sketchName, pendingIndex);
-    } else {
-        sketchName = m_completedSketches[m_currentSketchIndex].name;
-        m_pendingSketchTimelineIdx = timelineIndexFromSketchIndex(m_currentSketchIndex);
-    }
-
-    m_timeline->setSelectedIndex(m_pendingSketchTimelineIdx >= 0 ? m_pendingSketchTimelineIdx : m_timeline->itemCount() - 1);
-
-    // Update properties to show sketch settings
-    QTreeWidget* propsTree = propertiesTree();
-    if (propsTree) {
-        propsTree->clear();
-
-        auto* nameItem = new QTreeWidgetItem(propsTree);
-        nameItem->setText(0, tr("Name"));
-        nameItem->setText(1, sketchName);
-        nameItem->setFlags(nameItem->flags() | Qt::ItemIsEditable);
-
-        auto* planeItem = new QTreeWidgetItem(propsTree);
-        planeItem->setText(0, tr("Plane"));
-        QStringList planes = {tr("XY"), tr("XZ"), tr("YZ")};
-        int planeIdx = static_cast<int>(plane);
-        planeItem->setText(1, planes.value(planeIdx));
-        planeItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-        planeItem->setData(1, Qt::UserRole + 1, planes);
-        planeItem->setData(1, Qt::UserRole + 2, planeIdx);
-
-        auto* offsetItem = new QTreeWidgetItem(propsTree);
-        offsetItem->setText(0, tr("Offset"));
-        offsetItem->setText(1, tr("%1 mm").arg(m_pendingSketchOffset, 0, 'g', 6));
-
-        auto* entitiesItem = new QTreeWidgetItem(propsTree);
-        entitiesItem->setText(0, tr("Entities"));
-        entitiesItem->setText(1, QString::number(m_sketchCanvas->entities().size()));
-
-        propsTree->expandAll();
+    // Highlight the plane where it really is, and open the transform editor
+    showPlaneFrame(constructionPlaneFrame(*planeData, m_project));
+    if (PlaneTransformPanel* panel = planeTransformPanel()) {
+        panel->setPlane(*planeData, m_project.constructionPlanes());
+        panel->setVisible(true);
     }
 }
 
@@ -875,8 +880,99 @@ void FullModeWindow::exitSketchMode()
 {
     MainWindow::exitSketchMode();
 
-    // Switch back to 3D viewport
-    m_viewportStack->setCurrentWidget(m_viewport);
+    // Switch back to the 3D viewport, unless it was dropped (a null
+    // setCurrentWidget would blank the stack); then keep the current page.
+    if (m_viewport)
+        m_viewportStack->setCurrentWidget(m_viewport);
+
+    // The sketch is finished: discard the in-sketch 3D orientation and restore
+    // the pre-sketch model camera saved when 3D was first entered this sketch.
+    if (m_sketch3DSeeded && m_viewport && !m_viewport->view().IsNull()
+        && !m_preSketch3DCam.IsNull())
+        m_viewport->setCameraState(m_preSketch3DCam);
+    if (m_viewport) m_viewport->setAxisColorsNeutral(false);   // restore RGB axes
+    m_preSketch3DCam.Nullify();
+    m_inSketch3DCam.Nullify();
+    m_sketch3DSeeded = false;
+    m_pendingSketchSeed = false;
+}
+
+// Flat-on to the sketch plane: the projection vector is the plane normal and
+// the up vector its second in-plane axis, matching OCCT's Top/Front/Right.
+void FullModeWindow::orientViewToSketchPlane(const Handle(V3d_View)& v)
+{
+    double px = 0, py = 0, pz = 1;   // XY (top) by default
+    double ux = 0, uy = 1, uz = 0;
+    switch (m_sketchCanvas->sketchPlane()) {
+    case SketchPlane::XY:  px = 0; py = 0; pz = 1; ux = 0; uy = 1; uz = 0; break;
+    case SketchPlane::XZ:  px = 0; py = -1; pz = 0; ux = 0; uy = 0; uz = 1; break;
+    case SketchPlane::YZ:  px = 1; py = 0; pz = 0; ux = 0; uy = 0; uz = 1; break;
+    default:               px = 0; py = 0; pz = 1; ux = 0; uy = 1; uz = 0; break;
+    }
+    v->SetProj(px, py, pz);
+    v->SetUp(ux, uy, uz);
+}
+
+void FullModeWindow::lookAtSketchPlane()
+{
+    if (!m_viewport || !m_sketchCanvas) return;
+    Handle(V3d_View) v = m_viewport->view();
+    if (v.IsNull()) return;
+
+    // Projection vector points from the scene toward the eye, so it is the
+    // plane normal; the up vector is the plane's second in-plane axis. These
+    // match OCCT's standard Top/Front/Right views.
+    orientViewToSketchPlane(v);
+    m_viewport->fitAll();
+    v->Redraw();
+}
+
+void FullModeWindow::syncViewportToSketchView()
+{
+    if (!m_viewport || !m_sketchCanvas) return;
+    Handle(V3d_View) v = m_viewport->view();
+    if (v.IsNull()) return;
+
+    // Orientation: flat-on to the sketch plane (same vectors as Look At).
+    orientViewToSketchPlane(v);
+
+    // Center: the 2D view center (u,v on the plane) mapped to 3D world, so the
+    // 3D view frames the same point the 2D canvas did (not a blind fit-all).
+    const QPointF c = m_sketchCanvas->viewCenter();
+    double wx = 0, wy = 0, wz = 0;
+    switch (m_sketchCanvas->sketchPlane()) {
+    case SketchPlane::XY:  wx = c.x(); wy = c.y(); wz = 0;      break;
+    case SketchPlane::XZ:  wx = c.x(); wy = 0;     wz = c.y();  break;
+    case SketchPlane::YZ:  wx = 0;     wy = c.x(); wz = c.y();  break;
+    default:               wx = c.x(); wy = c.y(); wz = 0;      break;
+    }
+    v->SetAt(wx, wy, wz);
+
+    // Scale: match the 2D zoom (pixels per mm). The 2D view spans
+    // height_px / zoom mm; the stacked viewport is the same pixel size, so
+    // SetSize maps that world span in. (OCCT SetSize semantics are version
+    // dependent, so the match may want a small runtime tweak.)
+    const double zoom = m_sketchCanvas->zoomFactor();
+    if (zoom > geometry::kZeroEps && m_viewport->height() > 0)
+        v->SetSize(static_cast<double>(m_viewport->height()) / zoom);
+
+    // Flat sketch view: neutral (gray) axes rather than the model view's RGB.
+    m_viewport->setAxisColorsNeutral(true);
+
+    // The sketch plane's blue highlight overwhelms the 3D view and is transient
+    // (never saved with the camera); drop it here.
+    hideSketchPlane();
+
+    v->Redraw();
+}
+
+void FullModeWindow::seedSketch3DView()
+{
+    if (m_sketch3DSeeded || !m_viewport || m_viewport->view().IsNull()) return;
+    m_preSketch3DCam = m_viewport->cameraState();   // save before reorienting
+    syncViewportToSketchView();                     // orient + center + scale to 2D
+    m_inSketch3DCam  = m_viewport->cameraState();   // seed the in-sketch view
+    m_sketch3DSeeded = true;
 }
 
 void FullModeWindow::onSketchEntityModified(int entityId)
@@ -890,53 +986,7 @@ void FullModeWindow::onSketchEntityModified(int entityId)
     });
 }
 
-void FullModeWindow::showSketchProperties()
-{
-    QTreeWidget* propsTree = propertiesTree();
-    if (!propsTree) return;
-
-    propsTree->clear();
-
-    // Determine sketch name
-    QString sketchName;
-    if (m_currentSketchIndex >= 0 && m_currentSketchIndex < m_completedSketches.size()) {
-        sketchName = m_completedSketches[m_currentSketchIndex].name;
-    } else {
-        // New sketch - find name from timeline
-        int sketchCount = 0;
-        for (int i = 0; i < m_timeline->itemCount(); ++i) {
-            if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-                ++sketchCount;
-            }
-        }
-        sketchName = tr("Sketch%1").arg(sketchCount);
-    }
-
-    // Sketch name
-    auto* nameItem = new QTreeWidgetItem(propsTree);
-    nameItem->setText(0, tr("Name"));
-    nameItem->setText(1, sketchName);
-    nameItem->setFlags(nameItem->flags() | Qt::ItemIsEditable);
-
-    // Plane selection
-    auto* planeItem = new QTreeWidgetItem(propsTree);
-    planeItem->setText(0, tr("Plane"));
-    QStringList planes = {tr("XY"), tr("XZ"), tr("YZ")};
-    int planeIdx = static_cast<int>(m_sketchCanvas->sketchPlane());
-    planeItem->setText(1, planes.value(planeIdx));
-    planeItem->setData(1, Qt::UserRole, QStringLiteral("dropdown"));
-    planeItem->setData(1, Qt::UserRole + 1, planes);
-    planeItem->setData(1, Qt::UserRole + 2, planeIdx);
-
-    // Entities count
-    auto* entitiesItem = new QTreeWidgetItem(propsTree);
-    entitiesItem->setText(0, tr("Entities"));
-    entitiesItem->setText(1, QString::number(m_sketchCanvas->entities().size()));
-
-    propsTree->expandAll();
-}
-
-Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& sketch)
+Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const SketchData& sketch)
 {
     BRep_Builder builder;
     TopoDS_Compound compound;
@@ -963,7 +1013,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             rotAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
             break;
         }
-        double angleRad = sketch.rotationAngle * M_PI / 180.0;
+        double angleRad = degreesToRadians(sketch.rotationAngle);
         customTransform.SetRotation(rotAxis, angleRad);
     }
 
@@ -1030,7 +1080,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
         break;
     }
 
-    for (const SketchEntity& entity : sketch.entities) {
+    for (const sketch::Entity& entity : sketch.entities) {
         switch (entity.type) {
         case SketchEntityType::Point:
             if (!entity.points.empty()) {
@@ -1046,7 +1096,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             if (entity.points.size() >= 2) {
                 gp_Pnt p1 = to3D(entity.points[0]);
                 gp_Pnt p2 = to3D(entity.points[1]);
-                if (p1.Distance(p2) > 1e-6) {
+                if (p1.Distance(p2) > geometry::kDegenerateLen) {
                     BRepBuilderAPI_MakeEdge me(p1, p2);
                     if (me.IsDone()) {
                         TopoDS_Shape edge = me.Edge();
@@ -1057,14 +1107,17 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             break;
 
         case SketchEntityType::Rectangle:
-            if (entity.points.size() >= 2) {
-                gp_Pnt p1 = to3D(entity.points[0]);
-                gp_Pnt p2 = to3D(QPointF(entity.points[1].x, entity.points[0].y));
-                gp_Pnt p3 = to3D(entity.points[1]);
-                gp_Pnt p4 = to3D(QPointF(entity.points[0].x, entity.points[1].y));
+        case SketchEntityType::Parallelogram:
+            if (Point2D c[4]; sketch::quadCorners(entity, c)) {
+                // From the corners: a rotated rectangle or a parallelogram is
+                // not the axis-aligned box of its first two points.
+                gp_Pnt p1 = to3D(QPointF(c[0].x, c[0].y));
+                gp_Pnt p2 = to3D(QPointF(c[1].x, c[1].y));
+                gp_Pnt p3 = to3D(QPointF(c[2].x, c[2].y));
+                gp_Pnt p4 = to3D(QPointF(c[3].x, c[3].y));
 
                 auto addEdge = [&](const gp_Pnt& a, const gp_Pnt& b) {
-                    if (a.Distance(b) > 1e-6) {
+                    if (a.Distance(b) > geometry::kDegenerateLen) {
                         BRepBuilderAPI_MakeEdge me(a, b);
                         if (me.IsDone()) {
                             TopoDS_Shape edge = me.Edge();
@@ -1080,7 +1133,7 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             break;
 
         case SketchEntityType::Circle:
-            if (!entity.points.empty() && entity.radius > 1e-6) {
+            if (!entity.points.empty() && entity.radius > geometry::kDegenerateLen) {
                 gp_Pnt center = to3D(entity.points[0]);
                 gp_Ax2 axis(center, planeNormal, planeXDir);
                 gp_Circ circle(axis, entity.radius);
@@ -1093,15 +1146,15 @@ Handle(AIS_Shape) FullModeWindow::createSketchWireframe(const CompletedSketch& s
             break;
 
         case SketchEntityType::Arc:
-            if (!entity.points.empty() && entity.radius > 1e-6 &&
-                std::abs(entity.sweepAngle) > 1e-6) {
+            if (!entity.points.empty() && entity.radius > geometry::kDegenerateLen &&
+                std::abs(entity.sweepAngle) > geometry::kAngleEpsDeg) {
                 gp_Pnt center = to3D(entity.points[0]);
                 gp_Ax2 axis(center, planeNormal, planeXDir);
                 gp_Circ circle(axis, entity.radius);
 
                 // Convert angles to radians
-                double startRad = entity.startAngle * M_PI / 180.0;
-                double endRad = (entity.startAngle + entity.sweepAngle) * M_PI / 180.0;
+                double startRad = degreesToRadians(entity.startAngle);
+                double endRad = degreesToRadians(entity.startAngle + entity.sweepAngle);
 
                 BRepBuilderAPI_MakeEdge me(circle, startRad, endRad);
                 if (me.IsDone()) {
@@ -1153,7 +1206,7 @@ void FullModeWindow::showSketchPlane(SketchPlane plane, double offset,
     m_sketchPlaneVis->SetTransparency(0.7);
 
     // Display the plane
-    ctx->Display(m_sketchPlaneVis, Standard_True);
+    ctx->Display(m_sketchPlaneVis, true);
 }
 
 void FullModeWindow::hideSketchPlane()
@@ -1164,811 +1217,209 @@ void FullModeWindow::hideSketchPlane()
     Handle(AIS_InteractiveContext) ctx = m_viewport->context();
     if (ctx.IsNull()) return;
 
-    ctx->Remove(m_sketchPlaneVis, Standard_True);
+    ctx->Remove(m_sketchPlaneVis, true);
     m_sketchPlaneVis.Nullify();
-}
-
-void FullModeWindow::saveCurrentSketch()
-{
-    // Get the sketch from the timeline at the pending index
-    if (m_timeline->itemCount() == 0)
-        return;
-
-    int timelineIdx = m_pendingSketchTimelineIdx;
-    if (timelineIdx < 0 || timelineIdx >= m_timeline->itemCount())
-        timelineIdx = m_timeline->itemCount() - 1;
-
-    if (m_timeline->featureAt(timelineIdx) != TimelineFeature::Sketch)
-        return;
-
-    QString sketchName = m_timeline->nameAt(timelineIdx);
-    bool isNewSketch = (m_currentSketchIndex < 0);
-
-    // Create the completed sketch structure
-    CompletedSketch sketch;
-    sketch.name = sketchName;
-    sketch.plane = m_sketchCanvas->sketchPlane();
-    sketch.planeOffset = m_pendingSketchOffset;
-    sketch.rotationAxis = m_pendingRotationAxis;
-    sketch.rotationAngle = m_pendingRotationAngle;
-    sketch.entities = m_sketchCanvas->entities();
-
-    // Create and display the 3D wireframe
-    sketch.aisShape = createSketchWireframe(sketch);
-    if (!sketch.aisShape.IsNull() && m_viewport) {
-        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-        if (!ctx.IsNull()) {
-            ctx->Display(sketch.aisShape, Standard_True);
-        }
-    }
-
-    int sketchIndex;
-    if (isNewSketch) {
-        // Assign a new feature ID
-        sketch.featureId = m_nextFeatureId++;
-
-        // New sketch - calculate correct position in sketches array based on timeline position
-        // Count how many sketches come before this timeline index
-        int insertPos = 0;
-        for (int i = 0; i < timelineIdx; ++i) {
-            if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-                ++insertPos;
-            }
-        }
-
-        // Insert at calculated position
-        m_completedSketches.insert(insertPos, sketch);
-        sketchIndex = insertPos;
-
-        // Update feature tree (need to rebuild since indices shifted)
-        clearSketchesInTree();
-        for (int i = 0; i < m_completedSketches.size(); ++i) {
-            addSketchToTree(m_completedSketches[i].name, i);
-        }
-
-        // Set the feature ID in the timeline for dependency tracking
-        m_timeline->setFeatureId(timelineIdx, sketch.featureId);
-        // Sketches don't depend on anything by default (just the Origin, implicitly)
-        m_timeline->setDependencies(timelineIdx, {});
-    } else {
-        // Editing existing sketch - remove old wireframe, update in place
-        sketchIndex = m_currentSketchIndex;
-        CompletedSketch& existing = m_completedSketches[sketchIndex];
-
-        // Preserve the feature ID when editing
-        sketch.featureId = existing.featureId;
-
-        if (!existing.aisShape.IsNull() && m_viewport) {
-            Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-            if (!ctx.IsNull()) {
-                ctx->Remove(existing.aisShape, Standard_False);
-            }
-        }
-        existing = sketch;
-    }
-
-    selectSketchInTree(sketchIndex);
-
-    // Select the sketch in the timeline
-    m_timeline->setSelectedIndex(timelineIdx);
-
-    // Reset editing indices
-    m_currentSketchIndex = -1;
-    m_pendingSketchTimelineIdx = -1;
-
-    statusBar()->showMessage(
-        tr("Sketch '%1' saved with %2 entities")
-            .arg(sketchName)
-            .arg(sketch.entities.size()),
-        3000);
-}
-
-void FullModeWindow::discardCurrentSketch()
-{
-    bool isNewSketch = (m_currentSketchIndex < 0);
-    int entityCount = m_sketchCanvas->entities().size();
-
-    if (isNewSketch) {
-        // New sketch being discarded - remove from both timeline and feature tree
-        if (m_timeline->itemCount() > 0) {
-            int lastIdx = m_timeline->itemCount() - 1;
-            if (m_timeline->featureAt(lastIdx) == TimelineFeature::Sketch) {
-                m_timeline->removeItem(lastIdx);
-            }
-        }
-
-        // Remove from feature tree - the pending sketch was added at m_completedSketches.size()
-        // So we need to remove the last sketch item in the tree
-        clearSketchesInTree();
-        // Re-add existing sketches
-        for (int i = 0; i < m_completedSketches.size(); ++i) {
-            addSketchToTree(m_completedSketches[i].name, i);
-        }
-
-        if (entityCount == 0) {
-            statusBar()->showMessage(tr("Empty sketch discarded"), 3000);
-        } else {
-            statusBar()->showMessage(
-                tr("Sketch discarded (%1 entities)").arg(entityCount),
-                3000);
-        }
-    } else {
-        // Editing existing sketch - just discard changes, keep original
-        statusBar()->showMessage(
-            tr("Changes to '%1' discarded").arg(m_completedSketches[m_currentSketchIndex].name),
-            3000);
-    }
-
-    // Reset the editing index
-    m_currentSketchIndex = -1;
+    // Remove() redraws the OCCT viewer, but the Qt widget only repaints on
+    // its next paint event; without this the removed plane stayed on screen
+    // until something else moved the view.
+    m_viewport->update();
 }
 
 // ---- Timeline Context Menu Handlers ---------------------------------
 
-int FullModeWindow::sketchIndexFromTimelineIndex(int timelineIndex) const
-{
-    // Count how many Sketch items come before this index
-    int sketchCount = 0;
-    for (int i = 0; i <= timelineIndex; ++i) {
-        if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-            if (i == timelineIndex) {
-                return sketchCount;
-            }
-            ++sketchCount;
-        }
-    }
-    return -1;  // Not a sketch
-}
-
-int FullModeWindow::timelineIndexFromSketchIndex(int sketchIndex) const
-{
-    // Find the timeline index for the N-th sketch
-    int sketchCount = 0;
-    for (int i = 0; i < m_timeline->itemCount(); ++i) {
-        if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-            if (sketchCount == sketchIndex) {
-                return i;
-            }
-            ++sketchCount;
-        }
-    }
-    return -1;  // Not found
-}
-
-std::optional<TimelineFeature> FullModeWindow::validateFeatureAction(
-    int index, const QString& actionVerb) const
-{
-    if (index < 0 || index >= m_timeline->itemCount())
-        return std::nullopt;
-
-    TimelineFeature feature = m_timeline->featureAt(index);
-    if (feature == TimelineFeature::Origin) {
-        statusBar()->showMessage(
-            tr("Origin cannot be %1").arg(actionVerb), 3000);
-        return std::nullopt;
-    }
-    return feature;
-}
-
-std::optional<FullModeWindow::SketchProfilesResult>
-FullModeWindow::getSelectedSketchProfiles(const QString& operationName)
-{
-    int selectedIndex = m_timeline->selectedIndex();
-    if (selectedIndex < 0) {
-        QMessageBox::information(this, operationName,
-            tr("Please select a sketch in the timeline first."));
-        return std::nullopt;
-    }
-
-    TimelineFeature feature = m_timeline->featureAt(selectedIndex);
-    if (feature != TimelineFeature::Sketch) {
-        QMessageBox::information(this, operationName,
-            tr("Please select a sketch to %1.").arg(operationName.toLower()));
-        return std::nullopt;
-    }
-
-    int sketchIdx = sketchIndexFromTimelineIndex(selectedIndex);
-    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size()) {
-        QMessageBox::warning(this, operationName,
-            tr("Could not find sketch data."));
-        return std::nullopt;
-    }
-
-    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-    std::vector<sketch::Entity> libEntities = toLibraryEntities(sketch.entities);
-
-    sketch::ProfileDetectionOptions options;
-    options.excludeConstruction = true;
-    std::vector<sketch::Profile> profiles = sketch::detectProfiles(libEntities, options);
-
-    if (profiles.empty()) {
-        QMessageBox::warning(this, operationName,
-            tr("No closed profiles found in the sketch.\n"
-               "Make sure the sketch contains a closed loop."));
-        return std::nullopt;
-    }
-
-    return SketchProfilesResult{&sketch, std::move(libEntities), std::move(profiles)};
-}
-
-void FullModeWindow::onEditFeature(int index)
-{
-    auto feature = validateFeatureAction(index, tr("edited"));
-    if (!feature) return;
-
-    switch (*feature) {
-    case TimelineFeature::Origin:
-        break;  // unreachable — validateFeatureAction filters Origin
-
-    case TimelineFeature::Sketch:
-        {
-            int sketchIdx = sketchIndexFromTimelineIndex(index);
-            if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
-                // Set up for editing existing sketch
-                m_currentSketchIndex = sketchIdx;
-                const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-
-                // Store the plane parameters for editing
-                m_pendingSketchOffset = sketch.planeOffset;
-                m_pendingRotationAxis = sketch.rotationAxis;
-                m_pendingRotationAngle = sketch.rotationAngle;
-
-                // Load the sketch entities into the canvas
-                m_sketchCanvas->setEntities(sketch.entities);
-
-                // Enter sketch mode on the same plane
-                enterSketchMode(sketch.plane);
-            }
-        }
-        break;
-
-    default:
-        // TODO: Implement editing for other feature types (Extrude, Revolve, etc.)
-        statusBar()->showMessage(
-            tr("Editing %1 features not yet implemented").arg(m_timeline->nameAt(index)),
-            3000);
-        break;
-    }
-}
-
-void FullModeWindow::onRenameFeature(int index)
-{
-    auto feature = validateFeatureAction(index, tr("renamed"));
-    if (!feature) return;
-
-    QString currentName = m_timeline->nameAt(index);
-
-    // Show rename dialog
-    bool ok;
-    QString newName = QInputDialog::getText(this,
-        tr("Rename Feature"),
-        tr("New name:"),
-        QLineEdit::Normal,
-        currentName,
-        &ok);
-
-    if (ok && !newName.isEmpty() && newName != currentName) {
-        // Update the timeline item
-        // We need to remove and re-add since TimelineWidget doesn't have a rename API
-        // For now, just update the internal data structures
-
-        if (*feature == TimelineFeature::Sketch) {
-            int sketchIdx = sketchIndexFromTimelineIndex(index);
-            if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
-                m_completedSketches[sketchIdx].name = newName;
-
-                // Rebuild the timeline and tree with the new name
-                // (A cleaner approach would be to add a rename method to TimelineWidget)
-                populateTimeline();
-                clearSketchesInTree();
-                for (int i = 0; i < m_completedSketches.size(); ++i) {
-                    addSketchToTree(m_completedSketches[i].name, i);
-                }
-
-                // Mark project as modified
-                m_project.setModified(true);
-
-                statusBar()->showMessage(
-                    tr("Renamed to '%1'").arg(newName), 3000);
-            }
-        }
-        // TODO: Handle other feature types
-    }
-}
-
-void FullModeWindow::onDeleteFeature(int index)
-{
-    auto feature = validateFeatureAction(index, tr("deleted"));
-    if (!feature) return;
-
-    QString featureName = m_timeline->nameAt(index);
-
-    // Confirm deletion
-    QMessageBox::StandardButton reply = QMessageBox::question(this,
-        tr("Delete Feature"),
-        tr("Are you sure you want to delete '%1'?\n\n"
-           "This action cannot be undone.").arg(featureName),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (reply != QMessageBox::Yes)
-        return;
-
-    if (*feature == TimelineFeature::Sketch) {
-        int sketchIdx = sketchIndexFromTimelineIndex(index);
-        if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
-            // Remove from viewport if displayed
-            const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-            if (!sketch.aisShape.IsNull() && m_viewport && !m_viewport->context().IsNull()) {
-                m_viewport->context()->Remove(sketch.aisShape, false);
-                m_viewport->context()->UpdateCurrentViewer();
-            }
-
-            // Remove from completed sketches
-            m_completedSketches.remove(sketchIdx);
-
-            // Remove from timeline
-            m_timeline->removeItem(index);
-
-            // Rebuild feature tree
-            clearSketchesInTree();
-            for (int i = 0; i < m_completedSketches.size(); ++i) {
-                addSketchToTree(m_completedSketches[i].name, i);
-            }
-
-            // Mark project as modified
-            m_project.setModified(true);
-
-            statusBar()->showMessage(
-                tr("Deleted '%1'").arg(featureName), 3000);
-        }
-    }
-    // TODO: Handle other feature types
-}
-
-void FullModeWindow::onSuppressFeature(int index, bool suppress)
-{
-    auto feature = validateFeatureAction(index, tr("suppressed"));
-    if (!feature) return;
-
-    QString featureName = m_timeline->nameAt(index);
-
-    if (*feature == TimelineFeature::Sketch) {
-        int sketchIdx = sketchIndexFromTimelineIndex(index);
-        if (sketchIdx >= 0 && sketchIdx < m_completedSketches.size()) {
-            CompletedSketch& sketch = m_completedSketches[sketchIdx];
-
-            if (suppress) {
-                // Hide the sketch from viewport
-                if (!sketch.aisShape.IsNull() && m_viewport && !m_viewport->context().IsNull()) {
-                    m_viewport->context()->Erase(sketch.aisShape, false);
-                    m_viewport->context()->UpdateCurrentViewer();
-                }
-                statusBar()->showMessage(
-                    tr("Suppressed '%1'").arg(featureName), 3000);
-            } else {
-                // Show the sketch in viewport
-                if (!sketch.aisShape.IsNull() && m_viewport && !m_viewport->context().IsNull()) {
-                    m_viewport->context()->Display(sketch.aisShape, false);
-                    m_viewport->context()->UpdateCurrentViewer();
-                }
-                statusBar()->showMessage(
-                    tr("Unsuppressed '%1'").arg(featureName), 3000);
-            }
-
-            // Mark project as modified
-            m_project.setModified(true);
-        }
-    }
-    // TODO: Handle other feature types, store suppression state
-}
-
-void FullModeWindow::onExportSketchDXF(int index)
-{
-    int sketchIdx = sketchIndexFromTimelineIndex(index);
-    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size())
-        return;
-
-    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-    if (sketch.entities.isEmpty()) {
-        QMessageBox::information(this, tr("Export DXF"),
-            tr("The sketch '%1' is empty.").arg(sketch.name));
-        return;
-    }
-
-    QString filePath = QFileDialog::getSaveFileName(
-        this,
-        tr("Export DXF File"),
-        sketch.name + QStringLiteral(".dxf"),
-        tr("DXF Files (*.dxf);;All Files (*)"));
-
-    if (filePath.isEmpty()) return;
-
-    if (!filePath.toLower().endsWith(QLatin1String(".dxf"))) {
-        filePath += QStringLiteral(".dxf");
-    }
-
-    std::vector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
-
-    sketch::DXFExportOptions options;
-    bool success = sketch::exportSketchToDXF(entities, filePath.toStdString(), options);
-
-    if (!success) {
-        QMessageBox::critical(this, tr("Export Failed"),
-            tr("Failed to export DXF file."));
-        return;
-    }
-
-    statusBar()->showMessage(
-        tr("Exported '%1' (%2 entities) to DXF file")
-            .arg(sketch.name).arg(entities.size()), 5000);
-}
-
-void FullModeWindow::onExportSketchSVG(int index)
-{
-    int sketchIdx = sketchIndexFromTimelineIndex(index);
-    if (sketchIdx < 0 || sketchIdx >= m_completedSketches.size())
-        return;
-
-    const CompletedSketch& sketch = m_completedSketches[sketchIdx];
-    if (sketch.entities.isEmpty()) {
-        QMessageBox::information(this, tr("Export SVG"),
-            tr("The sketch '%1' is empty.").arg(sketch.name));
-        return;
-    }
-
-    QString filePath = QFileDialog::getSaveFileName(
-        this,
-        tr("Export SVG File"),
-        sketch.name + QStringLiteral(".svg"),
-        tr("SVG Files (*.svg);;All Files (*)"));
-
-    if (filePath.isEmpty()) return;
-
-    if (!filePath.toLower().endsWith(QLatin1String(".svg"))) {
-        filePath += QStringLiteral(".svg");
-    }
-
-    std::vector<sketch::Entity> entities = toLibraryEntities(sketch.entities);
-
-    sketch::SVGExportOptions options;
-    std::vector<sketch::Constraint> stdConstraints;  // No constraints for completed sketches
-    bool success = sketch::exportSketchToSVG(entities, stdConstraints, filePath.toStdString(), options);
-
-    if (!success) {
-        QMessageBox::critical(this, tr("Export Failed"),
-            tr("Failed to export SVG file."));
-        return;
-    }
-
-    statusBar()->showMessage(
-        tr("Exported '%1' (%2 entities) to SVG file")
-            .arg(sketch.name).arg(entities.size()), 5000);
-}
-
-void FullModeWindow::onFeatureMoved(int fromIndex, int toIndex)
-{
-    // The timeline UI has already been reordered by TimelineWidget::moveItem().
-    // Now we need to update the underlying data structures to match.
-    // Note: Dependencies are validated by TimelineWidget::canMoveItem() before the move.
-
-    if (fromIndex < 0 || toIndex < 0)
-        return;
-
-    // Use feature ID to find the moved item in our data structures
-    int movedFeatureId = m_timeline->featureIdAt(toIndex);
-    TimelineFeature featureType = m_timeline->featureAt(toIndex);
-
-    if (featureType == TimelineFeature::Sketch && movedFeatureId > 0) {
-        // Find the sketch with this feature ID
-        int sketchIdx = -1;
-        for (int i = 0; i < m_completedSketches.size(); ++i) {
-            if (m_completedSketches[i].featureId == movedFeatureId) {
-                sketchIdx = i;
-                break;
-            }
-        }
-
-        if (sketchIdx >= 0) {
-            // Calculate target position based on other sketches' positions
-            // Count how many sketches come before toIndex in the timeline
-            int targetPos = 0;
-            for (int i = 0; i < toIndex; ++i) {
-                if (m_timeline->featureAt(i) == TimelineFeature::Sketch) {
-                    ++targetPos;
-                }
-            }
-
-            // Reorder if needed
-            if (sketchIdx != targetPos) {
-                CompletedSketch sketch = m_completedSketches.takeAt(sketchIdx);
-                // Adjust target if we removed from before target
-                if (sketchIdx < targetPos) {
-                    --targetPos;
-                }
-                m_completedSketches.insert(targetPos, sketch);
-
-                // Update the feature tree to match
-                clearSketchesInTree();
-                for (int i = 0; i < m_completedSketches.size(); ++i) {
-                    addSketchToTree(m_completedSketches[i].name, i);
-                }
-
-                // Mark project as modified
-                m_project.setModified(true);
-
-                statusBar()->showMessage(
-                    tr("Moved '%1'").arg(sketch.name), 3000);
-            }
-        }
-    }
-
-    // If the moved item isn't a sketch, we don't need to do anything yet
-    // (no other feature types have backing data structures currently)
-}
-
-void FullModeWindow::onRollbackChanged(int index)
-{
-    // Show/hide 3D geometry based on rollback position
-    // Features after the rollback position should be hidden
-
-    if (!m_viewport || m_viewport->context().IsNull())
-        return;
-
-    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-
-    // Process all sketches
-    for (int i = 0; i < m_completedSketches.size(); ++i) {
-        CompletedSketch& sketch = m_completedSketches[i];
-
-        if (sketch.aisShape.IsNull())
-            continue;
-
-        // Find this sketch's timeline index
-        int timelineIdx = timelineIndexFromSketchIndex(i);
-        if (timelineIdx < 0)
-            continue;
-
-        // Determine if this sketch should be visible
-        bool shouldBeVisible = (index < 0 || timelineIdx <= index);
-
-        // Also check individual suppression
-        if (sketch.suppressed)
-            shouldBeVisible = false;
-
-        // Show or hide accordingly
-        if (shouldBeVisible) {
-            if (!ctx->IsDisplayed(sketch.aisShape)) {
-                ctx->Display(sketch.aisShape, Standard_False);
-            }
-        } else {
-            if (ctx->IsDisplayed(sketch.aisShape)) {
-                ctx->Erase(sketch.aisShape, Standard_False);
-            }
-        }
-    }
-
-    // TODO: When extrudes, revolves, etc. are implemented, process them here too
-
-    ctx->UpdateCurrentViewer();
-
-    // Update status bar
-    if (index < 0) {
-        statusBar()->showMessage(tr("Rollback cleared - all features active"), 3000);
-    } else {
-        QString featureName = m_timeline->nameAt(index);
-        statusBar()->showMessage(tr("Rolled back to '%1'").arg(featureName), 3000);
-    }
-}
-
 // ---- Project Loading ------------------------------------------------
 
-void FullModeWindow::loadProjectData()
+bool FullModeWindow::setBodyVisible(int bodyId, bool visible)
 {
-    // Clear existing data first
-    clearProjectData();
-
-    // Load project units
-    setUnitsFromString(QString::fromStdString(m_project.units()));
-    if (m_sketchCanvas) {
-        m_sketchCanvas->setUnitSuffix(unitSuffix());
+    // The tree keys bodies by ID now, not by position, so the AIS handle
+    // has to be found rather than indexed. Indexing directly would have
+    // shown or hidden the wrong body: ids start at 1 and positions at 0,
+    // so with a single body it addressed nothing at all.
+    const auto& bodies = m_project.bodies();
+    int index = -1;
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        if (bodies[i].id == bodyId) {
+            index = static_cast<int>(i);
+            break;
+        }
+    }
+    if (index < 0 || index >= m_solidAisShapes.size() || !m_viewport) {
+        return false;
     }
 
-    // Load parameters
-    loadParametersFromProject();
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+    if (ctx.IsNull()) {
+        return false;
+    }
 
-    // Load sketches
-    loadSketchesFromProject();
-
-    // Load construction planes
-    loadConstructionPlanesFromProject();
-
-    // Populate UI elements
-    populateFeatureTree();
-    populateTimeline();
+    if (visible) {
+        ctx->Display(m_solidAisShapes[index], false);
+    } else {
+        ctx->Erase(m_solidAisShapes[index], false);
+    }
+    ctx->UpdateCurrentViewer();
+    return true;
 }
 
-void FullModeWindow::clearProjectData()
+bool FullModeWindow::dropViewport()
 {
-    // Clear sketches
-    m_completedSketches.clear();
-    clearSketchesInTree();
+    try {
+        // Stop anything that would touch OCCT again. The handles are
+        // released rather than used: the driver that just failed must not
+        // be asked to render, clear, or even remove an object.
+        m_solidAisShapes.clear();
+        m_sketchWireframes.clear();
 
-    // Clear bodies in tree
-    clearBodiesInTree();
+        // The 3D viewport is only ONE page of m_viewportStack, which lives
+        // inside the central widget alongside the sketch canvas, timeline and
+        // toolbars. Replacing the central widget (setCentralWidget) would DELETE
+        // all of that, the sketch canvas included, so "sketching continues"
+        // would be a lie. Instead drop just the 3D page and keep everything
+        // else, whether we are mid-sketch or in the model view.
+        if (m_viewport && m_viewportStack) {
+            m_viewportStack->removeWidget(m_viewport);
+            m_viewport->hide();
+            m_viewport->setParent(nullptr);
+            m_viewport->deleteLater();
+            m_viewport = nullptr;
 
-    // Clear construction planes in tree
-    clearConstructionPlanesInTree();
+            if (m_inSketchMode && m_sketchCanvas) {
+                // Mid-sketch: fall back to the 2D canvas and clear the 3D latch.
+                m_viewportStack->setCurrentWidget(m_sketchCanvas);
+                m_sketchCanvas->setSketchMode(false);
+                if (m_sketchToolbar) m_sketchToolbar->set3DChecked(false);
+            } else {
+                // Model view: fill the viewport's slot with a notice PAGE (not
+                // the central widget) so the sketch UI survives.
+                auto* notice = new QLabel(
+                    tr("The 3D viewport is unavailable.\n\n"
+                       "Sketching and file operations still work."),
+                    m_viewportStack);
+                notice->setAlignment(Qt::AlignCenter);
+                notice->setObjectName(QStringLiteral("ViewportUnavailableNotice"));
+                m_viewportStack->addWidget(notice);
+                m_viewportStack->setCurrentWidget(notice);
+            }
 
-    // Clear timeline (except Origin)
-    while (m_timeline->itemCount() > 1) {
-        m_timeline->removeItem(m_timeline->itemCount() - 1);
-    }
-
-    // Reset parameters to defaults
-    initDefaultParameters();
-}
-
-void FullModeWindow::populateFeatureTree()
-{
-    // Add bodies to tree
-    const auto& shapes = m_project.shapes();
-    for (int i = 0; i < shapes.size(); ++i) {
-        QString name = QStringLiteral("Body%1").arg(i + 1);
-        addBodyToTree(name, i);
-    }
-
-    // Add sketches to tree
-    for (int i = 0; i < m_completedSketches.size(); ++i) {
-        addSketchToTree(m_completedSketches[i].name, i);
-    }
-}
-
-void FullModeWindow::populateTimeline()
-{
-    // Add features from project to timeline
-    const auto& features = m_project.features();
-
-    for (const auto& feature : features) {
-        // Skip Origin (already in timeline)
-        if (feature.type == FeatureType::Origin)
-            continue;
-
-        TimelineFeature tlFeature;
-        switch (feature.type) {
-        case FeatureType::Sketch:
-            tlFeature = TimelineFeature::Sketch;
-            break;
-        case FeatureType::Extrude:
-            tlFeature = TimelineFeature::Extrude;
-            break;
-        case FeatureType::Revolve:
-            tlFeature = TimelineFeature::Revolve;
-            break;
-        case FeatureType::Fillet:
-            tlFeature = TimelineFeature::Fillet;
-            break;
-        case FeatureType::Chamfer:
-            tlFeature = TimelineFeature::Chamfer;
-            break;
-        case FeatureType::Hole:
-            tlFeature = TimelineFeature::Hole;
-            break;
-        case FeatureType::Mirror:
-            tlFeature = TimelineFeature::Mirror;
-            break;
-        case FeatureType::Pattern:
-            tlFeature = TimelineFeature::Pattern;
-            break;
-        case FeatureType::Box:
-            tlFeature = TimelineFeature::Box;
-            break;
-        case FeatureType::Cylinder:
-            tlFeature = TimelineFeature::Cylinder;
-            break;
-        case FeatureType::Sphere:
-            tlFeature = TimelineFeature::Sphere;
-            break;
-        case FeatureType::Move:
-            tlFeature = TimelineFeature::Move;
-            break;
-        case FeatureType::Join:
-            tlFeature = TimelineFeature::Join;
-            break;
-        case FeatureType::Cut:
-            tlFeature = TimelineFeature::Cut;
-            break;
-        case FeatureType::Intersect:
-            tlFeature = TimelineFeature::Intersect;
-            break;
-        default:
-            continue;  // Skip unknown types
+            setGlModeText(QStringLiteral("\u26A0 ")
+                              + tr("Reduced Mode: 3D viewport stopped"),
+                          tr("The 3D viewport failed during this session and was "
+                             "switched off. Sketching and file operations "
+                             "continue; details are in the crash log."));
+            return true;
         }
 
-        m_timeline->addItem(tlFeature, QString::fromStdString(feature.name));
-    }
-}
-
-void FullModeWindow::loadSketchesFromProject()
-{
-    const auto& projectSketches = m_project.sketches();
-
-    for (const auto& sketchData : projectSketches) {
-        CompletedSketch sketch;
-        sketch.name = QString::fromStdString(sketchData.name);
-        sketch.plane = sketchData.plane;
-        sketch.planeOffset = sketchData.planeOffset;
-        sketch.rotationAxis = sketchData.rotationAxis;
-        sketch.rotationAngle = sketchData.rotationAngle;
-
-        // Convert SketchEntityData to SketchEntity
-        for (const auto& entityData : sketchData.entities) {
-            SketchEntity entity;
-            entity.id = entityData.id;
-            entity.type = entityData.type;
-            entity.points = entityData.points;
-            entity.radius = entityData.radius;
-            entity.startAngle = entityData.startAngle;
-            entity.sweepAngle = entityData.sweepAngle;
-            entity.sides = entityData.sides;
-            entity.majorRadius = entityData.majorRadius;
-            entity.minorRadius = entityData.minorRadius;
-            entity.text = entityData.text;
-            entity.fontFamily = entityData.fontFamily;
-            entity.fontSize = entityData.fontSize;
-            entity.fontBold = entityData.fontBold;
-            entity.fontItalic = entityData.fontItalic;
-            entity.textRotation = entityData.textRotation;
-            entity.arcFlipped = entityData.arcFlipped;
-            entity.constrained = entityData.constrained;
-            entity.isConstruction = entityData.isConstruction;
-            entity.selected = false;
-
-            sketch.entities.append(entity);
+        // No stack to fall back into (should not happen in Full Mode): keep the
+        // last-resort central-widget replacement so the window is not a gray
+        // hole.
+        if (m_viewport) {
+            m_viewport->hide();
+            m_viewport->setParent(nullptr);
+            m_viewport->deleteLater();
+            m_viewport = nullptr;
         }
+        auto* notice = new QLabel(
+            tr("The 3D viewport is unavailable.\n\n"
+               "Sketching and file operations still work."), this);
+        notice->setAlignment(Qt::AlignCenter);
+        notice->setObjectName(QStringLiteral("ViewportUnavailableNotice"));
+        setCentralWidget(notice);
 
-        // Create the 3D wireframe representation
-        sketch.aisShape = createSketchWireframe(sketch);
-
-        m_completedSketches.append(sketch);
+        setGlModeText(QStringLiteral("\u26A0 ")
+                          + tr("Reduced Mode: 3D viewport stopped"),
+                      tr("The 3D viewport failed during this session and was "
+                         "switched off. Details are in the crash log."));
+        return true;
+    } catch (...) {
+        // Tearing down failed too. Say no; the caller then saves and exits
+        // rather than pretending the window is usable.
+        return false;
     }
 }
 
-void FullModeWindow::loadParametersFromProject()
+
+
+void FullModeWindow::eraseConstructionPlane(int planeId)
 {
-    const auto& projectParams = m_project.parameters();
-
-    m_parameters.clear();
-
-    for (const auto& paramData : projectParams) {
-        Parameter param;
-        param.name = paramData.name;
-        param.expression = paramData.expression;
-        param.value = paramData.value;
-        param.unit = paramData.unit;
-        param.comment = paramData.comment;
-        m_parameters.append(param);
+    auto it = m_constructionPlaneVis.find(planeId);
+    if (it == m_constructionPlaneVis.end()) return;
+    if (m_viewport) {
+        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+        if (!ctx.IsNull() && !it.value().IsNull()) ctx->Remove(it.value(), false);
     }
-
-    // If no parameters loaded, use defaults
-    if (m_parameters.isEmpty()) {
-        initDefaultParameters();
-    }
+    m_constructionPlaneVis.erase(it);
 }
 
-void FullModeWindow::loadConstructionPlanesFromProject()
+void FullModeWindow::refreshConstructionPlaneVisuals()
+{
+    for (int id : m_constructionPlaneVis.keys()) eraseConstructionPlane(id);
+    for (const ConstructionPlaneData& p : m_project.constructionPlanes())
+        if (p.visible) displayConstructionPlane(p.id);
+    if (m_viewport && !m_viewport->context().IsNull()) m_viewport->context()->UpdateCurrentViewer();
+}
+
+void FullModeWindow::showPlaneFrame(const gp_Ax3& frame)
+{
+    if (!m_viewport) return;
+    Handle(AIS_InteractiveContext) ctx = m_viewport->context();
+    if (ctx.IsNull()) return;
+    hideSketchPlane();
+    m_sketchPlaneVis = new AisSketchPlane(200.0);
+    m_sketchPlaneVis->setFrame(frame);
+    m_sketchPlaneVis->SetTransparency(0.7);
+    ctx->Display(m_sketchPlaneVis, true);
+}
+
+void FullModeWindow::previewConstructionPlane(const ConstructionPlaneData& plane)
+{
+    if (plane.centerRelative && plane.centerRefPlaneId >= 0
+        && m_project.constructionPlaneDependsOn(plane.id, plane.centerRefPlaneId)) {
+        if (PlaneTransformPanel* panel = planeTransformPanel())
+            panel->setStatus(tr("That reference depends on this plane; a loop is not allowed."), true);
+        return;
+    }
+    // The committed plane (green) stays; the highlight (blue) moves to
+    // where the edit would put it.
+    showPlaneFrame(constructionPlaneFrame(plane, m_project));
+}
+
+void FullModeWindow::resetConstructionPlanePreview()
+{
+    PlaneTransformPanel* panel = planeTransformPanel();
+    if (!panel) return;
+    if (!panel->isVisible()) { hideSketchPlane(); return; }
+    if (const ConstructionPlaneData* stored = m_project.constructionPlaneById(panel->planeId()))
+        showPlaneFrame(constructionPlaneFrame(*stored, m_project));
+}
+
+void FullModeWindow::applyConstructionPlaneEdit(const ConstructionPlaneData& plane)
 {
     const auto& planes = m_project.constructionPlanes();
-
-    for (const auto& planeData : planes) {
-        // Add to feature tree
-        addConstructionPlaneToTree(QString::fromStdString(planeData.name), planeData.id);
-
-        // Display in viewport if visible
-        if (planeData.visible) {
-            displayConstructionPlane(planeData.id);
-        }
+    int index = -1;
+    for (size_t i = 0; i < planes.size(); ++i) if (planes[i].id == plane.id) { index = int(i); break; }
+    PlaneTransformPanel* panel = planeTransformPanel();
+    if (index < 0) {
+        if (panel) panel->setStatus(tr("This plane no longer exists."), true);
+        return;
     }
+    if (plane.centerRelative && plane.centerRefPlaneId >= 0
+        && m_project.constructionPlaneDependsOn(plane.id, plane.centerRefPlaneId)) {
+        if (panel) panel->setStatus(tr("Not applied: that reference already depends on this plane, which would make a loop."), true);
+        return;
+    }
+    const std::vector<ConstructionPlaneData> before = planes;
+    m_project.setConstructionPlane(index, plane);
+    const std::vector<ConstructionPlaneData> after = m_project.constructionPlanes();
+    pushDocumentCommand(hobbycad::makePlaneListCommand(
+        before, after, "Edit plane " + plane.name));
+
+    eraseConstructionPlane(plane.id);
+    if (plane.visible) displayConstructionPlane(plane.id);
+    if (m_viewport && !m_viewport->context().IsNull()) m_viewport->context()->UpdateCurrentViewer();
+    rebuildObjectsTree();
+    onConstructionPlaneSelected(plane.id);      // page and panel reload from the stored plane
+    if (panel) panel->setStatus(tr("Applied. Undo reverses it."), false);
+    statusBar()->showMessage(tr("Construction plane '%1' updated").arg(QString::fromStdString(plane.name)), 3000);
 }
 
 void FullModeWindow::displayConstructionPlane(int planeId)
@@ -1980,44 +1431,22 @@ void FullModeWindow::displayConstructionPlane(int planeId)
     Handle(AIS_InteractiveContext) ctx = m_viewport->context();
     if (ctx.IsNull()) return;
 
-    // Create AisSketchPlane to visualize this construction plane
+    // One visual per plane id; a redraw replaces the old one instead of
+    // stacking a second square on top of it.
+    eraseConstructionPlane(planeId);
+
+    // The full frame: base or reference plane, both rotations, roll,
+    // center and offset. Offset-from-plane chains through the reference.
     Handle(AisSketchPlane) planeVis = new AisSketchPlane(200.0);
-
-    switch (planeData->type) {
-    case ConstructionPlaneType::OffsetFromOrigin:
-        planeVis->setPlane(planeData->basePlane, planeData->offset);
-        break;
-
-    case ConstructionPlaneType::OffsetFromPlane:
-        // For offset from another plane, we need to compute the combined transform
-        // For now, just use the offset value (simplified)
-        // TODO: Properly chain transforms from reference plane
-        planeVis->setPlane(SketchPlane::XY, planeData->offset);
-        break;
-
-    case ConstructionPlaneType::Angled:
-        // Angled plane - use custom transform
-        // For now, use primary axis rotation only
-        // TODO: Support two-axis rotation
-        planeVis->setCustomPlane(planeData->primaryAxis, planeData->primaryAngle, planeData->offset);
-        break;
-    }
+    planeVis->setFrame(constructionPlaneFrame(*planeData, m_project));
 
     // Set construction plane appearance (different from sketch plane)
     planeVis->setFillColor(Quantity_Color(0.3, 0.8, 0.3, Quantity_TOC_RGB));  // Green tint
     planeVis->setBorderColor(Quantity_Color(0.2, 0.6, 0.2, Quantity_TOC_RGB));
     planeVis->SetTransparency(0.8);
 
-    // Store reference to plane visualization for later removal
-    // For now, just display it - proper management would track by ID
-    ctx->Display(planeVis, Standard_True);
-}
-
-void FullModeWindow::hideConstructionPlane(int planeId)
-{
-    Q_UNUSED(planeId);
-    // TODO: Track plane visualizations by ID and remove specific one
-    // For now, this is a placeholder
+    m_constructionPlaneVis.insert(planeId, planeVis);
+    ctx->Display(planeVis, true);
 }
 
 // ---- Model Tool Handlers ----
@@ -2041,138 +1470,50 @@ void FullModeWindow::onModelToolSelected(ModelTool tool)
 
 void FullModeWindow::performExtrude()
 {
-    auto sketchData = getSelectedSketchProfiles(tr("Extrude"));
-    if (!sketchData) return;
+    const int sketchId = selectedTimelineSketchId(tr("Extrude"));
+    if (sketchId < 0) return;
+    const QString sketchName = QString::fromStdString(m_session.sketchById(sketchId)->name);
 
-    const CompletedSketch& sketch = *sketchData->sketch;
-    auto& profiles = sketchData->profiles;
-    auto& libEntities = sketchData->libEntities;
-
-    // Show extrude dialog
     ExtrudeDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    double distance = dialog.distance();
-    ExtrudeDirection direction = dialog.direction();
-    ExtrudeOperation operation = dialog.operation();
+    const hobbycad::ExtrudeExtent extent =
+        dialog.direction() == ExtrudeDirection::NormalReverse ? hobbycad::ExtrudeExtent::Reverse
+        : dialog.direction() == ExtrudeDirection::TwoSided    ? hobbycad::ExtrudeExtent::Symmetric
+                                                               : hobbycad::ExtrudeExtent::Normal;
 
-    // Determine extrusion direction based on sketch plane
-    gp_Dir extrudeDir(0, 0, 1);  // Default: Z-up for XY plane
-    switch (sketch.plane) {
-    case SketchPlane::XY:
-        extrudeDir = gp_Dir(0, 0, 1);
-        break;
-    case SketchPlane::XZ:
-        extrudeDir = gp_Dir(0, 1, 0);
-        break;
-    case SketchPlane::YZ:
-        extrudeDir = gp_Dir(1, 0, 0);
-        break;
-    case SketchPlane::Custom:
-        // TODO: Calculate normal from rotation parameters
-        extrudeDir = gp_Dir(0, 0, 1);
-        break;
-    }
-
-    if (direction == ExtrudeDirection::NormalReverse) {
-        extrudeDir.Reverse();
-    }
-
-    // Perform extrusion using library
-    brep::OperationResult result;
-
-    if (direction == ExtrudeDirection::TwoSided) {
-        result = brep::extrudeProfileSymmetric(
-            profiles[0], libEntities, extrudeDir, distance, true);
-    } else {
-        result = brep::extrudeProfile(
-            profiles[0], libEntities, extrudeDir, distance);
-    }
-
-    if (!result.success) {
+    // The session builds the body on the sketch's own plane and records the
+    // feature: the same work the CLI's "extrude" does, so Reduced mode's
+    // terminal gets it too.
+    const hobbycad::ModelResult result = m_session.extrudeSketch(
+        sketchId, dialog.distance(), extent, bodyOperationFor(dialog.operation()),
+        tr("Extrude %1").arg(sketchName).toStdString());
+    if (!result.ok) {
         QMessageBox::critical(this, tr("Extrude Failed"),
-            tr("Extrusion failed: %1").arg(QString::fromStdString(result.errorMessage)));
+            tr("Extrusion failed: %1").arg(QString::fromStdString(result.error)));
         return;
     }
 
-    // Handle operation type (NewBody, Join, Cut, Intersect)
-    TopoDS_Shape finalShape = result.shape;
-
-    if (operation != ExtrudeOperation::NewBody && !m_solidBodies.isEmpty()) {
-        // Combine with existing body
-        TopoDS_Shape existingBody = m_solidBodies.last();
-        brep::OperationResult boolResult;
-
-        switch (operation) {
-        case ExtrudeOperation::Join:
-            boolResult = brep::fuseShapes(existingBody, finalShape);
-            break;
-        case ExtrudeOperation::Cut:
-            boolResult = brep::cutShape(existingBody, finalShape);
-            break;
-        case ExtrudeOperation::Intersect:
-            boolResult = brep::intersectShapes(existingBody, finalShape);
-            break;
-        default:
-            break;
-        }
-
-        if (boolResult.success) {
-            // Replace the last body
-            m_solidBodies.last() = boolResult.shape;
-            finalShape = boolResult.shape;
-
-            // Update display
-            Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-            ctx->Remove(m_solidAisShapes.last(), Standard_False);
-            m_solidAisShapes.last() = new AIS_Shape(finalShape);
-            ctx->Display(m_solidAisShapes.last(), Standard_True);
-        } else {
-            QMessageBox::warning(this, tr("Boolean Operation Failed"),
-                tr("Boolean operation failed: %1").arg(QString::fromStdString(boolResult.errorMessage)));
-        }
-    } else {
-        // Add as new body
-        m_solidBodies.append(finalShape);
-        m_document.addShape(finalShape);  // Add to document for export
-
-        Handle(AIS_Shape) aisShape = new AIS_Shape(finalShape);
-        m_solidAisShapes.append(aisShape);
-
-        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-        ctx->Display(aisShape, Standard_True);
-    }
-
-    // Add extrude feature to timeline
-    int featureId = m_nextFeatureId++;
-    int insertIdx = m_timeline->addItemAtRollback(TimelineFeature::Extrude,
-        tr("Extrude%1").arg(m_solidBodies.size()));
-    m_timeline->setFeatureId(insertIdx, featureId);
-    m_timeline->setDependencies(insertIdx, {sketch.featureId});
-
-    // Fit view to show the new solid
-    m_viewport->fitAll();
-
+    onDocumentRecipeChanged();
+    updateUndoActions();
+    if (m_viewport) m_viewport->fitAll();
     statusBar()->showMessage(tr("Extrusion completed"), 3000);
 }
 
 void FullModeWindow::performRevolve()
 {
-    auto sketchData = getSelectedSketchProfiles(tr("Revolve"));
-    if (!sketchData) return;
+    const int sketchId = selectedTimelineSketchId(tr("Revolve"));
+    if (sketchId < 0) return;
+    const SketchData source = *m_session.sketchById(sketchId);
+    const QString sketchName = QString::fromStdString(source.name);
 
-    const CompletedSketch& sketch = *sketchData->sketch;
-    auto& profiles = sketchData->profiles;
-    auto& libEntities = sketchData->libEntities;
-
-    // Show revolve dialog
     RevolveDialog dialog(this);
 
-    // Find construction lines for potential axis
+    // Construction lines of the sketch can serve as the axis.
     QVector<QPair<int, QString>> axisLines;
-    for (const SketchEntity& e : sketch.entities) {
+    for (const auto& e : source.entities) {
         if (e.type == SketchEntityType::Line && e.isConstruction) {
             axisLines.append({e.id, tr("Line %1").arg(e.id)});
         }
@@ -2183,117 +1524,34 @@ void FullModeWindow::performRevolve()
         return;
     }
 
-    double angle = dialog.angle();
-    RevolveAxis axisType = dialog.axis();
-    RevolveOperation operation = dialog.operation();
-
-    // Determine revolution axis
-    gp_Ax1 axis;
-    gp_Pnt origin(0, 0, 0);
-
-    switch (axisType) {
-    case RevolveAxis::XAxis:
-        axis = gp_Ax1(origin, gp_Dir(1, 0, 0));
-        break;
-    case RevolveAxis::YAxis:
-        axis = gp_Ax1(origin, gp_Dir(0, 1, 0));
-        break;
-    case RevolveAxis::SketchLine: {
-        int lineId = dialog.axisLineId();
+    hobbycad::RevolveAxisKind axis = hobbycad::RevolveAxisKind::SketchXAxis;
+    int lineId = -1;
+    switch (dialog.axis()) {
+    case RevolveAxis::XAxis: axis = hobbycad::RevolveAxisKind::SketchXAxis; break;
+    case RevolveAxis::YAxis: axis = hobbycad::RevolveAxisKind::SketchYAxis; break;
+    case RevolveAxis::SketchLine:
+        lineId = dialog.axisLineId();
         if (lineId < 0) {
             QMessageBox::warning(this, tr("Revolve"),
                 tr("Please select a construction line for the axis."));
             return;
         }
-
-        // Find the line entity
-        const SketchEntity* lineEntity = nullptr;
-        for (const SketchEntity& e : sketch.entities) {
-            if (e.id == lineId) {
-                lineEntity = &e;
-                break;
-            }
-        }
-
-        if (!lineEntity || lineEntity->points.size() < 2) {
-            QMessageBox::warning(this, tr("Revolve"),
-                tr("Invalid axis line selected."));
-            return;
-        }
-
-        QPointF p1 = lineEntity->points[0];
-        QPointF p2 = lineEntity->points[1];
-        gp_Pnt pt1(p1.x(), p1.y(), 0);
-        gp_Pnt pt2(p2.x(), p2.y(), 0);
-        gp_Dir dir(pt2.X() - pt1.X(), pt2.Y() - pt1.Y(), 0);
-        axis = gp_Ax1(pt1, dir);
+        axis = hobbycad::RevolveAxisKind::SketchLine;
         break;
     }
-    }
 
-    // Perform revolution
-    brep::OperationResult result = brep::revolveProfile(
-        profiles[0], libEntities, axis, angle);
-
-    if (!result.success) {
+    const hobbycad::ModelResult result = m_session.revolveSketch(
+        sketchId, dialog.angle(), axis, lineId, bodyOperationFor(dialog.operation()),
+        tr("Revolve %1").arg(sketchName).toStdString());
+    if (!result.ok) {
         QMessageBox::critical(this, tr("Revolve Failed"),
-            tr("Revolution failed: %1").arg(QString::fromStdString(result.errorMessage)));
+            tr("Revolution failed: %1").arg(QString::fromStdString(result.error)));
         return;
     }
 
-    // Handle operation type
-    TopoDS_Shape finalShape = result.shape;
-
-    if (operation != RevolveOperation::NewBody && !m_solidBodies.isEmpty()) {
-        TopoDS_Shape existingBody = m_solidBodies.last();
-        brep::OperationResult boolResult;
-
-        switch (operation) {
-        case RevolveOperation::Join:
-            boolResult = brep::fuseShapes(existingBody, finalShape);
-            break;
-        case RevolveOperation::Cut:
-            boolResult = brep::cutShape(existingBody, finalShape);
-            break;
-        case RevolveOperation::Intersect:
-            boolResult = brep::intersectShapes(existingBody, finalShape);
-            break;
-        default:
-            break;
-        }
-
-        if (boolResult.success) {
-            m_solidBodies.last() = boolResult.shape;
-            finalShape = boolResult.shape;
-
-            Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-            ctx->Remove(m_solidAisShapes.last(), Standard_False);
-            m_solidAisShapes.last() = new AIS_Shape(finalShape);
-            ctx->Display(m_solidAisShapes.last(), Standard_True);
-        } else {
-            QMessageBox::warning(this, tr("Boolean Operation Failed"),
-                tr("Boolean operation failed: %1").arg(QString::fromStdString(boolResult.errorMessage)));
-        }
-    } else {
-        m_solidBodies.append(finalShape);
-        m_document.addShape(finalShape);  // Add to document for export
-
-        Handle(AIS_Shape) aisShape = new AIS_Shape(finalShape);
-        m_solidAisShapes.append(aisShape);
-
-        Handle(AIS_InteractiveContext) ctx = m_viewport->context();
-        ctx->Display(aisShape, Standard_True);
-    }
-
-    // Add revolve feature to timeline
-    int featureId = m_nextFeatureId++;
-    int insertIdx = m_timeline->addItemAtRollback(TimelineFeature::Revolve,
-        tr("Revolve%1").arg(m_solidBodies.size()));
-    m_timeline->setFeatureId(insertIdx, featureId);
-    m_timeline->setDependencies(insertIdx, {sketch.featureId});
-
-    m_viewport->fitAll();
-
+    onDocumentRecipeChanged();
+    updateUndoActions();
+    if (m_viewport) m_viewport->fitAll();
     statusBar()->showMessage(tr("Revolution completed"), 3000);
 }
 

@@ -1,0 +1,28 @@
+# .github/release.yml
+#
+# How GitHub groups the automatically generated "What's Changed" list that
+# the release workflow appends under the rendered RELEASE_TEMPLATE.md.
+# Grouping is by pull-request label; unlabeled changes land in the last
+# category. Pull requests from the owner are listed like any other.
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: Fixes
+      labels:
+        - bug
+    - title: Features
+      labels:
+        - enhancement
+        - feature
+    - title: Packaging and CI
+      labels:
+        - packaging
+        - ci
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Other changes
+      labels:
+        - "*"

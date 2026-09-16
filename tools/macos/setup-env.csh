@@ -1,6 +1,6 @@
 #!/bin/tcsh -f
 # =====================================================================
-#  tools/macos/setup-env.csh -- macOS development environment setup
+#  tools/macos/setup-env.csh — macOS development environment setup
 # =====================================================================
 #
 #  csh/tcsh version of setup-env.sh.  Checks for required tools and
@@ -179,7 +179,7 @@ echo ""
 # ===================================================================
 
 if ($DO_UNINSTALL) then
-    header "Uninstall -- rolling back changes"
+    header "Uninstall: rolling back changes"
 
     set CHANGED = 0
 
@@ -301,7 +301,7 @@ if ($DO_UNINSTALL) then
                 "$answer" == "Y") then
                 info_msg "Removing tap formulas..."
                 "$BREW" uninstall --force \
-                    ayourk/hobbycad/opencascade@7.9.2 \
+                    ayourk/hobbycad/opencascade@8.0.1 \
                     ayourk/hobbycad/libzip@1.7.3 \
                     ayourk/hobbycad/libgit2@1.7.2 \
                     >& /dev/null
@@ -318,8 +318,13 @@ if ($DO_UNINSTALL) then
         echo ""
         info_msg "Checking HobbyCAD core formulas..."
 
+        # A prebuilt Qt 6.4.2 (~/Qt/6.4.2/macos or $HOBBYCAD_QT_DIR) means
+        # brew qt@6 was never needed; see setup-env.sh for why.
+        set QT_PREBUILT = ""
+        if ( $?HOBBYCAD_QT_DIR ) set QT_PREBUILT = "$HOBBYCAD_QT_DIR"
+        if ("$QT_PREBUILT" == "" && -d "$HOME/Qt/6.4.2/macos/lib/cmake/Qt6") set QT_PREBUILT = "$HOME/Qt/6.4.2/macos"
         set CORE_INSTALLED = ""
-        foreach f (qt@6 librsvg)
+        foreach f (qt@6)
             "$BREW" list "$f" >& /dev/null
             if ($status == 0) then
                 if ("$CORE_INSTALLED" == "") then
@@ -351,7 +356,7 @@ if ($DO_UNINSTALL) then
             ok "No HobbyCAD core formulas installed."
         endif
     else
-        ok "Homebrew not found -- nothing to do."
+        ok "Homebrew not found: nothing to do."
     endif
 
     # --- Summary -------------------------------------------------------
@@ -390,7 +395,7 @@ else
     if ("$answer" == "" || "$answer" == "y" || \
         "$answer" == "Y") then
         info_msg "Running xcode-select --install..."
-        info_msg "(A dialog will appear -- click 'Install'.)"
+        info_msg "(A dialog will appear. Click 'Install'.)"
         xcode-select --install >& /dev/null
 
         info_msg "Waiting for installation to finish..."
@@ -573,7 +578,7 @@ if ("$BREW" != "" && -x "$BREW") then
         endif
     endif
 else
-    info_msg "Homebrew not available -- skipping build tools."
+    info_msg "Homebrew not available: skipping build tools."
     set ALL_OK = 0
 endif
 
@@ -611,7 +616,7 @@ if ("$BREW" != "" && -x "$BREW") then
     set PINNED_MISSING = ""
 
     foreach formula ( \
-        ayourk/hobbycad/opencascade@7.9.2 \
+        ayourk/hobbycad/opencascade@8.0.1 \
         ayourk/hobbycad/libzip@1.7.3 \
         ayourk/hobbycad/libgit2@1.7.2 \
     )
@@ -629,22 +634,36 @@ if ("$BREW" != "" && -x "$BREW") then
         endif
     end
 
-    # Core formulas
+    # Core formulas: qt@6 only when no prebuilt Qt 6.4.2 is present (see
+    # setup-env.sh: on Intel macOS 15 brew builds Qt from source for hours).
     set CORE_MISSING = ""
+    set QT_PREBUILT = ""
+    if ( $?HOBBYCAD_QT_DIR ) set QT_PREBUILT = "$HOBBYCAD_QT_DIR"
+    if ("$QT_PREBUILT" == "" && -d "$HOME/Qt/6.4.2/macos/lib/cmake/Qt6") set QT_PREBUILT = "$HOME/Qt/6.4.2/macos"
 
-    foreach formula (qt@6 librsvg)
-        "$BREW" list "$formula" >& /dev/null
-        if ($status != 0) then
-            if ("$CORE_MISSING" == "") then
-                set CORE_MISSING = "$formula"
+    # nlohmann-json is always needed (find_package in src/libhobbycad and
+    # devtest); qt@6 only without the prebuilt Qt.
+    set CORE_LIST = "nlohmann-json"
+    if ("$QT_PREBUILT" != "") then
+        ok "Qt 6.4.2 (prebuilt) at $QT_PREBUILT; brew qt@6 not needed."
+    else
+        set CORE_LIST = "$CORE_LIST qt@6"
+    endif
+    if (1) then
+        foreach formula ($CORE_LIST)
+            "$BREW" list "$formula" >& /dev/null
+            if ($status != 0) then
+                if ("$CORE_MISSING" == "") then
+                    set CORE_MISSING = "$formula"
+                else
+                    set CORE_MISSING = \
+                        "${CORE_MISSING} $formula"
+                endif
             else
-                set CORE_MISSING = \
-                    "${CORE_MISSING} $formula"
+                ok "$formula installed."
             endif
-        else
-            ok "$formula installed."
-        endif
-    end
+        end
+    endif
 
     if ("$PINNED_MISSING" != "") then
         warn_msg "Missing pinned formulas: $PINNED_MISSING"
@@ -697,7 +716,7 @@ if ("$BREW" != "" && -x "$BREW") then
     endif
 
 else
-    info_msg "Homebrew not available -- skipping dependencies."
+    info_msg "Homebrew not available: skipping dependencies."
     set ALL_OK = 0
 endif
 
@@ -776,7 +795,7 @@ else
             endif
 
             if (! -d "$TARGET_PARENT") then
-                # Creation failed or was skipped -- skip clone
+                # Creation failed or was skipped: skip clone
             else if (-d "$TARGET_DIR/.git") then
                 ok "Repository already exists at $TARGET_DIR"
                 set CLONE_PATH = "$TARGET_DIR"
@@ -813,7 +832,7 @@ else
             info_msg "  git clone $REPO_URL"
         endif
     else
-        warn_msg "Git not available yet -- cannot clone."
+        warn_msg "Git not available yet: cannot clone."
         info_msg "Install Xcode CLT first (step 1), then re-run."
         set ALL_OK = 0
     endif
@@ -827,9 +846,9 @@ header "6/7  CMAKE_PREFIX_PATH"
 
 if ("$BREW" != "" && -x "$BREW") then
     set OCCT_PFX = `"$BREW" --prefix \
-        ayourk/hobbycad/opencascade@7.9.2 >& /dev/null \
+        ayourk/hobbycad/opencascade@8.0.1 >& /dev/null \
         && "$BREW" --prefix \
-        ayourk/hobbycad/opencascade@7.9.2`
+        ayourk/hobbycad/opencascade@8.0.1`
     set LZIP_PFX = `"$BREW" --prefix \
         ayourk/hobbycad/libzip@1.7.3 >& /dev/null \
         && "$BREW" --prefix \
@@ -916,7 +935,7 @@ if ("$BREW" != "" && -x "$BREW") then
         endif
     endif
 else
-    info_msg "Homebrew not available -- skipping CMAKE_PREFIX_PATH."
+    info_msg "Homebrew not available: skipping CMAKE_PREFIX_PATH."
     set ALL_OK = 0
 endif
 
@@ -1015,7 +1034,7 @@ if ($ALL_OK) then
     info_msg "  ${STEP}. Run:"
     info_msg "       ./build/src/hobbycad/hobbycad"
 else
-    fail_msg "Some items need attention -- see above."
+    fail_msg "Some items need attention: see above."
     echo ""
     info_msg "Fix the issues, then run this script again."
 endif

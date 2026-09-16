@@ -11,9 +11,11 @@
 
   GenerateIcons.cmake
     Build-time icon generation from the canonical SVG source.
-    Generates Linux hicolor PNGs (16-512px), Windows .ico
-    (via icotool or ImageMagick), and macOS .icns (via iconutil).
-    Requires rsvg-convert (librsvg2-bin).
+    Generates Linux hicolor PNGs (16-512px) and the 32x32 Debian menu
+    XPM, the Windows .ico, and the macOS .icns (via Apple's iconutil).
+    The images are rendered by tools/render-icons.cpp, built with the
+    Qt the application already needs; no rsvg-convert, icotool or
+    ImageMagick is involved.
 
     Usage:
       include(cmake/GenerateIcons.cmake)

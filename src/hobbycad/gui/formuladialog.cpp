@@ -111,7 +111,7 @@ void FormulaDialog::setupUi()
 void FormulaDialog::setPropertyName(const QString& name)
 {
     m_propertyName = name;
-    setWindowTitle(tr("Formula Editor — %1").arg(name));
+    setWindowTitle(tr("Formula Editor: %1").arg(name));
 }
 
 void FormulaDialog::setUnitSuffix(const QString& suffix)
@@ -220,9 +220,9 @@ void FormulaDialog::populateFunctionList()
 {
     // Math functions with descriptions
     struct FuncInfo {
-        const char* name;
-        const char* syntax;
-        const char* description;
+        const char* name = nullptr;
+        const char* syntax = nullptr;
+        const char* description = nullptr;
     };
 
     static const FuncInfo functions[] = {

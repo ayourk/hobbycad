@@ -5,8 +5,8 @@
   Project          : HobbyCAD
   Repository       : HobbyCAD (ayourk/hobbycad)
   File             : docs/coding_standards.txt
-  Document Version : 0.0.4
-  Date             : 2026-02-14
+  Document Version : 0.0.5
+  Date             : 2026-08-25
 
   AI Attribution   : This document was primarily generated with
                      the assistance of Claude AI (Anthropic).
@@ -16,7 +16,6 @@
 ================================================================================
   TABLE OF CONTENTS
 ================================================================================
-
     1. Purpose
     2. File Header Format
        2.1  C++ Source Files (.cpp)
@@ -26,17 +25,51 @@
        2.5  Qt Stylesheets (.qss)
        2.6  Plain Text Documents (.txt)
        2.7  Markdown Files (.md)
-       2.8  Data/Config Files (AUTHORS, .gitignore, etc.)
+       2.8  SVG Files (.svg)
+       2.9  XPM Files (.xpm)
+       2.10 Data/Config Files (AUTHORS, .gitignore, etc.)
     3. File Naming Conventions
     4. Directory Structure and File Placement
+       4.1  HobbyCAD (ayourk/hobbycad) — Main Application
+       4.2  HobbyCAD-vcpkg (ayourk/hobbycad-vcpkg) — vcpkg Registry
+       4.3  HobbyCAD-homebrew (ayourk/homebrew-hobbycad) — Homebrew Tap
+       4.4  HobbyCAD-libs — PPA Library Packaging
+       4.5  HobbyCAD-outside — Non-Repository Files
     5. Object Naming (setObjectName) Convention
     6. License Headers
+       6.1  SPDX License Identifiers
+       6.2  Placement
+       6.3  Exemptions
        6.4  Developer Certificate of Origin (DCO)
        6.5  GPG Commit Signing (Verified Commits)
+       6.6  Commit Message Format
     7. Include Order
     8. General C++ Style
        8.1  Units and Measurements
        8.2  Library Type Conventions
+    9. Internationalization (i18n) and Translation
+       9.1  Overview
+       9.2  The tr() Function
+       9.3  Context and Disambiguation
+       9.4  Plurals
+       9.5  Translation Workflow
+       9.6  Loading Translations at Runtime
+       9.7  Fun / Community Languages
+       9.8  Strings That Must NOT Be Translated
+    10. Theme and Resource Embedding
+       10.1 Resource System Overview
+       10.2 File Layout
+       10.3 Theme Loading Order (Runtime)
+       10.4 Compile-Time vs Runtime Themes
+    11. Layering and Code Reuse
+       11.1 Where Code Belongs
+       11.2 Rules
+       11.3 Consolidating GUI Code Into the Library
+       11.4 Intentional Duplication
+    12. Sketch Canvas Tool Handlers
+       12.1 The Fallthrough Contract
+       12.2 Do Not Collapse mousePress And mouseRelease
+       12.3 Handlers Are Stateless
 
 ================================================================================
   1. PURPOSE
@@ -56,7 +89,7 @@
     HobbyCAD-libs/      not in any repo              PPA library packaging
     HobbyCAD-outside/   not in any repo              Session docs, notes
 
-  All repos live under /wd8tb/ai/ on the developer's machine.
+  All repos live under /wd8tb/ai/hobbycad/ on the developer's machine.
   Binary files (images, archives, compiled objects) are NOT stored
   in the main HobbyCAD repository.  HobbyCAD-libs stores tarballs
   and source packages alongside debian packaging.
@@ -179,11 +212,11 @@
   ----------------------------
 
     /* =====================================================================
-     *  HobbyCAD — themes/sample.qss — Default Theme (Reference)
+     *  HobbyCAD — resources/themes/darkmode.qss — Built-in Dark Mode
      * =====================================================================
      *
      *  Repository: HobbyCAD (ayourk/hobbycad)
-     *  File: themes/sample.qss
+     *  File: resources/themes/darkmode.qss
      *
      *  Description of the theme or stylesheet.
      *
@@ -230,6 +263,13 @@
     - Line width: 80 characters maximum
 
 
+  Punctuation: no em dash and no ASCII double hyphen as prose
+  punctuation, in any document, comment or commit message.  Use a
+  colon, a semicolon, a comma or parentheses.  The em dash (—) stays
+  where a convention prescribes it as a separator, the file-header path
+  line above and section headings; "--" is written only as part of a
+  command-line switch.
+
   2.7  MARKDOWN FILES (.md)
   --------------------------
 
@@ -268,23 +308,11 @@
   2.9  XPM FILES (.xpm)
   ----------------------
 
-    /* =====================================================================
-     *  HobbyCAD — resources/icons/hobbycad.xpm — Application Icon (XPM)
-     * =====================================================================
-     *
-     *  Optional multi-line description.
-     *
-     *  SPDX-License-Identifier: GPL-3.0-only
-     *
-     * ===================================================================== */
-    /* XPM */
-    static const char *hobbycad_xpm[] = {
-
-  Rules:
-    - Standard C block comment header (same style as QSS)
-    - The required /* XPM */ tag must appear immediately after the
-      header block (XPM parsers look for this literal string)
-    - Repo name and file path in the header
+    No XPM is committed. The Debian menu icon (share/pixmaps/
+    hobbycad.xpm, 32x32) is rendered from resources/icons/hobbycad.svg
+    at build time by tools/render-icons.cpp through Qt's XPM writer,
+    so it is a build artifact: no header block, no hand edits. Change
+    the SVG instead.
 
 
   2.10  DATA/CONFIG FILES (AUTHORS, .gitignore, etc.)
@@ -326,7 +354,8 @@
   Themes:
     - Lowercase with underscores (dark_blue.qss)
     - .qss extension (Qt stylesheet)
-    - sample.qss is the reference theme and must always exist
+    - The built-in default.qss and darkmode.qss in resources/themes/ are
+      the reference: every setObjectName() widget appears in them
 
   Build files:
     - CMakeLists.txt (CMake standard)
@@ -337,7 +366,7 @@
 
   Icons:
     - Canonical source is SVG (hobbycad.svg)
-    - XPM uses same base name (hobbycad.xpm)
+    - The build-rendered XPM keeps the base name (hobbycad.xpm)
     - Sized PNGs use base name + hyphen + size (hobbycad-48.png)
     - Platform icons: .ico (Windows), .icns (macOS)
     - PNGs, .ico, and .icns are generated at build time from SVG
@@ -347,7 +376,7 @@
   4. DIRECTORY STRUCTURE AND FILE PLACEMENT
 ================================================================================
 
-  The project spans multiple repositories under /wd8tb/ai/:
+  The project spans multiple repositories under /wd8tb/ai/hobbycad/:
 
   4.1  HobbyCAD (ayourk/hobbycad) — Main Application
   -----------------------------------------------------
@@ -381,7 +410,6 @@
       hobbycad.desktop             Freedesktop.org .desktop entry
       icons/
         hobbycad.svg               Application icon (scalable, canonical)
-        hobbycad.xpm               XPM fallback (window manager hints)
 
     docs/                          Project documentation
       project_definition.txt       Master project spec
@@ -395,13 +423,16 @@
       cli_commands.txt             CLI command reference
       changelog.txt                Version history
 
-    themes/                        User/community Qt stylesheet themes
-      sample.qss                   Reference theme (all IDs, defaults)
-      darkmode.qss                 Community dark mode theme
-
-    translations/                  Translation source files (.ts)
-      hobbycad_en.ts               English (reference/default)
-      hobbycad_pirate.ts           Pirate English (fun language)
+    resources/                     Non-code assets
+      hobbycad.desktop             Freedesktop entry
+      icons/hobbycad.svg           Application icon (the one source)
+      macos/                       Bundle Info.plist template
+      themes/                      Built-in stylesheets (compiled in)
+        default.qss                Platform-native defaults
+        darkmode.qss               Dark mode
+      translations/                Translation source files (.ts)
+        hobbycad_en.ts             English (reference, generated)
+        hobbycad_<lang>.ts         One per shipped language
 
     vcpkg-custom-triplets/         vcpkg triplets
       arm64-osx-static.cmake       macOS ARM64 static triplet
@@ -430,9 +461,7 @@
         main.cpp                   Startup dispatcher
         resources/                 Compile-time embedded resources
           hobbycad.qrc             Qt resource collection file
-          themes/                  Built-in themes (embedded in binary)
-            default.qss            Default (platform-native) theme
-            darkmode.qss           Built-in dark mode theme
+          (themes: resources/themes/, compiled in via hobbycad.qrc)
         gui/                       GUI components (shared)
           mainwindow.h/.cpp        Base window (menus, status, docks)
           aboutdialog.h/.cpp       About dialog
@@ -453,9 +482,9 @@
           clihistory.h/.cpp        Persistent history
           terminalinput.h/.cpp     zsh-style line editor
 
-      libhobbymesh/                Mesh library (future — Phase 5)
+      libhobbymesh/                Mesh library (future, Phase 5)
         README.txt
-      hobbymesh/                   HobbyMesh app (future — Phase 5)
+      hobbymesh/                   HobbyMesh app (future, Phase 5)
         README.txt
       plugins/                     Plugin infrastructure (future)
         README.txt
@@ -537,9 +566,13 @@
     README.md
     populate-sha256.sh             SHA256 hash population script
     Formula/
-      opencascade@7.9.2.rb
+      opencascade@8.0.1.rb         current pin (PPA 8.0.1+p1 tarball)
       libzip@1.7.3.rb
-      libgit2@1.7.2.rb
+      libgit2@1.9.2.rb
+      libslvs.rb                   HobbyCAD series tarball (3.2p1)
+      openmesh.rb
+      lib3mf.rb
+      meshfix.rb
 
 
   4.4  HobbyCAD-libs — PPA Library Packaging
@@ -552,7 +585,7 @@
 
   HobbyCAD-libs/                   Directory root (not a repo)
     lib3mf/
-      debian/                      lib3mf 2.4.1 PPA packaging
+      debian/                      lib3mf 2.5.0+p1 PPA packaging
       *.dsc, *.tar.*               Source packages and tarballs
     MeshFix/
       debian/                      MeshFix 2.1 PPA packaging
@@ -577,9 +610,10 @@
 
   Placement rules:
     - Documentation goes in docs/ (within HobbyCAD repo)
-    - User/community themes go in themes/ (project root)
-    - Built-in themes go in src/hobbycad/resources/themes/ (compiled in)
-    - Translation source files (.ts) go in translations/
+    - Built-in themes go in resources/themes/ (compiled in through
+      src/hobbycad/resources/hobbycad.qrc); no other theme is kept in
+      the tree, custom themes live with the user (see 10.3)
+    - Translation source files (.ts) go in resources/translations/
     - No source code outside src/
     - Each library/app has its own CMakeLists.txt
     - Stub directories get a README.txt for git tracking
@@ -609,7 +643,8 @@
   When adding a new widget:
     1. Call setObjectName() with a PascalCase name
     2. Add the name to docs/theming.txt Section 2
-    3. Add a section for it in themes/sample.qss
+    3. Add a section for it in resources/themes/default.qss and
+       darkmode.qss
     4. Update this document's directory tree if a new file was added
 
   Current object names are listed in docs/theming.txt.
@@ -664,14 +699,15 @@
 
   All commits to HobbyCAD repositories must include a Signed-off-by
   trailer certifying that the contributor has the right to submit
-  the code under the project's license.
+  the code under the project's license.  This follows the Developer
+  Certificate of Origin (https://developercertificate.org/), the
+  same mechanism used by the Linux kernel.
 
   Commit Message Approval:  When working with AI assistants (e.g.,
   Claude Code), commit messages must be presented to and approved
-  by the user before any commit is made.  The AI assistant should
-  not commit changes without explicit user approval of the message.  This follows the Developer
-  Certificate of Origin (https://developercertificate.org/), the
-  same mechanism used by the Linux kernel.
+  by the user before any commit is made.  The AI assistant does not
+  commit on the author's behalf.  See Section 6.6 for the message
+  format.
 
   The sign-off is a single line at the end of the commit message:
 
@@ -754,6 +790,166 @@
     - If gpg-agent isn't caching your passphrase, add to ~/.bashrc:
 
         export GPG_TTY=$(tty)
+
+
+  6.6  Commit Message Format
+  ---------------------------
+
+  Commits in this project are consolidated and condensed: one commit
+  usually carries a period of work spanning several areas, rather than
+  being split one commit per feature.  The message is therefore the
+  only record that a given change landed at all, and it is written to
+  be read years later by someone who was not there.
+
+  Structure:
+
+    Line 1      Subject.  Imperative mood, 72 characters or fewer,
+                capitalized, no trailing period, no area prefix.
+    Line 2      Blank.  Always.  Without it the entire opening
+                paragraph is taken as the subject.
+    Body        Overview paragraph, then sections by area.
+    Last line   Signed-off-by, after a blank line.
+
+  The subject names the changes carrying the most weight, in
+  descending order of importance, until it runs out of room.  On a
+  consolidated commit it will not cover everything; that is
+  expected, and the body covers the rest.  A subject that would fit
+  any commit in the repository, such as "Various improvements" or
+  "Update multiple components", is worse than one that honestly
+  names three changes out of five.
+
+  The guiding rule for the body:
+
+      Exhaustive at the feature level; silent at the file level.
+
+  Condensed means condensed.  "Consolidated" says how many commits
+  there are; "condensed" says how long the message is, and the second
+  is the one that erodes.  The tests, applied to every bullet:
+
+    - One bullet per area, and a bullet is a statement of a few
+      sentences, not a paragraph of particulars.  A section that
+      needs five bullets is describing five files, not five features.
+
+    - If a sentence can be recovered from the diff, cut it.  What
+      remains is the why, the trap, the behavior change and the
+      verification, which the diff cannot give.
+
+    - If a bullet cannot be understood without a file name, the
+      statement is too fine-grained; name the outcome instead.
+      Version pins, build-script mechanics and per-platform fixes
+      collapse to one line each, or to nothing.
+
+    - A draft that grows past the point where the author would read
+      it end to end is the long form.  The long form is kept beside
+      the running list as commit-verb.txt for reference and is never
+      what gets committed; the committed message is the short form
+      written from it.
+
+  "Silent at the file level" forbids an inventory of what changed.  It
+  does not forbid naming a file that is itself the subject of a
+  statement: the header whose presence misleads a portability test,
+  or the script whose behavior changed.  Those carry information that
+  nothing else records.
+
+  When the point is instead to send the reader somewhere, name the
+  DIRECTORY rather than the paths inside it: "see docs/", not a list of
+  three document names.  A directory stays correct when a file is
+  renamed, and the reader can find the right document once they are in
+  the right place.
+
+  What belongs in the body:
+
+    - An orienting paragraph of two to four sentences before any
+      bullets, so that the sections following it are legible.
+
+    - Why a change was made.  The diff already shows what changed,
+      and can never show why.
+
+    - Features added or overhauled, described by what they do for
+      the user rather than by which files were touched.
+
+    - Non-obvious constraints and traps discovered along the way.
+      These are the highest-value lines in any message, because
+      nothing else records them.
+
+    - What was verified, and how.
+
+    - Deliberate omissions, and alternatives that were rejected.
+
+    - Behavior changes a user would notice.
+
+  What does not belong:
+
+    - Co-Authored-By, or any AI attribution trailer.  The
+      Signed-off-by names the project author and nobody else.
+      See Section 6.5.
+
+    - A file-by-file inventory.  "git show --stat" does that better
+      and cannot fall out of date.
+
+    - Session narration: what was attempted first, then second.
+      Record a dead end only when doing so stops someone from
+      retrying it.
+
+    - Status, TODO items, or next steps.  The commit is permanent
+      and status is not; nothing will ever come back to correct it.
+
+    - Superlatives: comprehensive, robust, significantly improved.
+
+    - Facts that will become false, such as version numbers of
+      components this commit did not change.
+
+    - A first body line that restates the subject.
+
+  Internal changes with no user-visible face (refactors,
+  dependency sweeps, build script fixes) earn a mention only when
+  they change behavior, remove a hazard, or explain why other work
+  became possible.  Otherwise they are a single line, or absent.
+
+  Sections are ordered by significance, not by chronology or
+  alphabet.  Body text wraps at 72 columns, because "git log"
+  indents its output by four spaces and 76 still fits an
+  80-column terminal.
+
+  Lifecycle:
+
+    commit-verb.txt is a RUNNING LIST.  Entries are added as work is
+    completed, rather than the whole message being composed at the
+    end, so that nothing is lost between making a change and
+    committing it.
+
+    At commit time the file has served its purpose and becomes
+    disposable.  The message is committed, the file is cleared, and
+    it starts accumulating again for the next commit cycle.  It is
+    a working document, not an archive; the committed message is
+    the permanent record.
+
+    For the same reason it is exempt from the backup policy: no
+    copies of commit.txt are kept in backups/.
+
+    The point of recording as you go is completeness, not order.
+    What matters is that nothing is missing when the message is
+    approved; the sequence entries were added in does not matter,
+    because the file is organized before the commit anyway.
+
+    That final pass groups the entries into sections, orders those
+    sections by significance, and adds the subject and the opening
+    paragraph.  Those two can only be written once the full scope
+    is known, which is not true until the work stops.
+
+  Preparation and review:
+
+    The message is written to commit.txt in the workspace directory
+    ABOVE the repository, not inside it, so that it can never be
+    committed by accident.  It is reviewed by the project author before
+    any commit is made, then committed with:
+
+        git commit -F ../commit.txt
+
+    The Signed-off-by trailer is written into commit.txt itself, so
+    "-s" is not used and the trailer is not duplicated.  Because the
+    message never passes through shell quoting, internal double
+    quotes are fine and wording need not be contorted to avoid them.
 
 ================================================================================
   7. INCLUDE ORDER
@@ -885,7 +1081,7 @@
 
   The Document Settings dialog allows users to select their preferred
   display unit.  This preference is stored per-project but does NOT
-  affect how values are stored — only how they are displayed.
+  affect how values are stored, only how they are displayed.
 
   Numeric Precision
   -----------------
@@ -980,7 +1176,7 @@
   --------------
 
   HobbyCAD uses Qt's built-in internationalization system.  English is
-  the default language — all user-visible strings in source code are
+  the default language: all user-visible strings in source code are
   written in English and wrapped in tr().  Translations are maintained
   as XML source files (.ts) edited by translators, compiled to binary
   files (.qm) by lrelease, and loaded at runtime.
@@ -995,7 +1191,7 @@
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
     setWindowTitle(tr("About HobbyCAD"));
 
-    // Wrong — not translatable:
+    // Wrong (not translatable):
     m_statusLabel->setText("Ready");
     m_statusLabel->setText(QStringLiteral("Ready"));
 
@@ -1014,10 +1210,10 @@
   meanings, add a disambiguation comment:
 
     // In FileMenu:
-    tr("Open", "menu action — open a file")
+    tr("Open", "menu action: open a file")
 
     // In NetworkDialog:
-    tr("Open", "connection state — port is open")
+    tr("Open", "connection state: port is open")
 
   9.4  Plurals
   -------------
@@ -1032,10 +1228,10 @@
   9.5  Translation Workflow
   --------------------------
 
-  Source files (.ts) live in translations/ at the project root:
+  Source files (.ts) live in resources/translations/:
 
-    translations/
-      hobbycad_en.ts         English (reference — generated, not edited)
+    resources/translations/
+      hobbycad_en.ts         English (reference, generated, not edited)
       hobbycad_de.ts         German
       hobbycad_fr.ts         French
       hobbycad_ja.ts         Japanese
@@ -1046,13 +1242,13 @@
     1. Developer writes code with tr() strings
     2. Run lupdate to extract strings into .ts files:
 
-         lupdate src/ -ts translations/hobbycad_en.ts
+         lupdate src/ -ts resources/translations/hobbycad_en.ts
 
     3. Translator edits .ts files using Qt Linguist or a text editor
        (.ts files are human-readable XML)
     4. Run lrelease to compile .ts -> .qm:
 
-         lrelease translations/hobbycad_pirate.ts
+         lrelease resources/translations/hobbycad_pirate.ts
 
     5. .qm files are embedded into the binary via the .qrc resource
        file, or installed alongside the application
@@ -1087,9 +1283,9 @@
   are welcome as community contributions.  They follow the same
   .ts file format and workflow.  The language name is freeform:
 
-    hobbycad_pirate.ts     — "Arr, open ye BREP file!"
-    hobbycad_lolcat.ts     — "I CAN HAZ GEOMETRY?"
-    hobbycad_shakespeare.ts — "Pray, save thine document"
+    hobbycad_pirate.ts:      "Arr, open ye BREP file!"
+    hobbycad_lolcat.ts:      "I CAN HAZ GEOMETRY?"
+    hobbycad_shakespeare.ts: "Pray, save thine document"
 
   These are listed in the language selector alongside standard
   locales.  The display name comes from the .ts file metadata.
@@ -1125,22 +1321,21 @@
   10.2  File Layout
   ------------------
 
-  Embedded resources live in src/hobbycad/resources/:
+  The resource collection file src/hobbycad/resources/hobbycad.qrc
+  compiles in the built-in themes from the top-level resources/ tree
+  (aliased, so the runtime paths stay :/themes/default.qss and
+  :/themes/darkmode.qss):
 
-    resources/
-      hobbycad.qrc             Resource collection file
-      themes/
-        default.qss            Platform-native defaults (compiled in)
-        darkmode.qss           Dark mode (compiled in)
-      translations/
-        hobbycad_en.qm         Compiled English translation
-        hobbycad_pirate.qm     Compiled Pirate translation
+    resources/themes/
+      default.qss              Platform-native defaults (compiled in)
+      darkmode.qss             Dark mode (compiled in)
 
-  User/community themes live in themes/ at the project root:
+  Compiled translations (.qm) are built by lrelease into the build
+  tree and installed to share/hobbycad/translations/, not embedded.
 
-    themes/
-      sample.qss               Reference (all IDs documented)
-      darkmode.qss             Community dark mode variant
+  No other theme is kept in the tree. A custom theme starts as a copy
+  of one of the two built-in files, which list every widget ID with
+  its value, and is loaded from disk (10.3).
 
   10.3  Theme Loading Order (Runtime)
   ------------------------------------
@@ -1158,20 +1353,203 @@
   10.4  Compile-Time vs Runtime Themes
   --------------------------------------
 
-  Built-in themes (src/hobbycad/resources/themes/):
+  Built-in themes (resources/themes/):
     - Compiled into the binary via .qrc
     - Always available, no external files needed
     - Versioned with the source code
     - Updated only with new releases
 
-  User/community themes (themes/ at project root, or ~/.config):
+  Custom themes (~/.config/HobbyCAD/theme.qss, HOBBYCAD_THEME or
+  --theme):
     - Loaded at runtime from disk
     - Can be modified without rebuilding
     - Distributed separately from the application
-    - Community contributions welcome
 
-  The built-in default.qss and darkmode.qss should be kept minimal
-  and stable.  The community darkmode.qss in themes/ can evolve
-  independently with user feedback.
+  The built-in default.qss and darkmode.qss are kept minimal and
+  stable and are the starting point for any custom theme.
 
 
+================================================================================
+  11. LAYERING AND CODE REUSE
+================================================================================
+
+  This section exists because the separation below has repeatedly eroded
+  in practice.  Treat it as a hard rule, not a preference.
+
+  Why it matters:
+
+    libhobbycad's public API is deliberately Qt-free.  The reason is not
+    purity; it is that an alternative front end (wxWidgets, GTK, or a
+    headless tool) must remain cheap to build.  That option only stays
+    open while the GUI is thin.  Every piece of logic that lives in
+    src/hobbycad/ instead of src/libhobbycad/ is work a second front end
+    would have to reimplement from scratch.
+
+    A second toolkit build is hypothetical, but the barrier to it should
+    stay low.  Keeping logic in the library is how that barrier stays low.
+
+
+  11.1 WHERE CODE BELONGS
+  ------------------------
+
+  Belongs in src/libhobbycad/ (Qt-free):
+
+    - Geometry and math of every kind
+    - Sketch entities, constraints, and the solver
+    - Document and project model, parameters, features
+    - File I/O and format conversion
+    - Units, formatting, parsing, validation
+    - Tessellation, profile detection, snapping, queries
+
+  Belongs in src/hobbycad/ (Qt-facing):
+
+    - Event handling (mouse, keyboard, focus)
+    - Painting and rendering
+    - Widget construction, layout, dialogs, actions
+    - Interaction state (what is selected, what tool is active,
+      what is being dragged)
+    - Conversion between library types and Qt types at the boundary
+
+  The test to apply: if a wxWidgets front end would need this code,
+  it belongs in the library.
+
+
+  11.2 RULES
+  -----------
+
+  1. Before writing geometry or math in src/hobbycad/, search
+     src/libhobbycad/ for an existing function.  Start with:
+
+       src/libhobbycad/hobbycad/geometry/utils.h
+       src/libhobbycad/hobbycad/geometry/intersections.h
+       src/libhobbycad/hobbycad/geometry/algorithms.h
+       src/libhobbycad/hobbycad/sketch/
+       src/libhobbycad/hobbycad/units.h
+
+  2. If the function exists, call it.  If it nearly exists, extend the
+     library version rather than writing a local variant.
+
+  3. Hand-rolled vector math in GUI code is a defect when the library
+     already provides it.  In particular:
+
+       std::sqrt(v.x() * v.x() + v.y() * v.y())   ->  geometry::length(v)
+       dividing a vector by its own length         ->  geometry::normalize(v)
+
+     geometry/utils.h also provides dot, cross, lengthSquared,
+     perpendicular, lerp, vectorAngle, angleBetween, rotatePoint,
+     projectPointOntoRay, snapToAngleIncrement, and more.  Check before
+     writing.
+
+  4. Do not copy a block of logic to a second location.  If two call
+     sites need the same behavior, extract one function and call it
+     twice.  A copied block is two things that must now be corrected
+     twice, and copies drift.
+
+  5. Prefer a small function or a typed wrapper over a preprocessor
+     macro.  Macros defeat the debugger, IDE navigation, and type
+     checking; an inline function costs nothing at runtime.  Macros are
+     acceptable for repetitive declarative registration tables, where
+     the alternative is dozens of near-identical stanzas.
+
+
+  11.3 CONSOLIDATING GUI CODE INTO THE LIBRARY
+  ---------------------------------------------
+
+  When moving code from the GUI into libhobbycad, do not assume the
+  library version is the better one.  The GUI copy has usually been
+  exercised harder and often carries:
+
+    - Epsilon guards (> 1e-6, > 1e-9) the library version lacks
+    - Additional entity types or edge cases
+    - Ordering or degeneracy handling learned from real use
+
+  Merge the best of both, then delete the GUI copy.  Blindly replacing
+  the GUI code with the existing library function is how working
+  behavior gets lost.
+
+
+  11.4 INTENTIONAL DUPLICATION
+  -----------------------------
+
+  Some duplication is deliberate and must NOT be consolidated:
+
+    - The Qt and non-Qt paths in src/libhobbycad/project.cpp and
+      parameters.cpp, selected by #if HOBBYCAD_HAS_QT.  These exist so
+      the library builds without Qt at all.  Collapsing them would
+      break the Qt-free build.
+
+      Note that only the accessor spellings and the JSON type genuinely
+      differ between those paths; where the two sides are identical,
+      the code should be written once outside the #if rather than
+      duplicated inside it.
+
+    - Repetitive declarative registration blocks (key bindings, toolbar
+      actions).  These are data, not logic.  Convert them to a table
+      driven by a loop where practical, but do not attempt to
+      "de-duplicate" them as if they were algorithms.
+
+
+================================================================================
+  12. SKETCH CANVAS TOOL HANDLERS
+================================================================================
+
+  Sketch tool behavior belongs in a SketchToolHandler subclass under
+  src/hobbycad/gui/tools/, one per tool, NOT in a switch inside
+  SketchCanvas.
+
+  The canvas began as a single large class in which every tool was a
+  case label in eight dispatch points.  Handlers are the way out of
+  that, and the migration is incremental by design: old and new dispatch
+  live side by side, and the app builds and runs after every individual
+  tool moves.  There is deliberately never a half-built state.
+
+  This approach was chosen over a parallel second canvas and over a
+  ground-up rewrite, and is referred to in discussion as "Plan A" (or
+  Route A, after the document that compared the alternatives).  The
+  rationale for the routes NOT taken is not repeated here; what follows
+  is the contract that binds code in this repository.
+
+  12.1  The Fallthrough Contract
+  -------------------------------
+
+  Every hook returns bool:
+
+      true    this handler dealt with the event; the canvas stops.
+      false   not handled; the canvas falls through to its existing
+              switch, which behaves exactly as it did before.
+
+  That single convention is what lets a migrated tool and an unmigrated
+  one coexist.  A tool is migrated by implementing its hooks and then
+  DELETING its case labels from the dispatch points it now covers.  The
+  old switch shrinks monotonically; when the last tool leaves, the
+  switch is empty and is removed.
+
+  applyCreationMode() follows the same contract for creation modes.
+  CreationMode values restart at 0 for each tool, so only the owning
+  tool can say what a given value means, which is precisely why the
+  interpretation belongs in the handler.
+
+  Do NOT add a new per-tool case to a canvas switch.  That grows the
+  structure this section exists to remove.  Put it in the handler.
+
+  12.2  Do Not Collapse mousePress And mouseRelease
+  --------------------------------------------------
+
+  These are separate hooks and must stay separate.
+
+  Every staged mode accepts two input styles: click-click-click, and
+  press-drag-release past a small threshold, detected per stage.  Press
+  places a point on click; release places the next one if the user
+  dragged.  A single "onClick" abstraction cannot express both, and
+  merging them silently deletes drag-through placement, silently
+  because everything still compiles, and click-click-click still works,
+  so the loss shows up only when someone tries to drag.
+
+  12.3  Handlers Are Stateless
+  -----------------------------
+
+  A handler holds no members.  One instance per tool is created with the
+  canvas and lives as long as it does.  Per-tool mode state (the active
+  line mode, circle mode and so on) lives on SketchCanvas and is read
+  and written through accessors, so that a handler stays a pure
+  translation of input into canvas operations.

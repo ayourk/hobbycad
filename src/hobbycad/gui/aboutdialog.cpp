@@ -2,6 +2,7 @@
 //  src/hobbycad/gui/aboutdialog.cpp — About HobbyCAD dialog
 // =====================================================================
 
+#include <hobbycad/sketch/solver.h>
 #include "aboutdialog.h"
 
 #include <hobbycad/core.h>
@@ -44,7 +45,7 @@ AboutDialog::AboutDialog(const OpenGLInfo& glInfo, QWidget* parent)
     titleLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(titleLabel);
 
-    // Logo — render SVG at exact target size via QSvgRenderer
+    // Logo: render SVG at exact target size via QSvgRenderer
     auto* logoLabel = new QLabel;
     logoLabel->setAlignment(Qt::AlignCenter);
     QSvgRenderer svgRenderer(QStringLiteral(":/icons/hobbycad.svg"));
@@ -90,7 +91,7 @@ AboutDialog::AboutDialog(const OpenGLInfo& glInfo, QWidget* parent)
     } else {
         status = QStringLiteral("failed");
         if (!glInfo.errorMessage.empty())
-            status += QStringLiteral(" — ") + QString::fromStdString(glInfo.errorMessage);
+            status += QStringLiteral(": ") + QString::fromStdString(glInfo.errorMessage);
     }
     glForm->addRow(tr("Context Creation:"), valueLabel(status));
 
@@ -110,6 +111,46 @@ AboutDialog::AboutDialog(const OpenGLInfo& glInfo, QWidget* parent)
         valueLabel(QStringLiteral(HOBBYCAD_OCCT_VERSION)));
 #else
     depForm->addRow(tr("OpenCASCADE:"), valueLabel(tr("(unknown)")));
+#endif
+
+    // Constraint solver. The version alone is not the whole story: a stock
+    // libslvs aborts the process on a kernel assertion, while a patched one
+    // hands the fault back so the sketch survives. A bug report needs to say
+    // which, so the capability is shown next to the version rather than left
+    // for someone to infer from the number.
+    // Listed only when the solver is actually linked in. A build without it
+    // does not get a row saying "absent"; the rule is linked means listed,
+    // not linked means not listed at all.
+    if (sketch::Solver::isAvailable()) {
+        QString solver = QString::fromLatin1(sketch::solverVersionString());
+        if (sketch::solverCanRecoverFromFaults()) {
+            solver += tr("  (recovers from solver faults)");
+        } else if (sketch::solverFatalHandlerAvailable()) {
+            solver += tr("  (reports solver faults, cannot recover)");
+        } else {
+            solver += tr("  (stock: a solver fault ends the process)");
+        }
+        depForm->addRow(tr("Solver (libslvs):"), valueLabel(solver));
+    }
+
+#ifdef HOBBYCAD_JSON_VERSION
+    depForm->addRow(tr("nlohmann/json:"),
+        valueLabel(QStringLiteral(HOBBYCAD_JSON_VERSION)));
+#endif
+
+#ifdef HOBBYCAD_WEBP_VERSION
+    depForm->addRow(tr("libwebp:"),
+        valueLabel(QStringLiteral(HOBBYCAD_WEBP_VERSION)));
+#endif
+
+#ifdef HOBBYCAD_STB_VERSION
+    depForm->addRow(tr("stb_image:"),
+        valueLabel(QStringLiteral(HOBBYCAD_STB_VERSION)));
+#endif
+
+#ifdef HOBBYCAD_EGL_VERSION
+    depForm->addRow(tr("EGL:"),
+        valueLabel(QStringLiteral(HOBBYCAD_EGL_VERSION)));
 #endif
 
 #ifdef HOBBYCAD_CMAKE_VERSION

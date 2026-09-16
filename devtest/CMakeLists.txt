@@ -5,7 +5,7 @@
 #  Builds and runs a test program that verifies every HobbyCAD and
 #  HobbyMesh dependency across all development phases.
 #
-#  Phase 0 and Phase 1 dependencies are REQUIRED — cmake will fail if
+#  Phase 0 and Phase 1 dependencies are REQUIRED; cmake will fail if
 #  they are missing.  All later-phase dependencies are optional and
 #  report [WARN] at runtime if absent.
 #
@@ -90,7 +90,7 @@ if(NOT CMAKE_GENERATOR MATCHES "Ninja")
     depcheck_log("       Continuing with ${CMAKE_GENERATOR}.")
 endif()
 
-# PkgConfig is optional — available on Linux and macOS (Homebrew),
+# PkgConfig is optional: available on Linux and macOS (Homebrew),
 # typically absent on Windows.  Used as a fallback when CMake config
 # files are not shipped by a library.
 find_package(PkgConfig QUIET)
@@ -100,14 +100,41 @@ find_package(PkgConfig QUIET)
 find_package(OpenCASCADE REQUIRED)
 depcheck_log("Found OpenCASCADE: ${OpenCASCADE_INCLUDE_DIR}")
 
-find_package(Qt6 6.2 REQUIRED COMPONENTS
+# Read the Qt floor from the project rather than restating it. A second
+# hardcoded copy drifts: this file said 6.2 while HobbyCAD required 6.4.2, so
+# devtest passed on a machine HobbyCAD then refused to configure: exactly
+# Ubuntu jammy, which ships 6.2.4.
+set(_hc_root "${CMAKE_CURRENT_SOURCE_DIR}/..")
+file(STRINGS "${_hc_root}/CMakeLists.txt" _hc_qt_line
+     REGEX "^set\\(HOBBYCAD_MIN_QT_VERSION")
+if(_hc_qt_line MATCHES "\"([0-9]+\\.[0-9]+\\.?[0-9]*)\"")
+    set(HC_MIN_QT "${CMAKE_MATCH_1}")
+else()
+    set(HC_MIN_QT "6.4.2")
+    depcheck_log("[WARN] Could not read HOBBYCAD_MIN_QT_VERSION; assuming ${HC_MIN_QT}")
+endif()
+
+find_package(Qt6 ${HC_MIN_QT} REQUIRED COMPONENTS
     Core Gui Widgets OpenGL OpenGLWidgets Svg)
-depcheck_log("Found Qt6: ${Qt6_VERSION}")
+depcheck_log("Found Qt6: ${Qt6_VERSION} (project minimum ${HC_MIN_QT})")
+
+# nlohmann_json is find_package(... REQUIRED) in src/libhobbycad, so a machine
+# without it fails at configure. It was absent from this harness entirely.
+find_package(nlohmann_json CONFIG REQUIRED)
+depcheck_log("Found nlohmann_json: ${nlohmann_json_VERSION}")
+
+# fontconfig comes in through OpenCASCADE's visualization link interface.
+# debian/control notes the link fails without it where nothing else supplies
+# it, so it belongs in the required set rather than being assumed present.
+if(UNIX AND NOT APPLE AND PkgConfig_FOUND)
+    pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
+    depcheck_log("Found fontconfig: ${FONTCONFIG_VERSION}")
+endif()
 
 find_package(OpenGL REQUIRED)
 depcheck_log("Found OpenGL: ${OPENGL_gl_LIBRARY}")
 
-# libgit2 — try CMake config first (vcpkg ships one), fall back
+# libgit2: try CMake config first (vcpkg ships one), fall back
 # to pkg-config on Linux/macOS.
 find_package(libgit2 QUIET)
 if(NOT libgit2_FOUND)
@@ -121,12 +148,26 @@ if(NOT libgit2_FOUND)
             "libgit2 via vcpkg (Windows), or libgit2 via Homebrew (macOS).")
     endif()
 else()
-    # vcpkg provides libgit2::libgit2 as the imported target
-    set(LIBGIT2_TARGET libgit2::libgit2)
-    depcheck_log("Found libgit2: (cmake config)")
+    # The imported target name varies by platform/packager:
+    #   libgit2::libgit2         (vcpkg)
+    #   libgit2::libgit2package  (Debian/Ubuntu libgit2-dev 1.8+)
+    #   libgit2::git2            (some older configs)
+    if(TARGET libgit2::libgit2)
+        set(LIBGIT2_TARGET libgit2::libgit2)
+    elseif(TARGET libgit2::libgit2package)
+        set(LIBGIT2_TARGET libgit2::libgit2package)
+    elseif(TARGET libgit2::git2)
+        set(LIBGIT2_TARGET libgit2::git2)
+    else()
+        message(FATAL_ERROR
+            "find_package(libgit2) succeeded but no known target found.  "
+            "Check installed cmake config in: "
+            "${libgit2_DIR}")
+    endif()
+    depcheck_log("Found libgit2: (cmake config, target=${LIBGIT2_TARGET})")
 endif()
 
-# libzip — On Linux, the CMake config shipped by libzip-dev references
+# libzip: On Linux, the CMake config shipped by libzip-dev references
 # companion tool binaries (zipcmp, zipmerge, ziptool) that live in a
 # separate package.  If those tools are not installed, find_package()
 # fails even though the library itself is present.  To avoid this,
@@ -153,7 +194,7 @@ if(NOT LIBZIP_TARGET)
         "libzip via vcpkg (Windows), or libzip via Homebrew (macOS).")
 endif()
 
-# TBB — OCCT links against TBB for parallelism.  On Linux the system
+# TBB: OCCT links against TBB for parallelism.  On Linux the system
 # OCCT package requires libtbb-dev at link time.  On Windows/macOS
 # vcpkg/Homebrew OCCT may bundle TBB or not need it explicitly.
 find_package(TBB QUIET)
@@ -168,16 +209,18 @@ endif()
 
 # ---- Phase 1: Basic Modeling (required) ------------------------------
 
-# libslvs — PPA package on Linux, MSYS2 package on Windows, build from
+# libslvs: PPA package on Linux, MSYS2 package on Windows, build from
 # source on macOS.  Try pkg-config first, then CMake config, then manual.
 set(HAVE_SLVS FALSE)
 set(SLVS_TARGET "")
 
-# Method 1: pkg-config (try libslvs first, then slvs)
+# Method 1: pkg-config (try libslvs first, then slvs). Both probes are QUIET:
+# a miss on the first name is expected, and pkgconf would otherwise print
+# "required by 'virtual:world', not found" for it.
 if(PkgConfig_FOUND)
-    pkg_check_modules(SLVS IMPORTED_TARGET libslvs)
+    pkg_check_modules(SLVS QUIET IMPORTED_TARGET libslvs)
     if(NOT SLVS_FOUND)
-        pkg_check_modules(SLVS IMPORTED_TARGET slvs)
+        pkg_check_modules(SLVS QUIET IMPORTED_TARGET slvs)
     endif()
     if(SLVS_FOUND)
         set(HAVE_SLVS TRUE)
@@ -248,15 +291,15 @@ if(pybind11_FOUND AND Python3_FOUND)
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
         depcheck_log(
-            "pybind11/Python3 not found (Phase 3) — "
+            "pybind11/Python3 not found (Phase 3): "
             "install pybind11-dev python3-dev")
     elseif(HOBBYCAD_PLATFORM STREQUAL "windows")
         depcheck_log(
-            "pybind11/Python3 not found (Phase 3) — "
+            "pybind11/Python3 not found (Phase 3): "
             "vcpkg install pybind11:x64-windows")
     else()
         depcheck_log(
-            "pybind11/Python3 not found (Phase 3) — "
+            "pybind11/Python3 not found (Phase 3): "
             "brew install pybind11 python")
     endif()
 endif()
@@ -266,7 +309,7 @@ endif()
 # OpenMesh
 find_package(OpenMesh QUIET)
 if(NOT OpenMesh_FOUND AND PkgConfig_FOUND)
-    pkg_check_modules(OPENMESH IMPORTED_TARGET OpenMesh)
+    pkg_check_modules(OPENMESH QUIET IMPORTED_TARGET OpenMesh)
     if(OPENMESH_FOUND)
         set(OpenMesh_FOUND TRUE)
     endif()
@@ -278,11 +321,11 @@ if(OpenMesh_FOUND)
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
         depcheck_log(
-            "OpenMesh not found (Phase 5) — "
+            "OpenMesh not found (Phase 5): "
             "install libopenmesh-dev from ppa:ayourk/hobbycad")
     else()
         depcheck_log(
-            "OpenMesh not found (Phase 5) — "
+            "OpenMesh not found (Phase 5): "
             "build from source: https://www.graphics.rwth-aachen.de/software/openmesh/")
     endif()
 endif()
@@ -290,7 +333,7 @@ endif()
 # lib3mf
 find_package(lib3mf QUIET)
 if(NOT lib3mf_FOUND AND PkgConfig_FOUND)
-    pkg_check_modules(LIB3MF IMPORTED_TARGET lib3mf)
+    pkg_check_modules(LIB3MF QUIET IMPORTED_TARGET lib3mf)
     if(LIB3MF_FOUND)
         set(lib3mf_FOUND TRUE)
     endif()
@@ -302,11 +345,11 @@ if(lib3mf_FOUND)
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
         depcheck_log(
-            "lib3mf not found (Phase 5) — "
+            "lib3mf not found (Phase 5): "
             "install lib3mf-dev from ppa:ayourk/hobbycad")
     else()
         depcheck_log(
-            "lib3mf not found (Phase 5) — "
+            "lib3mf not found (Phase 5): "
             "build from source: https://github.com/3MFConsortium/lib3mf")
     endif()
 endif()
@@ -314,7 +357,7 @@ endif()
 # MeshFix
 set(HAVE_MESHFIX FALSE)
 if(PkgConfig_FOUND)
-    pkg_check_modules(MESHFIX IMPORTED_TARGET meshfix)
+    pkg_check_modules(MESHFIX QUIET IMPORTED_TARGET meshfix)
     if(MESHFIX_FOUND)
         set(HAVE_MESHFIX TRUE)
     endif()
@@ -331,11 +374,11 @@ if(HAVE_MESHFIX)
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
         depcheck_log(
-            "MeshFix not found (Phase 5) — "
+            "MeshFix not found (Phase 5): "
             "install libmeshfix-dev from ppa:ayourk/hobbycad")
     else()
         depcheck_log(
-            "MeshFix not found (Phase 5) — "
+            "MeshFix not found (Phase 5): "
             "build from source: https://github.com/MarcoAttene/MeshFix-V2.1")
     endif()
 endif()
@@ -348,11 +391,11 @@ if(CGAL_FOUND)
     depcheck_log("Found CGAL (Phase 5)")
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
-        depcheck_log("CGAL not found (Phase 5) — sudo apt install libcgal-dev")
+        depcheck_log("CGAL not found (Phase 5): sudo apt install libcgal-dev")
     elseif(HOBBYCAD_PLATFORM STREQUAL "windows")
-        depcheck_log("CGAL not found (Phase 5) — vcpkg install cgal:x64-windows")
+        depcheck_log("CGAL not found (Phase 5): vcpkg install cgal:x64-windows")
     else()
-        depcheck_log("CGAL not found (Phase 5) — brew install cgal")
+        depcheck_log("CGAL not found (Phase 5): brew install cgal")
     endif()
 endif()
 
@@ -364,18 +407,18 @@ if(OpenVDB_FOUND)
     depcheck_log("Found OpenVDB (Phase 5)")
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
-        depcheck_log("OpenVDB not found (Phase 5) — sudo apt install libopenvdb-dev")
+        depcheck_log("OpenVDB not found (Phase 5): sudo apt install libopenvdb-dev")
     elseif(HOBBYCAD_PLATFORM STREQUAL "windows")
-        depcheck_log("OpenVDB not found (Phase 5) — vcpkg install openvdb:x64-windows")
+        depcheck_log("OpenVDB not found (Phase 5): vcpkg install openvdb:x64-windows")
     else()
-        depcheck_log("OpenVDB not found (Phase 5) — brew install openvdb")
+        depcheck_log("OpenVDB not found (Phase 5): brew install openvdb")
     endif()
 endif()
 
 # Assimp
 find_package(assimp QUIET)
 if(NOT assimp_FOUND AND PkgConfig_FOUND)
-    pkg_check_modules(ASSIMP IMPORTED_TARGET assimp)
+    pkg_check_modules(ASSIMP QUIET IMPORTED_TARGET assimp)
     if(ASSIMP_FOUND)
         set(assimp_FOUND TRUE)
     endif()
@@ -386,11 +429,11 @@ if(assimp_FOUND)
     depcheck_log("Found Assimp (Phase 5)")
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
-        depcheck_log("Assimp not found (Phase 5) — sudo apt install libassimp-dev")
+        depcheck_log("Assimp not found (Phase 5): sudo apt install libassimp-dev")
     elseif(HOBBYCAD_PLATFORM STREQUAL "windows")
-        depcheck_log("Assimp not found (Phase 5) — vcpkg install assimp:x64-windows")
+        depcheck_log("Assimp not found (Phase 5): vcpkg install assimp:x64-windows")
     else()
-        depcheck_log("Assimp not found (Phase 5) — brew install assimp")
+        depcheck_log("Assimp not found (Phase 5): brew install assimp")
     endif()
 endif()
 
@@ -402,11 +445,11 @@ if(Eigen3_FOUND)
     depcheck_log("Found Eigen: ${Eigen3_VERSION} (Phase 5)")
 else()
     if(HOBBYCAD_PLATFORM STREQUAL "linux")
-        depcheck_log("Eigen not found (Phase 5) — sudo apt install libeigen3-dev")
+        depcheck_log("Eigen not found (Phase 5): sudo apt install libeigen3-dev")
     elseif(HOBBYCAD_PLATFORM STREQUAL "windows")
-        depcheck_log("Eigen not found (Phase 5) — vcpkg install eigen3:x64-windows")
+        depcheck_log("Eigen not found (Phase 5): vcpkg install eigen3:x64-windows")
     else()
-        depcheck_log("Eigen not found (Phase 5) — brew install eigen")
+        depcheck_log("Eigen not found (Phase 5): brew install eigen")
     endif()
 endif()
 
@@ -429,15 +472,99 @@ target_include_directories(depcheck PRIVATE
 target_compile_options(depcheck PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-deprecated-declarations>)
 
+# OCCT library names changed in 7.8+ (TKSTEP→TKDESTEP, etc.).
+# Pick whichever variant is available.
+macro(occt_pick_lib VAR OLD NEW)
+    if(OLD IN_LIST OpenCASCADE_DataExchange_LIBRARIES)
+        set(${VAR} ${OLD})
+    elseif(NEW IN_LIST OpenCASCADE_DataExchange_LIBRARIES)
+        set(${VAR} ${NEW})
+    else()
+        # Fallback: check if the library file exists
+        find_library(_occt_${VAR} NAMES ${NEW} ${OLD}
+            HINTS ${OpenCASCADE_LIBRARY_DIR})
+        if(_occt_${VAR})
+            get_filename_component(_occt_name "${_occt_${VAR}}" NAME_WE)
+            string(REGEX REPLACE "^lib" "" ${VAR} "${_occt_name}")
+        else()
+            set(${VAR} ${NEW})  # prefer new name as last resort
+        endif()
+    endif()
+endmacro()
+
+occt_pick_lib(_OCCT_STEP  TKSTEP  TKDESTEP)
+occt_pick_lib(_OCCT_STL   TKSTL   TKDESTL)
+occt_pick_lib(_OCCT_IGES  TKIGES  TKDEIGES)
+
+# ---- Optional, but their absence is SILENT --------------------------
+#
+# These do not fail any build. They change what the finished binary can do,
+# with no error at any stage, which is precisely why they are worth a [WARN]
+# here rather than being discovered later.
+
+# lrelease compiles resources/translations/*.ts into the .qm catalogs embedded in the
+# binary. HobbyCAD looks it up with find_program, not find_package, so a
+# machine without it builds cleanly and ships English-only. On Debian and
+# Ubuntu it lives in qt6-l10n-tools; /usr/bin/lrelease is a qtchooser symlink
+# that resolves to Qt 5 and is NOT a substitute.
+find_program(HC_LRELEASE NAMES lrelease-qt6 lrelease6 lrelease)
+if(HC_LRELEASE)
+    depcheck_log("Found lrelease: ${HC_LRELEASE}")
+else()
+    depcheck_log("[WARN] lrelease not found; translations will not be built.")
+    depcheck_log("       The build still succeeds and produces an English-only")
+    depcheck_log("       binary with no error. Install: qt6-l10n-tools")
+endif()
+
+if(UNIX AND NOT APPLE AND PkgConfig_FOUND)
+    pkg_check_modules(LIBWEBP IMPORTED_TARGET libwebp)
+    if(LIBWEBP_FOUND)
+        depcheck_log("Found libwebp: ${LIBWEBP_VERSION}")
+    else()
+        depcheck_log("[WARN] libwebp not found; WebP background images will")
+        depcheck_log("       be unsupported in the built binary. Install: libwebp-dev")
+    endif()
+
+    pkg_check_modules(LIBPNG IMPORTED_TARGET libpng)
+    if(LIBPNG_FOUND)
+        depcheck_log("Found libpng: ${LIBPNG_VERSION}")
+    else()
+        depcheck_log("[WARN] libpng not found; PNG background image loading")
+        depcheck_log("       will be unsupported. Install: libpng-dev")
+    endif()
+endif()
+
+# ---- Declared in debian/control, normally supplied transitively -----
+#
+# Qt and OpenCASCADE pull these in, so a missing one usually surfaces as a Qt
+# or OCCT failure first. They are checked here for parity with the packaging:
+# debian/control names them explicitly because the packaged build cannot rely
+# on something else happening to bring them along.
+if(UNIX AND NOT APPLE AND PkgConfig_FOUND)
+    foreach(_m xkbcommon egl glu)
+        string(TOUPPER "${_m}" _M)
+        pkg_check_modules(HC_${_M} IMPORTED_TARGET ${_m})
+        if(HC_${_M}_FOUND)
+            depcheck_log("Found ${_m}: ${HC_${_M}_VERSION}")
+        else()
+            depcheck_log("[WARN] ${_m} not found via pkg-config.")
+            depcheck_log("       Usually supplied through Qt or OpenCASCADE; a")
+            depcheck_log("       packaged build declares it directly. See")
+            depcheck_log("       debian/control.")
+        endif()
+    endforeach()
+endif()
+
 # Phase 0 (required)
 target_link_libraries(depcheck PRIVATE
-    TKernel TKMath TKBRep TKSTEP TKXSBase TKSTL TKIGES
+    TKernel TKMath TKBRep ${_OCCT_STEP} TKXSBase ${_OCCT_STL} ${_OCCT_IGES}
+    nlohmann_json::nlohmann_json
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
     ${LIBGIT2_TARGET}
     ${LIBZIP_TARGET}
     OpenGL::GL)
 
-# TBB (if found — required by OCCT on some platforms)
+# TBB, if found (required by OCCT on some platforms)
 if(TBB_FOUND AND TARGET TBB::tbb)
     target_link_libraries(depcheck PRIVATE TBB::tbb)
 elseif(TARGET PkgConfig::TBB)

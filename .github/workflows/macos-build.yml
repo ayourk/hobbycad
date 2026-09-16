@@ -5,8 +5,8 @@
 # into the executable; only macOS system frameworks remain dynamic.
 #
 # First build is slow (~45 min) due to Qt6/OCCT compilation.
-# Subsequent builds use GitHub Actions cache via vcpkg binary
-# caching, reducing install to ~2 min.
+# Later builds restore vcpkg's binary archives from the GitHub Actions
+# cache (see "Restore vcpkg binary cache"), so only changed packages build.
 
 name: macOS Build
 
@@ -20,6 +20,9 @@ on:
       - 'LICENSE'
       - '*.md'
   workflow_dispatch:
+  # Callable from another workflow (a release workflow that gathers every
+  # package on a tag); the triggers above stay as they are.
+  workflow_call:
 
 env:
   ACTIONS_STEP_DEBUG: true
@@ -34,21 +37,14 @@ jobs:
     env:
       BUILD_TYPE: Release
       VCPKG_DEFAULT_TRIPLET: arm64-osx-static
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
 
     steps:
       - name: Checkout HobbyCAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install build tools
         run: brew install ninja
-
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Setup vcpkg
         run: |
@@ -60,12 +56,39 @@ jobs:
       - name: Clear vcpkg registry cache
         run: rm -rf ~/.cache/vcpkg/registries
 
+      # vcpkg stores every package it builds as an archive in vcpkg-bincache
+      # (the files provider in VCPKG_BINARY_SOURCES), and that directory is kept
+      # in the GitHub Actions cache. vcpkg hashes each package's inputs itself,
+      # so restoring an older cache is safe: unchanged packages come from it and
+      # only changed ones build. The runner image is in the key because an image
+      # update can change the compiler and with it those hashes.
+      - name: vcpkg binary cache key
+        id: vcpkg-key
+        run: |
+          mkdir -p vcpkg-bincache
+          echo "image=$ImageVersion" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-arm64-osx-static-2026.02.27-${{ steps.vcpkg-key.outputs.image }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-custom-triplets/**') }}
+          restore-keys: vcpkg-arm64-osx-static-2026.02.27-
+
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install --triplet arm64-osx-static \
             --overlay-triplets=${{ github.workspace }}/vcpkg-custom-triplets \
             --x-install-root=vcpkg_installed \
             --clean-buildtrees-after-build
+
+      - name: Save vcpkg binary cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vcpkg-bincache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Configure CMake
         run: |
@@ -83,20 +106,40 @@ jobs:
         run: |
           cmake --install build --prefix build/install
 
-          # Static build — single executable, no dylibs to bundle
-          exe="build/install/bin/hobbycad"
+          # On macOS the target is an app bundle, installed at the prefix
+          # root as HobbyCAD.app (static build: one executable inside it,
+          # no dylibs to bundle). The bare bin/hobbycad form is kept as a
+          # fallback for a non-bundle configuration.
+          exe="build/install/HobbyCAD.app/Contents/MacOS/HobbyCAD"
+          [ -f "$exe" ] || exe="build/install/bin/hobbycad"
           if [ ! -f "$exe" ]; then
-            echo "::error::hobbycad not found at $exe"
+            echo "::error::hobbycad not found in build/install (neither HobbyCAD.app nor bin/)"
             exit 1
+          fi
+          if [ -f build/install/HobbyCAD.app/Contents/Resources/hobbycad.icns ]; then
+            echo "Bundle icon: hobbycad.icns present"
+          else
+            echo "::warning::HobbyCAD.app has no hobbycad.icns"
           fi
           echo "Static build produced: $exe"
           echo "Size: $(du -h "$exe" | cut -f1)"
           echo "Architecture: $(file "$exe")"
 
+      - name: Create DMG
+        run: tools/macos/make-dmg.sh build/install/HobbyCAD.app arm64 dist
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: hobbycad-macos-arm64-dmg
+          path: dist/*.dmg
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hobbycad-macos-arm64
           path: build/install/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error

@@ -76,8 +76,8 @@
   2. SUPPORTED PLATFORMS
 ================================================================================
 
-  Development:    Ubuntu 24.04 LTS (Noble Numbat) — primary
-  Build Target:   Ubuntu 22.04 LTS (Jammy Jellyfish) — minimum
+  Development:    Ubuntu 24.04 LTS (Noble Numbat), primary
+  Build Target:   Ubuntu 22.04 LTS (Jammy Jellyfish), minimum
   Packaging:      .deb (Ubuntu/Debian), .AppImage (generic Linux)
   Platform Stubs: Windows (MSYS2/MinGW-w64 or MSVC),
                   macOS (Apple Clang + Homebrew)
@@ -228,10 +228,10 @@
 
         Intel Integrated Graphics (Linux: Mesa i915/iris; Windows: Intel driver)
           - HD Graphics 2500 / 4000 (Ivy Bridge, 3rd gen Core) and
-            newer — OpenGL 3.3 via Mesa core profile on Linux
-          - HD Graphics 4200+ (Haswell, 4th gen Core) — OpenGL 4.0
-          - Intel UHD 600/620/630 and newer — OpenGL 4.5+
-          - Intel Iris Xe, Intel Arc — OpenGL 4.6
+            newer: OpenGL 3.3 via Mesa core profile on Linux
+          - HD Graphics 4200+ (Haswell, 4th gen Core): OpenGL 4.0
+          - Intel UHD 600/620/630 and newer: OpenGL 4.5+
+          - Intel Iris Xe, Intel Arc: OpenGL 4.6
           - Recommended: Intel HD 4000 or newer
 
           IMPORTANT: Intel HD Graphics 2000 (Sandy Bridge, 2nd gen)
@@ -242,7 +242,7 @@
           First-generation Intel HD Graphics (Arrandale/Ironlake)
           supports only OpenGL 2.1 and WILL NOT work.
 
-        Apple Silicon (M1/M2/M3/M4 — macOS only)
+        Apple Silicon (M1/M2/M3/M4, macOS only)
           - OpenGL 4.1 (Apple's maximum; see Part C Section 23.3)
           - Metal is the preferred API on macOS; Qt 6 RHI can use
             Metal as a backend, but OCCT currently requires OpenGL
@@ -310,7 +310,7 @@
   4.2  OPENCASCADE TECHNOLOGY (OCCT)
   ------------------------------------
 
-  The 3D modeling kernel. The HobbyCAD PPA provides OCCT 7.9.2
+  The 3D modeling kernel. The HobbyCAD PPA provides OCCT 8.0.1
   (Ubuntu 24.04 system packages provide 7.6.3, but the PPA is preferred):
 
     sudo apt-get install -y \
@@ -353,7 +353,9 @@
       qmake6
 
   Note: HobbyCAD does NOT use Qt3D. The 3D viewport uses OCCT's AIS
-  viewer embedded directly in a QOpenGLWidget. The Qt3D scene graph
+  viewer embedded directly in a plain QWidget using
+  Qt::WA_PaintOnScreen (see project_definition.txt Phase 0;
+  QOpenGLWidget conflicts with the Qt 6 RHI). The Qt3D scene graph
   module (qt6-3d-dev, libqt63dcore6, libqt63drender6) is not needed.
 
   4.4  PYTHON (FOR FUTURE SCRIPTING SUPPORT)
@@ -380,9 +382,7 @@
       clang-tidy \
       doxygen \
       graphviz \
-      lcov \
-      librsvg2-bin \
-      icoutils
+      lcov
 
   4.6  IMAGE FORMAT SUPPORT
   ---------------------------
@@ -465,8 +465,7 @@
       libpng-dev libjpeg-dev netpbm \
       libzip-dev libminizip-dev \
       libgit2-dev \
-      gdb valgrind clang-format clang-tidy doxygen graphviz lcov \
-      librsvg2-bin icoutils
+      gdb valgrind clang-format clang-tidy doxygen graphviz lcov
 
 ================================================================================
   5. PACKAGE INSTALLATION - UBUNTU 22.04 LTS (Minimum Target)
@@ -574,8 +573,7 @@
       libpng-dev libjpeg-dev netpbm \
       libzip-dev libminizip-dev \
       libgit2-dev \
-      gdb valgrind clang-format clang-tidy doxygen graphviz lcov \
-      librsvg2-bin icoutils
+      gdb valgrind clang-format clang-tidy doxygen graphviz lcov
 
 ================================================================================
   6. PACKAGE VERSION DIFFERENCES (22.04 vs 24.04) AND CROSS-PLATFORM PINNING
@@ -594,31 +592,42 @@
   | Python              | 3.10.x       | 3.12.x       | (system)     | (system)     | Medium    |
   | Qt 6 (min 6.4.2)   | 6.4.2 (PPA)  | 6.4.2        | 6.4.2        | (not pinned) | Medium    |
   | OCCT (system)       | 7.5.x        | 7.6.3        | —            | —            | —         |
-  | OCCT (PPA/pinned)   | 7.9.2 *      | 7.9.2 *      | 7.9.2        | 7.9.2        | Medium    |
+  | OCCT (PPA/pinned)   | 8.0.1 *      | 8.0.1 *      | 8.0.1        | 8.0.1        | Medium    |
   | pybind11            | 2.9.x        | 2.11.1       | (not pinned) | (not pinned) | Low       |
   | Ninja               | 1.10.x       | 1.11.x       | (system)     | (system)     | None      |
   | libzip              | 1.7.3        | 1.7.3        | 1.7.3        | 1.7.3        | Low       |
   | libgit2             | 1.4.x        | 1.7.2        | 1.8.0 **     | 1.7.2        | Low       |
   +---------------------+--------------+--------------+--------------+--------------+-----------+
 
-  *  OCCT 7.9.2 is provided by the HobbyCAD PPA for Ubuntu and pinned
-     in vcpkg/Homebrew. The PPA packages take precedence over system
-     packages. Minimum supported version is 7.6.3.
+  *  OCCT 8.0.1 is provided by the HobbyCAD PPA for Ubuntu (8.0.1+p1,
+     the HobbyCAD BSD portability series baked into the tarball) and the
+     same tarball is pinned in vcpkg and Homebrew. The PPA packages take
+     precedence over system packages. Minimum supported version is 7.6.3.
 
   ** libgit2 1.7.x does not exist in vcpkg (jumps from 1.6.4 to
      1.8.0). We pin to 1.8.0 as the nearest version above 24.04's
      1.7.2. The libgit2 C API is stable across minor versions.
 
   Qt 6.4.2 is not pinned in Homebrew because building Qt from source
-  takes over two hours. Use the Qt Online Installer for exact parity
-  (Section 16.2), or brew install qt@6 for a rolling-latest Qt 6.x
-  which is source-compatible.
+  takes over two hours. Use the prebuilt 6.4.2 for exact parity: the
+  Qt Online Installer (Section 16.2), or without a Qt account,
+  aqtinstall into ~/Qt (the setup and build scripts look there):
+
+    python3 -m venv ~/aqt && ~/aqt/bin/pip install aqtinstall
+    ~/aqt/bin/aqt install-qt mac desktop 6.4.2 clang_64 \
+        --archives qtbase qtsvg qttools -O ~/Qt
+
+  brew install qt@6 remains a source-compatible rolling alternative
+  on Apple Silicon; on Intel macOS 15 Homebrew has no bottle for it,
+  so it compiles from source for most of a day. The setup script
+  skips it when a prebuilt Qt is present (or HOBBYCAD_QT_DIR is set).
 
   6.1  OCCT VERSION NOTES
   -------------------------
 
-  HobbyCAD targets OCCT 7.9.2 (provided via PPA, vcpkg, and Homebrew).
-  Minimum supported version is 7.6.3 (Ubuntu 24.04 system packages).
+  HobbyCAD targets OCCT 8.0.1 (provided via PPA, vcpkg, and Homebrew,
+  all from the same 8.0.1+p1 tarball). Minimum supported version is
+  7.6.3 (Ubuntu 24.04 system packages).
 
   OCCT 7.8+ library name changes:
     - TKSTEP → TKDESTEP
@@ -629,13 +638,15 @@
   The CMake build uses occt_pick_lib() macro to handle both old and
   new library names automatically.
 
-  OCCT 7.9.2 includes:
-    - Improved STEP/IGES performance
-    - Enhanced mesh algorithms
-    - Better OpenGL rendering
-    - Various bug fixes
+  OCCT 8.0 differences that touch the build:
+    - Sources moved to src/<Module>/<Toolkit>/<Package>/; installed
+      header layout is unchanged.
+    - New DRAW test plugin TKOpenGlTest (shipped in the draw package,
+      not with the visualization libraries).
+    - CMAKE_POLICY_VERSION_MINIMUM=3.5 is still needed with CMake 4.
+    - The 7.8+ library names (TKDESTEP etc.) apply.
 
-  Code should be developed against OCCT 7.9.2. Use CMake version
+  Code should be developed against OCCT 8.0.1. Use CMake version
   detection if supporting older versions:
 
     find_package(OpenCASCADE REQUIRED)
@@ -697,7 +708,8 @@
     the current vcpkg baseline would normally resolve to:
 
       "overrides": [
-        { "name": "opencascade", "version": "7.9.2" },
+        { "name": "opencascade", "version": "8.0.1" },
+        { "name": "libslvs",     "version-string": "3.2p1" },
         { "name": "qtbase",      "version": "6.4.2" },
         { "name": "qtsvg",       "version": "6.4.2" },
         { "name": "libzip",      "version": "1.7.3" },
@@ -714,13 +726,13 @@
     version-pinned formulas that download directly from upstream
     GitHub release tarballs:
 
-      brew install ayourk/hobbycad/opencascade@7.9.2
+      brew install ayourk/hobbycad/opencascade@8.0.1
       brew install ayourk/hobbycad/libzip@1.7.3
       brew install ayourk/hobbycad/libgit2@1.7.2
 
     These are keg-only (they do not conflict with Homebrew core
     formulas). CMake must be told where to find them via
-    CMAKE_PREFIX_PATH — see Section 22.5 and Section 25.3.
+    CMAKE_PREFIX_PATH (see Section 22.5 and Section 25.3).
 
     Qt 6.4.2 is NOT pinned via Homebrew because building Qt from
     source takes over two hours. Developers who need exact version
@@ -748,7 +760,7 @@
   7.1  SOLVESPACE SOLVER LIBRARY
   --------------------------------
 
-  Status: PACKAGED — available in the HobbyCAD PPA (see Section 8)
+  Status: PACKAGED, available in the HobbyCAD PPA (see Section 8)
   Needed: Phase 1 (sketch constraint solving)
   License: GPL 3.0
 
@@ -762,13 +774,17 @@
                       soname libslvs.so.1)
     libslvs-dev       Development headers and CMake config
 
-  Current PPA version (as of 2026-02-08):
-    Noble (24.04):  libslvs 3.2.git~20260208-1~ppa2~noble1
-    Jammy (22.04):  libslvs 3.2.git~20260208-1~ppa2~jammy1
+  Current PPA version (as of 2026-09-14):
+    Noble (24.04):  libslvs 3.2.git~20260914+p1-1~ppa1~noble1
+    Jammy (22.04):  libslvs 3.2.git~20260914+p1-1~ppa1~jammy1
 
-  Built from SolveSpace git master snapshot dated 2026-02-08.
-  Source tarball: libslvs_3.2.git~20260208.orig.tar.xz
-  Download:       https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/libslvs_3.2.git.20260208.orig.tar.gz
+  Built from SolveSpace git master 952c11c0, with the HobbyCAD patch
+  series cut 2026-09-14 baked into the tarball (+p1; the header reports
+  SLVS_VERSION_STRING "3.2p1").  The Homebrew tap and the vcpkg registry
+  build from the same tarball.
+  Source tarball: libslvs_3.2.git~20260914+p1.orig.tar.gz
+  Download:       https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/libslvs_3.2.git.20260914+p1.orig.tar.gz
+                  (GitHub stores the "~" as ".")
 
   Install from PPA:
     sudo add-apt-repository ppa:ayourk/hobbycad
@@ -809,9 +825,9 @@
       Source:   https://github.com/3MFConsortium/lib3mf
       License:  BSD 2-Clause
       Packages: lib3mf2, lib3mf-dev
-      Noble:    lib3mf 2.4.1.git~20260208-1~ppa1~noble1
-      Jammy:    lib3mf 2.4.1.git~20260208-1~ppa1~jammy1
-      Download: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/lib3mf_2.4.1.git.20260208.orig.tar.gz
+      Noble:    lib3mf 2.5.0+p1-1~ppa1~noble1
+      Jammy:    lib3mf 2.5.0+p1-1~ppa1~jammy1
+      Download: https://github.com/ayourk/hobbycad-vcpkg/releases/download/sources/lib3mf_2.5.0+p1.orig.tar.xz
 
     MeshFix:
       Status:   PACKAGED (2026-02-08)
@@ -863,10 +879,10 @@
 
     Custom Packages (not in any Ubuntu repo):
 
-      1. SolveSpace solver library (libslvs-dev) — DONE (2026-02-08)
-      2. OpenMesh (libopenmesh-dev) — DONE (2026-02-08)
-      3. lib3mf (lib3mf-dev) — DONE (2026-02-08)
-      4. MeshFix (libmeshfix-dev) — DONE (2026-02-08)
+      1. SolveSpace solver library (libslvs-dev): DONE (2026-02-08)
+      2. OpenMesh (libopenmesh-dev): DONE (2026-02-08)
+      3. lib3mf (lib3mf-dev): DONE (2026-02-08)
+      4. MeshFix (libmeshfix-dev): DONE (2026-02-08)
 
     Backports to 22.04 (Jammy):
 
@@ -875,14 +891,14 @@
       22.04 to maintain a single codebase without excessive version
       guards. Candidates for backporting:
 
-      5. OCCT 7.6.x — 22.04 ships 7.5.x. The 7.5-to-7.6 API
+      5. OCCT 7.6.x: 22.04 ships 7.5.x. The 7.5-to-7.6 API
          differences may require backporting 7.6 if conditional
          compilation becomes too burdensome.
-      6. Qt 6.4.x — 22.04 ships 6.2.4. If Qt 6.4-only features
+      6. Qt 6.4.x: 22.04 ships 6.2.4. If Qt 6.4-only features
          are needed, backporting avoids maintaining two code paths.
          Note: Qt is a large packaging effort; defer unless truly
          needed.
-      7. pybind11 2.11.x — 22.04 ships 2.9.x. May be needed if
+      7. pybind11 2.11.x: 22.04 ships 2.9.x. May be needed if
          Python 3.12 compatibility issues arise when cross-building.
 
     Backports to 24.04 (Noble):
@@ -892,14 +908,14 @@
       makes sense, newer versions of dependencies should be
       backported to 24.04 as well. Candidates:
 
-      8. OCCT 7.8.x or 8.0.x — if a newer OCCT release provides
+      8. OCCT 7.8.x or 8.0.x: if a newer OCCT release provides
          significant performance improvements or needed API features,
          it should be backported to 24.04 via the PPA rather than
          requiring developers to upgrade their entire OS.
-      9. Qt 6.6.x or 6.8.x — same rationale. Newer Qt releases
+      9. Qt 6.6.x or 6.8.x: same rationale. Newer Qt releases
          include bug fixes and performance improvements relevant to
          OpenGL widget rendering.
-      10. CGAL — newer versions may include mesh processing
+      10. CGAL: newer versions may include mesh processing
           improvements relevant to HobbyMesh.
 
     General Backporting Policy:
@@ -967,19 +983,21 @@
   than a tagged release. If the package is built from a tagged
   upstream release, this suffix is absent.
 
-  Examples (published — git snapshots):
-    libslvs     3.2.git~20260208-1~ppa2~noble1    (custom package)
-    libslvs     3.2.git~20260208-1~ppa2~jammy1     (custom package)
+  Examples (published, git snapshots):
+    libslvs     3.2.git~20260914+p1-1~ppa1~noble1 (custom package)
+    libslvs     3.2.git~20260914+p1-1~ppa1~jammy1 (custom package)
     libopenmesh 11.0.0.git~20260208-1~ppa1~noble1  (custom package)
     libopenmesh 11.0.0.git~20260208-1~ppa1~jammy1  (custom package)
-    lib3mf      2.4.1.git~20260208-1~ppa1~noble1   (custom package)
-    lib3mf      2.4.1.git~20260208-1~ppa1~jammy1   (custom package)
+    lib3mf      2.5.0+p1-1~ppa1~noble1             (custom package)
+    lib3mf      2.5.0+p1-1~ppa1~jammy1             (custom package)
     meshfix     2.1.git~20260208-1~ppa1~noble1      (custom package)
     meshfix     2.1.git~20260208-1~ppa1~jammy1      (custom package)
 
   OpenCASCADE (current PPA version):
-    opencascade 7.9.2+dfsg-4~ppa1~noble1           (backport to 24.04)
-    opencascade 7.9.2+dfsg-4~ppa1~jammy1           (backport to 22.04)
+    opencascade 8.0.1+p1-1~ppa1~noble1             (24.04)
+    opencascade 8.0.1+p1-1~ppa1~jammy1             (22.04)
+    (+p1: the HobbyCAD BSD portability series is baked into the orig
+    tarball; see HobbyCAD-libs/opencascade/ and OpenCASCADE issue #1515)
 
   The ~ppa<N>~ infix ensures:
     - The package sorts lower than any future distro package with
@@ -1008,7 +1026,7 @@
   Launchpad.net provides build farm infrastructure that compiles
   packages in clean, stock chroot environments for each target
   distribution. This means packages do not need to be cross-compiled
-  locally — uploading a properly prepared source package to the PPA
+  locally: uploading a properly prepared source package to the PPA
   triggers automated builds on Launchpad's servers for all specified
   distributions and architectures.
 
@@ -1043,7 +1061,7 @@
       3. Resolve any build dependency issues (may require
          backporting additional packages first)
       4. Build and test locally
-      5. Upload source package to PPA — Launchpad handles the
+      5. Upload source package to PPA; Launchpad handles the
          actual build in a stock chroot for the target release
 
   8.6  PPA PRIORITY AND TIMELINE
@@ -1053,7 +1071,7 @@
     No PPA needed. All dependencies are in standard repos.
 
   Phase 1:
-    DONE — SolveSpace solver library (libslvs) packaged and
+    DONE: SolveSpace solver library (libslvs) packaged and
     published in PPA for both Noble and Jammy (2026-02-08).
     Evaluate whether OCCT 7.5 (22.04) needs backporting.
 
@@ -1062,7 +1080,7 @@
     compatibility.
 
   Phase 5:
-    DONE — OpenMesh, lib3mf, MeshFix packaged and published
+    DONE: OpenMesh, lib3mf, MeshFix packaged and published
     in PPA for both Noble and Jammy (2026-02-08).
     Evaluate CGAL and OpenVDB version requirements when
     Phase 5 development begins.
@@ -1084,7 +1102,7 @@
   HobbyMesh dependency across all development phases, then exercises
   each one at runtime.
 
-  Phase 0 dependencies are required — cmake will fail if missing.
+  Phase 0 dependencies are required; cmake will fail if missing.
   All later-phase dependencies are optional and report [WARN] with
   corrective install commands if absent.  As phases are implemented
   and their dependencies become required for the build, devtest
@@ -1100,7 +1118,7 @@
 
   Exit code 0 means all Phase 0 dependencies are OK (warnings are
   informational).  Exit code 1 means one or more Phase 0 dependencies
-  failed — see Section 12 for troubleshooting.
+  failed (see Section 12 for troubleshooting).
 
   See devtest/README.txt for full details and expected output.
 
@@ -1156,7 +1174,6 @@
         screenshot.png             Application screenshot (README)
         icons/
           hobbycad.svg             Application icon (scalable, canonical)
-          hobbycad.xpm             XPM fallback (window manager hints)
       devtest/
         CMakeLists.txt             Dependency verification build
         depcheck.cpp               Test program (all phases)
@@ -1169,11 +1186,10 @@
         security_risks.txt
         coding_standards.txt       File conventions and C++ style
         theming.txt                GUI theming guide
-      themes/
-        sample.qss                 Reference theme (all widget IDs)
-        darkmode.qss               Community dark mode theme
-      translations/
-        hobbycad_en.ts             English reference (generated by lupdate)
+      resources/
+        themes/                    Built-in stylesheets (compiled in)
+        translations/
+          hobbycad_en.ts           English reference (generated by lupdate)
       src/
         libhobbycad/               Reusable core library (no GUI)
           CMakeLists.txt
@@ -1213,19 +1229,22 @@
             cliengine.h/.cpp       Shared command dispatch engine
             clihistory.h/.cpp      Persistent command history
             terminalinput.h/.cpp   zsh-style terminal line editor
-        libhobbymesh/              Reusable mesh library (future — Phase 5)
+        libhobbymesh/              Reusable mesh library (future, Phase 5)
           README.txt               Stub for git tracking
-        hobbymesh/                 HobbyMesh application (future — Phase 5)
+        hobbymesh/                 HobbyMesh application (future, Phase 5)
           README.txt               Stub for git tracking
-        plugins/                   Plugin infrastructure (future — Phase 3+)
+        plugins/                   Plugin infrastructure (future, Phase 3+)
           README.txt               Stub for git tracking
       tests/                       Unit and integration tests (future)
         README.txt                 Stub for git tracking
       cmake/                       Custom CMake modules
         GenerateIcons.cmake        Build-time SVG to PNG/ICO/ICNS
         README.txt                 Stub for git tracking
-      scripts/                     Helper scripts (future)
-        README.txt                 Stub for git tracking
+      scripts/                     Helper scripts
+        README.txt                 What each script does
+        ci/                        CI dependency scripts: build dependencies
+                                   from the packaging, pinned sources built
+                                   from versions.json (pins.sh is generated)
       tools/
         README.txt                 Build and packaging tools
         linux/
@@ -1288,7 +1307,7 @@
     ./tools/linux/build-dev.sh clean release run   # Clean + Release + run
 
   The "run" option checks if the binary already exists.  If so,
-  it just launches it — no build step.  If the binary is missing
+  it just launches it, with no build step.  If the binary is missing
   (or was just removed by "clean"), it runs devtest, builds, and
   then launches.  This means "run" alone is instant when you
   already have a build, while "clean run" forces a full rebuild.
@@ -1373,12 +1392,14 @@
       hobbycad.desktop       Freedesktop.org .desktop entry
       icons/
         hobbycad.svg         Application icon (scalable, canonical)
-        hobbycad.xpm         XPM fallback (window manager hints)
 
-  Platform-specific icons (PNG, .ico, .icns) are generated at
-  build time from the SVG via cmake/GenerateIcons.cmake.
-  Requires rsvg-convert (librsvg2-bin).  The XPM is installed
-  to share/pixmaps/ for legacy window manager support.
+  Every raster icon (hicolor PNGs, the Windows .ico, the macOS
+  iconset, and the 32x32 XPM the Debian menu wants in
+  share/pixmaps/) is rendered at build time from the SVG by
+  cmake/GenerateIcons.cmake, which builds and runs
+  tools/render-icons.cpp with the Qt the GUI already requires
+  (Gui + Svg); no rsvg-convert, icotool or ImageMagick is needed,
+  and no generated icon is committed.
 
   Build the .deb using the script:
 
@@ -1543,11 +1564,39 @@
   Windows 10 1809+ for DPI-awareness APIs and other platform
   features.  Windows 7, 8, and 8.1 are not supported.
 
+  Two entry points are installed side by side. hobbycad.exe is a
+  GUI-subsystem program: the Start menu, Explorer and the .hcad
+  association launch it and no console window appears. hobbycad.com is
+  its console-subsystem launcher: cmd and PowerShell resolve a bare
+  "hobbycad" to it (PATHEXT lists .COM before .EXE), so "hobbycad
+  --version", "hobbycad --no-gui < script" and any pipeline behave as
+  console programs do, and the launcher returns the program's exit code.
+  hobbycad.exe typed by name still prints to the console it was started
+  from, but the shell does not wait for it and will not pipe into it.
+
+  The installer offers an unchecked task, "Install the Mesa software
+  OpenGL renderer", for PCs without a graphics driver. Windows then
+  falls back to its built-in OpenGL 1.1, which OCCT can only drive
+  through a fixed-function path with no sRGB stage: the picture works
+  but every designed color comes out dark and over-saturated. The task
+  installs Mesa's llvmpipe beside hobbycad.exe, a complete
+  OpenGL 4.5 renderer in software; about 60 MB. x64 only;
+  mesa-dist-win ships no arm64 build.
+
+  Windows on ARM has no OpenGL driver at all: the GPU vendors ship
+  Direct3D only, and OpenGL comes from Microsoft's free "OpenCL,
+  OpenGL, and Vulkan Compatibility Pack" in the Microsoft Store
+  (Mesa's d3d12 driver, built by Microsoft for arm64, running on
+  the GPU through Direct3D 12). On arm64 the installer shows a page
+  saying so and its last page can open the Store entry; it offers
+  no Mesa task there, since llvmpipe would be a slower software
+  substitute for what the platform already provides.
+
   Windows does not ship with a built-in C++ compiler, so one must
   be installed. The recommended toolchain is MSYS2 with MinGW-w64,
   which provides a fully free and open-source GCC-based build
   environment. MSYS2 also includes Pacman (the Arch Linux package
-  manager), CMake, Ninja, Git, and Python — reducing the number of
+  manager), CMake, Ninja, Git, and Python, reducing the number of
   separate downloads required.
 
   The Windows build uses:
@@ -1620,23 +1669,80 @@
   CONTINUOUS INTEGRATION: The project's Windows CI uses separate
   workflows for each toolchain:
 
-    - windows-build-msys2.yml  -- MSYS2 UCRT64 / GCC / pacman
+    - windows-build-msys2.yml: MSYS2 UCRT64 / GCC / pacman
       Matches the local developer setup from setup-env.ps1.
       Dependencies come from pre-built pacman packages (fast).
       Produces a dynamic build (requires DLLs alongside the .exe).
 
-    - windows-build-msvc.yml       -- MSVC x64 static build
-    - windows-build-msvc-arm64.yml -- MSVC arm64 static build
+    - windows-build-msvc.yml: MSVC x64 static build
+    - windows-build-msvc-arm64.yml: MSVC arm64 static build
       Uses Visual Studio / cl.exe with vcpkg custom static
       triplets (x64-windows-static-md, arm64-windows-static-md).
-      All dependencies are statically linked into hobbycad.exe,
-      producing a self-contained executable with no DLL
-      dependencies.  Uses vcpkg binary caching via the GitHub
-      Actions cache.
+      Every library is statically linked into hobbycad.exe; the
+      -md triplets leave only the Visual C++ runtime (msvcp140,
+      vcruntime140 and their _1 companions) as DLLs.  vcpkg keeps
+      every package it builds as an archive in vcpkg-bincache (the
+      files binary source) and the workflow keeps that directory in
+      the GitHub Actions cache, so a later run builds only the
+      packages whose inputs changed.  Each uploads the
+      install tree and a portable zip (the tree plus the Visual C++
+      runtime DLLs beside hobbycad.exe, for people who want no
+      installer).  Both are also reusable workflows (workflow_call):
+      the installer workflows below call them and package the
+      install tree they upload.
+      Every packaging workflow (the Linux, macOS and Windows
+      installer ones) accepts workflow_call as well, which is how
+      release.yml works.
 
-    - windows-inno.yml  -- Inno Setup installer (static build)
-    - windows-msi.yml   -- WiX MSI installer (static build)
-      Package the static executables into installer artifacts.
+    - release.yml: on a version tag (v0.1.0) or a manual dispatch,
+      checks the tag against the VERSION line of CMakeLists.txt,
+      calls every packaging workflow but linux-deb.yml (Ubuntu ships
+      through the PPA), gathers the installers and
+      packages, writes SHA256SUMS.txt, renders
+      .github/RELEASE_TEMPLATE.md (version, date, asset table, and the
+      docs/changelog.txt entry headed by that version, without which
+      the run fails) with GitHub's generated change list appended per
+      .github/release.yml,
+      and creates a DRAFT release, marked pre-release while the major
+      version is 0. Publishing is a manual step after the install
+      checklist below.
+
+  Dependencies in the Linux and MSYS2 jobs:
+    Build dependencies come from the packaging, never from a list in a
+    workflow: debian/control, packaging/rpm/hobbycad.spec and
+    packaging/arch/PKGBUILD, installed by
+    scripts/ci/install-build-deps.sh.  The versions no distribution
+    ships (OpenCASCADE 8.0.1+p1, libslvs, nlohmann-json, libwebp) are
+    built by scripts/ci/build-*.sh from the source URLs and SHA-256
+    sums in versions.json.  Changing one of those versions means
+    editing versions.json and running tools/check-versions.py
+    --write-pins; the checker reports a workflow that downloads a
+    pinned source itself.  scripts/ci/check-launchpad.py reports any
+    Launchpad +sourcefiles URL (those files disappear once an upload is
+    superseded) and any pin that lags what the PPA publishes.
+
+  Release checklist (run against the draft's assets before publishing):
+    0. Before tagging: rename the changelog's Unreleased entry to the
+       version and date, and bump the VERSION line and debian/changelog.
+    1. Windows: fresh VM, Setup.exe per-user install, run, uninstall;
+       MSI per-machine install, run, uninstall; zip extracted and run.
+    2. Linux: Ubuntu comes from the PPA (Launchpad's builds, not the
+       release), so check the PPA has the version for every series;
+       install the .rpm on Fedora and AlmaLinux containers and the Arch
+       package, run the AppImage, install the Flatpak bundle; each runs
+       --version and --no-gui.
+    3. macOS: mount each DMG, drag to Applications, open once through
+       Open Anyway, run.
+    4. A failed item means a new tag, never a replaced asset.
+
+    - windows-inno.yml: Inno Setup installer (static build)
+      Calls the two build workflows, then stages vc_redist and the
+      optional Mesa task and runs Inno Setup.
+    - windows-msi.yml: WiX MSI installer (static build)
+      Calls the build workflow per architecture; per-machine 64-bit
+      package that ships the runtime DLLs beside hobbycad.exe
+      because an MSI has no vc_redist bootstrapper.
+      Both refuse anything older than Windows 10 1809.
 
 ================================================================================
   14. WINDOWS PREREQUISITES
@@ -1645,7 +1751,7 @@
   14.1  C++ COMPILER
   ---------------------
 
-  Option A: MSYS2 / MinGW-w64 (Recommended — Free, Open Source)
+  Option A: MSYS2 / MinGW-w64 (Recommended, Free, Open Source)
 
   MSYS2 provides a complete Unix-like development environment for
   Windows, including GCC (via MinGW-w64), Bash, Git, CMake, Ninja,
@@ -1824,7 +1930,7 @@
 
   HobbyCAD ships two vcpkg manifest files in the repository root:
 
-  vcpkg.json — declares all dependencies and pins versions to match
+  vcpkg.json: declares all dependencies and pins versions to match
   Ubuntu 24.04 (see Section 6.4 for rationale):
 
     {
@@ -1832,24 +1938,33 @@
       "version": "0.0.1",
       "dependencies": [
         "opencascade",
-        {
-          "name": "qtbase",
-          "default-features": false,
-          "features": ["widgets", "opengl", "gui"]
-        },
+        { "name": "freetype", "default-features": false,
+          "features": ["bzip2", "zlib"] },
+        { "name": "qtbase", "default-features": false,
+          "features": ["thread", "concurrent", "xml", "gui", "opengl",
+                       "widgets", "freetype", "harfbuzz", "jpeg", "png",
+                       "qtsvg"] },
         "qtsvg",
+        { "name": "qttools", "default-features": false },
         "opengl",
         "libzip",
         "libpng",
         "libjpeg-turbo",
-        "libgit2"
+        "libgit2",
+        "libslvs",
+        "lib3mf",
+        "openmesh",
+        "meshfix",
+        "nlohmann-json",
+        "libwebp"
       ],
       "overrides": [
-        { "name": "opencascade", "version": "7.9.2" },
-        { "name": "qtbase",      "version": "6.4.2" },
-        { "name": "qtsvg",       "version": "6.4.2" },
+        { "name": "opencascade", "version": "8.0.1", "port-version": 0 },
+        { "name": "libslvs",     "version-string": "3.2p1", "port-version": 1 },
+        { "name": "qtbase",      "version": "6.4.2", "port-version": 25 },
+        { "name": "qtsvg",       "version": "6.4.2", "port-version": 1 },
         { "name": "libzip",      "version": "1.7.3" },
-        { "name": "libgit2",     "version": "1.8.0" }
+        { "name": "libgit2",     "version": "1.9.2", "port-version": 1 }
       ]
     }
 
@@ -1858,23 +1973,30 @@
   all platforms use the same library versions (see Section 6 for the
   full version comparison table).
 
-  vcpkg-configuration.json — configures the custom registry for
+  vcpkg-configuration.json: configures the custom registry for
   packages not available in the main vcpkg registry:
 
     {
       "default-registry": {
         "kind": "builtin",
-        "baseline": "2026.01.16"
+        "baseline": "2026.02.27"
       },
       "registries": [
         {
           "kind": "git",
           "repository": "https://github.com/ayourk/hobbycad-vcpkg",
-          "baseline": "465ba185597aa67c13e248fffa8ec71549c5fafb",
-          "packages": ["libslvs", "openmesh", "lib3mf", "meshfix"]
+          "baseline": "7ba84aa174f483afd7888de1d9c738b7f40d8953",
+          "packages": ["freetype", "lib3mf", "libgit2", "libslvs",
+                       "meshfix", "opencascade", "openmesh", "qtbase",
+                       "qtsvg", "qttools"]
         }
       ]
     }
+
+  The registry baseline is the hash of a commit in ayourk/hobbycad-vcpkg;
+  it moves with every registry commit HobbyCAD depends on, and every
+  port taken from that registry must be listed in "packages" or vcpkg
+  looks for it in the builtin registry instead.
 
   The custom registry (ayourk/hobbycad-vcpkg) provides vcpkg ports
   for four libraries that are not in the main vcpkg registry. These
@@ -1884,15 +2006,15 @@
 
   Custom registry ports:
 
-    libslvs      3.2       SolveSpace constraint solver library
+    libslvs      3.2p1     SolveSpace constraint solver library (HobbyCAD series)
     openmesh     11.0.0    Half-edge mesh data structure
-    lib3mf       2.4.1     3D Manufacturing Format I/O
+    lib3mf       2.5.0     3D Manufacturing Format I/O (2.5.0+p1 tarball)
     meshfix      2.1       Mesh repair (MeshFix by Marco Attene)
 
   When CMake is configured with the vcpkg toolchain file, it will
   automatically install these dependencies before building. Both
   the main vcpkg registry and the custom registry are resolved
-  automatically — no extra configuration is required.
+  automatically; no extra configuration is required.
 
 ================================================================================
   16. INSTALLING DEPENDENCIES VIA VCPKG
@@ -1915,18 +2037,18 @@
   GitHub:         https://github.com/Open-Cascade-SAS/OCCT
   Releases:       https://github.com/Open-Cascade-SAS/OCCT/releases
 
-  Pinned version: 7.9.2 (via hobbycad-vcpkg registry).
-  In manifest mode, the vcpkg.json "overrides" section pins this
-  automatically.
+  Pinned version: 8.0.1 (via hobbycad-vcpkg registry, built from the
+  PPA's opencascade_8.0.1+p1.orig.tar.xz). In manifest mode, the
+  vcpkg.json "overrides" section pins this automatically.
 
   Note: The vcpkg port disables the Draw module (which requires
-  Tcl/Tk). This is fine for HobbyCAD — Draw is only needed for
+  Tcl/Tk). This is fine for HobbyCAD: Draw is only needed for
   OCCT's own test harness.
 
   Pre-built Windows binaries are also available directly from
   OpenCASCADE if the vcpkg port is insufficient:
     https://dev.opencascade.org/release
-  Download: opencascade-7.9.2-vc14-64.zip
+  Download the 8.0.1 Windows (64-bit, VC++) archive from that page.
 
   16.2  QT 6
   ------------
@@ -1957,7 +2079,7 @@
   Installer:      https://www.qt.io/download-qt-installer-oss
 
   Run the installer and select:
-    - Qt 6.4.2 (to match Ubuntu 24.04 — do NOT select a newer
+    - Qt 6.4.2 (to match Ubuntu 24.04; do NOT select a newer
       version unless you have a specific reason)
     - MSVC 2019/2022 64-bit binaries
     - Qt 5 Compatibility Module (optional)
@@ -2071,14 +2193,15 @@
     Source tarballs and pre-compiled Windows binaries (daily
     builds) are available from the download page.
 
-  lib3mf 2.4.1 (3D Manufacturing Format):
+  lib3mf 2.5.0 (3D Manufacturing Format):
 
     Project page:   https://3mf.io/
     GitHub:         https://github.com/3MFConsortium/lib3mf
     Releases:       https://github.com/3MFConsortium/lib3mf/releases
-    Windows SDK:    https://github.com/3MFConsortium/lib3mf/releases/download/v2.4.1/lib3mf_sdk_v2.4.1.zip
-    Docs:           https://lib3mf.readthedocs.io/en/release-2.4.1/
-    vcpkg port:     ayourk/hobbycad-vcpkg  ports/lib3mf
+    Windows SDK:    https://github.com/3MFConsortium/lib3mf/releases/download/v2.5.0/lib3mf_sdk_v2.5.0.zip
+    Docs:           https://lib3mf.readthedocs.io/en/release-2.5.0/
+    vcpkg port:     ayourk/hobbycad-vcpkg  ports/lib3mf (builds the
+                    2.5.0+p1 orig tarball, the HobbyCAD patch series)
     License:        BSD 2-Clause
 
     Pre-built Windows SDK (includes DLL, headers, and language
@@ -2132,11 +2255,11 @@
       -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 
   devtest works with any CMake generator.  If Ninja is not installed,
-  CMake uses the platform default and devtest prints a [WARN] —
+  CMake uses the platform default and devtest prints a [WARN];
   install Ninja before building the main project.
 
   Exit code 0 means all Phase 0 dependencies are OK.  Exit code 1
-  means one or more are missing — devtest output includes corrective
+  means one or more are missing; devtest output includes corrective
   hints.  See devtest/README.txt for full details.
 
   18.3  BUILD WITH CMAKE PRESETS (RECOMMENDED)
@@ -2277,7 +2400,7 @@
 
   Note: This section applies to dynamic builds only (MSYS2/GCC or
   MSVC with default triplets).  CI release builds use static triplets
-  that link everything into the .exe — no DLLs are needed.  See
+  that link everything into the .exe, so no DLLs are needed.  See
   Section 13 "Continuous Integration" for details.
 
   Windows does not have an equivalent of Linux's rpath. If the
@@ -2340,7 +2463,7 @@
 
   macOS includes a free C/C++ compiler (Apple Clang) as part of
   the Xcode Command Line Tools. No Xcode IDE installation is
-  required — just the command line tools, which are a free
+  required, just the command line tools, which are a free
   download from Apple.
 
   Homebrew (the macOS package manager) provides the remaining
@@ -2354,7 +2477,7 @@
     - Homebrew as the package manager for dependencies
 
   Alternative compilers available via Homebrew:
-    - brew install gcc       (GCC — fully open source, GPL)
+    - brew install gcc       (GCC, fully open source, GPL)
     - brew install llvm      (upstream LLVM/Clang, newer than
                               Apple's fork)
 
@@ -2366,14 +2489,25 @@
   produce self-contained binaries.  Only macOS system frameworks
   (AppKit, CoreFoundation, OpenGL, etc.) remain dynamic.
 
-    - macos-build.yml      -- arm64 (Apple Silicon) static build
-    - macos-build-x64.yml  -- x64 (Intel) static build
-    - macos-universal.yml  -- Universal binary (arm64 + x64 via lipo)
+    - macos-build.yml: arm64 (Apple Silicon) static build
+    - macos-build-x64.yml: static x64 build and DMG on the self-hosted
+      Intel Mac mini (owner-gated; the repository is public)
+    - macos-universal.yml: Universal binary (arm64 + x64 via lipo)
       Cross-compiles both architectures on a single arm64 runner
       using Apple Clang's native cross-compilation support.
 
-    - macos-homebrew.yml      -- Homebrew formula testing (arm64)
-    - macos-homebrew-x64.yml  -- Homebrew formula testing (x64)
+    Each of the three publishes two artifacts: the install tree and
+    a DMG installer (HobbyCAD-<version>-<arch>.dmg) made by
+    tools/macos/make-dmg.sh: HobbyCAD.app beside an Applications
+    shortcut, the volume wearing the application icon. The same
+    script produces the image from a local build:
+
+      tools/macos/make-dmg.sh build/src/hobbycad/HobbyCAD.app x86_64 dist
+
+    - macos-homebrew.yml: Homebrew formula testing (arm64)
+    - macos-homebrew-x64.yml: Homebrew formula testing (x64) on the
+      self-hosted Intel Mac mini; the job runs only for the repository
+      owner, since the repository is public
       Verify the Homebrew tap formulas build correctly.
       These use Homebrew, not vcpkg.
 
@@ -2513,12 +2647,12 @@
   22.1  OPENCASCADE TECHNOLOGY (OCCT)
   -------------------------------------
 
-    brew install ayourk/hobbycad/opencascade@7.9.2
+    brew install ayourk/hobbycad/opencascade@8.0.1
 
-  This installs OCCT 7.9.2 (matching the PPA and vcpkg versions) as a
-  keg-only formula. It does not conflict with the Homebrew core
+  This installs OCCT 8.0.1 (the PPA's 8.0.1+p1 tarball, so the same
+  source as Ubuntu and the vcpkg registry) as a keg-only formula. It does not conflict with the Homebrew core
   opencascade formula. Because it is keg-only, you must pass
-  CMAKE_PREFIX_PATH to CMake — see Section 22.5.
+  CMAKE_PREFIX_PATH to CMake (see Section 22.5).
 
   22.2  QT 6
   ------------
@@ -2529,29 +2663,26 @@
     https://formulae.brew.sh/formula/qt
 
   Note: Homebrew's qt@6 is a rolling-latest formula (currently
-  6.7.x or 6.8.x) — NOT version-pinned to 6.4.2. Building Qt
+  6.7.x or 6.8.x), NOT version-pinned to 6.4.2. Building Qt
   from source takes 2+ hours, making a pinned formula impractical.
 
   For exact version parity with Ubuntu 24.04, install Qt 6.4.2 via
   the Qt Online Installer instead (see Section 16.2). For most
-  development work, the rolling Homebrew version is fine — Qt 6
+  development work, the rolling Homebrew version is fine; Qt 6
   maintains source compatibility within the 6.x series.
 
   After installation, Homebrew may report that Qt is "keg-only"
   (not symlinked into /opt/homebrew). The CMAKE_PREFIX_PATH in
   Section 22.5 already accounts for this.
 
-  22.3  LIBRSVG (ICON GENERATION)
-  ---------------------------------
+  22.3  ICON GENERATION
+  -----------------------
 
-    brew install librsvg
-
-  Provides rsvg-convert, used by cmake/GenerateIcons.cmake to
-  convert the SVG icon to platform-specific formats (.icns on
-  macOS). Without librsvg, the icon generation step is skipped.
-
-  Homebrew formula:
-    https://formulae.brew.sh/formula/librsvg
+  No extra formula. cmake/GenerateIcons.cmake builds and runs
+  tools/render-icons.cpp with the Qt the GUI already requires
+  (Gui + Svg) to render the SVG icon into the PNG sizes and the
+  Windows .ico; the .icns is assembled from those PNGs with Apple's
+  iconutil, present on every Mac.
 
   22.4  LIBZIP (PINNED)
   -----------------------
@@ -2562,7 +2693,7 @@
   and is keg-only.
 
   Note: libpng and jpeg-turbo are transitive dependencies of Qt
-  and OCCT. Homebrew installs them automatically — no explicit
+  and OCCT. Homebrew installs them automatically; no explicit
   install is needed.
 
   22.4a  LIBGIT2
@@ -2584,18 +2715,20 @@
     brew tap ayourk/hobbycad
 
     # Pinned formulas (keg-only, matching Ubuntu 24.04)
-    brew install ayourk/hobbycad/opencascade@7.9.2 \
+    brew install ayourk/hobbycad/opencascade@8.0.1 \
       ayourk/hobbycad/libzip@1.7.3 \
       ayourk/hobbycad/libgit2@1.7.2
 
-    # From Homebrew core (not pinned)
-    brew install cmake ninja qt@6 librsvg
+    # From Homebrew core (not pinned). nlohmann-json is header-only and
+    # required by libhobbycad. qt@6 only when no prebuilt Qt 6.4.2 is
+    # installed (Section 16.2); on Intel macOS 15 it compiles for hours.
+    brew install cmake ninja nlohmann-json
 
   Optional development tools:
 
     brew install doxygen graphviz
 
-  IMPORTANT — keg-only formulas and CMAKE_PREFIX_PATH:
+  IMPORTANT (keg-only formulas and CMAKE_PREFIX_PATH):
 
   The three pinned formulas are keg-only (they are NOT symlinked
   into /opt/homebrew). You must tell CMake where to find them by
@@ -2603,13 +2736,13 @@
   (e.g. ~/.zshrc):
 
     export CMAKE_PREFIX_PATH="\
-    $(brew --prefix ayourk/hobbycad/opencascade@7.9.2):\
+    $(brew --prefix ayourk/hobbycad/opencascade@8.0.1):\
     $(brew --prefix ayourk/hobbycad/libzip@1.7.3):\
     $(brew --prefix ayourk/hobbycad/libgit2@1.7.2):\
     $(brew --prefix qt@6)"
 
-  Or pass -DCMAKE_PREFIX_PATH="..." to cmake directly — see
-  Section 25.3.
+  Or pass -DCMAKE_PREFIX_PATH="..." to cmake directly (see
+  Section 25.3).
 
   22.6  HOBBYCAD HOMEBREW TAP (FUTURE — PHASE 1+)
   --------------------------------------------------
@@ -2645,11 +2778,11 @@
     License:        BSD 3-Clause
     Used by:        HobbyMesh Phase 5+
 
-  lib3mf 2.4.1 (3D Manufacturing Format):
+  lib3mf 2.5.0 (3D Manufacturing Format):
 
     Upstream:       https://github.com/3MFConsortium/lib3mf
     Releases:       https://github.com/3MFConsortium/lib3mf/releases
-    Docs:           https://lib3mf.readthedocs.io/en/release-2.4.1/
+    Docs:           https://lib3mf.readthedocs.io/en/release-2.5.0/
     License:        BSD 2-Clause
     Used by:        HobbyMesh Phase 5+
 
@@ -2719,8 +2852,9 @@
 
   Apple deprecated OpenGL in macOS 10.14 (Mojave) in favor of
   Metal, but OpenGL 4.1 remains available and functional as of
-  macOS 14 (Sonoma). HobbyCAD uses OpenGL via Qt's QOpenGLWidget,
-  which abstracts the platform details.
+  macOS 14 (Sonoma). HobbyCAD uses OpenGL via OCCT, which creates
+  and owns the context on a WA_PaintOnScreen QWidget and abstracts
+  the platform details.
 
   Known issues:
     - macOS caps OpenGL at version 4.1 (no 4.2+ features)
@@ -2743,10 +2877,9 @@
     ninja --version
     python3 --version
     git --version
-    brew list opencascade
-    brew list qt@6
-    brew list librsvg
-    which rsvg-convert
+    brew list ayourk/hobbycad/opencascade@8.0.1
+    brew list nlohmann-json
+    ls ~/Qt/6.4.2/macos/lib/cmake/Qt6   # or: brew list qt@6
 
   Check OCCT installation:
 
@@ -2785,11 +2918,11 @@
       -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
 
   devtest works with any CMake generator.  If Ninja is not installed,
-  CMake uses the platform default and devtest prints a [WARN] —
+  CMake uses the platform default and devtest prints a [WARN];
   install Ninja before building the main project.
 
   Exit code 0 means all Phase 0 dependencies are OK.  Exit code 1
-  means one or more are missing — devtest output includes corrective
+  means one or more are missing; devtest output includes corrective
   hints.  See devtest/README.txt for full details.
 
   25.3  BUILD WITH CMAKE PRESETS (RECOMMENDED)
@@ -2832,7 +2965,7 @@
 
     cmake -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_PREFIX_PATH="$(brew --prefix ayourk/hobbycad/opencascade@7.9.2);$(brew --prefix ayourk/hobbycad/libzip@1.7.3);$(brew --prefix ayourk/hobbycad/libgit2@1.7.2);$(brew --prefix qt@6)"
+      -DCMAKE_PREFIX_PATH="$(brew --prefix ayourk/hobbycad/opencascade@8.0.1);$(brew --prefix ayourk/hobbycad/libzip@1.7.3);$(brew --prefix ayourk/hobbycad/libgit2@1.7.2);$(brew --prefix qt@6)"
 
   Note: use semicolons (;) inside the -D argument, not colons.
   CMake interprets the value as a CMake list (semicolon-separated).
@@ -2880,9 +3013,9 @@
   -------------------------------------
 
     If using the pinned formula (recommended):
-    - Verify: brew list ayourk/hobbycad/opencascade@7.9.2
+    - Verify: brew list ayourk/hobbycad/opencascade@8.0.1
     - Ensure CMAKE_PREFIX_PATH is set (see Section 22.5)
-    - Or pass: -DOpenCASCADE_DIR=$(brew --prefix ayourk/hobbycad/opencascade@7.9.2)/lib/cmake/opencascade
+    - Or pass: -DOpenCASCADE_DIR=$(brew --prefix ayourk/hobbycad/opencascade@8.0.1)/lib/cmake/opencascade
 
     If using the Homebrew core formula:
     - Verify: brew list opencascade
@@ -2957,7 +3090,7 @@
     GitHub:       https://github.com/qt/qtbase
     vcpkg:        https://vcpkg.io/en/package/qt
 
-  SolveSpace (constraint solver) — version 3.2
+  SolveSpace (constraint solver, version 3.2)
     Project:      https://solvespace.com/
     GitHub:       https://github.com/solvespace/solvespace
     Release:      https://github.com/solvespace/solvespace/releases/tag/v3.2-rc1
@@ -2990,11 +3123,11 @@
     Project:      https://git-scm.com/
     Download:     https://git-scm.com/downloads
 
-  Visual Studio 2022 (Windows — alternative)
+  Visual Studio 2022 (Windows, alternative)
     Project:      https://visualstudio.microsoft.com/
     Community:    https://visualstudio.microsoft.com/vs/community/
 
-  MSYS2 / MinGW-w64 (Windows — recommended)
+  MSYS2 / MinGW-w64 (Windows, recommended)
     Project:      https://www.msys2.org/
     MinGW-w64:    https://www.mingw-w64.org/
     GitHub:       https://github.com/msys2/msys2-installer/releases
@@ -3045,7 +3178,7 @@
     GitHub:       https://github.com/AcademySoftwareFoundation/openvdb
     vcpkg:        https://vcpkg.io/en/package/openvdb
 
-  OpenMesh — version 11.0.0
+  OpenMesh (version 11.0.0)
     Project:      https://www.graphics.rwth-aachen.de/software/openmesh/
     Download:     https://www.graphics.rwth-aachen.de/software/openmesh/download/
     GitLab:       https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh
@@ -3057,13 +3190,13 @@
     GitHub:       https://github.com/assimp/assimp
     vcpkg:        https://vcpkg.io/en/package/assimp
 
-  lib3mf — version 2.4.1
+  lib3mf (version 2.5.0)
     GitHub:       https://github.com/3MFConsortium/lib3mf
     Releases:     https://github.com/3MFConsortium/lib3mf/releases
-    Windows SDK:  https://github.com/3MFConsortium/lib3mf/releases/download/v2.4.1/lib3mf_sdk_v2.4.1.zip
-    Docs:         https://lib3mf.readthedocs.io/en/release-2.4.1/
+    Windows SDK:  https://github.com/3MFConsortium/lib3mf/releases/download/v2.5.0/lib3mf_sdk_v2.5.0.zip
+    Docs:         https://lib3mf.readthedocs.io/en/release-2.5.0/
 
-  MeshFix — version 2.1
+  MeshFix (version 2.1)
     GitHub:       https://github.com/MarcoAttene/MeshFix-V2.1
 
   Eigen
@@ -3082,10 +3215,10 @@
     Project:      https://graphviz.org/
     Download:     https://graphviz.org/download/
 
-  Valgrind (Linux only — memory analysis)
+  Valgrind (Linux only, memory analysis)
     Project:      https://valgrind.org/
 
-  GDB (Linux — debugger)
+  GDB (Linux debugger)
     Project:      https://sourceware.org/gdb/
 
 ================================================================================

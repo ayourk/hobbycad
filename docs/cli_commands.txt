@@ -6,6 +6,497 @@ This document covers both shell invocation (command-line flags and subcommands)
 and interactive CLI mode commands.
 
 ================================================================================
+COMMAND MAP
+================================================================================
+
+The interactive CLI works in CONTEXTS, like a network router's command line.
+The prompt tells you which context you are in, and the context decides which
+commands are available.
+
+    hobbycad:~/projects>            model context
+    sketch Profile>                 a sketch is selected
+    sketch *Profile>                a sketch is being EDITED, not yet finished
+    body Body1>                     a body is selected
+
+The asterisk goes BEFORE the name, and '*' is an illegal first character for
+any object name, so "sketch *Profile>" can only mean "Profile, being edited".
+There is no sketch it could be confused with.
+
+Names may not be empty, may not begin or end with a space, may not start with
+'*', and may not contain control characters. An asterisk INSIDE a name is
+fine. The same rule applies in the GUI: a name the CLI accepts is one the
+objects browser accepts.
+
+You enter the sketch context with "create sketch", and leave it with "finish"
+(keep the sketch) or "discard" (throw it away).
+
+--------------------------------------------------------------------------------
+Model context: available everywhere
+--------------------------------------------------------------------------------
+
+    Files       new [discard]  start an empty project
+                open <path>    open a project, or a .brep file
+                save [<path>]  save the project, or write bodies to .brep
+                convert <in> <out>
+                script <file>  run a script of CLI commands
+
+    Navigate    cd <dir>       change directory
+                pwd            print working directory
+                zoom <percent>|home
+                panto <x>,<y>  pan the view to a point
+                rotate <axis> <degrees>          axis: x, y or z
+
+    Model       create <type> [args]             type: sketch, plane
+                select <type> <name>             type: sketch, body, plane
+                delete <type> <name|id=n>        type: sketch, body, plane
+                rename <type> <name|id=n> <new name>
+                extrude <sketch> <distance> [options]
+                revolve <sketch> [options]
+                info           describe the current selection
+
+    Contents    sketches       list the sketches, with ids
+                bodies         list the solid bodies
+                planes         list the construction planes
+                parameters     list the parameters
+                parameters <name> <expression>
+                               add or update a parameter
+                parameters reference <name> distance <ptA> <ptB>
+                               add a reference parameter: its value is measured
+                               from the solved geometry (distance between two
+                               points, e.g. 1.0 1.1) and re-measured on each
+                               solve; usable in other parameters' expressions
+                coords         list the named coordinates
+                coords <name> <x,y,z>
+                               add or update a named coordinate
+
+    Selection   select <type> <name>   select an object; the prompt follows it
+                deselect       return to the document context
+
+Naming an object: "delete", "rename" and "select" take a NAME, or "id=<n>" for
+the id shown by "sketches"/"bodies"/"planes". A bare token is matched by name
+first, then by id, and if it is the name of one object and the id of a
+different one, the command refuses and asks for the "id=" form rather than
+guessing. That guess would destroy the wrong drawing, and there is no undo.
+
+Undo: "create sketch"/"finish", "delete" and "rename" are all recorded, so
+"undo" reverses them and "redo" re-applies them. The CLI and the GUI share ONE
+history, so a sketch deleted at the terminal comes back with Edit > Undo, and
+vice versa. Undo restores the whole object (name, id and geometry) not
+just the name.
+
+A front end may have no undo history at all; "delete" says which case applied
+when it ran, so there is never any doubt afterwards.
+
+    Reading     print          show what is in the current context
+
+    Scripting   export [all] [file=<path>]
+                               emit a replayable script
+
+Contents commands read the open document and report "No document is open" when
+there is not one. They work identically in the GUI terminal and under --no-gui:
+in the GUI they act on the project the windows are showing, so a parameter set
+from the terminal appears in the Parameters dialog immediately.
+
+    Session     help           list commands
+                history [<n>]  show recent commands
+                version        show version
+                exit / quit    leave the CLI
+
+--------------------------------------------------------------------------------
+Construction planes: create plane, and how positioning works
+--------------------------------------------------------------------------------
+
+    create plane at X,Y,Z                 [with rotation RX RY RZ]
+    create plane offset from X,Y,Z        [with rotation RX RY RZ]
+    create plane relative to <plane>      [offset N] [with rotation RX RY RZ]
+
+The plane is added to the project and listed by "planes". If you omit a name it
+is auto-named "Plane N".
+
+POSITIONING. A plane is an ORIGIN plus an orientation; everything sketched on it
+is measured from that origin, in the plane's own axes.
+
+  at X,Y,Z          the plane's origin sits at that GLOBAL point.
+  offset from X,Y,Z the same, phrased as an offset from a global point.
+  relative to P     the origin is tied to plane P and MOVES WITH IT; "offset N"
+                    then slides it N along P's normal. (A face or other 3D
+                    object as the reference (inheriting its angle) is
+                    planned; today the reference is a construction plane.)
+
+ROTATION is three angles in degrees about the GLOBAL X, Y and Z axes, SPACE-
+separated (no commas): "with rotation 45 0 0" tilts 45 deg about X. They compose
+in order (X, then Y, then Z-as-roll).
+
+Coordinates are "X,Y,Z"; spaces around the commas are fine ("3, 4, 5"), and each
+component may be a number, a unit value, a parameter, or a formula (see below).
+A whole coordinate may also be a NAMED point: "origin" is built-in (0,0,0), and
+"coords <name> <x,y,z>" defines your own, usable anywhere a coordinate is
+expected: "create plane at origin", "point at corner". See below.
+
+HOW A SKETCH POINT BECOMES 3D. A point drawn at (u,v) on a plane maps to world
+as  origin + u*Uaxis + v*Vaxis,  where the axes come from the plane's
+orientation:
+  XY   U=+X  V=+Y  normal +Z      point (u,v) -> (u, v, 0)
+  XZ   U=+X  V=+Z  normal +Y      point (u,v) -> (u, 0, v)
+  YZ   U=+Y  V=+Z  normal +X      point (u,v) -> (0, u, v)
+An angled plane uses the rotated axes, so a 45 deg tilt foreshortens one axis by
+cos 45 and a point's three world coordinates are all combinations of u and v.
+
+--------------------------------------------------------------------------------
+Sketch context: the above, plus these
+--------------------------------------------------------------------------------
+
+    Geometry    point [at] <x>,<y>
+                line [from] <x>,<y> to <x>,<y>
+                circle [at] <x>,<y> radius|diameter <value>
+                rectangle [from] <x>,<y> to <x>,<y>
+                arc [at] <x>,<y> radius <value> from <deg> to <deg>
+                polygon [at] <x>,<y> radius <value> sides <n>
+                ellipse [at] <x>,<y> major <value> minor <value>
+                slot [from] <x>,<y> to <x>,<y> radius <value>
+                spline [through] <x>,<y> <x>,<y> [<x>,<y> ...]
+                text <string> [at] <x>,<y> [size <n>] [rotation <deg>]
+
+The "from", "to", "radius", "diameter", "sides", "major", "minor" and "size"
+keywords are REQUIRED where shown: "from", "at" and "through" are the only
+optional words. An earlier version of this page documented "line <x,y> <x,y>",
+which the parser rejects; scripts written from that form did not run.
+
+    Modifier    construction   trailing keyword on ANY geometry command,
+                               making the entity construction geometry
+
+Every entity is given an id when it is created, and the confirmation reports
+it: "Created circle at (0, 0) with radius 5 [id 1]". Ids are 1-based and
+count within the sketch.
+
+    Editing     select [entity] <id>   select an entity by id
+                delete [entity] <id>   remove an entity from the sketch
+                deselect               clear the entity selection
+
+    Lifecycle   finish         commit the sketch and leave the context
+                discard        abandon the sketch and leave the context
+
+Inside a sketch, "select", "delete" and "print" act on ENTITIES, and entities
+have ids rather than names. The same three words act on document objects at
+the document prompt: the context decides, the way it does in a router CLI.
+
+--------------------------------------------------------------------------------
+Values, units and precision
+--------------------------------------------------------------------------------
+
+Any length may carry a unit suffix, and is converted to the storage unit
+(millimeters):
+
+    line from 0,0 to 10mm,0
+    line from 0,0 to 1in,0          # 25.4 mm
+    circle at 0,0 radius 2.5cm      # 25 mm
+    circle at 0,0 radius 1ft        # 304.8 mm
+
+Recognized: mm, cm, m, in/inch/inches, ft/foot/feet. A number with no suffix is
+millimeters. An unrecognized suffix is an error, not a silent default.
+
+Suffixes are case-insensitive, and capitals are NOT SI multipliers: "10M" and
+"10m" both mean ten meters, not ten mega-anything. There is no kilo/mega prefix
+system: "10km" is rejected rather than guessed at.
+
+Digit groups use an UNDERSCORE, not a comma:
+
+    line from 0,0 to 1_000,0        # 1000
+    line from 0,0 to 1_000_000,0
+
+A comma cannot be a digit separator here because it already separates x from
+y: "1,000" would mean the point (1, 0). It is refused rather than guessed at,
+as is any number whose leading zero is followed by another digit ("000",
+"050", "007"), which is what a comma-separated group looks like. "2,500" stays
+a valid coordinate: 500 has no leading zero and is an ordinary y value.
+
+Underscores are only valid BETWEEN digits, so "_5" and "5_" are errors.
+
+--------------------------------------------------------------------------------
+Brackets for points, parentheses for arithmetic
+--------------------------------------------------------------------------------
+
+    [ ]   groups a POINT           [10,20]
+    ( )   groups ARITHMETIC        (width * 2)
+
+Both forms of point work:
+
+    line from 0,0 to 10,20          bare, the usual form
+    line from [0,0] to [10,20]      explicit
+    line from 0,0 to [(width*2),5]  explicit, and unambiguous with a comma
+                                    inside the arithmetic
+
+The bare form is not going away: every CAD format and command line writes a
+point as "x,y". Brackets are for when a component contains something that
+would otherwise be hard to read.
+
+Note the CLI splits arguments on whitespace, so a bracketed point must not
+contain spaces: "[(width*2),5]" works, "[ (width*2), 5 ]" does not.
+
+Scientific notation works (1e3 is 1000). Hexadecimal does NOT: "0xDD" is
+rejected. It used to be accepted silently: the C library parses it, so
+"0x10" quietly meant 16 rather than 10, and a dimension written in hex is a
+typo, not an intent.
+
+--------------------------------------------------------------------------------
+Comparison and logical operators (a minimal condition language)
+--------------------------------------------------------------------------------
+
+Any expression may use C-style comparison and logical operators. They evaluate
+to 1 (true) or 0 (false), and any non-zero value counts as true:
+
+    <  <=  >  >=       relational
+    ==  !=             equality
+    &&  ||  !          logical and, or, not
+    cond ? a : b       conditional (ternary)
+
+Precedence, loosest to tightest: ternary, then ||, &&, "== !=", "< <= > >=",
+then the arithmetic operators. Parenthesize when in doubt.
+
+    2 + 3 > 4                    -> 1  (arithmetic binds tighter than relational)
+    (x > 0) && (x < 10)         -> 1  when x is in range
+    a > b ? a : b               -> the larger of a and b
+
+&&, || and ?: SHORT-CIRCUIT: the branch that cannot affect the result is not
+evaluated, so a guarded division is safe:
+
+    (x != 0) ? (1 / x) : 0      -> no division-by-zero when x is 0
+
+For a value inside an expression, use ?: (it short-circuits). For control flow,
+see "Statements, variables, and loops" below. (The older three-argument
+if(cond, a, b) function has been removed; use ?: or bif in its place.)
+
+For choosing among values, these functions are built in:
+
+    min(a, b, ...)         the smallest argument (two or more)
+    max(a, b, ...)         the largest argument (two or more)
+    clamp(x, lo, hi)       x limited to the range [lo, hi]
+                           (equivalently max(lo, min(hi, x)); assumes lo <= hi)
+
+So clamp(v, 0, 10) is 0 when v is negative, 10 when v exceeds 10, and v
+otherwise. floor(x), ceil(x) and round(x) are also available for a single value.
+
+These operators, plus the statement layer below, are a small self-contained
+fallback for parametric conditions, a numeric subset of the QtJS host, with
+'b'-prefixed keywords so the two never clash.
+
+Statements, variables, and loops:
+
+    x = expr            assign a script-local variable (also an expression)
+    a ; b               run a, then b; the value is the last statement
+    { ... }             a block; the value is its last statement
+
+    bif (cond) { ... } belse { ... }      conditional
+    bwhile (cond) { ... }                 pre-test loop
+    bdo { ... } bwhile (cond)             post-test loop (body runs once)
+    bfor (init; cond; post) { ... }       counted loop
+
+The keywords mirror JavaScript one-for-one (bif/belse/bfor/bwhile/bdo ->
+if/else/for/while/do), so a script ports to the full QtJS host by dropping the
+'b'. Values are numbers only, truthiness is (x != 0), and a runaway loop stops
+at a fixed iteration cap. Examples:
+
+    s = 0 ; bfor (i = 0; i < 4; i = i + 1) { s = s + i } ; s    -> 6
+    n = 0 ; bwhile (n < 5) { n = n + 1 } ; n                    -> 5
+    bif (a > b) { a } belse { b }                              -> the larger
+
+Display precision is per unit: 3 places for mm (0.001 mm, what a micrometer
+reads) and 4 for decimal inches. Stored precision is far higher and is what
+the model actually holds.
+
+This is where "print" and "export" differ, and the difference is the point:
+
+    print      for a PERSON      display precision, paginated
+    export     for a MACHINE     full precision, never paginated
+
+"print" shows what is in the current context (the document's contents at the
+top level, a sketch's entities when a sketch is selected) at display
+precision and in the current unit, because it is meant to be read.
+
+"export" produces a script that has to reproduce the model on another machine,
+so it is always exact. There is no option to lower its precision: a rounded
+export has no legitimate use, and an option nobody should choose is better not
+offered.
+
+    export                      to the terminal
+    export file=part.cli        to a file
+    export all                  the whole document, not just the selection
+
+Nothing is written until the whole script has been built, so a failure part way
+through leaves no half-written file.
+
+Paging applies only to an interactive terminal. Piped or redirected output is
+never paged: "hobbycad --no-gui < script" must not stop for a keypress that
+will never come.
+
+The paging keys follow "less":
+
+    SPACE, f      forward one screen
+    b             back one screen
+    ENTER, j      forward one line
+    k             back one line
+    g             first line
+    G             last screenful
+    h             show these keys
+    q             stop
+
+Backward movement is always available. less can only page forward when it is
+reading a stream, but the whole output is already in memory here, so there is
+no reason to make you re-run a command to see what scrolled past.
+
+The prompt shows position as ":[shown/total]", and "(END)" once there is no
+more. SPACE at the end exits, as it does in less.
+
+A page is measured against the terminal's CURRENT height, re-read for every
+screen, so resizing while the pager is open works, which matters, because
+resizing is a common reaction to output that did not fit.
+
+The two directions fail differently, and both are handled. Shrinking is safe on
+its own: a smaller page only raises the last valid position. Growing lowers it,
+so a position that was fine a moment ago can end up past the last screenful and
+show a mostly blank screen; the position is therefore clamped to the current
+last screenful on every keypress.
+
+However small the window becomes, paging continues with at least one line. It
+never gives up and dumps the remainder: flooding the terminal is the thing
+paging exists to prevent, and it would throw away your position at the moment
+you could least afford it.
+
+The GUI terminal panel pages by holding output back rather than by blocking
+for a keypress: the widget keeps its scrollbar and mouse wheel throughout. A
+page is shown, the rest is announced as "-- N more line(s) --", and Space (or
+any other key, which shows the remainder) continues.
+
+Because the panel owns its widget, it responds to a resize in a way a terminal
+pager cannot:
+
+  * Growing the panel past the remaining output shows the rest and finishes.
+    Holding back lines the viewport could already display is pointless.
+  * Shrinking reveals nothing. The lines already written stay where they are
+    and the panel scrolls, which is what a text view is for.
+  * Growing part-way reveals nothing either: a page was asked for, and a
+    taller window does not withdraw that.
+
+When a resize is what finishes the pager, "(END)" is written where the marker
+was: the pager stopped on its own rather than because you asked it to, so it
+says so.
+
+"(END)" is acknowledgement, not output. The next keypress clears the word and
+leaves the line blank, so a gap separates the output from the prompt that
+follows. Leaving the marker behind would litter the scrollback between
+commands; closing the gap entirely would run output and prompt together and
+make a long result look like it was still going.
+
+The terminal pager behaves the same way: its own prompt is erased on every
+keypress and the next line of output lands on that row, so no blank rows
+accumulate mid-output: except at the end, where the row is left blank on
+purpose.
+
+Moving forward reveals only what has not been shown: SPACE prints a page, and
+ENTER or j prints a single line rather than repainting the screen. Moving
+backward reprints, because a stream cannot unscroll.
+
+Enlarging the panel far enough therefore removes the pager from the picture
+entirely. For a 50-line result that is a panel tall enough for the 50 lines and
+the prompt: the whole result is emitted at once, no marker is ever written, and
+nothing needs dismissing.
+
+One boundary is worth knowing, because it is easy to get wrong. The
+"-- N more --" marker occupies a line itself, so withholding a single line to
+announce it uses exactly the room that showing the line would. With a viewport
+of precisely 50 lines and 50 lines of output, the pager therefore emits all 50
+rather than 49 plus a marker. The rule is: never withhold fewer lines than the
+marker costs.
+
+Note "emits", not "displays at once": 50 lines plus the prompt need 51 rows, so
+the first line sits one scroll above. Nothing is lost: the panel keeps a
+scrollback buffer, and it is the panel's scrollbar rather than the pager that
+takes you back.
+
+--------------------------------------------------------------------------------
+Terminal scrollback
+--------------------------------------------------------------------------------
+
+The GUI terminal keeps a fixed number of lines and discards the oldest beyond
+that. The default is 10,000 lines; change it in Preferences under General ->
+Terminal. Setting it to 0 removes the limit, which grows without bound in a
+long session and is offered as a deliberate choice rather than the default.
+
+--------------------------------------------------------------------------------
+Coordinates accept expressions
+--------------------------------------------------------------------------------
+
+Anywhere a number is expected (in ANY command's coordinates) you may use a
+literal, a unit value, a parameter name, or a formula. The formula may be bare
+or parenthesized (parentheses group, and are needed only when a component itself
+contains a comma, e.g. a function call). Spaces around the commas are tolerated
+everywhere, so the coordinate can be split by spaces as you type it:
+
+    point at width, 0
+    line from 0, 0 to width, height/2
+    circle 0,0 (width / 2)
+    create plane at w, 0, w/2 with rotation w+5 0 0
+
+A whole coordinate may be a NAMED point instead of literals. "origin" is the
+built-in (0,0,0); define more with "coords":
+
+    coords corner 10, 20, 5           (components may be formulas/parameters)
+    create plane at corner            (uses corner's x, y, z)
+    point at corner                   (a 3D named point in a 2D sketch uses x, y)
+    coords                            (lists the named coordinates)
+
+--------------------------------------------------------------------------------
+Finding your way around
+--------------------------------------------------------------------------------
+
+    help                list the commands valid in the current context
+    <TAB>               complete a partial command, or show what may come next
+    <command> <TAB>     show the arguments that command expects
+
+Tab completion is context-aware: it offers only what is valid where you are.
+Parameter names are completed from the OPEN DOCUMENT; before a project exists
+it falls back to a short list of common names.
+
+--------------------------------------------------------------------------------
+With and without a GUI
+--------------------------------------------------------------------------------
+
+The same commands run in both places, because both attach a document to one
+engine rather than each implementing its own:
+
+    hobbycad --no-gui        interactive CLI, no window, no viewport
+    Terminal panel           the same commands, acting on the open project
+
+The split is deliberate:
+
+    parsing and completion   the CLI layer, which knows about text
+    acting on the model      through a document host, GUI-backed or headless
+    the model itself         the library, which knows nothing about either
+
+A command written once therefore works in both. What differs is only what the
+host can offer: headless has no viewport, so view commands (zoom, panto,
+rotate) report that rather than appearing to succeed.
+
+Sketch geometry commands DO create geometry. They accumulate into a pending
+sketch that "finish" commits to the document and "discard" throws away. (An
+earlier version of this page said they only parsed their arguments and created
+nothing. That was true once and is not now.)
+
+Constraints ARE reachable: "constrain" applies any of the nineteen types,
+"constraints" lists them, "solve" runs the solver, and "export" emits them so
+a constrained sketch replays.
+
+Still not reachable from the CLI: parallelogram, trim, extend, split, offset,
+fillet, chamfer, and patterns. The GUI sketcher can still do more than the CLI
+can express.
+
+Two entity types are drawable but not fully constrainable, and this is a
+solver limit rather than a CLI one: a regular polygon's radius and rotation,
+and an ellipse's axes, have no libslvs primitive. The geometry is real and
+saves correctly; the solver simply cannot constrain those quantities.
+
+
+================================================================================
 SHELL INVOCATION
 ================================================================================
 
@@ -132,27 +623,36 @@ quit
 FILE COMMANDS
 ================================================================================
 
-open <file>
-    Open a BREP file.
+open <path> [discard]
+    Open a project (its directory or its .hcad manifest) or a .brep file.
+    A .brep file opens as a new, unsaved project holding its shapes as
+    bodies. The open project is replaced; when it has unsaved changes, or a
+    sketch is open in the window, the command refuses unless "discard" is
+    added. A sketch open at this prompt has to be finished or discarded
+    first.
 
-    Arguments:
-      <file>    BREP file to open (.brep)
+    Examples:
+      open projects/widget
+      open widget/widget.hcad
+      open part.brep
 
-    Notes:
-      - Extension .brep is added automatically if not specified
-      - Supports .brep and .brp extensions
+save [<path>]
+    Save the project. With no path it saves where it was last saved; a
+    project never saved needs a directory. A new "name.hcad" becomes the
+    directory "name". A path ending in .brep or .brp writes the bodies to
+    that file instead and leaves the project as it is.
 
-save <file>
-    Save to a BREP file.
+    Save is a checkpoint: a sketch open at this prompt is written as it
+    stands and stays open.
 
-    Arguments:
-      <file>    BREP file to save (.brep)
+    Examples:
+      save projects/widget
+      save
+      save bodies.brep
 
-    Notes:
-      - Extension .brep is added automatically if not specified
-
-new
-    Create a new document with a test solid.
+new [discard]
+    Start an empty project in place of the open one. Unsaved changes are
+    refused as for "open", unless "discard" is added.
 
 convert <input> <output> [--format <fmt>]
     Convert between CAD file formats.
@@ -229,17 +729,84 @@ history max <n>
 SELECTION & CREATION COMMANDS
 ================================================================================
 
-select <type> <name>
-    Select an object by type and name.
+select <type> <name|id=n>
+    Select an object. The prompt then names it, the way a shell prompt
+    names the current directory, and "print" reports on it.
 
     Arguments:
-      <type>    Object type (sketch, body, face, edge, vertex)
-      <name>    Name of the object to select
+      <type>    sketch, body or plane. face, edge and vertex are recognized
+                but not selectable yet, and say so rather than reading as
+                a misspelling.
+      <name>    Name of the object, or "id=<n>" for the id that
+                "sketches"/"bodies"/"planes" prints.
 
     Examples:
       select sketch Sketch1
       select body Body1
-      select face Face1
+      select plane id=2
+
+select [entity] <id>                                (inside a sketch)
+    Select an entity by id. Entities have no names, so this form takes the
+    id shown when the entity was created and by "print". The prompt becomes
+    "sketch *Name/entity 3>".
+
+delete <type> <name|id=n>
+    Delete a sketch, body or plane. Naming works exactly as for "select".
+
+    Undoable: "undo" brings the object back with its id and contents
+    intact. The command's output says so; if it instead says the delete
+    cannot be undone, the front end running it has no history attached.
+
+    A token that is the name of one object and the id of a different one
+    is refused rather than guessed at: "id=<n>" says which was meant.
+
+    Examples:
+      delete sketch Sketch1
+      delete plane id=2
+
+delete [entity] <id>                                (inside a sketch)
+    Remove an entity from the sketch being edited. Surviving entities keep
+    their ids; nothing is renumbered, so an id printed earlier still names
+    the same entity afterwards.
+
+    Examples:
+      delete 3
+      delete entity 3
+
+rename <type> <name|id=n> <new name>
+    Rename a sketch, body or plane. Quote a new name containing spaces.
+
+    The new name must pass the same rules the GUI applies, and must not
+    already belong to another object of that type: names are how both
+    you and "select" find things, so a duplicate is a trap.
+
+    Examples:
+      rename sketch Sketch1 Profile
+      rename plane id=2 "Top offset"
+
+extrude <sketch> [distance] <value> [reverse|symmetric] [join|cut|intersect|new]
+    Extrude the sketch's first closed profile from the sketch's own plane.
+    The distance may be a number, a parameter or an expression. The solid
+    becomes a new body, or joins, cuts or intersects the last body. Works
+    with no viewport: headless, and in Reduced mode's terminal.
+
+    Undoable: "undo" takes back the body change and the Extrude feature
+    together.
+
+    Examples:
+      extrude Sketch1 10
+      extrude Sketch1 distance height symmetric
+      extrude id=4 5 reverse cut
+
+revolve <sketch> [angle <deg>] [about x|y|line <id>] [join|cut|intersect|new]
+    Revolve the sketch's first closed profile, by default 360 degrees about
+    the sketch's own y axis. "about line <id>" turns it about a line of the
+    sketch. Body options and undo work as for "extrude".
+
+    Examples:
+      revolve Sketch1
+      revolve Sketch1 angle 90 about x
+      revolve Sketch1 about line 3 join
 
 create sketch [<plane>] [name]
 create sketch on [plane] <named-plane> [name]
@@ -405,6 +972,408 @@ arc [at] <x>,<y> radius <r> [angle] <start> to <end>
     Examples:
       arc at 50,50 radius 30 angle 0 to 90
       arc 50,50 radius 30 0 to 90
+
+polygon [at] <x>,<y> radius <r> sides <n>
+    Create a regular polygon inscribed in a circle of the given radius.
+    Needs at least 3 sides, and the count must be a whole number: 5.5 is
+    rejected rather than quietly truncated to 5.
+
+    Examples:
+      polygon at 0,0 radius 25 sides 6
+      polygon 50,50 radius (width/2) sides 8
+
+    Note: the solver cannot constrain a polygon's radius or rotation; there
+    is no libslvs primitive for either. The shape is real and saves fine.
+
+ellipse [at] <x>,<y> major <a> minor <b>
+    Create an ellipse with the given semi-axes. If the minor radius is
+    larger than the major, the two are swapped and the command says so;
+    the field names describe which is which, so the input was mislabeled
+    rather than impossible.
+
+    Examples:
+      ellipse at 0,0 major 40 minor 20
+      ellipse 10,10 major (width/2) minor 15
+
+    Note: as with polygons, the solver cannot constrain the axes.
+
+slot along <entity id> width <w>
+slot [from] <x1>,<y1> to <x2>,<y2> width <w>
+slot arc [at] <x>,<y> radius <r> from <x>,<y> to <x>,<y> width <w> [long]
+slot arc [at] <x>,<y> radius <r> angle <a> to <b> width <w>
+    A slot is a round profile swept along a path. The path is a line or an
+    arc, and that is the only difference between the two kinds of slot.
+
+    "width" (or "thickness") is the full width of the slot (the diameter
+    of the swept profile) in every form.
+
+    ALONG: sweep an existing line or arc. Draw the centerline, then thicken
+    it. The path is kept and marked as CONSTRUCTION geometry, because that
+    is what it has become: the slot's centerline rather than an edge of it.
+    A path that was already construction is left as it is.
+
+      slot along 3 width 10
+
+    LINEAR: the two points are the centers of the round ends. They must
+    differ; a slot with both ends in one place is a circle, and the command
+    says so rather than emitting a degenerate shape.
+
+      slot from 0,0 to 50,0 width 10
+      slot 10,10 to 10,60 thickness (bolt)
+
+    ARC: the center is the arc's center and "radius" reaches out to the
+    slot's CENTERLINE, not to be confused with the width. The two points
+    are the centers of the round ends, and they give DIRECTION only: each is
+    placed on the circle of that radius, so the two ends cannot end up at
+    different distances from the center. An angle range says the same thing.
+
+      slot arc at 0,0 radius 30 from 30,0 to 0,30 width 8
+      slot arc at 0,0 radius 30 angle 0 to 90 width 8
+
+    Two end centers cannot say which way round the arc runs, so "long"
+    takes the long way. An angle range of more than 180 degrees says it
+    without the keyword.
+
+      slot arc at 0,0 radius 30 from 30,0 to 0,30 width 8 long
+      slot arc at 0,0 radius 30 angle 0 to 270 width 8
+
+    A width at or beyond twice the centerline radius is refused: the inner
+    edge would reach the center and turn the shape inside out.
+
+    MAXIMUM SWEEP. An arc slot cannot reach a full turn. Its ends are
+    semicircular caps, and past a certain sweep they overlap each other.
+    The limit is "a full circle minus twice the cap radius": the two
+    centerline endpoints stay exactly two cap radii apart and never
+    coincide, but their cap arcs become tangent: one end's perimeter
+    touching the other's. That closed form is the dial-indicator case.
+
+    The value depends on both the radius and the width, so write "to max"
+    rather than working it out:
+
+      slot arc at 0,0 radius 30 radius angle 0 to max width 8
+
+    On a 30 mm centerline with an 8 mm width that is 344.6755 degrees. A
+    narrower slot can sweep further; a wider one less far.
+
+    At that maximum the material left between the two tangent ends and the
+    outer wall forms a tapering wedge (an almost-triangular tip) which
+    is the last thing joining the middle of the ring to the outside. The
+    thicker the slot, the bigger that tip; the thinner the slot, the
+    smaller it gets. The gap left in the ring is exactly the slot's own
+    width.
+
+    "slot along" applies the same limit to the arc it is given.
+
+    Note: "radius" is NOT accepted on a linear slot. It briefly meant the
+    HALF-width there while meaning the path radius in the arc form: one
+    word for two quantities. Use "width", which is twice the old value.
+
+spline [through] <x>,<y> <x>,<y> [<x>,<y> ...]
+    Create a Catmull-Rom spline through the given control points. At least
+    two are required; there is no upper limit. A malformed point is
+    reported by its position in the list, so it can be found in a long one.
+
+    Examples:
+      spline through 0,0 25,40 50,0
+      spline 0,0 10,10 20,0 30,10
+
+bezier <x>,<y> [in <ang> <len>] [out <ang> <len>] | [tan <ang> <len>]  <x>,<y> ...
+    Create a piecewise cubic Bezier spline (a solver curve: tangent and
+    curvature constraints can act on it, unlike the interpolating spline).
+    Each anchor is a point, optionally followed by handle specs given as an
+    angle (degrees, CCW from +X) and a length: "out" points toward the next
+    anchor, "in" from the previous, and "tan" is a smooth symmetric pair. A
+    missing handle makes a corner on that side. At least two anchors are
+    required; the control polygon is [P0, out0, in1, P1, out1, ..., inN, PN].
+
+    Examples:
+      bezier 0,0 out 45 1.4  3,3 tan 0 1  6,0 in 135 1.4
+      bezier 0,0 5,5 10,0            (corners: a polyline of cubics)
+
+bezier <id> handle <anchor> in|out|tan <ang> <len>
+    Recompute one handle of an existing bezier precisely (angle + length),
+    which dragging in the GUI cannot match. <anchor> is 0-based, as printed by
+    `points <id>`. "tan" resets both handles symmetrically. An "in" handle on
+    the first anchor or an "out" handle on the last is rejected (no such side).
+
+    Use `points <id>` to inspect a bezier: it prints each anchor as its
+    position plus its in/out handles as angle+length, with a
+    [smooth]/[asymmetric]/[corner] label, the read half of the edit loop.
+
+text <string> [at] <x>,<y> [size <n>] [rotation <deg>]
+    Create a text annotation. Quote the string if it contains spaces.
+    Size is in mm and defaults to 12; rotation is in degrees and defaults
+    to 0. The two may be given in either order.
+
+    Examples:
+      text "Part A" at 0,0
+      text Label at 10,10 size 8
+      text "Top view" at 0,50 size 6 rotation 90
+
+--------------------------------------------------------------------------------
+Construction geometry
+--------------------------------------------------------------------------------
+
+Any geometry command accepts a trailing "construction" keyword, which marks
+the entity as construction geometry: reference lines and circles that guide
+a sketch without becoming part of its profile.
+
+    Examples:
+      line from 0,0 to 100,0 construction
+      circle at 50,50 radius 25 construction
+      polygon at 0,0 radius 25 sides 6 construction
+
+It is deliberately the same word in the same position on every command; a
+modifier that works on some shapes and not others is harder to remember than
+one that always works.
+
+--------------------------------------------------------------------------------
+Constraints
+--------------------------------------------------------------------------------
+
+constrain <type> <entity id>... [<value>] [reference]
+    Apply a constraint to the sketch being edited. Running "constrain" with
+    no arguments lists every type.
+
+    Types come in two kinds. Geometric ones take no value:
+
+      horizontal, vertical, parallel, perpendicular, coincident, tangent,
+      curvature, equal, midpoint, symmetric, concentric, collinear,
+      pointonline, pointoncircle, pointonspline, fixedpoint
+
+    Dimensional ones take one:
+
+      distance, radius, diameter, angle, fixedangle, radiusofcurvature
+
+    Units are checked against what the constraint measures. Lengths take
+    mm, cm, m, in, ft and default to mm; angles take deg (or a bare
+    number) and rad, and are stored in degrees:
+
+      constrain angle 1 2 45          45 degrees
+      constrain angle 1 2 45deg       the same
+      constrain angle 1 2 0.7854rad   converted to degrees on the way in
+      constrain radius 3 1in          converted to millimeters
+
+    Mixing them is refused rather than accepted:
+
+      constrain angle 1 2 45mm        refused: that is a length
+      constrain radius 3 25deg        refused: that is an angle
+
+    Both are the kind of mistake that produces a wrong drawing rather than
+    an error, so neither is allowed through.
+
+    curvature (G2) joins two Bezier splines with equal curvature at the ends
+    that meet, for a smooth, non-kinking transition: normally paired with
+    coincident + tangent at that junction. Name the two ends by <id>.<end>,
+    where end 0 is the spline's start and 1 its finish:
+
+      constrain coincident 1.<lastpt> 2.0    the two splines share the point
+      constrain tangent 1 2                   G1 (equal tangent direction)
+      constrain curvature 1.1 2.0             G2 (equal curvature there)
+
+    It applies to two Bezier splines (create them with `bezier`); a line or
+    circle operand is refused.
+
+    pointonspline constrains a point onto a Bezier spline:
+
+      constrain pointonspline <point>.<idx> <spline>
+
+    Name the point as <id>.<index>; the spline may be given first or second.
+    For a multi-segment spline the constraint targets one cubic segment:
+    give the segment as the spline's index (<spline>.<seg>), default 0. Like
+    every curve constraint the parameter is unbounded, so place the point near
+    the segment. Only a Bezier spline (from `bezier`) is a solver curve.
+
+    radiusofcurvature dimensions the radius of curvature at a Bezier spline end:
+
+      constrain radiusofcurvature <spline>.<end> <r>
+
+    <end> is 0 (start) or 1 (finish). The value is a length (mm), so it reads
+    like any radius; the bend DIRECTION is taken from the current geometry and
+    kept, so tightening or loosening the radius never flips the curve.
+
+    Names ignore case, spaces and underscores, so "PointOnLine",
+    "point on line" and "point_on_line" are the same. Short forms are
+    accepted for the tedious ones: perp, horiz, vert, rad, dia, tan, dist,
+    coincide.
+
+    Naming a POINT of an entity: "<id>.<point>" picks one point rather than
+    the whole entity: "1.0" is the start of entity 1, "1.1" its end.
+    Constraints like Coincident are about specific points, and without this
+    the solver cannot tell which end was meant.
+
+    The "points <id>" command lists an entity's points and their <id>.<index>
+    names, so the numbering is discoverable rather than assumed:
+
+        Sketch S> points 1
+        entity 1 has 2 point(s):
+          1.0 = (0, 0)
+          1.1 = (10, 0)
+
+      constrain horizontal 1
+      constrain parallel 1 2
+      constrain radius 3 25mm
+      constrain distance 1.1 2.0 (width/2)
+      constrain coincident 1.0 2.0
+
+    Naming the same entity twice is refused as a typo, UNLESS different
+    points of it were meant: "constrain coincident 1.0 1.1" is a real
+    thing to ask for.
+
+    Editing an existing constraint (find its id with "constraints"):
+
+      constrain edit <id> value <expr>     change a dimensional value (a plain
+                                           number or a formula/parameter)
+      constrain edit <id> reference        make it a measurement (driven)
+      constrain edit <id> driving          make it drive the geometry again
+
+    Run "solve" after editing a value to apply it.
+
+    "reference" records the value as a measurement rather than letting it
+    drive the geometry. Use it when a constraint would otherwise be refused.
+
+    Known solver limit: "fixedangle" on an EXACTLY horizontal line is
+    reported as inconsistent. The constraint is built against an internal
+    horizontal reference line, and measuring a horizontal line against it
+    is degenerate. Sloped lines are fine. This is a libslvs property, not
+    a CLI one.
+
+    *** Redundancy is caught at insert time, but only on a sketch that is
+    otherwise determined. *** libslvs does not report a duplicate constraint
+    on an under-constrained sketch, so adding Horizontal twice to a floating
+    line is accepted; on a pinned sketch the second is refused as adding
+    nothing. This is a solver property, not a CLI one: in a mutually
+    dependent set there is no fact about which member is "the extra one", so
+    catching it as it goes in is the answerable version of the question.
+
+constraints
+    List the constraints of the sketch being edited, or of the selected
+    sketch. Shows each constraint's id, type, the entities it relates, and
+    a dimensional value where there is one.
+
+solve
+    Solve the sketch and report its state and remaining degrees of freedom.
+    Geometry is updated only if the solve succeeded; a failed solve leaves
+    the sketch exactly as it was rather than half-moved.
+
+transform move <dx>,<dy> | rotate <deg> | scale <f> | mirror x|y | mirror line <x1>,<y1> <x2>,<y2>
+          | point-to-point <x1>,<y1> <x2>,<y2>   [about <x>,<y>|center] [copy] [group <name>|id=<n>]
+    Move the selected entity as one unit, or a whole group: without "group",
+    the selected entity's group (if it has one) moves with it. Translation
+    is rigid. Rotation, scale and mirror repair the constraints that do not
+    survive them, the way Onshape's Transform does: a 90 or 270 degree turn
+    swaps Horizontal and Vertical; any other angle adds one construction
+    line that turned with the set and makes those constraints Parallel or
+    Perpendicular to it; scale multiplies the set's Distance, Radius and
+    Diameter values; mirror is refused when a Symmetric or Midpoint
+    constraint's axis lies outside the set. Constraints reaching outside
+    the set are left to the solver: a free outsider follows, a pinned one
+    makes the command refuse and name the constraint. The sketch is
+    re-solved and nothing is kept unless it solves. "about" sets the
+    center; the default is the group's stored pivot when it has one (see
+    "group ... pivot"), else the set's geometric center (the length-weighted
+    center of its curves, which for a rectangle is its middle); "about
+    center" forces the geometric center. "point-to-point" is a move that
+    lands the first point on the second. "mirror line" reflects across the
+    line through the two points: a 45-degree line swaps Horizontal and
+    Vertical, any other angle converts them against a pinned construction
+    line. "copy" clones the set with its internal constraints, transforms
+    the clones and leaves the originals; a copied group becomes
+    "<name> copy" with its pivot carried along. A group's stored pivot moves
+    with the group.
+
+      transform move 10,20
+      transform rotate 90 group "Rectangle 1"
+      transform scale 2 about 0,0
+      transform mirror y
+      transform point-to-point 0,0 10,5 group Rect
+      transform move 200,0 copy group Rect
+      transform mirror line 0,0 1,1
+
+    States: empty, under-constrained, fully constrained, over-constrained,
+    inconsistent, failed, unknown. When the state carries no meaningful
+    count, the dof line says so rather than printing 0, which would read as
+    "fully constrained".
+
+delete constraint <id>
+    Remove a constraint. The word "constraint" is required: entities and
+    constraints have SEPARATE id sequences, so a bare "delete 3" means
+    entity 3.
+
+    Deleting an ENTITY also removes every constraint that referred to it. A
+    constraint naming an entity that no longer exists makes the sketch
+    unsolvable with no visible cause.
+
+--------------------------------------------------------------------------------
+Groups
+--------------------------------------------------------------------------------
+
+group <name> [id=<n>] [entities <ids>] [constraints <ids>] [groups <ids>] [locked]
+      [pivot <x>,<y>|center]
+    "pivot x,y" stores the point the group rotates, scales and mirrors
+    about; "pivot center" (the default) means its geometric center. The
+    stored pivot moves with the group and survives export and reload.
+    Gather entities, constraints and other groups under one name. Ids are
+    comma-separated. At least one member is required; an empty group is a
+    name with nothing under it.
+
+      group "Sweep Angle 1" entities 2,3 constraints 1 locked sweep
+      group Centerline entities 1,2
+      group Outer id=4 groups 1,2
+
+    "sweep" marks the group as an arc's sweep-angle rig (the two
+    construction lines and their Angle constraint). The canvas looks the
+    rig up by that kind, so the group can be renamed without breaking it;
+    export writes the word back. For scripts from before the kind existed,
+    a name starting "Sweep Angle" is taken the same way.
+
+    A group's ID matters too, because groups nest: a child records its
+    parent by id. "id=<n>" pins one explicitly; without it the lowest unused
+    id is taken. A child group must exist before the group that holds it.
+
+groups
+    List the groups of the sketch being edited, or of the selected sketch,
+    with each one's members and lock state.
+
+Grouping happens on its own in one place: "slot along" puts the slot and the
+centerline it was swept from into a group named "Slot <id>". The two are one
+thing built from two records, and nothing else says so.
+
+--------------------------------------------------------------------------------
+Projection (cross-sketch reference geometry)
+--------------------------------------------------------------------------------
+
+projection <sourceSketch> <entityId>
+    Bring an entity from ANOTHER sketch into the current one as reference
+    geometry, a projection. The projected entity is driven by its source
+    (zero degrees of freedom): a solve re-derives it and it cannot be edited
+    here; edit the source instead.
+
+    <sourceSketch> is a sketch name or id=<n>; <entityId> is the source
+    entity's id within that sketch.
+
+    Example:
+        create sketch XY Base
+        line from 0,0 to 10,0        (entity 1)
+        finish
+        create sketch XZ Side
+        projection Base 1            (projects Base's line onto the XZ plane)
+
+    Only point-list geometry projects today (line, point, spline, polygon).
+    A circle or arc projects to an ellipse in the general case, which is not
+    supported yet.
+
+--------------------------------------------------------------------------------
+Entity ids
+--------------------------------------------------------------------------------
+
+Each entity is given an id as it is created, reported in the confirmation:
+
+    > circle at 0,0 radius 5
+    Created circle at (0, 0) with radius 5 [id 1]
+
+Ids are 1-based and count within the sketch, matching what the GUI assigns.
+They are what constraints refer to.
 
 --------------------------------------------------------------------------------
 Exit Commands

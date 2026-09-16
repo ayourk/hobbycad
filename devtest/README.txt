@@ -62,22 +62,20 @@
   WHAT IT TESTS
   -------------
 
-    Phase 0 — Foundation (required):
+    Phase 0, Foundation (required):
       OCCT            B-Rep kernel, STEP/STL/IGES writers
       Qt 6            GUI framework (Core, Widgets, OpenGL)
       libgit2         Version control library
       libzip          Archive support
       OpenGL          3D viewport symbol linkage
-      rsvg-convert    SVG to PNG icon generation (build-time, required)
-      icotool         Windows .ico generation (Windows only, WARN)
 
-    Phase 1 — Basic Modeling (optional):
+    Phase 1, Basic Modeling (optional):
       libslvs         SolveSpace constraint solver
 
-    Phase 3 — Python / Plugins (optional):
+    Phase 3, Python / Plugins (optional):
       pybind11        Embedded Python interpreter
 
-    Phase 5 — HobbyMesh (optional):
+    Phase 5, HobbyMesh (optional):
       OpenMesh        Half-edge mesh kernel
       lib3mf          3MF format support
       MeshFix         Automatic mesh repair
@@ -94,27 +92,26 @@
     Platform: linux
 
       -- Phase 0: Foundation --
-      [PASS] OCCT 7.9.2 — BRep + STEP/STL/IGES writers OK
-      [PASS] Qt 6 6.4.2 — QApplication + OpenGLWidgets OK
-      [PASS] libgit2 1.7.2 — init + version query OK
-      [PASS] libzip 1.10.1 — version query OK
-      [PASS] OpenGL 4.6 (Mesa) — Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)
-      [PASS] rsvg-convert 2.56.1 — SVG to PNG conversion available
+      [PASS] OCCT 8.0.1: BRep + STEP/STL/IGES writers OK
+      [PASS] Qt 6 6.4.2: QApplication + OpenGLWidgets OK
+      [PASS] libgit2 1.9.2: init + version query OK
+      [PASS] libzip 1.7.3: version query OK
+      [PASS] OpenGL 4.6 (Mesa): Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)
 
       -- Phase 1: Basic Modeling --
-      [PASS] libslvs — solver invoked OK (result=0)
+      [PASS] libslvs: solver invoked OK (result=0)
 
       -- Phase 3: Python / Plugins / Version Control --
-      [PASS] pybind11 2.11.1 — embedded Python 3.12.3 OK
+      [PASS] pybind11 2.11.1: embedded Python 3.12.3 OK
 
       -- Phase 5: HobbyMesh --
-      [PASS] OpenMesh — created triangle mesh (3v, 1f)
-      [PASS] lib3mf 2.4.1 — created 3MF model OK
-      [PASS] MeshFix — library linked OK
-      [PASS] CGAL — Surface_mesh created (3v, 1f)
-      [PASS] OpenVDB 10.0.1 — initialized + created FloatGrid OK
-      [PASS] Assimp 5.3.1 — Importer created OK
-      [PASS] Eigen 3.4.0 — 3x3 identity matrix OK
+      [PASS] OpenMesh: created triangle mesh (3v, 1f)
+      [PASS] lib3mf 2.5.0: created 3MF model OK
+      [PASS] MeshFix: library linked OK
+      [PASS] CGAL: Surface_mesh created (3v, 1f)
+      [PASS] OpenVDB 10.0.1: initialized + created FloatGrid OK
+      [PASS] Assimp 5.3.1: Importer created OK
+      [PASS] Eigen 3.4.0: 3x3 identity matrix OK
 
     ===== Results: 15 passed, 0 warnings, 0 failed out of 15 =====
 
@@ -169,14 +166,14 @@
   devtest.log is written in the devtest/ source directory and
   captures the full pipeline from configure through runtime:
 
-    1. CMake configure phase — written during cmake -B build:
+    1. CMake configure phase, written during cmake -B build:
        - Timestamp, generator, build type, source/build dirs
        - Compiler identity, version, and path
        - Platform detection
        - Each dependency: found (with version and method) or
          not found (with install hint)
 
-    2. Runtime test phase — appended by ./build/depcheck:
+    2. Runtime test phase, appended by ./build/depcheck:
        - Compiler, C++ standard, architecture, build type
        - Per-dependency [PASS]/[WARN]/[FAIL] with versions
        - OpenGL driver version and GPU renderer
@@ -189,7 +186,7 @@
 
   Useful for bug reports, CI diagnostics, and verifying that
   the correct library versions are being picked up.  Listed in
-  .gitignore — should not be committed.
+  .gitignore; should not be committed.
 
 
   PLATFORM NOTES
@@ -219,8 +216,8 @@
   FILES
   -----
 
-    CMakeLists.txt    Build system — cross-platform dependency detection
-    depcheck.cpp      Test program — exercises each dependency
+    CMakeLists.txt    Build system: cross-platform dependency detection
+    depcheck.cpp      Test program: exercises each dependency
     README.txt        This file
     devtest.log       Generated at runtime (not checked in)
 

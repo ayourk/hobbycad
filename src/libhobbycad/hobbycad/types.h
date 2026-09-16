@@ -84,6 +84,58 @@ struct Point2D {
 /// Scalar * Point2D (allows 2.0 * point syntax)
 constexpr Point2D operator*(double s, const Point2D& p) { return {s * p.x, s * p.y}; }
 
+struct PlaneBasis;  // defined below; used by Point3::world/project
+
+// =====================================================================
+//  Point3 — a sketch point in 3D
+// =====================================================================
+//  Sketch points are 3D internally; a 2D sketch is the special case z == 0
+//  (the UI hides the third component in 2D mode). Point3 interconverts
+//  IMPLICITLY with Point2D (a 2D point lifts to z == 0, and dropping to 2D
+//  discards z), so the large body of existing 2D-point code keeps compiling
+//  while the storage is 3D. Arithmetic here is genuine 3D; use .xy() when a
+//  2D value is meant explicitly.
+struct Point3 {
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+
+    constexpr Point3() = default;
+    constexpr Point3(double x_, double y_, double z_ = 0.0) : x(x_), y(y_), z(z_) {}
+    constexpr Point3(const Point2D& p) : x(p.x), y(p.y), z(0.0) {}  // NOLINT implicit lift
+    constexpr operator Point2D() const { return {x, y}; }           // NOLINT implicit drop
+    constexpr Point2D xy() const { return {x, y}; }
+
+    constexpr Point3 operator+(const Point3& r) const { return {x + r.x, y + r.y, z + r.z}; }
+    constexpr Point3 operator-(const Point3& r) const { return {x - r.x, y - r.y, z - r.z}; }
+    constexpr Point3 operator*(double s) const { return {x * s, y * s, z * s}; }
+    constexpr Point3 operator/(double s) const { return {x / s, y / s, z / s}; }
+    constexpr Point3 operator-() const { return {-x, -y, -z}; }
+    Point3& operator+=(const Point3& r) { x += r.x; y += r.y; z += r.z; return *this; }
+    Point3& operator-=(const Point3& r) { x -= r.x; y -= r.y; z -= r.z; return *this; }
+    Point3& operator*=(double s) { x *= s; y *= s; z *= s; return *this; }
+    Point3& operator/=(double s) { x /= s; y /= s; z /= s; return *this; }
+    constexpr bool operator==(const Point3& r) const { return x == r.x && y == r.y && z == r.z; }
+    constexpr bool operator!=(const Point3& r) const { return !(*this == r); }
+    constexpr bool operator<(const Point3& r) const {
+        return (x < r.x) || (x == r.x && (y < r.y || (y == r.y && z < r.z)));
+    }
+    constexpr bool isNull() const { return x == 0.0 && y == 0.0 && z == 0.0; }
+
+    /// Plane <-> world (see PlaneBasis), the way dune3d/Fusion expose it.
+    /// world():  treat this as a plane-local (u, v, w) point -> WORLD point.
+    /// project(): treat this as a WORLD point -> its plane-local (u, v, w).
+    /// Defined out-of-line below PlaneBasis. Inverses of each other.
+    Point3 world(const PlaneBasis& basis) const;
+    Point3 project(const PlaneBasis& basis) const;
+
+#if HOBBYCAD_HAS_QT
+    Point3(const QPointF& q) : x(q.x()), y(q.y()), z(0.0) {}  // NOLINT
+    operator QPointF() const { return QPointF(x, y); }        // NOLINT
+#endif
+};
+constexpr Point3 operator*(double s, const Point3& p) { return {s * p.x, s * p.y, s * p.z}; }
+
 // =====================================================================
 //  Rect2D — replaces QRectF
 // =====================================================================
@@ -171,6 +223,37 @@ struct Vec3 {
 #endif
 };
 
+/// A workplane's frame: origin plus orthonormal in-plane axes and the normal.
+/// A sketch point (u, v) maps to world as  origin + u*uAxis + v*vAxis;
+/// projecting a world point P back onto the plane gives u = dot(P-origin,uAxis),
+/// v = dot(P-origin,vAxis) (the normal component is dropped). This is the
+/// "everything is relative to the plane's origin" frame the sketcher uses.
+struct PlaneBasis {
+    Vec3 origin;
+    Vec3 uAxis{1.0f, 0.0f, 0.0f};
+    Vec3 vAxis{0.0f, 1.0f, 0.0f};
+    Vec3 normal{0.0f, 0.0f, 1.0f};
+};
+
+inline Point3 Point3::world(const PlaneBasis& b) const {
+    // world = origin + u*uAxis + v*vAxis + w*normal   (u,v,w == x,y,z)
+    return {
+        double(b.origin.x) + x*double(b.uAxis.x) + y*double(b.vAxis.x) + z*double(b.normal.x),
+        double(b.origin.y) + x*double(b.uAxis.y) + y*double(b.vAxis.y) + z*double(b.normal.y),
+        double(b.origin.z) + x*double(b.uAxis.z) + y*double(b.vAxis.z) + z*double(b.normal.z),
+    };
+}
+inline Point3 Point3::project(const PlaneBasis& b) const {
+    const double dx = x - double(b.origin.x);
+    const double dy = y - double(b.origin.y);
+    const double dz = z - double(b.origin.z);
+    return {
+        dx*double(b.uAxis.x)  + dy*double(b.uAxis.y)  + dz*double(b.uAxis.z),   // u
+        dx*double(b.vAxis.x)  + dy*double(b.vAxis.y)  + dz*double(b.vAxis.z),   // v
+        dx*double(b.normal.x) + dy*double(b.normal.y) + dz*double(b.normal.z),  // w
+    };
+}
+
 // =====================================================================
 //  Container Helpers — replacements for Qt convenience methods
 // =====================================================================
@@ -234,6 +317,30 @@ inline bool fuzzyCompare(double a, double b) {
 /// Fuzzy zero check (replaces qFuzzyIsNull)
 inline bool fuzzyIsNull(double a) {
     return std::abs(a) < 1e-12;
+}
+
+
+/// Arbitrary Axis Algorithm (AutoCAD/DXF): a right-handed plane frame from a
+/// bare normal, for planes with NO construction history: 3-point, from-face,
+/// or a DXF entity's OCS. If |Nx| < 1/64 and |Ny| < 1/64 the in-plane X is
+/// seeded from world Y, else from world Z; then Y = N x X. This is the same
+/// convention the DXF OCS uses, so import/export share one implementation.
+inline PlaneBasis arbitraryAxisBasis(const Vec3& normal, const Vec3& origin = Vec3()) {
+    float nx = normal.x, ny = normal.y, nz = normal.z;
+    const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+    if (len < 1e-12f) { nx = 0; ny = 0; nz = 1; } else { nx /= len; ny /= len; nz /= len; }
+    float axx, axy, axz;
+    if (std::fabs(nx) < 1.0f / 64.0f && std::fabs(ny) < 1.0f / 64.0f) {
+        axx = nz;  axy = 0.0f; axz = -nx;              // Wy(0,1,0) x N
+    } else {
+        axx = -ny; axy = nx;   axz = 0.0f;             // Wz(0,0,1) x N
+    }
+    float al = std::sqrt(axx * axx + axy * axy + axz * axz); if (al < 1e-12f) al = 1.0f;
+    axx /= al; axy /= al; axz /= al;
+    const float ayx = ny * axz - nz * axy;             // Ay = N x Ax
+    const float ayy = nz * axx - nx * axz;
+    const float ayz = nx * axy - ny * axx;
+    return { origin, Vec3(axx, axy, axz), Vec3(ayx, ayy, ayz), Vec3(nx, ny, nz) };
 }
 
 }  // namespace hobbycad

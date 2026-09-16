@@ -30,6 +30,30 @@ namespace geometry {
 /// Default tolerance for geometric comparisons (in mm)
 constexpr double DEFAULT_TOLERANCE = 1e-6;
 
+/// Named thresholds shared by the library and the front ends. Each value is
+/// the literal it replaced across the code base; the name records what the
+/// threshold means so a reader does not have to infer it from the comparison.
+/// A magnitude (length, radius, vector norm, denominator, radian angle
+/// difference) below this is treated as zero.
+constexpr double kZeroEps = 1e-9;
+/// Near-exact equality of doubles, and squared lengths that must be non-zero.
+constexpr double kExactEps = 1e-12;
+/// A length, distance or radius below this is degenerate geometry (mm).
+constexpr double kDegenerateLen = 1e-6;
+/// Angle differences in degrees below this are the same angle.
+constexpr double kAngleEpsDeg = 1e-6;
+/// Points closer than this coincide (mm; also used on squared distances).
+constexpr double kCoincidentTol = 1e-4;
+
+/// "Greater than zero" as the model means it. Aaron: a width, radius or
+/// length has to be greater than zero, and how much greater is dictated by
+/// the precision. A length at or below kDegenerateLen is zero for every
+/// purpose; an angle in degrees at or below kAngleEpsDeg likewise. Every
+/// validation of a size or a sweep goes through these, never a bare "> 0".
+constexpr bool isPositiveLength(double v) { return v > kDegenerateLen; }
+constexpr bool isZeroAngleDeg(double deg) { return (deg < 0.0 ? -deg : deg) <= kAngleEpsDeg; }
+constexpr bool isPositiveAngleDeg(double deg) { return deg > kAngleEpsDeg; }
+
 /// Tolerance for point coincidence checks (in mm)
 constexpr double POINT_TOLERANCE = 0.5;
 
@@ -145,11 +169,6 @@ struct BoundingBox {
 
     /// Convert to Rect2D
     Rect2D toRect() const;
-
-#if HOBBYCAD_HAS_QT
-    /// Convert to QRectF
-    QRectF toQRect() const;
-#endif
 
     /// Check if point is inside (inclusive)
     bool contains(const Point2D& point) const;
