@@ -144,6 +144,13 @@ Point2D lineMidpoint(const Point2D& p1, const Point2D& p2)
     return Point2D((p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0);
 }
 
+double ellipseCircumference(double a, double b)
+{
+    if (!isPositiveLength(a + b)) return 0.0;
+    const double h = std::pow((a - b) / (a + b), 2);
+    return M_PI * (a + b) * (1.0 + 3.0 * h / (10.0 + std::sqrt(4.0 - 3.0 * h)));
+}
+
 Point2D lineDirection(const Point2D& p1, const Point2D& p2)
 {
     return normalize(p2 - p1);

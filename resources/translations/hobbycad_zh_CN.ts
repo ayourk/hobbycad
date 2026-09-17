@@ -18,32 +18,32 @@
 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="885"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="886"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="52"/>
         <source>Usage: undo [count]</source>
         <translation>用法: undo [次数]</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="888"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="889"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="53"/>
         <source>No document is open, so there is nothing to undo.</source>
         <translation>没有打开的文档，因此没有可撤销的内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="901"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="902"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="54"/>
         <source>Nothing to undo.</source>
         <translation>没有可撤销的内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="906"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="907"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="55"/>
         <source>Undone: %1</source>
         <translation>已撤销: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="908"/>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="943"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="909"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="944"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="56"/>
         <source>
 (only %1 of %2 steps were available)</source>
@@ -51,7 +51,7 @@
 （%2 步中只有 %1 步可用）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="912"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="913"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="57"/>
         <source>
 Next undo: %1</source>
@@ -59,31 +59,31 @@ Next undo: %1</source>
 下一次撤销: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="922"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="923"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="58"/>
         <source>Usage: redo [count]</source>
         <translation>用法: redo [次数]</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="925"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="926"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="59"/>
         <source>No document is open, so there is nothing to redo.</source>
         <translation>没有打开的文档，因此没有可重做的内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="938"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="939"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="60"/>
         <source>Nothing to redo.</source>
         <translation>没有可重做的内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="941"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="942"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="61"/>
         <source>Redone: %1</source>
         <translation>已重做: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="947"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="948"/>
         <location filename="../../src/hobbycad/cli_translator.cpp" line="62"/>
         <source>
 Next redo: %1</source>
@@ -91,9 +91,225 @@ Next redo: %1</source>
 下一次重做: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1175"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1469"/>
         <source>Not set</source>
         <translation>未设置</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5089"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="64"/>
+        <source>Usage: ellipse [at] &lt;x&gt;,&lt;y&gt; major &lt;a&gt; minor &lt;b&gt;
+                [rotation &lt;deg&gt;] [angle &lt;start&gt; to &lt;end&gt;]
+                [construction]
+
+Examples:
+  ellipse at 0,0 major 40 minor 20
+  ellipse 10,10 major (width/2) minor 15
+  ellipse at 0,0 major 40 minor 20 rotation 30
+  ellipse at 0,0 major 40 minor 20 angle 0 to 90</source>
+        <translation>用法：ellipse [at] &lt;x&gt;,&lt;y&gt; major &lt;a&gt; minor &lt;b&gt;
+           [rotation &lt;deg&gt;] [angle &lt;start&gt; to &lt;end&gt;]
+           [construction]
+
+示例：
+  ellipse at 0,0 major 40 minor 20
+  ellipse 10,10 major (width/2) minor 15
+  ellipse at 0,0 major 40 minor 20 rotation 30
+  ellipse at 0,0 major 40 minor 20 angle 0 to 90</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5129"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="74"/>
+        <source>Invalid rotation. Must be a number, parameter, or (expression).</source>
+        <translation>旋转无效。必须是数字、参数或（表达式）。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5141"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="76"/>
+        <source>Invalid start angle. Must be a number, parameter, or (expression).</source>
+        <translation>起始角度无效。必须是数字、参数或（表达式）。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5145"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="78"/>
+        <source>Expected &apos;to&apos; between the start and end angles</source>
+        <translation>起始角度和终止角度之间应为 &apos;to&apos;</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5150"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="79"/>
+        <source>Invalid end angle. Must be a number, parameter, or (expression).</source>
+        <translation>终止角度无效。必须是数字、参数或（表达式）。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5155"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="81"/>
+        <source>An elliptical arc needs a non-zero sweep.</source>
+        <translation>椭圆弧的扫掠角度不能为零。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6026"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="97"/>
+        <source>Usage: conic &lt;id&gt; rho &lt;r&gt;</source>
+        <translation>用法：conic &lt;id&gt; rho &lt;r&gt;</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6034"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="98"/>
+        <source>Entity %1 is not a conic arc.</source>
+        <translation>实体 %1 不是圆锥曲线弧。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6039"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="99"/>
+        <source>rho must be a number between 0 and 1, exclusive (&apos;%1&apos;).</source>
+        <translation>rho 必须是严格介于 0 和 1 之间的数（&apos;%1&apos;）。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6044"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="100"/>
+        <source>Entity %1 has no recoverable apex; it is not a conic arc.</source>
+        <translation>无法求出实体 %1 的顶点；它不是圆锥曲线弧。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6049"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="101"/>
+        <source>Updated conic %1: rho %2 (%3).</source>
+        <translation>已更新圆锥曲线 %1：rho %2（%3）。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6058"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="83"/>
+        <source>Usage: conic [from] &lt;x&gt;,&lt;y&gt; to &lt;x&gt;,&lt;y&gt; apex &lt;x&gt;,&lt;y&gt; rho &lt;r&gt;
+             [construction]
+
+A conic arc by rho, as in Fusion, Onshape and SolidWorks: the two
+points are its ends, the apex is where the end tangents meet, and rho
+says where the curve&apos;s shoulder sits between the chord&apos;s midpoint (0)
+and the apex (1). Below 0.5 it is an elliptical arc, at 0.5 a parabola,
+above 0.5 a hyperbola. It is stored as one rational Bezier segment; rho
+stays a property of the curve (see `points &lt;id&gt;`, `conic &lt;id&gt; rho`).
+
+Examples:
+  conic 0,0 to 40,0 apex 20,30 rho 0.5          (a parabola)
+  conic 0,0 to 40,40 apex 40,0 rho 0.41421      (a quarter circle)</source>
+        <translation>用法：conic [from] &lt;x&gt;,&lt;y&gt; to &lt;x&gt;,&lt;y&gt; apex &lt;x&gt;,&lt;y&gt; rho &lt;r&gt;
+         [construction]
+
+按 rho 定义的圆锥曲线弧，与 Fusion、Onshape 和 SolidWorks 相同：两个点是
+它的两端，顶点是两端切线的交点，rho 表示曲线的肩部位于弦中点（0）与
+顶点（1）之间的位置。小于 0.5 为椭圆弧，等于 0.5 为抛物线，大于 0.5 为
+双曲线。它存储为一个有理贝塞尔段；rho 始终是曲线的属性（参见
+`points &lt;id&gt;`、`conic &lt;id&gt; rho`）。
+
+示例：
+  conic 0,0 to 40,0 apex 20,30 rho 0.5          (抛物线)
+  conic 0,0 to 40,40 apex 40,0 rho 0.41421      (四分之一圆)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6077"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="102"/>
+        <source>Invalid start coordinates. Use format: x,y</source>
+        <translation>起点坐标无效。请使用格式：x,y</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6078"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="103"/>
+        <source>Expected &apos;to&apos; between the start and end points</source>
+        <translation>起点和终点之间应为 &apos;to&apos;</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6083"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="104"/>
+        <source>Invalid end coordinates. Use format: x,y</source>
+        <translation>终点坐标无效。请使用格式：x,y</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6084"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="105"/>
+        <source>Expected &apos;apex&apos; keyword</source>
+        <translation>应为关键字 &apos;apex&apos;</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6088"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="106"/>
+        <source>Invalid apex coordinates. Use format: x,y</source>
+        <translation>顶点坐标无效。请使用格式：x,y</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6089"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="107"/>
+        <source>Expected &apos;rho&apos; keyword</source>
+        <translation>应为关键字 &apos;rho&apos;</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6095"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="108"/>
+        <source>Invalid rho. Must be a number, parameter, or (expression).</source>
+        <translation>rho 无效。必须是数字、参数或（表达式）。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6100"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="109"/>
+        <source>rho must be between 0 and 1, exclusive.</source>
+        <translation>rho 必须严格介于 0 和 1 之间。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6105"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="110"/>
+        <source>The two ends must be apart and the apex off their line.</source>
+        <translation>两个端点必须分开，且顶点不能在它们的连线上。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6111"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="111"/>
+        <source>Created %6conic arc (%5) from (%1, %2) to (%3, %4), rho %7 [id %8]</source>
+        <translation>已创建%6圆锥曲线弧（%5），从 (%1, %2) 到 (%3, %4)，rho %7 [id %8]</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2963"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="113"/>
+        <source>entity %1 (conic arc, %2, rho %3):</source>
+        <translation>实体 %1（圆锥曲线弧，%2，rho %3）：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2966"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="114"/>
+        <source>  start (%1, %2)</source>
+        <translation>  起点  (%1, %2)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2968"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="115"/>
+        <source>  end   (%1, %2)</source>
+        <translation>  终点  (%1, %2)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2970"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="116"/>
+        <source>  apex  (%1, %2)   (where the end tangents meet; not a stored point)</source>
+        <translation>  顶点  (%1, %2)   （两端切线的交点；不是存储的点）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2973"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="118"/>
+        <source>Change rho: conic %1 rho &lt;r&gt;. Editing a handle makes it a plain bezier.</source>
+        <translation>修改 rho：conic %1 rho &lt;r&gt;。编辑手柄会使其变为普通贝塞尔曲线。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="120"/>
+        <source>elliptical</source>
+        <translation>椭圆</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="121"/>
+        <source>parabolic</source>
+        <translation>抛物线</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="122"/>
+        <source>hyperbolic</source>
+        <translation>双曲线</translation>
     </message>
 </context>
 <context>
@@ -2332,174 +2548,174 @@ Sketching and file operations still work.</source>
 <context>
     <name>hobbycad::MainWindow</name>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1194"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1198"/>
         <source>&amp;File</source>
         <translation>文件(&amp;F)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1195"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1199"/>
         <source>&amp;New</source>
         <translation>新建(&amp;N)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1196"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1200"/>
         <source>&amp;Open...</source>
         <translation>打开(&amp;O)...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1197"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1201"/>
         <source>&amp;Save</source>
         <translation>保存(&amp;S)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1198"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1202"/>
         <source>Save &amp;As...</source>
         <translation>另存为(&amp;A)...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1199"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1203"/>
         <source>&amp;Close</source>
         <translation>关闭(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1200"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1204"/>
         <source>&amp;Import</source>
         <translation>导入(&amp;I)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1201"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1206"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1205"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1210"/>
         <source>STEP File...</source>
         <translation>STEP 文件...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1202"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1206"/>
         <source>Import geometry from STEP file</source>
         <translation>从 STEP 文件导入几何</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1205"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1209"/>
         <source>&amp;Export</source>
         <translation>导出(&amp;E)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1207"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1211"/>
         <source>Export geometry to STEP file</source>
         <translation>将几何导出为 STEP 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1208"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1212"/>
         <source>STL File...</source>
         <translation>STL 文件...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1209"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1213"/>
         <source>Export geometry to STL file for 3D printing</source>
         <translation>将几何导出为用于三维打印的 STL 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1203"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1210"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1207"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1214"/>
         <source>DXF File (Sketch)...</source>
         <translation>DXF 文件（草图）...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1211"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1215"/>
         <source>Export sketch to DXF file</source>
         <translation>将草图导出为 DXF 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1212"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1216"/>
         <source>SVG File (Sketch)...</source>
         <translation>SVG 文件（草图）...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1213"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1217"/>
         <source>Export sketch to SVG file</source>
         <translation>将草图导出为 SVG 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1214"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1218"/>
         <source>&amp;Quit</source>
         <translation>退出(&amp;Q)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1215"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1219"/>
         <source>&amp;Edit</source>
         <translation>编辑(&amp;E)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1216"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1220"/>
         <source>&amp;Undo</source>
         <translation>撤销(&amp;U)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1217"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1221"/>
         <source>&amp;Redo</source>
         <translation>重做(&amp;R)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1218"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1222"/>
         <source>Cu&amp;t</source>
         <translation>剪切(&amp;T)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1219"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1223"/>
         <source>&amp;Copy</source>
         <translation>复制(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1220"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1224"/>
         <source>&amp;Paste</source>
         <translation>粘贴(&amp;P)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1221"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1225"/>
         <source>&amp;Delete</source>
         <translation>删除(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1222"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1226"/>
         <source>Select &amp;All</source>
         <translation>全选(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1223"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1227"/>
         <source>&amp;Construct</source>
         <translation>构造(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1224"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1228"/>
         <source>New Construction &amp;Plane...</source>
         <translation>新建构造平面(&amp;P)...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1225"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1229"/>
         <source>Create a new construction plane</source>
         <translation>创建新的构造平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1228"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1232"/>
         <source>&amp;View</source>
         <translation>视图(&amp;V)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1229"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1233"/>
         <source>&amp;Terminal</source>
         <translation>终端(&amp;T)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1268"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1272"/>
         <source>Rotate &amp;Left 90°</source>
         <translation>向左旋转 90°(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1269"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1273"/>
         <source>Rotate Ri&amp;ght 90°</source>
         <translation>向右旋转 90°(&amp;G)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1226"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1230"/>
         <source>&amp;Help</source>
         <translation>帮助(&amp;H)</translation>
     </message>
@@ -2545,222 +2761,222 @@ A recovery copy of your project was saved.</source>
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1227"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1231"/>
         <source>&amp;About HobbyCAD...</source>
         <translation>关于 HobbyCAD(&amp;A)...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1230"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1234"/>
         <source>P&amp;roject</source>
         <translation>项目(&amp;R)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1231"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1235"/>
         <source>&amp;Properties</source>
         <translation>属性(&amp;P)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1232"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1236"/>
         <source>Tool&amp;bar</source>
         <translation>工具栏(&amp;B)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1233"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1237"/>
         <source>Change &amp;History</source>
         <translation>变更历史(&amp;H)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1253"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1257"/>
         <source>&amp;Workspace</source>
         <translation>工作区(&amp;W)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1259"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1263"/>
         <source>&amp;Design</source>
         <translation>设计(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1260"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1264"/>
         <source>&amp;Render</source>
         <translation>渲染(&amp;R)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1261"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1265"/>
         <source>&amp;Animation</source>
         <translation>动画(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1262"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1266"/>
         <source>&amp;Simulation</source>
         <translation>仿真(&amp;S)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1271"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1275"/>
         <source>&amp;Snap to Grid</source>
         <translation>吸附到网格(&amp;S)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1272"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1276"/>
         <source>&amp;Z-Up Orientation</source>
         <translation>Z 轴向上方向(&amp;Z)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1273"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1277"/>
         <source>&amp;Orbit Selected Object</source>
         <translation>绕选定对象环绕(&amp;O)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1282"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1286"/>
         <source>System Default (English)</source>
         <translation>系统默认（英语）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1283"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1287"/>
         <source>System Default (%1)</source>
         <translation>系统默认（%1）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1291"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1295"/>
         <source>%1 (machine translation)</source>
         <translation>%1（机器翻译）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1369"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1373"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1395"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1399"/>
         <source>OpenGL %1.%2: %3</source>
         <translation>OpenGL %1.%2: %3</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1850"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1854"/>
         <source>Terminal</source>
         <translation>终端</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1988"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1992"/>
         <source>New document created</source>
         <translation>已创建新文档</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2725"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2729"/>
         <source>Document closed</source>
         <translation>文档已关闭</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2177"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2181"/>
         <source>Opened: %1</source>
         <translation>已打开：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1433"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4593"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1437"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4597"/>
         <source>Project</source>
         <translation>项目</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1578"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1582"/>
         <source>Files</source>
         <translation>文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
         <source>mm</source>
         <translation>mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
         <source>cm</source>
         <translation>cm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
         <source>m</source>
         <translation>m</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
         <source>in</source>
         <translation>in</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
         <source>ft</source>
         <translation>ft</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1486"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1490"/>
         <source>Units: %1</source>
         <translation>单位：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4648"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4872"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5271"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4652"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4876"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5275"/>
         <source>Origin</source>
         <translation>原点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4949"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4953"/>
         <source>X Axis</source>
         <translation>X 轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4949"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4953"/>
         <source>Y Axis</source>
         <translation>Y 轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4611"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4615"/>
         <source>Bodies</source>
         <translation>实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4609"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4613"/>
         <source>Sketches</source>
         <translation>草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1577"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1581"/>
         <source>Objects</source>
         <translation>对象</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1661"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4912"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1665"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4916"/>
         <source>Properties</source>
         <translation>属性</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1685"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1689"/>
         <source>Property</source>
         <translation>属性</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1685"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4732"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1689"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4736"/>
         <source>Value</source>
         <translation>值</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1826"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1830"/>
         <source>History</source>
         <translation>历史</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2092"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2096"/>
         <source>Open File</source>
         <translation>打开文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2149"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2153"/>
         <source>Opened project: %1</source>
         <translation>已打开项目：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2156"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2160"/>
         <source>Could not open project:
 %1
 
@@ -2771,26 +2987,26 @@ A recovery copy of your project was saved.</source>
 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2319"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2323"/>
         <source>Saved project: %1</source>
         <translation>已保存项目：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2311"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2315"/>
         <source>Could not save project:
 %1</source>
         <translation>无法保存项目：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2346"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2383"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2350"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2387"/>
         <source>Saved: %1</source>
         <translation>已保存：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2155"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2181"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2159"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2185"/>
         <source>Open Failed</source>
         <translation>打开失败</translation>
     </message>
@@ -2818,8 +3034,8 @@ Saved: %1</source>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="273"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2032"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5521"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2036"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5525"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
@@ -2889,612 +3105,622 @@ This cannot be undone.</source>
         <translation>仅曲线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1007"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1009"/>
         <source>S&amp;ketch</source>
         <translation>草图(&amp;K)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1017"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1019"/>
         <source>&amp;Line</source>
         <translation>线(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1018"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1020"/>
         <source>&amp;Rectangle</source>
         <translation>矩形(&amp;R)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1019"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1021"/>
         <source>&amp;Circle</source>
         <translation>圆(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1020"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1022"/>
         <source>&amp;Arc</source>
         <translation>圆弧(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1021"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1023"/>
+        <source>&amp;Ellipse</source>
+        <translation>椭圆(&amp;E)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1024"/>
         <source>&amp;Point</source>
         <translation>点(&amp;P)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1023"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1026"/>
         <source>&amp;Cubic Bezier</source>
         <translation>三次贝塞尔(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1024"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1027"/>
         <source>&amp;Catmull-Rom Spline</source>
         <translation>Catmull-Rom 样条(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1025"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1028"/>
         <source>&amp;Rational Bezier</source>
         <translation>有理贝塞尔(&amp;R)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1027"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1029"/>
+        <source>Conic Arc (Rh&amp;o)</source>
+        <translation>圆锥曲线弧 (Rho)(&amp;O)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1031"/>
         <source>Curvature Comb</source>
         <translation>曲率梳</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1037"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4014"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1041"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4018"/>
         <source>Finish Sketch</source>
         <translation>完成草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1050"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1054"/>
         <source>C&amp;onstraints</source>
         <translation>约束(&amp;O)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1064"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4716"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1068"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4720"/>
         <source>Curvature (G2)</source>
         <translation>曲率 (G2)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1069"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4717"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1073"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4721"/>
         <source>Point on Spline</source>
         <translation>样条上的点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1070"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4719"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1074"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4723"/>
         <source>Tangent Angle</source>
         <translation>切线角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1073"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1077"/>
         <source>Angle (2 lines)</source>
         <translation>角度（2 条线）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1081"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1085"/>
         <source>Fix / Unfix</source>
         <translation>固定 / 解除固定</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1086"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1090"/>
         <source>Auto Constrain</source>
         <translation>自动约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1204"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1208"/>
         <source>Import DXF geometry into the active sketch</source>
         <translation>将 DXF 几何图形导入活动草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1234"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1238"/>
         <source>&amp;Draw, then Constrain</source>
         <translation>先绘制，再约束(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1235"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1239"/>
         <source>Show &amp;Unconstrained Points</source>
         <translation>显示未约束的点(&amp;U)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1237"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1241"/>
         <source>Mark endpoints that are not constrained to other geometry</source>
         <translation>标记未约束到其他几何图形的端点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1238"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1242"/>
         <source>Show &amp;Constraints</source>
         <translation>显示约束(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1240"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1244"/>
         <source>Show the constraint symbols on the canvas; dimensions are unaffected</source>
         <translation>在画布上显示约束符号；尺寸不受影响</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1242"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1246"/>
         <source>Show &amp;Dimensions</source>
         <translation>显示尺寸(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1244"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1248"/>
         <source>Show the dimensional labels on the canvas; constraint symbols are unaffected</source>
         <translation>在画布上显示尺寸标签；约束符号不受影响</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1246"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1250"/>
         <source>Show &amp;Profiles</source>
         <translation>显示轮廓(&amp;P)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1247"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1251"/>
         <source>Shade closed sketch profiles in blue</source>
         <translation>用蓝色为闭合的草图轮廓着色</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1248"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1252"/>
         <source>&amp;Fit Sketch to View</source>
         <translation>使草图适应视图(&amp;F)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1249"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1253"/>
         <source>Zoom and pan so the whole sketch is visible</source>
         <translation>缩放和平移以显示整个草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1251"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1255"/>
         <source>Place geometry roughly and fix it with constraints afterwards, instead of snapping and typing dimensions as you place it</source>
         <translation>大致放置几何图形，随后用约束固定，而不是在放置时捕捉并输入尺寸</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1254"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1258"/>
         <source>L&amp;anguage</source>
         <translation>语言(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1255"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1259"/>
         <source>&amp;Theme</source>
         <translation>主题(&amp;T)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1256"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1260"/>
         <source>&amp;Light</source>
         <translation>浅色(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1257"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1261"/>
         <source>&amp;Dark</source>
         <translation>深色(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1258"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1262"/>
         <source>&amp;Edit...</source>
         <translation>编辑(&amp;E)...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1263"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1267"/>
         <source>Reset &amp;View</source>
         <translation>重置视图(&amp;V)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1264"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1268"/>
         <source>Look &amp;At Sketch Plane</source>
         <translation>注视草图平面(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1265"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1269"/>
         <source>Orient the camera square onto the active sketch plane</source>
         <translation>将相机正对活动草图平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1266"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1270"/>
         <source>&amp;Slice at Sketch Plane</source>
         <translation>在草图平面剖切(&amp;S)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1267"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1271"/>
         <source>Section the model at the active sketch plane to see inside</source>
         <translation>在活动草图平面剖切模型以查看内部</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1270"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1274"/>
         <source>Show Gri&amp;d</source>
         <translation>显示网格(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1274"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1278"/>
         <source>Pre&amp;ferences...</source>
         <translation>首选项(&amp;F)...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1314"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1318"/>
         <source>Empty sketch</source>
         <translation>空草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1315"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1319"/>
         <source>No geometry yet.</source>
         <translation>尚无几何图形。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1321"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1325"/>
         <source>1 degree of freedom</source>
         <translation>1 个自由度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1322"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1326"/>
         <source>%1 degrees of freedom</source>
         <translation>%1 个自由度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1323"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1327"/>
         <source>The sketch can still move. Add constraints or dimensions to pin it down.</source>
         <translation>草图仍可移动。添加约束或尺寸以将其固定。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1327"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1331"/>
         <source>Fully constrained</source>
         <translation>完全约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1329"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1333"/>
         <source>Every degree of freedom is pinned; the sketch has exactly one solution.</source>
         <translation>每个自由度都已固定；草图恰好有一个解。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1333"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1337"/>
         <source>Over-constrained</source>
         <translation>过约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1335"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1339"/>
         <source>The sketch still solves, but some constraints are redundant; they repeat what others already say.</source>
         <translation>草图仍可求解，但部分约束是冗余的；它们重复了其他约束已表达的内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1339"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1343"/>
         <source>Conflicting constraints</source>
         <translation>冲突的约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1341"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1345"/>
         <source>No solution exists: two or more constraints contradict each other. The conflicting ones are drawn in red.</source>
         <translation>不存在解：两个或更多约束相互矛盾。冲突的约束以红色绘制。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1345"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1349"/>
         <source>Solver failed</source>
         <translation>求解器失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1347"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1351"/>
         <source>The solver could not produce an answer. The sketch may still be satisfiable; this is not the same as a conflict.</source>
         <translation>求解器无法得出结果。草图仍可能是可满足的；这与冲突不同。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1402"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1406"/>
         <source>Reduced Mode</source>
         <translation>精简模式</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1409"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1413"/>
         <source>The 3D viewport is disabled because the OCCT viewer could not start.</source>
         <translation>由于 OCCT 查看器无法启动，3D 视口已禁用。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1416"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1420"/>
         <source>The 3D viewport is disabled because OpenGL 3.3+ was not detected.</source>
         <translation>由于未检测到 OpenGL 3.3+，3D 视口已禁用。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1420"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1424"/>
         <source>File operations and geometry operations still work normally.</source>
         <translation>文件操作和几何操作仍可正常工作。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1528"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1532"/>
         <source>Another %1 is already called &apos;%2&apos;.</source>
         <translation>另一个 %1 已命名为“%2”。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1538"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1542"/>
         <source>This item cannot be renamed.</source>
         <translation>此项目无法重命名。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1809"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1813"/>
         <source>Options</source>
         <translation>选项</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2018"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2022"/>
         <source>Open the sketch before calibrating its canvas</source>
         <translation>在校准草图画布之前请先打开草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2033"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2037"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2034"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2038"/>
         <source>Embed a copy</source>
         <translation>嵌入副本</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2035"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2039"/>
         <source>Link to a project file</source>
         <translation>链接到项目文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2036"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2040"/>
         <source>Editing this</source>
         <translation>正在编辑此项</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2039"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5521"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2043"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5525"/>
         <source>%1 is not implemented yet</source>
         <translation>%1 尚未实现</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2069"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2073"/>
         <source>Link to Project</source>
         <translation>链接到项目</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2070"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2074"/>
         <source>Relink &apos;%1&apos;</source>
         <translation>重新链接“%1”</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2083"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2087"/>
         <source>Relinking is not implemented yet (selected: %1)</source>
         <translation>重新链接尚未实现（已选择: %1）</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2145"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2149"/>
         <source>Opened project: %1 (%n sketch(es) not finished)</source>
         <translation>
             <numerusform>已打开项目: %1 (%n 个草图未完成)</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2182"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2186"/>
         <source>Could not open file:
 %1</source>
         <translation>无法打开文件：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2282"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2286"/>
         <source>Undo</source>
         <translation>撤销</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2283"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2287"/>
         <source>Undo %1</source>
         <translation>撤销 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2288"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2292"/>
         <source>Redo</source>
         <translation>重做</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2289"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2293"/>
         <source>Redo %1</source>
         <translation>重做 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2310"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2349"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2386"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2858"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2883"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2314"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2353"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2390"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2862"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2887"/>
         <source>Save Failed</source>
         <translation>保存失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2350"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2387"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2859"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2884"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2354"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2391"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2863"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2888"/>
         <source>Could not save file:
 %1</source>
         <translation>无法保存文件：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2362"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2866"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2366"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2870"/>
         <source>Save As</source>
         <translation>另存为</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2401"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2405"/>
         <source>Import STEP File</source>
         <translation>导入 STEP 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2403"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2407"/>
         <source>STEP Files (*.step *.stp *.STEP *.STP);;All Files (*)</source>
         <translation>STEP 文件 (*.step *.stp *.STEP *.STP);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2413"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2626"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2417"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2630"/>
         <source>Import Failed</source>
         <translation>导入失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2414"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2418"/>
         <source>Failed to import STEP file:
 %1</source>
         <translation>导入 STEP 文件失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2427"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2431"/>
         <source>Imported %1 shape(s) from STEP file</source>
         <translation>已从 STEP 文件导入 %1 个形状</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2442"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2446"/>
         <source>Export STEP</source>
         <translation>导出 STEP</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2443"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2490"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2447"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2494"/>
         <source>No geometry to export.
 Create some geometry first using extrude or other operations.</source>
         <translation>没有可导出的几何。
 请先使用拉伸或其他操作创建几何。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2450"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2454"/>
         <source>Export STEP File</source>
         <translation>导出 STEP 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2452"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2456"/>
         <source>STEP Files (*.step);;All Files (*)</source>
         <translation>STEP 文件 (*.step);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2468"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2514"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2597"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2706"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5601"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5630"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2472"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2518"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2601"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2710"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5605"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5634"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2473"/>
         <source>Failed to export STEP file:
 %1</source>
         <translation>导出 STEP 文件失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2474"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2478"/>
         <source>Exported %1 shape(s) to STEP file</source>
         <translation>已将 %1 个形状导出到 STEP 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2489"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2493"/>
         <source>Export STL</source>
         <translation>导出 STL</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2497"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2501"/>
         <source>Export STL File</source>
         <translation>导出 STL 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2499"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2503"/>
         <source>STL Files (*.stl);;All Files (*)</source>
         <translation>STL 文件 (*.stl);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2515"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2519"/>
         <source>Failed to export STL file:
 %1</source>
         <translation>导出 STL 文件失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2519"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2523"/>
         <source>Exported geometry to STL file</source>
         <translation>已将几何导出到 STL 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2555"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2565"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2572"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5590"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2559"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2569"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2576"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5594"/>
         <source>Export DXF</source>
         <translation>导出 DXF</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2556"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2573"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2663"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2684"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2560"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2577"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2667"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2688"/>
         <source>The sketch is empty. Add some geometry first.</source>
         <translation>草图为空。请先添加几何。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2566"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2677"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2570"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2681"/>
         <source>No sketch available for export.
 Enter sketch mode or select a completed sketch in the timeline.</source>
         <translation>没有可导出的草图。
 请进入草图模式或在时间线中选择一个已完成的草图。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2579"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5593"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2583"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5597"/>
         <source>Export DXF File</source>
         <translation>导出 DXF 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2581"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2617"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5594"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2585"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2621"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5598"/>
         <source>DXF Files (*.dxf);;All Files (*)</source>
         <translation>DXF 文件 (*.dxf);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2598"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5601"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2602"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5605"/>
         <source>Failed to export DXF file.</source>
         <translation>导出 DXF 文件失败。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2603"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2607"/>
         <source>Exported %1 entities to DXF file</source>
         <translation>已将 %1 个实体导出到 DXF 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2610"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2632"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2614"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2636"/>
         <source>Import DXF</source>
         <translation>导入 DXF</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2611"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2615"/>
         <source>Enter a sketch first. DXF geometry is imported into the active sketch.</source>
         <translation>请先进入草图。DXF 几何图形将导入活动草图。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2616"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2620"/>
         <source>Import DXF File</source>
         <translation>导入 DXF 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2627"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2631"/>
         <source>Could not import the DXF file:
 %1</source>
         <translation>无法导入 DXF 文件:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2633"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2637"/>
         <source>No supported geometry was found in the DXF file.</source>
         <translation>在 DXF 文件中未找到受支持的几何图形。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2645"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2649"/>
         <source>DXF Imported with Notes</source>
         <translation>导入 DXF 并附带说明</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2646"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2650"/>
         <source>Imported %1 entities. Notes:
 
 %2</source>
@@ -3503,186 +3729,186 @@ Enter sketch mode or select a completed sketch in the timeline.</source>
 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2648"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2652"/>
         <source>Imported %1 entities from DXF</source>
         <translation>已从 DXF 导入 %1 个实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2662"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2676"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2683"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5618"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2666"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2680"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2687"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5622"/>
         <source>Export SVG</source>
         <translation>导出 SVG</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2690"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5621"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2694"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5625"/>
         <source>Export SVG File</source>
         <translation>导出 SVG 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2692"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5622"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2696"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5626"/>
         <source>SVG Files (*.svg);;All Files (*)</source>
         <translation>SVG 文件 (*.svg);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2707"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5630"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2711"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5634"/>
         <source>Failed to export SVG file.</source>
         <translation>导出 SVG 文件失败。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2712"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2716"/>
         <source>Exported %1 entities to SVG file</source>
         <translation>已将 %1 个实体导出到 SVG 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2828"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2832"/>
         <source>Unsaved Changes</source>
         <translation>未保存的更改</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2829"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2833"/>
         <source>The document has been modified.</source>
         <translation>文档已被修改。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2830"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2834"/>
         <source>Do you want to save your changes?</source>
         <translation>是否要保存更改？</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2834"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2838"/>
         <source>Close Without Saving</source>
         <translation>不保存并关闭</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2836"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2840"/>
         <source>Save and Close</source>
         <translation>保存并关闭</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2838"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2842"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3216"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3220"/>
         <source>Base width dimension</source>
         <translation>基础宽度尺寸</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3225"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3229"/>
         <source>Base height dimension</source>
         <translation>基础高度尺寸</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3234"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3238"/>
         <source>Base depth dimension</source>
         <translation>基础深度尺寸</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3243"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3247"/>
         <source>Default fillet radius</source>
         <translation>默认圆角半径</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3252"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3256"/>
         <source>Default angle</source>
         <translation>默认角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3262"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3266"/>
         <source>Extrude1 distance</source>
         <translation>拉伸1 距离</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3271"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3275"/>
         <source>Fillet1 radius (uses &apos;radius&apos; param)</source>
         <translation>圆角1 半径（使用 &apos;radius&apos; 参数）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3313"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3317"/>
         <source>Circular parameter definition (%1): not applied</source>
         <translation>循环参数定义 (%1): 未应用</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3390"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3394"/>
         <source>Parameters updated</source>
         <translation>参数已更新</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3491"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3495"/>
         <source>Click to select entities, drag to move</source>
         <translation>点击选择实体，拖动以移动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3494"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3498"/>
         <source>Click to start line, click again to end</source>
         <translation>点击开始画线，再次点击结束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3497"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3501"/>
         <source>Click and drag to draw rectangle</source>
         <translation>点击并拖动以绘制矩形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3500"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3504"/>
         <source>Click center, drag to set radius</source>
         <translation>点击圆心，拖动以设置半径</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3503"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3507"/>
         <source>Click center, drag to set radius and arc</source>
         <translation>点击圆心，拖动以设置半径和圆弧</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3506"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3510"/>
         <source>Click to place construction point</source>
         <translation>点击以放置构造点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3509"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3513"/>
         <source>Click two points or an entity to add dimension</source>
         <translation>点击两个点或一个实体以添加标注</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3512"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3516"/>
         <source>Select entities to add constraints</source>
         <translation>选择实体以添加约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3515"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3519"/>
         <source>Select a tool to start drawing</source>
         <translation>选择工具开始绘制</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3526"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5005"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5328"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3530"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4757"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5009"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5332"/>
         <source>Entities</source>
         <translation>实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3619"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3623"/>
         <source>Sketch %1</source>
         <translation>草图 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3621"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3625"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3661"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3665"/>
         <source>Sketch Cannot Be Finished</source>
         <translation>无法完成草图</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3664"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3668"/>
         <source>This sketch has %n problem(s), so it is not finished yet.
 
 Fix them, or discard the sketch. Saving still works in the meantime.</source>
@@ -3693,12 +3919,12 @@ Fix them, or discard the sketch. Saving still works in the meantime.</source>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3674"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3678"/>
         <source>Finishing A Damaged Sketch</source>
         <translation>完成受损的草图</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3675"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3679"/>
         <source>HOBBYCAD_DEBUG is set, so this sketch is being kept despite %n problem(s).
 
 %1</source>
@@ -3709,1088 +3935,1088 @@ Fix them, or discard the sketch. Saving still works in the meantime.</source>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3690"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3694"/>
         <source>Create %1</source>
         <translation>创建 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3690"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3694"/>
         <source>Edit %1</source>
         <translation>编辑 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3700"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3704"/>
         <source>Sketch &apos;%1&apos; saved with %2 entities</source>
         <translation>草图 &apos;%1&apos; 已保存，包含 %2 个实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3717"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3721"/>
         <source>Changes to &apos;%1&apos; discarded</source>
         <translation>已放弃对 &apos;%1&apos; 的更改</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3719"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3723"/>
         <source>Empty sketch discarded</source>
         <translation>已放弃空草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3721"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3725"/>
         <source>Sketch discarded (%1 entities)</source>
         <translation>已放弃草图（%1 个实体）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3731"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3735"/>
         <source>Calibrate Background</source>
         <translation>校准背景</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3732"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3736"/>
         <source>Load a background image before calibrating it.</source>
         <translation>在校准之前请先加载背景图像。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3762"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3766"/>
         <source>Background image calibrated</source>
         <translation>背景图像已校准</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3784"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3788"/>
         <source>Background image removed</source>
         <translation>背景图像已移除</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3983"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3987"/>
         <source>Sketch mode - Draw entities or press Escape to finish</source>
         <translation>草图模式 - 绘制实体或按 Esc 结束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4014"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4018"/>
         <source>Save this sketch?</source>
         <translation>保存此草图？</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4070"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4074"/>
         <source>Sketch finished</source>
         <translation>草图已完成</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4118"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4122"/>
         <source>X: %1  Y: %2</source>
         <translation>X: %1  Y: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4184"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4188"/>
         <source>Corner %1</source>
         <translation>角点 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4335"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4646"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4684"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4889"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4339"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4650"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4688"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4893"/>
         <source>Type</source>
         <translation>类型</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4338"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4342"/>
         <source>Point</source>
         <translation>点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4339"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4343"/>
         <source>Line</source>
         <translation>直线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4340"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4344"/>
         <source>Rectangle</source>
         <translation>矩形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4341"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4345"/>
         <source>Parallelogram</source>
         <translation>平行四边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4342"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4346"/>
         <source>Circle</source>
         <translation>圆</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4343"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4347"/>
         <source>Arc</source>
         <translation>圆弧</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4344"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4348"/>
         <source>Spline</source>
         <translation>样条</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4345"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4349"/>
         <source>Polygon</source>
         <translation>多边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4346"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4350"/>
         <source>Slot</source>
         <translation>槽</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4347"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4351"/>
         <source>Ellipse</source>
         <translation>椭圆</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4939"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4943"/>
         <source>One Side (Reverse)</source>
         <translation>单侧（反向）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4940"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4944"/>
         <source>Two Sides (Symmetric)</source>
         <translation>双侧（对称）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4949"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4953"/>
         <source>Sketch Line</source>
         <translation>草图直线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5327"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5331"/>
         <source>%1 mm</source>
         <translation>%1 mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5360"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5364"/>
         <source>Origin cannot be %1</source>
         <translation>原点不能为 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5371"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5375"/>
         <source>Please select a sketch in the timeline first.</source>
         <translation>请先在时间线中选择一个草图。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5376"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5380"/>
         <source>Please select a sketch to %1.</source>
         <translation>请选择要%1的草图。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5382"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5386"/>
         <source>Could not find sketch data.</source>
         <translation>找不到草图数据。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5389"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5393"/>
         <source>No closed profiles found in the sketch.
 Make sure the sketch contains a closed loop.</source>
         <translation>草图中未找到闭合轮廓。
 请确认草图包含闭合环。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5437"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5444"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5508"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5441"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5448"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5512"/>
         <source>Rename to %1</source>
         <translation>重命名为 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5472"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5476"/>
         <source>edited</source>
         <translation>已编辑</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5475"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5479"/>
         <source>Editing %1 features not yet implemented</source>
         <translation>尚未实现对 %1 特征的编辑</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5498"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5502"/>
         <source>renamed</source>
         <translation>已重命名</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5502"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5506"/>
         <source>Rename Feature</source>
         <translation>重命名特征</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5502"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5506"/>
         <source>New name:</source>
         <translation>新名称：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5511"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5515"/>
         <source>Renamed to &apos;%1&apos;</source>
         <translation>已重命名为 &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5516"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5520"/>
         <source>deleted</source>
         <translation>已删除</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5526"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5530"/>
         <source>Delete Feature</source>
         <translation>删除特征</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5527"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5531"/>
         <source>Are you sure you want to delete &apos;%1&apos;?</source>
         <translation>确定要删除“%1”吗？</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5532"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5536"/>
         <source>Delete %1</source>
         <translation>删除 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5535"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5539"/>
         <source>Deleted &apos;%1&apos;</source>
         <translation>已删除 &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5541"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5545"/>
         <source>suppressed</source>
         <translation>已抑制</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5547"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5551"/>
         <source>Suppress %1</source>
         <translation>抑制 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5547"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5551"/>
         <source>Unsuppress %1</source>
         <translation>取消抑制 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5551"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5555"/>
         <source>Suppressed &apos;%1&apos;</source>
         <translation>已抑制 &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5551"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5555"/>
         <source>Unsuppressed &apos;%1&apos;</source>
         <translation>已取消抑制 &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5563"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5564"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5567"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5568"/>
         <source>Moved &apos;%1&apos;</source>
         <translation>已移动 &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5574"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5578"/>
         <source>Rollback cleared - all features active</source>
         <translation>已清除回退 - 所有特征均处于活动状态</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5576"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5580"/>
         <source>Rolled back to &apos;%1&apos;</source>
         <translation>已回退到 &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5590"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5618"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5594"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5622"/>
         <source>The sketch &apos;%1&apos; is empty.</source>
         <translation>草图 &apos;%1&apos; 为空。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5604"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5608"/>
         <source>Exported &apos;%1&apos; (%2 entities) to DXF file</source>
         <translation>已将 &apos;%1&apos;（%2 个实体）导出到 DXF 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5633"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5637"/>
         <source>Exported &apos;%1&apos; (%2 entities) to SVG file</source>
         <translation>已将 &apos;%1&apos;（%2 个实体）导出到 SVG 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4303"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4348"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4307"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4352"/>
         <source>Text</source>
         <translation>文字</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4349"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4353"/>
         <source>Dimension</source>
         <translation>标注</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4354"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4724"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4358"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4728"/>
         <source>ID</source>
         <translation>ID</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4358"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4362"/>
         <source>Geometry</source>
         <translation>几何</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4301"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4364"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4929"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4305"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4368"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4933"/>
         <source>Position</source>
         <translation>位置</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4162"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4166"/>
         <source>Start</source>
         <translation>起点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4164"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4168"/>
         <source>End</source>
         <translation>终点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4167"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4261"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4171"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4265"/>
         <source>Length</source>
         <translation>长度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4188"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4192"/>
         <source>Corner 1</source>
         <translation>角点 1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4190"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4194"/>
         <source>Corner 2</source>
         <translation>角点 2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4193"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4265"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4197"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4269"/>
         <source>Width</source>
         <translation>宽度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4201"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4205"/>
         <source>Height</source>
         <translation>高度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4215"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4228"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4243"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4274"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4507"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4219"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4232"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4247"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4278"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4511"/>
         <source>Center</source>
         <translation>中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4217"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4230"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4247"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4689"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4221"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4234"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4251"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4693"/>
         <source>Radius</source>
         <translation>半径</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4219"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4690"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4223"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4694"/>
         <source>Diameter</source>
         <translation>直径</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4232"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4236"/>
         <source>Start Angle</source>
         <translation>起始角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4234"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4699"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4238"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4703"/>
         <source>Sweep Angle</source>
         <translation>扫掠角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4245"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4249"/>
         <source>Sides</source>
         <translation>边数</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4256"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4260"/>
         <source>Center 1</source>
         <translation>中心 1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4258"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4262"/>
         <source>Center 2</source>
         <translation>中心 2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4276"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4280"/>
         <source>Major Radius</source>
         <translation>长半轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4278"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4282"/>
         <source>Minor Radius</source>
         <translation>短半轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4287"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4291"/>
         <source>Control Points</source>
         <translation>控制点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4291"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4295"/>
         <source>Point %1</source>
         <translation>点 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4305"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4309"/>
         <source>Font Size</source>
         <translation>字号</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4307"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4311"/>
         <source>Rotation</source>
         <translation>旋转</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4410"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
         <source>Constrained</source>
         <translation>已约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4410"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4749"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
         <source>Yes</source>
         <translation>是</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4410"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4749"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
         <source>No</source>
         <translation>否</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4423"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4427"/>
         <source>Group</source>
         <translation>组</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4437"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4441"/>
         <source>Members</source>
         <translation>成员</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1926"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4445"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1930"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4449"/>
         <source>point</source>
         <translation>点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1925"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4446"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1929"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4450"/>
         <source>line</source>
         <translation>线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4447"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4451"/>
         <source>rectangle</source>
         <translation>矩形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1929"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4449"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1933"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4453"/>
         <source>circle</source>
         <translation>圆</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1930"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4450"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1934"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4454"/>
         <source>arc</source>
         <translation>圆弧</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1927"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4451"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1931"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4455"/>
         <source>spline</source>
         <translation>样条</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1928"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4452"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1932"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4456"/>
         <source>polygon</source>
         <translation>多边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4453"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4457"/>
         <source>slot</source>
         <translation>槽</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1931"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4454"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1935"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4458"/>
         <source>ellipse</source>
         <translation>椭圆</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4448"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4452"/>
         <source>parallelogram</source>
         <translation>平行四边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4455"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4459"/>
         <source>text</source>
         <translation>文本</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4456"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4460"/>
         <source>dimension</source>
         <translation>尺寸</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4465"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4469"/>
         <source>Click to enter the group and select this member</source>
         <translation>点击进入该组并选择此成员</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4479"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4483"/>
         <source>Click to select this constraint</source>
         <translation>点击选择此约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4483"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4487"/>
         <source>Locked</source>
         <translation>已锁定</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4492"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4496"/>
         <source>Geometric center</source>
         <translation>几何中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4496"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4500"/>
         <source>Pivot</source>
         <translation>枢轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4498"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4502"/>
         <source>center</source>
         <translation>中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4502"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4506"/>
         <source>Type &quot;x, y&quot; to store a pivot on the group, or &quot;center&quot; to follow the geometric center</source>
         <translation>输入“x, y”以在组上存储枢轴，或输入“center”以跟随几何中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4505"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4509"/>
         <source>Reset pivot</source>
         <translation>重置枢轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4509"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4513"/>
         <source>Drop the stored pivot; the group rotates about its geometric center again (one undo step)</source>
         <translation>放弃已存储的枢轴；组将再次绕其几何中心旋转（一个撤销步骤）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4593"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4597"/>
         <source>Untitled</source>
         <translation>无标题</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4594"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4598"/>
         <source>File</source>
         <translation>文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4594"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4598"/>
         <source>Not saved yet</source>
         <translation>尚未保存</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4595"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4599"/>
         <source>Units</source>
         <translation>单位</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4607"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4611"/>
         <source>Contents</source>
         <translation>内容</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4610"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4614"/>
         <source>Features</source>
         <translation>特征</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4612"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4616"/>
         <source>Planes</source>
         <translation>平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4613"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4617"/>
         <source>Parameters</source>
         <translation>参数</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4616"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4620"/>
         <source>Pick a plane, sketch, or feature to see its properties.</source>
         <translation>选择平面、草图或特征以查看其属性。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4617"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4621"/>
         <source>Select an item in the Project tree or the timeline.</source>
         <translation>在项目树或时间线中选择一项。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4635"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4639"/>
         <source>XY plane</source>
         <translation>XY 平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4635"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4639"/>
         <source>+Z</source>
         <translation>+Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4635"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4639"/>
         <source>Sketch X = global X, sketch Y = global Y</source>
         <translation>草图 X = 全局 X，草图 Y = 全局 Y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4636"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4640"/>
         <source>XZ plane</source>
         <translation>XZ 平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4636"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4640"/>
         <source>+Y</source>
         <translation>+Y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4636"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4640"/>
         <source>Sketch X = global X, sketch Y = global Z</source>
         <translation>草图 X = 全局 X，草图 Y = 全局 Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4637"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4641"/>
         <source>YZ plane</source>
         <translation>YZ 平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4637"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4641"/>
         <source>+X</source>
         <translation>+X</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4637"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4641"/>
         <source>Sketch X = global Y, sketch Y = global Z</source>
         <translation>草图 X = 全局 Y，草图 Y = 全局 Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4638"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4642"/>
         <source>Custom plane</source>
         <translation>自定义平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4638"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4642"/>
         <source>(derived)</source>
         <translation>（派生）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4646"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4650"/>
         <source>Origin plane</source>
         <translation>原点平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4647"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4651"/>
         <source>Normal</source>
         <translation>法线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4649"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4653"/>
         <source>Axes</source>
         <translation>轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4650"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5003"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5327"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4654"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5007"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5331"/>
         <source>Offset</source>
         <translation>偏移</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4650"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4654"/>
         <source>0 (fixed)</source>
         <translation>0（固定）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4652"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4656"/>
         <source>Sketches here</source>
         <translation>此处的草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4652"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4656"/>
         <source>Completed sketches on this plane</source>
         <translation>此平面上已完成的草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4657"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5015"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4661"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5019"/>
         <source>Actions</source>
         <translation>操作</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4658"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4662"/>
         <source>New sketch</source>
         <translation>新建草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4659"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4663"/>
         <source>Starts a sketch on this plane, the same as the Sketch button while it is selected</source>
         <translation>在此平面上开始草图，与选中时的“草图”按钮相同</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4663"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4667"/>
         <source>Offset or angled: Construct &gt; New Construction Plane.</source>
         <translation>偏移或倾斜：构造 &gt; 新建构造平面。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4688"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4937"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4692"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4941"/>
         <source>Distance</source>
         <translation>距离</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4699"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4947"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4703"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4951"/>
         <source>Angle</source>
         <translation>角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4701"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4705"/>
         <source>Fixed Angle</source>
         <translation>固定角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4718"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4722"/>
         <source>Radius of Curvature</source>
         <translation>曲率半径</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4993"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
         <source>Custom</source>
         <translation>自定义</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5008"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5012"/>
         <source>Groups</source>
         <translation>组</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5016"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5020"/>
         <source>Edit sketch</source>
         <translation>编辑草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5017"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5021"/>
         <source>Open this sketch in the sketcher</source>
         <translation>在草图编辑器中打开此草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5074"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5161"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5078"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5165"/>
         <source>&apos;%1&apos; is not a number or an expression.</source>
         <translation>“%1”既不是数字也不是表达式。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5146"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5150"/>
         <source>&apos;%1&apos; is not a point; use &quot;x, y&quot; (a unit may follow).</source>
         <translation>“%1”不是点；请使用“x, y”（可在后面加单位）。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5174"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5178"/>
         <source>&apos;%1&apos; is not a number.</source>
         <translation>“%1”不是数字。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5078"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5082"/>
         <source>A size must be greater than zero.</source>
         <translation>尺寸必须大于零。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5099"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5103"/>
         <source>A group needs a name.</source>
         <translation>组需要一个名称。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5113"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5117"/>
         <source>&apos;%1&apos; is not a point; use &quot;x, y&quot; or &quot;center&quot;.</source>
         <translation>“%1”不是点；请使用“x, y”或“center”。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5170"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5174"/>
         <source>A radius must be a positive number.</source>
         <translation>半径必须为正数。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5172"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5176"/>
         <source>A diameter must be a positive number.</source>
         <translation>直径必须为正数。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1059"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4702"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1063"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4706"/>
         <source>Horizontal</source>
         <translation>水平</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1060"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4703"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1064"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4707"/>
         <source>Vertical</source>
         <translation>竖直</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1061"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4704"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1065"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4708"/>
         <source>Parallel</source>
         <translation>平行</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1062"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4705"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1066"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4709"/>
         <source>Perpendicular</source>
         <translation>垂直</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1058"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4706"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1062"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4710"/>
         <source>Coincident</source>
         <translation>重合</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1063"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4707"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1067"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4711"/>
         <source>Tangent</source>
         <translation>相切</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1065"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4708"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1069"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4712"/>
         <source>Equal</source>
         <translation>相等</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1066"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4709"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1070"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4713"/>
         <source>Midpoint</source>
         <translation>中点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1078"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4710"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1082"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4714"/>
         <source>Symmetric</source>
         <translation>对称</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1067"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4711"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1071"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4715"/>
         <source>Concentric</source>
         <translation>同心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1068"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4712"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1072"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4716"/>
         <source>Collinear</source>
         <translation>共线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4713"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4717"/>
         <source>Point On Line</source>
         <translation>点在直线上</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4714"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4718"/>
         <source>Point On Circle</source>
         <translation>点在圆上</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4715"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4719"/>
         <source>Fixed Point</source>
         <translation>固定点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4746"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4750"/>
         <source>Mode</source>
         <translation>模式</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4746"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4750"/>
         <source>Driving</source>
         <translation>驱动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4746"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4750"/>
         <source>Reference</source>
         <translation>参考</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4749"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
         <source>Enabled</source>
         <translation>已启用</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1951"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4428"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4645"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4866"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1955"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4432"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4649"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4870"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4873"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4898"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4877"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4902"/>
         <source>Sketch</source>
         <translation>草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4874"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4878"/>
         <source>Extrude</source>
         <translation>拉伸</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4875"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4879"/>
         <source>Revolve</source>
         <translation>旋转</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4876"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4880"/>
         <source>Fillet</source>
         <translation>圆角</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4877"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4881"/>
         <source>Chamfer</source>
         <translation>倒角</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4878"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4882"/>
         <source>Hole</source>
         <translation>孔</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4879"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4883"/>
         <source>Mirror</source>
         <translation>镜像</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4880"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4884"/>
         <source>Pattern</source>
         <translation>阵列</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4881"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4885"/>
         <source>Box</source>
         <translation>长方体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4882"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4886"/>
         <source>Cylinder</source>
         <translation>圆柱体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4883"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4887"/>
         <source>Sphere</source>
         <translation>球体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4884"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4888"/>
         <source>Move</source>
         <translation>移动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4885"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4924"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4889"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
         <source>Join</source>
         <translation>合并</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4886"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4924"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4890"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
         <source>Cut</source>
         <translation>剪切</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4887"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4924"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4891"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
         <source>Intersect</source>
         <translation>相交</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4648"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4929"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4652"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4933"/>
         <source>(0, 0, 0)</source>
         <translation>(0, 0, 0)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4899"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4903"/>
         <source>Click to select this sketch</source>
         <translation>点击选择此草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4941"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4945"/>
         <source>Direction</source>
         <translation>方向</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4939"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4943"/>
         <source>One Side</source>
         <translation>单侧</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4943"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4952"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4947"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4956"/>
         <source>Operation</source>
         <translation>操作</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4924"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
         <source>New Body</source>
         <translation>新建实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4950"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4954"/>
         <source>Axis</source>
         <translation>轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1957"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4993"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1961"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
         <source>XY</source>
         <translation>XY</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1957"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4993"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1961"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
         <source>XZ</source>
         <translation>XZ</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1957"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4993"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1961"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
         <source>YZ</source>
         <translation>YZ</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1956"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4994"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4996"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1960"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4998"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5000"/>
         <source>Plane</source>
         <translation>平面</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1798"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4469"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5006"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1802"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5010"/>
         <source>Constraints</source>
         <translation>约束</translation>
     </message>
@@ -6131,13 +6357,13 @@ Click here for details.</source>
 <context>
     <name>hobbycad::SketchCanvas</name>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4340"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4404"/>
         <source>Distance</source>
         <translation>距离</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4343"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6573"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4407"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6637"/>
         <location filename="../../src/hobbycad/gui/tools/polygontoolhandler.cpp" line="32"/>
         <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="187"/>
         <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="33"/>
@@ -6148,8 +6374,8 @@ Click here for details.</source>
         <translation>半径</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4343"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6580"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4407"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6644"/>
         <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="37"/>
         <source>Diameter</source>
         <translation>直径</translation>
@@ -6160,376 +6386,376 @@ Click here for details.</source>
         <translation>角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7202"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7266"/>
         <source>Rectangle</source>
         <translation>矩形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5260"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5266"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5275"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6353"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9858"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9878"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9896"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9930"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5324"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5330"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5339"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6417"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9989"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10009"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10027"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10061"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="155"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="167"/>
         <source>Split</source>
         <translation>分割</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10301"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10432"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="259"/>
         <source>Fillet</source>
         <translation>圆角</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10336"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10467"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="272"/>
         <source>Chamfer</source>
         <translation>倒角</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4314"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5153"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4378"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5217"/>
         <source>Delete Entities</source>
         <translation>删除实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4315"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5154"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4379"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5218"/>
         <source>Delete %1 selected entities?</source>
         <translation>是否删除所选的 %1 个实体？</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4851"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4915"/>
         <source>Create Slot from Path</source>
         <translation>从路径创建槽</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4873"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4937"/>
         <source>Insert Fit Point</source>
         <translation>插入拟合点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4876"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4940"/>
         <source>Open Spline</source>
         <translation>打开样条</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4877"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4941"/>
         <source>Close Spline</source>
         <translation>闭合样条</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4881"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4945"/>
         <source>Delete Fit Point</source>
         <translation>删除拟合点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4902"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4966"/>
         <source>Unfix Point</source>
         <translation>取消固定点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4910"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4974"/>
         <source>Fix This Point Instead</source>
         <translation>改为固定此点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4911"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4975"/>
         <source>Fix Point for Resize</source>
         <translation>固定点以便调整大小</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4941"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5005"/>
         <source>Make Driven (Reference)</source>
         <translation>设为从动（参考）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4946"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5010"/>
         <source>Make Driving</source>
         <translation>设为驱动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4954"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5018"/>
         <source>Edit Value...</source>
         <translation>编辑值...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4959"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5282"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5023"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5346"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4995"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5059"/>
         <source>Make All Normal Geometry (%1)</source>
         <translation>全部设为普通几何（%1）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4994"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5058"/>
         <source>Make All Construction Geometry (%1)</source>
         <translation>全部设为构造几何（%1）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4763"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4827"/>
         <source>Transform</source>
         <translation>变换</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="1732"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="1796"/>
         <source>D: %1</source>
         <translation>D: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2150"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2214"/>
         <source>Editing: %1</source>
         <translation>正在编辑：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4709"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4773"/>
         <source>Member of Group(s): (none)</source>
         <translation>所属组：（无）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4712"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4776"/>
         <source>Member of Group(s): %1</source>
         <translation>所属组：%1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4756"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4820"/>
         <source>Unfix</source>
         <translation>解除固定</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4756"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4820"/>
         <source>Fix</source>
         <translation>固定</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4765"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4829"/>
         <source>Move...</source>
         <translation>移动...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4770"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4834"/>
         <source>Copy...</source>
         <translation>复制...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4775"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4839"/>
         <source>Rotate...</source>
         <translation>旋转...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4780"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4844"/>
         <source>Scale...</source>
         <translation>缩放...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4785"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4849"/>
         <source>Mirror...</source>
         <translation>镜像...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4792"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4856"/>
         <source>Align</source>
         <translation>对齐</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4794"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4858"/>
         <source>Align Left</source>
         <translation>左对齐</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4799"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4863"/>
         <source>Align Right</source>
         <translation>右对齐</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4804"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4868"/>
         <source>Align Top</source>
         <translation>顶端对齐</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4809"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4873"/>
         <source>Align Bottom</source>
         <translation>底端对齐</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4816"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4880"/>
         <source>Center Horizontally</source>
         <translation>水平居中</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4821"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4885"/>
         <source>Center Vertically</source>
         <translation>垂直居中</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4828"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4892"/>
         <source>Distribute Horizontally</source>
         <translation>水平分布</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4833"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4897"/>
         <source>Distribute Vertically</source>
         <translation>垂直分布</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5020"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5084"/>
         <source>Set Color... (%1)</source>
         <translation>设置颜色... (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5023"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5087"/>
         <source>Entity Color</source>
         <translation>实体颜色</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5032"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5096"/>
         <source>Default (by layer)</source>
         <translation>默认（按图层）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5055"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5119"/>
         <source>Clear Color (%1)</source>
         <translation>清除颜色 (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5075"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5139"/>
         <source>Sweep Along This Path...</source>
         <translation>沿此路径扫掠...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5077"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5141"/>
         <source>Sweep a width along this line or arc, leaving the path itself as the construction centerline</source>
         <translation>沿此线或圆弧扫掠一个宽度，将路径本身作为构造中心线保留</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5094"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5158"/>
         <source>Group (%1 entities)</source>
         <translation>组（%1 个实体）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5108"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5244"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5172"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5308"/>
         <source>Enter Group &quot;%1&quot;</source>
         <translation>进入组 &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5114"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5251"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5178"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5315"/>
         <source>Ungroup &quot;%1&quot;</source>
         <translation>取消组合 &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5124"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5188"/>
         <source>Split All at Intersections</source>
         <translation>在所有交点处分割</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5139"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5203"/>
         <source>Rejoin Segments</source>
         <translation>重新连接线段</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5149"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5213"/>
         <source>Delete All (%1)</source>
         <translation>全部删除（%1）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5178"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5194"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5242"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5258"/>
         <source>Make Normal Geometry</source>
         <translation>设为普通几何</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5178"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5242"/>
         <source>Make Construction Geometry</source>
         <translation>设为构造几何</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5195"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5259"/>
         <source>Make Centerline</source>
         <translation>设为中心线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5228"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5292"/>
         <source>Leave Group &quot;%1&quot;</source>
         <translation>离开组 &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5262"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5326"/>
         <source>At Nearest Intersections</source>
         <translation>在最近的交点处</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5267"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5331"/>
         <source>No intersections found near the click point.</source>
         <translation>在点击位置附近未找到交点。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5271"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5335"/>
         <source>At All Intersections</source>
         <translation>在所有交点处</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5276"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5340"/>
         <source>No intersections found on this entity.</source>
         <translation>在该实体上未找到交点。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5309"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5373"/>
         <source>Export as DXF...</source>
         <translation>导出为 DXF...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5312"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5376"/>
         <source>Export DXF File</source>
         <translation>导出 DXF 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5313"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5377"/>
         <source>DXF Files (*.dxf);;All Files (*)</source>
         <translation>DXF 文件 (*.dxf);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5328"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5354"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5392"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5418"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5329"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5393"/>
         <source>Failed to export DXF file.</source>
         <translation>导出 DXF 文件失败。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5333"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5397"/>
         <source>Export as SVG...</source>
         <translation>导出为 SVG...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5336"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5400"/>
         <source>Export SVG File</source>
         <translation>导出 SVG 文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5337"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5401"/>
         <source>SVG Files (*.svg);;All Files (*)</source>
         <translation>SVG 文件 (*.svg);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5355"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5419"/>
         <source>Failed to export SVG file.</source>
         <translation>导出 SVG 文件失败。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5452"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7987"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5516"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8051"/>
         <source>
 
 Conflicting constraints:
@@ -6540,17 +6766,17 @@ Conflicting constraints:
 </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5458"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5522"/>
         <source>Cannot Convert to Driving</source>
         <translation>无法转换为驱动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5459"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5523"/>
         <source>Converting this dimension to driving would over-constrain the sketch.</source>
         <translation>将该标注转换为驱动会使草图过约束。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5461"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5525"/>
         <source>
 
 Remove or modify the conflicting constraints first.</source>
@@ -6559,73 +6785,75 @@ Remove or modify the conflicting constraints first.</source>
 请先移除或修改冲突的约束。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6207"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6271"/>
         <source>A width of %1 does not fit on an arc of radius %2: the inner edge would pass through the center. Width can be at most %3.</source>
         <translation>宽度 %1 无法放在半径为 %2 的圆弧上：内侧边缘会穿过圆心。宽度最大为 %3。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6258"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6322"/>
         <source>Group %1</source>
         <translation>组 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6353"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6417"/>
         <source>No intersections found between selected entities.</source>
         <translation>所选实体之间未找到交点。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7200"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7264"/>
         <source>Polygon</source>
         <translation>多边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7204"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7268"/>
         <source>Parallelogram</source>
         <translation>平行四边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8003"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8067"/>
         <source>Over-Constrained</source>
         <translation>过约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7999"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8063"/>
         <source>This dimension would over-constrain the sketch.</source>
         <translation>该标注会使草图过约束。</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="339"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8554"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="357"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="706"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8618"/>
         <source>This entity is in a locked group; unlock the group to edit it.</source>
         <translation>此实体位于已锁定的组中；请解锁该组以进行编辑。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="744"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="808"/>
         <source>Select two lines to dimension the angle between them.</source>
         <translation>选择两条线以标注它们之间的角度。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="754"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="818"/>
         <source>The angle dimension needs two line segments.</source>
         <translation>角度尺寸需要两条线段。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="759"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="823"/>
         <source>These lines are parallel; there is no angle to dimension.</source>
         <translation>这些线平行；没有可标注的角度。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2492"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2556"/>
         <source>Tangent contact selected: Ctrl-click a line endpoint, then Coincident to pin it onto the circle.</source>
         <translation>已选择切点接触: 按住 Ctrl 点击线端点，然后用“重合”将其固定到圆上。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4255"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4319"/>
         <source>Transform canceled; selection kept</source>
         <translation>已取消变换；保留选择</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8005"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8069"/>
         <source>
 
 Create a Driven (reference) dimension instead?</source>
@@ -6634,12 +6862,12 @@ Create a Driven (reference) dimension instead?</source>
 是否改为创建从动（参考）标注？</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8643"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8707"/>
         <source>Solver Unavailable</source>
         <translation>求解器不可用</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8644"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8708"/>
         <source>Constraint solving is not available (libslvs not compiled).
 
 Dimensions will be displayed as reference values only.</source>
@@ -6648,252 +6876,252 @@ Dimensions will be displayed as reference values only.</source>
 标注将仅作为参考值显示。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9166"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9297"/>
         <source>(none)</source>
         <translation>（无）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4746"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9429"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9454"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4810"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9560"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9585"/>
         <source>Constrain</source>
         <translation>约束</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5615"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5679"/>
         <source>The selection is in a locked group; unlock it to delete.</source>
         <translation>所选内容位于已锁定的组中；请解锁以删除。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5989"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6053"/>
         <source>Pivot: click to place the star or drag it (snaps apply, Alt = free); Home = center; Escape cancels</source>
         <translation>枢轴：点击以放置星标或拖动它（应用捕捉，Alt = 自由）；Home = 中心；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5990"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6054"/>
         <source>Point to point: click the point to move FROM (snaps apply); Escape cancels</source>
         <translation>点到点：点击要移动的起点（应用捕捉）；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5991"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6055"/>
         <source>Point to point: click the point to move TO (snaps apply); Escape cancels</source>
         <translation>点到点：点击要移动到的目标点（应用捕捉）；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5992"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6056"/>
         <source>Point to position: click the point on the selection that should land on the target; Escape cancels</source>
         <translation>点到位置：点击所选内容上应落在目标处的点；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5993"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6057"/>
         <source>Mirror line: click its first point (snaps apply); Escape cancels</source>
         <translation>镜像线：点击其第一个点（应用捕捉）；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5994"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6058"/>
         <source>Mirror line: click its second point (snaps apply); Escape cancels</source>
         <translation>镜像线：点击其第二个点（应用捕捉）；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5995"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6059"/>
         <source>Relative to: click the reference point the target is measured from (snaps apply); Escape cancels</source>
         <translation>相对于：点击测量目标所依据的参考点（应用捕捉）；Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5996"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6060"/>
         <source>Free move: drag the selection to move it, drag the ring to turn it about the star (Ctrl = axis lock / 15-degree steps); Enter applies, Escape cancels</source>
         <translation>自由移动：拖动所选内容以移动，拖动圆环以绕星标旋转（Ctrl = 轴锁定 / 15 度步进）；Enter 应用，Esc 取消</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6196"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6206"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6215"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6230"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6260"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6270"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6279"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6294"/>
         <source>Sweep Along Path</source>
         <translation>沿路径扫掠</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6196"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6260"/>
         <source>Width:</source>
         <translation>宽度:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6213"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6277"/>
         <source>Round</source>
         <translation>圆头</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6213"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6277"/>
         <source>Flat</source>
         <translation>平头</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6215"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6279"/>
         <source>Ends:</source>
         <translation>端部:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6231"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6295"/>
         <source>That sweep could not be built.</source>
         <translation>无法构建该扫掠。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6590"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6654"/>
         <source>Driven (Reference)</source>
         <translation>被驱动（参考）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7315"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7379"/>
         <source>Select at least two connected lines or arcs to make a slot from a path.</source>
         <translation>选择至少两条相连的线或圆弧以从路径创建槽。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7327"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7391"/>
         <source>These do not form a slot path: %1</source>
         <translation>这些无法构成槽路径: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7333"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7397"/>
         <source>A width of %1 does not fit this path: %2</source>
         <translation>宽度 %1 无法容纳在此路径上: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7997"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8061"/>
         <source>This dimension is already implied by the existing constraints, so it would add nothing.</source>
         <translation>此尺寸已由现有约束隐含，因此不会增加任何内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8547"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8611"/>
         <source>This is projected geometry, driven by its source sketch; edit it in the source sketch, not here.</source>
         <translation>这是投影几何图形，由其源草图驱动；请在源草图中编辑，而不是在此处。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9230"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9361"/>
         <source>Select one Bezier spline anchor point, then apply Tangent Angle.</source>
         <translation>选择一个贝塞尔样条锚点，然后应用“切线角度”。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9236"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9367"/>
         <source>Tangent Angle applies to a Bezier spline anchor.</source>
         <translation>“切线角度”适用于贝塞尔样条锚点。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9242"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9373"/>
         <source>Select an ANCHOR point (every third control point), not a tangent handle.</source>
         <translation>请选择锚点（每第三个控制点），而不是切线手柄。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9252"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9383"/>
         <source>Tangent Angle</source>
         <translation>切线角度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9253"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9384"/>
         <source>Directed tangent angle (0-360 deg):</source>
         <translation>有向切线角度（0-360 度）:</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9383"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9514"/>
         <source>%1 needs %n entity(s); %2 selected. Select them (Ctrl to add), then apply.</source>
         <translation>
             <numerusform>%1 需要 %n 个实体；已选择 %2 个。选择它们（按 Ctrl 添加），然后应用。</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9403"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9534"/>
         <source>%1 does not apply to those two entities. Applicable here: %2</source>
         <translation>%1 不适用于那两个实体。此处适用: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9430"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9561"/>
         <source>Select one or two entities first, then apply a constraint.</source>
         <translation>请先选择一个或两个实体，然后应用约束。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9455"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9586"/>
         <source>No geometric constraint applies to that selection.</source>
         <translation>没有适用于该选择的几何约束。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9594"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9725"/>
         <source>Auto Constrain: nothing to add.</source>
         <translation>自动约束：没有可添加的内容。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9610"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9741"/>
         <source>Auto Constrain: added %1 constraint(s).</source>
         <translation>自动约束：已添加 %1 个约束。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9945"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9958"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10076"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10089"/>
         <source>Rejoin</source>
         <translation>重新连接</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9946"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10077"/>
         <source>Selected entity not found.</source>
         <translation>未找到所选实体。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10363"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10367"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10371"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10375"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10494"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10498"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10502"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10506"/>
         <source>Rectangular Pattern</source>
         <translation>矩形阵列</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10364"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10495"/>
         <source>Number of copies in X direction:</source>
         <translation>X 方向的副本数：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10368"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10499"/>
         <source>Number of copies in Y direction:</source>
         <translation>Y 方向的副本数：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10372"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10503"/>
         <source>Spacing in X direction (mm):</source>
         <translation>X 方向的间距（mm）：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10376"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10507"/>
         <source>Spacing in Y direction (mm):</source>
         <translation>Y 方向的间距（mm）：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10402"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10453"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10533"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10584"/>
         <source>Pattern Error</source>
         <translation>阵列错误</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10416"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10420"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10424"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10428"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10547"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10551"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10555"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10559"/>
         <source>Circular Pattern</source>
         <translation>环形阵列</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10417"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10548"/>
         <source>Center X coordinate (mm):</source>
         <translation>中心 X 坐标（mm）：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10421"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10552"/>
         <source>Center Y coordinate (mm):</source>
         <translation>中心 Y 坐标（mm）：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10425"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10556"/>
         <source>Number of copies (including original):</source>
         <translation>副本数（含原件）：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10429"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10560"/>
         <source>Total angle (degrees, 360 for full circle):</source>
         <translation>总角度（度，360 表示整圆）：</translation>
     </message>
@@ -6906,11 +7134,6 @@ Dimensions will be displayed as reference values only.</source>
         <location filename="../../src/hobbycad/gui/tools/constrainttoolhandler.cpp" line="20"/>
         <source>Constraint: select entities, then choose a constraint</source>
         <translation>约束：选择实体，然后选择一个约束</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="21"/>
-        <source>Major Radius</source>
-        <translation>长半轴</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="184"/>
@@ -7323,17 +7546,17 @@ Projection brings geometry from another sketch into this one as reference (it st
         <translation>投影：从另一个草图中选择几何作为参考带入</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="46"/>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="146"/>
         <source>(Right-click to finish)</source>
         <translation>（右键单击以完成）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="47"/>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="147"/>
         <source>(Click to add points, drag for handles)</source>
         <translation>（点击以添加点，拖动以调整手柄）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="48"/>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="147"/>
         <source>(Click to add points)</source>
         <translation>（点击以添加点）</translation>
     </message>
@@ -7494,6 +7717,182 @@ Please click on a line or rectangle edge.</source>
         <source>(Shift to flip, Ctrl for 180°)</source>
         <translation>（按 Shift 翻转，按 Ctrl 取 180°）</translation>
     </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="106"/>
+        <source>Conic arc: click the start</source>
+        <translation>圆锥曲线弧：点击起点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="108"/>
+        <source>Conic arc: click the end</source>
+        <translation>圆锥曲线弧：点击终点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="110"/>
+        <source>Conic arc: click the apex, where the two end tangents meet</source>
+        <translation>圆锥曲线弧：点击两端切线相交的顶点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="114"/>
+        <source>Conic arc: slide to set rho (0.5 parabola, less elliptical, more hyperbolic), click to place</source>
+        <translation>圆锥曲线弧：滑动以设置 rho（0.5 为抛物线，较小为椭圆，较大为双曲线），点击放置</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="121"/>
+        <source>Bezier: click for a corner, click-drag to pull tangent handles</source>
+        <translation>贝塞尔：点击生成角点，点击并拖动拉出切线手柄</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="124"/>
+        <source>Bezier: click/drag to add anchors; Enter, Esc, or right-click to finish</source>
+        <translation>贝塞尔：点击/拖动添加锚点；按 Enter、Esc 或右键单击完成</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="129"/>
+        <source>Spline: click to add fit points</source>
+        <translation>样条：点击添加拟合点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="130"/>
+        <source>Spline: click to add points; Enter, Esc, or right-click to finish</source>
+        <translation>样条：点击添加点；按 Enter、Esc 或右键单击完成</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="140"/>
+        <source>(Slide to set rho, click to place)</source>
+        <translation>（滑动以设置 rho，点击放置）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="141"/>
+        <source>(Click to place)</source>
+        <translation>（点击放置）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="156"/>
+        <source>Major Radius</source>
+        <translation>长半轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="157"/>
+        <source>Minor Radius</source>
+        <translation>短半轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="158"/>
+        <source>Arc Start</source>
+        <translation>圆弧起点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="159"/>
+        <source>Arc Sweep</source>
+        <translation>圆弧扫掠</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="162"/>
+        <source>Span</source>
+        <translation>跨度</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="163"/>
+        <source>Rise</source>
+        <translation>矢高</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="166"/>
+        <source>First Axis</source>
+        <translation>第一轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="167"/>
+        <source>Second Axis</source>
+        <translation>第二轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="186"/>
+        <source>Ellipse: click the center</source>
+        <translation>椭圆：点击中心</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="187"/>
+        <source>Ellipse: click the major-axis end, or type a radius</source>
+        <translation>椭圆：点击长轴端点，或输入半径</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="190"/>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="207"/>
+        <source>Ellipse: click a point the ellipse passes through, or type the minor radius</source>
+        <translation>椭圆：点击椭圆经过的点，或输入短半轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="193"/>
+        <source>Elliptical arc: click where the arc starts</source>
+        <translation>椭圆弧：点击弧的起点位置</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="196"/>
+        <source>Elliptical arc: click where the arc ends (Shift: the long way around)</source>
+        <translation>椭圆弧：点击弧的终点位置（Shift：走长路径）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="203"/>
+        <source>Ellipse: click one end of the major axis</source>
+        <translation>椭圆：点击长轴的一个端点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="205"/>
+        <source>Ellipse: click the other end of the major axis</source>
+        <translation>椭圆：点击长轴的另一个端点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="214"/>
+        <source>Span + Rise arc: click one end of the span</source>
+        <translation>跨度 + 矢高弧：点击跨度的一端</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="216"/>
+        <source>Span + Rise arc: click the other end of the span</source>
+        <translation>跨度 + 矢高弧：点击跨度的另一端</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="218"/>
+        <source>Span + Rise arc: click the apex (the rise), or type it</source>
+        <translation>跨度 + 矢高弧：点击顶点（矢高），或输入它</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="224"/>
+        <source>Corner arc: click the corner</source>
+        <translation>角点弧：点击角点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="225"/>
+        <source>Corner arc: click where the arc meets the first leg</source>
+        <translation>角点弧：点击弧与第一条边相接处</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="227"/>
+        <source>Corner arc: click where the arc meets the second leg</source>
+        <translation>角点弧：点击弧与第二条边相接处</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="233"/>
+        <source>Endpoints arc: click the first point on the curve</source>
+        <translation>端点弧：点击曲线上的第一个点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="235"/>
+        <source>Endpoints arc: click the second point on the curve</source>
+        <translation>端点弧：点击曲线上的第二个点</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="237"/>
+        <source>Endpoints arc: click the center</source>
+        <translation>端点弧：点击中心</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="238"/>
+        <source>Endpoints arc: click to set the axis direction (Shift: the long way around)</source>
+        <translation>端点弧：点击以设置轴方向（Shift：走长路径）</translation>
+    </message>
 </context>
 <context>
     <name>hobbycad::SketchOptionsWidget</name>
@@ -7558,52 +7957,62 @@ Please click on a line or rectangle edge.</source>
         <translation>投影几何</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="57"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="46"/>
+        <source>Ellipse axes</source>
+        <translation>椭圆轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="48"/>
+        <source>Draw the major and minor axes of ellipses so they can be dragged and dimensioned (off by default; the Properties panel can override it per ellipse)</source>
+        <translation>绘制椭圆的长轴和短轴，以便拖动和标注（默认关闭；属性面板可为单个椭圆更改）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="63"/>
         <source>Selection</source>
         <translation>选择</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="60"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="66"/>
         <source>Normal</source>
         <translation>法线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="61"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="67"/>
         <source>Construction</source>
         <translation>构造</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="62"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="68"/>
         <source>Centerline</source>
         <translation>中心线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="63"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="69"/>
         <source>Linetype of the selected geometry</source>
         <translation>所选几何图形的线型</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="65"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="71"/>
         <source>Linetype:</source>
         <translation>线型:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="68"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="74"/>
         <source>Look At</source>
         <translation>注视</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="69"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="75"/>
         <source>Fit and center the sketch in the view</source>
         <translation>使草图在视图中适应并居中</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="72"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="78"/>
         <source>Slice</source>
         <translation>剖切</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="73"/>
+        <location filename="../../src/hobbycad/gui/sketchoptionswidget.cpp" line="79"/>
         <source>Section the model at the sketch plane, to sketch against its interior</source>
         <translation>在草图平面剖切模型，以便针对其内部进行草图绘制</translation>
     </message>
@@ -7785,707 +8194,832 @@ Please click on a line or rectangle edge.</source>
 <context>
     <name>hobbycad::SketchPropertiesWidget</name>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="115"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="123"/>
         <source>Background Image</source>
         <translation>背景图像</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="119"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="496"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="503"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="127"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="504"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="511"/>
         <source>File:</source>
         <translation>文件：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="125"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="133"/>
         <source>No image selected</source>
         <translation>未选择图像</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="128"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="136"/>
         <source>...</source>
         <translation>...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="130"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="138"/>
         <source>Browse for a different image file</source>
         <translation>浏览其他图像文件</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="139"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="147"/>
         <source>Edit Position</source>
         <translation>编辑位置</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="141"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="149"/>
         <source>Enable interactive repositioning and resizing of the background image</source>
         <translation>启用背景图像的交互式移动和缩放</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="145"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="153"/>
         <source>Remove</source>
         <translation>移除</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="146"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="154"/>
         <source>Remove the background image</source>
         <translation>移除背景图像</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="151"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="159"/>
         <source>Calibrate Scale</source>
         <translation>校准比例</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="152"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="160"/>
         <source>Set the scale by picking two points with a known distance</source>
         <translation>通过拾取两个已知距离的点来设置比例</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="156"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="164"/>
         <source>Export to Project</source>
         <translation>导出到项目</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="157"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="165"/>
         <source>Save the image file to the project directory</source>
         <translation>将图像文件保存到项目目录</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="163"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="171"/>
         <source>Opacity:</source>
         <translation>不透明度：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="173"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="181"/>
         <source>%</source>
         <translation>%</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="204"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="213"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="222"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="231"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="212"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="221"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="230"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="239"/>
         <source> mm</source>
         <translation> mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="207"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="215"/>
         <source>Position X:</source>
         <translation>位置 X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="216"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="224"/>
         <source>Position Y:</source>
         <translation>位置 Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="225"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="233"/>
         <source>Size W:</source>
         <translation>尺寸 宽:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="234"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="242"/>
         <source>Size H:</source>
         <translation>尺寸 高:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="240"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="248"/>
         <source>°</source>
         <translation>°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="241"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="249"/>
         <source>Rotation angle (will be normalized to 0-360°)</source>
         <translation>旋转角度（将归一化为 0–360°）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="244"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="252"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1261"/>
         <source>Rotation:</source>
         <translation>旋转：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="262"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="270"/>
         <source>Scale:</source>
         <translation>缩放：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="266"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="274"/>
         <source>The image&apos;s pixel size and its scale. Two scales appear when the
 aspect lock is off and the picture has been stretched.</source>
         <translation>图像的像素尺寸及其比例。关闭宽高比锁定并拉伸
 图片后，会显示两个比例。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="273"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="281"/>
         <source>Lock aspect ratio</source>
         <translation>锁定宽高比</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="275"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="283"/>
         <source>Keep the picture&apos;s own proportions (one scale for both axes).
 Off, width and height move independently and the scale splits into X and Y.</source>
         <translation>保持图片自身的比例（两个轴使用同一比例）。
 关闭后，宽度和高度可分别调整，比例会分为 X 和 Y。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="285"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="293"/>
         <source>Grayscale</source>
         <translation>灰度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="286"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="294"/>
         <source>Convert image to grayscale for easier tracing</source>
         <translation>将图像转换为灰度以便更容易描摹</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="298"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="306"/>
         <source>Contrast:</source>
         <translation>对比度：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="308"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="316"/>
         <source>Brightness:</source>
         <translation>亮度：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="315"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="323"/>
         <source>↔</source>
         <translation>↔</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="317"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="325"/>
         <source>Flip horizontally (mirror)</source>
         <translation>水平翻转（镜像）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="321"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="329"/>
         <source>↕</source>
         <translation>↕</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="323"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="331"/>
         <source>Flip vertically</source>
         <translation>垂直翻转</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="329"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="337"/>
         <source>↺</source>
         <translation>↺</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="331"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="339"/>
         <source>Rotate 90° counter-clockwise</source>
         <translation>逆时针旋转 90°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="335"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="343"/>
         <source>↻</source>
         <translation>↻</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="337"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="345"/>
         <source>Rotate 90° clockwise</source>
         <translation>顺时针旋转 90°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="341"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="349"/>
         <source>180°</source>
         <translation>180°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="343"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="351"/>
         <source>Rotate 180°</source>
         <translation>旋转 180°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="354"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="362"/>
         <source>Selected Entity</source>
         <translation>所选实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="360"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="368"/>
         <source>No entity selected</source>
         <translation>未选择实体</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="372"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="421"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="380"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="429"/>
         <source>Type:</source>
         <translation>类型：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="375"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="383"/>
         <source>ID:</source>
         <translation>ID：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="378"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="386"/>
         <source>Construction:</source>
         <translation>构造：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="394"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1217"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="402"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1511"/>
         <source>Point:</source>
         <translation>点:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="408"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="416"/>
         <source>Projection:</source>
         <translation>投影:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="424"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="432"/>
         <source>Value:</source>
         <translation>值：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="427"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="435"/>
         <source>Constrained:</source>
         <translation>已约束：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="434"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="442"/>
         <source>Label Angle:</source>
         <translation>标签角度：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="494"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="500"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="502"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="508"/>
         <source>File (embedded):</source>
         <translation>文件（已嵌入）：</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="499"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="507"/>
         <source>(embedded image)</source>
         <translation>（嵌入的图像）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="624"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="657"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="611"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="613"/>
+        <source>Driven by a dimension; edit the dimension instead.</source>
+        <translation>由标注驱动；请改为编辑标注。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="706"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="744"/>
         <source>Yes</source>
         <translation>是</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="624"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="657"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="706"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="744"/>
         <source>No</source>
         <translation>否</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="676"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="677"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="740"/>
+        <source>Conic arc, %1</source>
+        <translation>圆锥曲线弧，%1</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="763"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="764"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="775"/>
         <source>Start</source>
         <translation>起点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="676"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="677"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="763"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="764"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="776"/>
         <source>End</source>
         <translation>终点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="677"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="678"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1251"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="764"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="765"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="769"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1545"/>
         <source>Center</source>
         <translation>中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="685"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="769"/>
+        <source>Major axis</source>
+        <translation>长轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="769"/>
+        <source>Minor axis</source>
+        <translation>短轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="775"/>
+        <source>Handle (derived)</source>
+        <translation>手柄（派生）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="785"/>
         <source>Point %1</source>
         <translation>点 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="707"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="807"/>
         <source>sketch %1, entity %2</source>
         <translation>草图 %1，实体 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="710"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="810"/>
         <source>%1
 (reference: edit it in the source sketch)</source>
         <translation>%1
 （参考：请在源草图中编辑）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="882"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="859"/>
+        <source>Set by rho and the apex. Edit rho in the Conic section; a handle edit in the Bezier anchor section makes this a plain Bezier.</source>
+        <translation>由 rho 和顶点决定。请在“圆锥曲线”部分编辑 rho；在“贝塞尔锚点”部分编辑手柄会使其变为普通贝塞尔曲线。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="997"/>
         <source>Pixel size unknown until the image loads.</source>
         <translation>在图像加载前，像素尺寸未知。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="885"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1000"/>
         <source>%1 x %2 px; 1 mm = %3 px%4</source>
         <translation>%1 x %2 像素；1 mm = %3 像素%4</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="887"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1002"/>
         <source> (calibrated)</source>
         <translation>（已校准）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="890"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1005"/>
         <source>%1 x %2 px; stretched: X %3 mm/px, Y %4 mm/px</source>
         <translation>%1 x %2 像素；已拉伸：X %3 mm/像素，Y %4 mm/像素</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1078"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1193"/>
         <source>Bezier Anchor</source>
         <translation>贝塞尔锚点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1087"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1202"/>
         <source>Tangent angle:</source>
         <translation>切线角度:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1093"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1208"/>
         <source>In handle length:</source>
         <translation>入手柄长度:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1099"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1214"/>
         <source>Out handle length:</source>
         <translation>出手柄长度:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1105"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1220"/>
         <source>Weight (rational):</source>
         <translation>权重（有理）:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1109"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1224"/>
         <source>Bezier Leg</source>
         <translation>贝塞尔腿</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1115"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1230"/>
         <source>Leg length:</source>
         <translation>腿长:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1148"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1236"/>
+        <source>Ellipse</source>
+        <translation>椭圆</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1245"/>
+        <source>Major radius:</source>
+        <translation>长半轴：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1252"/>
+        <source>Minor radius:</source>
+        <translation>短半轴：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1265"/>
+        <source>Elliptical arc</source>
+        <translation>椭圆弧</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1276"/>
+        <source>Arc start:</source>
+        <translation>弧起点：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1284"/>
+        <source>Arc sweep:</source>
+        <translation>弧扫掠：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1289"/>
+        <source>Show axes</source>
+        <translation>显示轴</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1290"/>
+        <source>Draw this ellipse&apos;s major and minor axis points and lines so they can be dragged and dimensioned. Overrides the Sketch Options default for this ellipse.</source>
+        <translation>绘制此椭圆长轴和短轴的点与线，以便拖动和标注。对此椭圆覆盖草图选项中的默认设置。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1353"/>
+        <source>Conic</source>
+        <translation>圆锥曲线</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1364"/>
+        <source>0.5 is a parabola; less is an elliptical arc, more a hyperbola. The ends, their tangents and the apex stay.</source>
+        <translation>0.5 为抛物线；较小为椭圆弧，较大为双曲线。端点、端点切线和顶点保持不变。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1368"/>
+        <source>Rho:</source>
+        <translation>Rho：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1371"/>
+        <source>Kind:</source>
+        <translation>类型：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1377"/>
+        <source>Where the end tangents meet. Not a stored point: drag an end or a handle on the canvas to move it.</source>
+        <translation>两端切线的交点。它不是存储的点：要移动它，请在画布上拖动端点或手柄。</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1379"/>
+        <source>Apex:</source>
+        <translation>顶点：</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1389"/>
+        <source>parabolic</source>
+        <translation>抛物线</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1390"/>
+        <source>hyperbolic</source>
+        <translation>双曲线</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1391"/>
+        <source>elliptical</source>
+        <translation>椭圆</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1399"/>
+        <source>(none: the end tangents are parallel)</source>
+        <translation>（无：两端切线平行）</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1442"/>
         <source>Transform</source>
         <translation>变换</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1178"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
         <source>Translate</source>
         <translation>平移</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1178"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
         <source>Rotate</source>
         <translation>旋转</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1178"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
         <source>Scale</source>
         <translation>缩放</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1178"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
         <source>Mirror</source>
         <translation>镜像</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1179"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1473"/>
         <source>Point to point</source>
         <translation>点到点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1179"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1473"/>
         <source>Point to position</source>
         <translation>点到位置</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1179"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1473"/>
         <source>Free move</source>
         <translation>自由移动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1180"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1474"/>
         <source>Move type:</source>
         <translation>移动类型:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1185"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1479"/>
         <source>X distance:</source>
         <translation>X 距离:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1185"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1479"/>
         <source>Y distance:</source>
         <translation>Y 距离:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1188"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1237"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1482"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1531"/>
         <source>Angle:</source>
         <translation>角度:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1191"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1485"/>
         <source>Factor:</source>
         <translation>系数:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1194"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
         <source>Horizontal axis through pivot</source>
         <translation>过枢轴的水平轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1194"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
         <source>Vertical axis through pivot</source>
         <translation>过枢轴的垂直轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1194"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
         <source>Picked line</source>
         <translation>已选择的线</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1196"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1490"/>
         <source>Axis:</source>
         <translation>轴:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1197"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1491"/>
         <source>Pick line point A</source>
         <translation>选择线点 A</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1198"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1492"/>
         <source>Pick line point B</source>
         <translation>选择线点 B</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1200"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1494"/>
         <source>Line A:</source>
         <translation>线 A:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1201"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1495"/>
         <source>Line B:</source>
         <translation>线 B:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1205"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1499"/>
         <source>Pick from point</source>
         <translation>选择起点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1206"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1500"/>
         <source>Pick to point</source>
         <translation>选择目标点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1208"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1502"/>
         <source>From:</source>
         <translation>从:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1209"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1503"/>
         <source>To:</source>
         <translation>到:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1210"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1504"/>
         <source>Δ (x, y):</source>
         <translation>Δ (x, y):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1214"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1508"/>
         <source>Pick point on selection</source>
         <translation>在所选内容上选择点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1221"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1515"/>
         <source>Absolute</source>
         <translation>绝对</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1221"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1515"/>
         <source>Relative to reference</source>
         <translation>相对于参考</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1223"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1517"/>
         <source>Target is:</source>
         <translation>目标为:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1224"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1518"/>
         <source>Pick reference</source>
         <translation>选择参考</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1226"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1520"/>
         <source>Reference:</source>
         <translation>参考:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1228"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1294"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1522"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1588"/>
         <source>Target X:</source>
         <translation>目标 X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1228"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1295"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1522"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1589"/>
         <source>Target Y:</source>
         <translation>目标 Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1235"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1529"/>
         <source>Drag the selection to move it; drag the ring to turn it about the star. Ctrl = axis lock / 15° steps.</source>
         <translation>拖动所选内容以移动；拖动圆环以绕星标旋转。Ctrl = 轴锁定 / 15° 步进。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1237"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1531"/>
         <source>dx:</source>
         <translation>dx:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1237"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1531"/>
         <source>dy:</source>
         <translation>dy:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1250"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1544"/>
         <source>Set pivot</source>
         <translation>设置枢轴</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1253"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1547"/>
         <source>Pivot X:</source>
         <translation>枢轴 X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1253"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1547"/>
         <source>Pivot Y:</source>
         <translation>枢轴 Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1255"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1549"/>
         <source>Pivot is:</source>
         <translation>枢轴为:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1259"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1553"/>
         <source>Create copy</source>
         <translation>创建副本</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1261"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1555"/>
         <source>Apply</source>
         <translation>应用</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1294"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1588"/>
         <source>Offset X:</source>
         <translation>偏移 X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1295"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1589"/>
         <source>Offset Y:</source>
         <translation>偏移 Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1312"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1606"/>
         <source>Not set</source>
         <translation>未设置</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1319"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1447"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1613"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
         <source>transient (no group)</source>
         <translation>临时（无组）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1320"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1447"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1614"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
         <source>stored on the group</source>
         <translation>存储在组上</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1320"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1614"/>
         <source>geometric center</source>
         <translation>几何中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1357"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1651"/>
         <source>pick both points of the mirror line</source>
         <translation>选择镜像线的两个点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1364"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1658"/>
         <source>pick the from-point and the to-point</source>
         <translation>选择起点和目标点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1367"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1661"/>
         <source>pick the point on the selection that should land on the target</source>
         <translation>选择所选内容上应落在目标处的点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1370"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1664"/>
         <source>pick the reference point the offset is measured from</source>
         <translation>选择测量偏移所依据的参考点</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1394"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1688"/>
         <source>Not possible: %1.</source>
         <translation>无法进行: %1。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1396"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1690"/>
         <source>Preview shown; Apply to commit.</source>
         <translation>已显示预览；应用以提交。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1447"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
         <source>geometric center (stored at Apply if you move it)</source>
         <translation>几何中心（若移动它，将在应用时存储）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1467"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1761"/>
         <source> (not on selection)</source>
         <translation>（不在所选内容上）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1505"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1799"/>
         <source>Canceled; selection kept.</source>
         <translation>已取消；保留选择。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1557"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1851"/>
         <source>Not applied: %1.</source>
         <translation>未应用: %1。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1561"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1855"/>
         <source>Applied%1%2</source>
         <translation>已应用%1%2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1561"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1855"/>
         <source> to a copy</source>
         <translation>到副本</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1005"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1120"/>
         <source>Load Failed</source>
         <translation>加载失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="256"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="264"/>
         <source> mm/px</source>
         <translation> mm/像素</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="257"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="265"/>
         <source>Millimeters of sketch per image pixel: the picture&apos;s scale.
 Type it when you know it (a 300 DPI scan is 25.4/300 = 0.0847),
 or use Calibrate Scale to measure it from two known points.</source>
@@ -8494,29 +9028,29 @@ or use Calibrate Scale to measure it from two known points.</source>
 或使用“校准比例”通过两个已知点测量。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1006"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1121"/>
         <source>Failed to load the image file.</source>
         <translation>加载图像文件失败。</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1058"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1173"/>
         <source>Export Complete</source>
         <translation>导出完成</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1059"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1174"/>
         <source>Background image exported to:
 %1</source>
         <translation>背景图像已导出到：
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1061"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1176"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1062"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1177"/>
         <source>Failed to export the background image to the project directory.</source>
         <translation>将背景图像导出到项目目录失败。</translation>
     </message>
@@ -8524,524 +9058,554 @@ or use Calibrate Scale to measure it from two known points.</source>
 <context>
     <name>hobbycad::SketchToolbar</name>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="235"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="662"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="245"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="680"/>
         <source>Create</source>
         <translation>创建</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="239"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="676"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="249"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="694"/>
         <source>Create geometry</source>
         <translation>创建几何</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="84"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="250"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="260"/>
         <source>Line</source>
         <translation>直线</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="84"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="250"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="260"/>
         <source>Draw line (L)</source>
         <translation>绘制直线 (L)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="111"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="251"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="261"/>
         <source>Two Point</source>
         <translation>两点</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="112"/>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="128"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="252"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="283"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="262"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="293"/>
         <source>Tangent</source>
         <translation>相切</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="113"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="253"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="263"/>
         <source>Construction</source>
         <translation>构造</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="85"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="259"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="269"/>
         <source>Rectangle</source>
         <translation>矩形</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="85"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="259"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="269"/>
         <source>Draw rectangle (R)</source>
         <translation>绘制矩形 (R)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="115"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="260"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="270"/>
         <source>Corner to Corner</source>
         <translation>角到角</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="116"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="261"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="271"/>
         <source>Center</source>
         <translation>中心</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="117"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="262"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="272"/>
         <source>3-Point (Angled)</source>
         <translation>三点（倾斜）</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="118"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="263"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="273"/>
         <source>Parallelogram</source>
         <translation>平行四边形</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="86"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="269"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="279"/>
         <source>Circle</source>
         <translation>圆</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="86"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="269"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="279"/>
         <source>Draw circle (C)</source>
         <translation>绘制圆 (C)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="120"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="270"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="280"/>
         <source>Center + Radius</source>
         <translation>中心 + 半径</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="121"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="271"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="281"/>
         <source>2-Point (Diameter)</source>
         <translation>两点（直径）</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="122"/>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="129"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="145"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="272"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="284"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="320"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="147"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="282"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="294"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="331"/>
         <source>3-Point</source>
         <translation>三点</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="87"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="280"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="290"/>
         <source>Arc</source>
         <translation>圆弧</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="87"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="280"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="290"/>
         <source>Draw arc (A)</source>
         <translation>绘制圆弧 (A)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="126"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="281"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="291"/>
         <source>Center + Start + End</source>
         <translation>中心 + 起点 + 终点</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="127"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="282"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="292"/>
         <source>Start + End + Radius</source>
         <translation>起点 + 终点 + 半径</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="88"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="290"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="300"/>
         <source>Spline</source>
         <translation>样条</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="89"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="299"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="310"/>
         <source>Polygon</source>
         <translation>多边形</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="89"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="299"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="310"/>
         <source>Draw polygon</source>
         <translation>绘制多边形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="135"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="300"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="137"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="311"/>
         <source>Inscribed</source>
         <translation>内接</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="136"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="301"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="138"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="312"/>
         <source>Circumscribed</source>
         <translation>外切</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="137"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="302"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="139"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="313"/>
         <source>Freeform</source>
         <translation>自由形状</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="90"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="308"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="319"/>
         <source>Slot</source>
         <translation>槽</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="90"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="308"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="319"/>
         <source>Draw slot</source>
         <translation>绘制槽</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="139"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="309"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="141"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="320"/>
         <source>Center to Center</source>
         <translation>中心到中心</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="140"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="310"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="142"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="321"/>
         <source>Overall Length</source>
         <translation>总长度</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="141"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="311"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="143"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="322"/>
         <source>Arc Slot (Radius)</source>
         <translation>弧形槽（半径）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="142"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="312"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="144"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="323"/>
         <source>Arc Slot (Ends)</source>
         <translation>弧形槽（端点）</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="318"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="329"/>
         <source>Ellipse</source>
         <translation>椭圆</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="318"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="329"/>
         <source>Draw ellipse</source>
         <translation>绘制椭圆</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="144"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="319"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="146"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="330"/>
         <source>Center + Axes</source>
         <translation>中心 + 轴</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="92"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="326"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="344"/>
         <source>Point</source>
         <translation>点</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="92"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="326"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="344"/>
         <source>Place point (P)</source>
         <translation>放置点 (P)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="94"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="342"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="354"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="663"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="360"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="372"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="681"/>
         <source>Dimension</source>
         <translation>标注</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="346"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="678"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="364"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="696"/>
         <source>Add dimension</source>
         <translation>添加标注</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="94"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="354"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="372"/>
         <source>Add dimension (D)</source>
         <translation>添加标注 (D)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="88"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="290"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="300"/>
         <source>Draw a Bezier or Catmull-Rom spline</source>
         <translation>绘制贝塞尔或 Catmull-Rom 样条</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="95"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="359"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="377"/>
         <source>Constraint</source>
         <translation>约束</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="95"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="359"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="377"/>
         <source>Add constraint (X)</source>
         <translation>添加约束 (X)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="96"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="364"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="382"/>
         <source>Text</source>
         <translation>文字</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="96"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="364"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="382"/>
         <source>Add text (T)</source>
         <translation>添加文字 (T)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="98"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="375"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="387"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="664"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="393"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="405"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="682"/>
         <source>Trim</source>
         <translation>修剪</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="98"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="379"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="387"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="680"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="397"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="405"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="698"/>
         <source>Trim entity at intersections</source>
         <translation>在交点处修剪实体</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="99"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="392"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="410"/>
         <source>Extend</source>
         <translation>延伸</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="99"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="392"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="410"/>
         <source>Extend entity to nearest intersection</source>
         <translation>将实体延伸到最近的交点</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="100"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="397"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="415"/>
         <source>Split</source>
         <translation>分割</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="100"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="397"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="415"/>
         <source>Split entity at intersections</source>
         <translation>在交点处分割实体</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="101"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="402"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="420"/>
         <source>Offset</source>
         <translation>偏移</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="101"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="402"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="420"/>
         <source>Offset geometry (O)</source>
         <translation>偏移几何 (O)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="102"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="407"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="425"/>
         <source>Fillet</source>
         <translation>圆角</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="102"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="407"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="425"/>
         <source>Fillet corners (F)</source>
         <translation>圆角化拐角 (F)</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="103"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="412"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="430"/>
         <source>Chamfer</source>
         <translation>倒角</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="103"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="412"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="430"/>
         <source>Chamfer corners</source>
         <translation>倒角拐角</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="107"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="469"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="487"/>
         <source>Projection</source>
         <translation>投影</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="123"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="273"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="283"/>
         <source>Tangent to 2</source>
         <translation>与 2 个相切</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="124"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="274"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="284"/>
         <source>Tangent to 3</source>
         <translation>与 3 个相切</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="131"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="291"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="301"/>
         <source>Cubic Bezier</source>
         <translation>三次贝塞尔</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="132"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="292"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="302"/>
         <source>Catmull-Rom</source>
         <translation>Catmull-Rom</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="133"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="293"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="303"/>
         <source>Rational Bezier</source>
         <translation>有理贝塞尔</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="420"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="149"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="332"/>
+        <source>Elliptical Arc</source>
+        <translation>椭圆弧</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="151"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="333"/>
+        <source>Span + Rise Elliptical Arc</source>
+        <translation>跨度 + 矢高椭圆弧</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="153"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="335"/>
+        <source>Corner Elliptical Arc</source>
+        <translation>角点椭圆弧</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="155"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="337"/>
+        <source>Endpoints Elliptical Arc</source>
+        <translation>端点椭圆弧</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="135"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="304"/>
+        <source>Conic Arc (Rho)</source>
+        <translation>圆锥曲线弧 (Rho)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="438"/>
         <source>Move</source>
         <translation>移动</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="420"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="438"/>
         <source>Move the selected geometry</source>
         <translation>移动所选几何图形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="424"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="442"/>
         <source>Rotate</source>
         <translation>旋转</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="424"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="442"/>
         <source>Rotate the selected geometry</source>
         <translation>旋转所选几何图形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="428"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="446"/>
         <source>Scale</source>
         <translation>缩放</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="428"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="446"/>
         <source>Scale the selected geometry</source>
         <translation>缩放所选几何图形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="432"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="450"/>
         <source>Mirror</source>
         <translation>镜像</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="432"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="450"/>
         <source>Mirror the selected geometry</source>
         <translation>镜像所选几何图形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="436"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="454"/>
         <source>Copy</source>
         <translation>复制</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="436"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="454"/>
         <source>Copy the selected geometry</source>
         <translation>复制所选几何图形</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="447"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="665"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="465"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="683"/>
         <source>Rect
 Pattern</source>
         <translation>矩形
 阵列</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="480"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="498"/>
         <source>3D</source>
         <translation>3D</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="480"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="498"/>
         <source>Toggle 3D sketch mode</source>
         <translation>切换 3D 草图模式</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="491"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="509"/>
         <source>Flip</source>
         <translation>翻转</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="491"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="509"/>
         <source>Draw from the far side of the plane (heads/tails)</source>
         <translation>从平面的另一侧绘制（正面/反面）</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="503"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="521"/>
         <source>Finish Sketch</source>
         <translation>完成草图</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="503"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="521"/>
         <source>Finish editing the sketch</source>
         <translation>完成草图编辑</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="105"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="451"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="459"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="682"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="469"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="477"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="700"/>
         <source>Create rectangular pattern</source>
         <translation>创建矩形阵列</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="105"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="459"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="477"/>
         <source>Rect Pattern</source>
         <translation>矩形阵列</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="106"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="464"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="482"/>
         <source>Circ Pattern</source>
         <translation>环形阵列</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="106"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="464"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="482"/>
         <source>Create circular pattern</source>
         <translation>创建环形阵列</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="107"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="469"/>
+        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="487"/>
         <source>Project geometry from other sketches</source>
         <translation>从其他草图投影几何</translation>
     </message>

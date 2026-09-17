@@ -8,6 +8,7 @@
 // =====================================================================
 
 #include <hobbycad/sketch/solver.h>
+#include <hobbycad/geometry/utils.h>
 #include <hobbycad/units.h>
 
 #ifdef HAVE_SLVS
@@ -20,6 +21,7 @@
 #include <array>
 #include <cstdio>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -115,6 +117,28 @@ public:
         Slvs_hEntity h = nextEntityHandle++;
         entityHandles[entityId] = h;
         entities.push_back(Slvs_MakeLineSegment(h, sketchGroupId, workplaneHandle, p1, p2));
+        return h;
+    }
+
+    /// A point that stands for no sketch entity (a construction aid the
+    /// solver needs), in `group`: the fixed group for a constant, the
+    /// sketch group for a point the solver may move.
+    Slvs_hEntity addHelperPoint(std::vector<Slvs_Param>& params,
+                                std::vector<Slvs_Entity>& entities,
+                                const Point2D& pt, Slvs_hGroup group) {
+        const Slvs_hParam u = addParam(params, pt.x, group);
+        const Slvs_hParam v = addParam(params, pt.y, group);
+        const Slvs_hEntity h = nextEntityHandle++;
+        entities.push_back(Slvs_MakePoint2d(h, group, workplaneHandle, u, v));
+        return h;
+    }
+
+    /// A line segment between two solver points that stands for no sketch
+    /// entity, in `group`.
+    Slvs_hEntity addHelperSegment(std::vector<Slvs_Entity>& entities,
+                                  Slvs_hEntity p1, Slvs_hEntity p2, Slvs_hGroup group) {
+        const Slvs_hEntity h = nextEntityHandle++;
+        entities.push_back(Slvs_MakeLineSegment(h, group, workplaneHandle, p1, p2));
         return h;
     }
 
@@ -311,6 +335,24 @@ SolveResult Solver::solve(
     // Build solver system
     Slvs_System sys = {};
     m_impl->buildSolverSystem(sys, params, slvsEntities, slvsConstraints, entities, constraints);
+
+    if (solverFaultInjectionForTesting()) {
+        // TEST HOOK (solver.h): one constraint libslvs cannot evaluate, a
+        // DIAMETER whose operand is a line. It passes the C API's operand
+        // check (the entity exists) and asserts in CircleGetRadiusExpr when
+        // the equations are generated: a genuine kernel fault, reached
+        // through this public API, which the fatal-error handoff must turn
+        // into SolveResult::InternalError with the caller's data untouched.
+        for (const Entity& e : entities) {
+            if (e.type != EntityType::Line) continue;
+            const auto it = m_impl->entityHandles.find(e.id);
+            if (it == m_impl->entityHandles.end()) continue;
+            slvsConstraints.push_back(Slvs_MakeConstraint(
+                m_impl->nextConstraintHandle++, m_impl->sketchGroupId, SLVS_C_DIAMETER,
+                m_impl->workplaneHandle, 1.0, 0, 0, it->second, 0));
+            break;
+        }
+    }
 
     // Set up Slvs_System pointers
     sys.param = params.data();
@@ -1011,12 +1053,56 @@ void Solver::Impl::buildSolverSystem(
             break;
 
         case EntityType::Ellipse:
-            // Same reasoning as the regular polygon: the major/minor axes are
-            // stored as scalars, so an axis endpoint moved freely by the
-            // solver could not be written back. Center only.
-            if (!entity.points.empty()) {
-                addPoint2d(params, slvsEntities, entity.points[0],
-                           entity.id * 1000 + 0);
+            // The axes are GEOMETRY, not scalars: the center plus a point on
+            // each axis. With the fork's ellipse entity (SLVS_HAS_ELLIPSE,
+            // libslvs patch 0028) the three points ARE the ellipse and the
+            // entity keeps its axes perpendicular itself; with an older lib
+            // the same three points are joined by two lines held
+            // perpendicular. Either way six parameters less one equation
+            // leaves five freedoms (center x and y, rotation, major, minor),
+            // which is exactly an ellipse.
+            //
+            // The radii are deliberately left FREE. Pinning them here would
+            // fix the shape and make a radius dimension impossible, which is
+            // the very thing a scalar axis could never support.
+            if (entity.points.size() >= 3) {
+                const Slvs_hEntity cH =
+                    addPoint2d(params, slvsEntities, entity.points[0], entity.id * 1000 + 0);
+                // The entity-level handle, as a Point entity aliases its one
+                // point: generic checks ask entityHandles.count(id) before any
+                // type-specific branch runs, and an ellipse with no entry there
+                // was refused by every constraint that names it.
+                entityHandles[entity.id] = cH;
+                const Slvs_hEntity majH =
+                    addPoint2d(params, slvsEntities, entity.points[1], entity.id * 1000 + 1);
+                const Slvs_hEntity minH =
+                    addPoint2d(params, slvsEntities, entity.points[2], entity.id * 1000 + 2);
+#if defined(SLVS_HAS_ELLIPSE)
+                // A native SLVS_E_ELLIPSE over the same three points. Its
+                // handle replaces the center alias, so a constraint can name
+                // the ellipse itself (point-on, line tangency).
+                {
+                    const Slvs_hEntity ellH = nextEntityHandle++;
+                    entityHandles[entity.id] = ellH;
+                    slvsEntities.push_back(Slvs_MakeEllipse(ellH, sketchGroupId, workplaneHandle,
+                                                            normalHandle, cH, majH, minH));
+                }
+#else
+                const Slvs_hEntity majLine =
+                    addLineSegment(slvsEntities, cH, majH, entity.id * 1000 + 1000 + 0);
+                const Slvs_hEntity minLine =
+                    addLineSegment(slvsEntities, cH, minH, entity.id * 1000 + 1000 + 1);
+                slvsConstraints.push_back(
+                    Slvs_MakeConstraint(nextConstraintHandle++, sketchGroupId,
+                                        SLVS_C_PERPENDICULAR, workplaneHandle, 0.0,
+                                        0, 0, majLine, minLine));
+#endif
+            } else if (!entity.points.empty()) {
+                // An ellipse from an older file, before the axes became
+                // points. Center only, exactly as before.
+                entityHandles[entity.id] =
+                    addPoint2d(params, slvsEntities, entity.points[0],
+                               entity.id * 1000 + 0);
             }
             break;
 
@@ -1252,10 +1338,17 @@ void Solver::Impl::extractSolution(
             break;
 
         case EntityType::Ellipse:
-            // Center only; the axes are scalars and were never registered.
-            // Any further points (the GUI keeps a major-axis point) ride
-            // along with the center for the same reason as the polygon.
-            if (!entity.points.empty()) {
+            if (entity.points.size() >= 3) {
+                // Read all three back, then re-derive the scalars from them.
+                // The points are what the solver moved; the radii and the
+                // rotation are a VIEW of those points, so they follow.
+                for (std::size_t i = 0; i < 3; ++i) {
+                    readSolvedPoint(sys, entity.id * 1000 + static_cast<int>(i),
+                                    entity.points[i]);
+                }
+                syncEllipseFields(entity);
+            } else if (!entity.points.empty()) {
+                // Pre-migration ellipse: center only, everything rides along.
                 Point2D solved = entity.points[0];
                 if (readSolvedPoint(sys, entity.id * 1000 + 0, solved)) {
                     const double dx = solved.x - entity.points[0].x;
@@ -1585,6 +1678,114 @@ void Solver::Impl::addTangentConstraint(
                     Slvs_MakeConstraint(nextConstraintHandle++, sketchGroupId,
                                         SLVS_C_PERPENDICULAR, workplaneHandle, 0.0,
                                         0, 0, radiusLine, entityHandles[lineId]));
+            } else if ((typeOf(id1) == EntityType::Ellipse && isLine(id2))
+                       || (isLine(id1) && typeOf(id2) == EntityType::Ellipse)) {
+                // LINE TANGENT TO AN ELLIPSE.
+                //
+                // With the fork's ellipse entity (SLVS_HAS_ELLIPSE, libslvs
+                // patch 0028) this is EXACT: SLVS_C_ELLIPSE_LINE_TANGENT names
+                // the ellipse and the line, and whichever side is free moves.
+                //
+                // Without it, libslvs has no ellipse to name, and the ellipse
+                // is replaced, at the point nearest the line, by its
+                // OSCULATING CIRCLE (center of curvature K, radius rho); the
+                // line is made tangent to that with the construction the
+                // circle case uses: a touch point on the circle, on the line,
+                // with the radius to it perpendicular to the line. "On the
+                // circle" is written the way the arc case writes it,
+                // |K->touch| == |K->Q| for a reference point Q at distance
+                // rho, so no circle entity and no normal handle are needed.
+                // K and Q are CONSTANTS for this solve, re-derived from the
+                // ellipse each time, so that route moves the LINE onto the
+                // ellipse and never the ellipse; a fully fixed line then
+                // over-constrains. It stays as the fallback for an older lib.
+                const int ellId = (typeOf(id1) == EntityType::Ellipse) ? id1 : id2;
+                const int lnId  = (ellId == id1) ? id2 : id1;
+                if (entityHandles.count(lnId) == 0) {
+                    solverDiag( "Solver: Tangent constraint %d: line not in solver, skipping\n",
+                                constraint.id);
+                    return;
+                }
+                const Entity* E = findEntityById(entities, ellId);
+                const Entity* L = findEntityById(entities, lnId);
+                if (!E || !L || E->points.empty() || L->points.size() < 2
+                    || !geometry::isPositiveLength(E->majorRadius)
+                    || !geometry::isPositiveLength(E->minorRadius)) {
+                    solverDiag("Solver: Tangent constraint %d: degenerate ellipse or line, "
+                               "skipping\n", constraint.id);
+                    return;
+                }
+#if defined(SLVS_HAS_ELLIPSE)
+                if (E->points.size() < 3 || entityHandles.count(ellId) == 0) {
+                    // A pre-migration ellipse (center only) has no native
+                    // entity behind its handle; nothing exact can be written.
+                    solverDiag("Solver: Tangent constraint %d: ellipse has no axis points, "
+                               "skipping\n", constraint.id);
+                    return;
+                }
+                slvsConstraints.push_back(
+                    Slvs_MakeConstraint(ch, sketchGroupId, SLVS_C_ELLIPSE_LINE_TANGENT,
+                                        workplaneHandle, 0.0, 0, 0,
+                                        entityHandles[ellId], entityHandles[lnId]));
+#else
+                const Point2D la = L->points[0], lb = L->points[1];
+                const double llen = geometry::lineLength(la, lb);
+                if (llen < geometry::kZeroEps) {
+                    solverDiag( "Solver: Tangent constraint %d: zero-length line, skipping\n",
+                                constraint.id);
+                    return;
+                }
+                // The line's unit normal.
+                const Point2D n = geometry::perpendicular((lb - la) / llen);
+
+                const double A = E->majorRadius, B = E->minorRadius;
+                auto pointAt = [&](double t) {
+                    return ellipsePointAtParamDeg(*E, radiansToDegrees(t));
+                };
+
+                // The parameter where the ellipse comes nearest the line: the
+                // seed, and where the curvature is measured. Half-degree
+                // sampling is plenty for a seed; the solver finishes the job.
+                double bestT = 0.0, bestD = std::numeric_limits<double>::max();
+                for (int i = 0; i < 720; ++i) {
+                    const double t = (2.0 * M_PI * i) / 720.0;
+                    const Point2D P = pointAt(t);
+                    const double d = std::fabs(geometry::dot(P - la, n));
+                    if (d < bestD) { bestD = d; bestT = t; }
+                }
+                const double st = std::sin(bestT), ct = std::cos(bestT);
+                const double w = std::sqrt(A * A * st * st + B * B * ct * ct);
+                const double rho = (w * w * w) / (A * B);           // radius of curvature
+                // Inward unit normal in the ellipse's frame, then turned.
+                const Point2D inward = geometry::rotatePoint(Point2D(-B * ct / w, -A * st / w),
+                                                             E->ellipseRotation);
+                const Point2D P = pointAt(bestT);
+                const Point2D K = P + inward * rho;                  // center of curvature
+                const Point2D Q{K.x + rho, K.y};                     // reference at distance rho
+
+                // K and Q are constants: fixed group, not solved.
+                const Slvs_hEntity kH = addHelperPoint(params, slvsEntities, K, workplaneGroupId);
+                const Slvs_hEntity qH = addHelperPoint(params, slvsEntities, Q, workplaneGroupId);
+                const Slvs_hEntity refLine =
+                    addHelperSegment(slvsEntities, kH, qH, workplaneGroupId);
+
+                // The touch point is free, seeded ON the ellipse at P.
+                const Slvs_hEntity touch = addHelperPoint(params, slvsEntities, P, sketchGroupId);
+                const Slvs_hEntity radLine =
+                    addHelperSegment(slvsEntities, kH, touch, sketchGroupId);
+
+                slvsConstraints.push_back(
+                    Slvs_MakeConstraint(ch, sketchGroupId, SLVS_C_EQUAL_LENGTH_LINES,
+                                        workplaneHandle, 0.0, 0, 0, radLine, refLine));
+                slvsConstraints.push_back(
+                    Slvs_MakeConstraint(nextConstraintHandle++, sketchGroupId,
+                                        SLVS_C_PT_ON_LINE, workplaneHandle, 0.0,
+                                        touch, 0, entityHandles[lnId], 0));
+                slvsConstraints.push_back(
+                    Slvs_MakeConstraint(nextConstraintHandle++, sketchGroupId,
+                                        SLVS_C_PERPENDICULAR, workplaneHandle, 0.0,
+                                        0, 0, radLine, entityHandles[lnId]));
+#endif
             } else {
                 solverDiag( "Solver: Tangent constraint %d: unsupported "
                                 "operand types, skipping\n", constraint.id);
@@ -1722,6 +1923,13 @@ void Solver::Impl::addConstraintToSolver(
         if (entityHandles.count(constraint.entityIds[0]) == 0) {
             solverDiag( "Solver: Radius/Diameter constraint %d: entity %d not in solver, skipping\n",
                      constraint.id, constraint.entityIds[0]);
+            break;
+        }
+        if (!isCurve(constraint.entityIds[0])) {
+            // SLVS_C_DIAMETER on anything but a circle or arc is a kernel
+            // assertion inside libslvs (CircleGetRadiusExpr), not a diagnosis.
+            solverDiag("Solver: Radius/Diameter constraint %d: entity %d is not a circle "
+                       "or arc, skipping\n", constraint.id, constraint.entityIds[0]);
             break;
         }
         {
@@ -2293,11 +2501,30 @@ void Solver::Impl::addConstraintToSolver(
         {
             const int a = constraint.entityIds[0];
             const int b = constraint.entityIds[1];
-            const int circleId = isCurve(a) ? a : b;
-            const int pointId  = isCurve(a) ? b : a;
-            if (!isCurve(circleId)) {
-                solverDiag( "Solver: PointOnCircle constraint %d: no circle operand, skipping\n",
-                        constraint.id);
+            // The curve operand is a circle or an arc; with the fork's
+            // ellipse entity (SLVS_HAS_ELLIPSE, libslvs patch 0028) an
+            // ellipse with its axis points qualifies too, as PT_ON_ELLIPSE.
+            auto ellipseWithAxes = [&](int id) {
+                const Entity* e = findEntityById(entities, id);
+                return e && e->type == EntityType::Ellipse && e->points.size() >= 3;
+            };
+            auto isOnTarget = [&](int id) {
+#if defined(SLVS_HAS_ELLIPSE)
+                if (ellipseWithAxes(id)) return true;
+#endif
+                return isCurve(id);
+            };
+            const int circleId = isOnTarget(a) ? a : b;
+            const int pointId  = isOnTarget(a) ? b : a;
+            if (!isOnTarget(circleId)) {
+                if (typeOf(circleId) == EntityType::Ellipse) {
+                    solverDiag("Solver: PointOnCircle constraint %d on an ellipse skipped: "
+                               "linked libslvs lacks SLVS_HAS_ELLIPSE (needs the 0028 cut)\n",
+                               constraint.id);
+                } else {
+                    solverDiag("Solver: PointOnCircle constraint %d: no circle operand, "
+                               "skipping\n", constraint.id);
+                }
                 break;
             }
             const int pIdx = (pointId == a) ? safeGet(constraint.pointIndices, 0, 0)
@@ -2308,8 +2535,12 @@ void Solver::Impl::addConstraintToSolver(
                         constraint.id);
                 break;
             }
+            int onType = SLVS_C_PT_ON_CIRCLE;
+#if defined(SLVS_HAS_ELLIPSE)
+            if (ellipseWithAxes(circleId)) onType = SLVS_C_PT_ON_ELLIPSE;
+#endif
             slvsConstraints.push_back(
-                Slvs_MakeConstraint(ch, sketchGroupId, SLVS_C_PT_ON_CIRCLE,
+                Slvs_MakeConstraint(ch, sketchGroupId, onType,
                                     workplaneHandle, 0.0,
                                     pt, 0, entityHandles[circleId], 0));
         }
@@ -2523,6 +2754,18 @@ std::vector<ConstraintType> supportedConstraintTypes()
     };
 }
 
+
+// =====================================================================
+//  Fault injection (test hook)
+// =====================================================================
+//  See solver.h. Off by default; the application never sets it. Kept as a
+//  plain flag rather than an environment variable so a test cannot leave
+//  it switched on for anything but its own process. Solver::solve() reads
+//  it through the getter, so the definition can live here with it.
+static bool g_solverFaultInjection = false;
+
+void setSolverFaultInjectionForTesting(bool on) { g_solverFaultInjection = on; }
+bool solverFaultInjectionForTesting() { return g_solverFaultInjection; }
 
 // =====================================================================
 //  Fatal-error handler

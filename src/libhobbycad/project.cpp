@@ -1192,6 +1192,9 @@ QJsonObject Project::sketchToJson(const SketchData& sketch) const
             for (double w : entity.weights) wj.append(w);
             ent["weights"] = wj;
         }
+        if (entity.type == SketchEntityType::Spline && entity.conicRho > 0.0) {
+            ent["conic_rho"] = entity.conicRho;
+        }
         ent["constrained"] = entity.constrained;
         ent["is_construction"] = entity.isConstruction;
         ent["is_centerline"] = entity.isCenterline;
@@ -1361,6 +1364,11 @@ SketchData Project::sketchFromJson(const QJsonObject& json) const
         entity.ellipseRotation = ent["ellipse_rotation"].toDouble();
         entity.ellipseStart = ent["ellipse_start"].toDouble();
         entity.ellipseSweep = ent.contains("ellipse_sweep") ? ent["ellipse_sweep"].toDouble() : 360.0;
+        // Files written before the axes became geometry hold the center
+        // only. Give them their axis points so an old sketch drags and
+        // solves like a new one. The scalars are still what is saved, so
+        // this does not change the file format.
+        sketch::ensureEllipseAxisPoints(entity);
         entity.text = ent["text"].toString().toStdString();
         entity.fontFamily = ent["font_family"].toString().toStdString();
         entity.fontSize = ent["font_size"].toDouble(12.0);
@@ -1381,6 +1389,7 @@ SketchData Project::sketchFromJson(const QJsonObject& json) const
         entity.splineClosed = ent["spline_closed"].toBool();
         { const QJsonArray wj = ent["weights"].toArray(); entity.weights.clear();
           for (const auto& v : wj) entity.weights.push_back(v.toDouble()); }
+        entity.conicRho = ent["conic_rho"].toDouble(0.0);
         entity.constrained = ent["constrained"].toBool();
         entity.isConstruction = ent["is_construction"].toBool();
         entity.isCenterline = ent["is_centerline"].toBool();
@@ -2234,6 +2243,9 @@ nlohmann::json Project::sketchToJson(const SketchData& sketch) const
             ent["spline_rational"] = true;
             ent["weights"] = entity.weights;
         }
+        if (entity.type == SketchEntityType::Spline && entity.conicRho > 0.0) {
+            ent["conic_rho"] = entity.conicRho;
+        }
         ent["constrained"] = entity.constrained;
         ent["is_construction"] = entity.isConstruction;
         ent["is_centerline"] = entity.isCenterline;
@@ -2392,6 +2404,9 @@ SketchData Project::sketchFromJson(const nlohmann::json& json) const
             entity.ellipseRotation = ent.value("ellipse_rotation", 0.0);
             entity.ellipseStart = ent.value("ellipse_start", 0.0);
             entity.ellipseSweep = ent.value("ellipse_sweep", 360.0);
+            // Same migration as the Qt half above: an older file carries the
+            // center only, and the axis points are derived from the scalars.
+            sketch::ensureEllipseAxisPoints(entity);
             entity.text = ent.value("text", std::string{});
             entity.fontFamily = ent.value("font_family", std::string{});
             entity.fontSize = ent.value("font_size", 12.0);
@@ -2409,6 +2424,7 @@ SketchData Project::sketchFromJson(const nlohmann::json& json) const
             entity.splineRational = ent.value("spline_rational", false);
             entity.splineClosed = ent.value("spline_closed", false);
             if (ent.contains("weights")) entity.weights = ent["weights"].get<std::vector<double>>();
+            entity.conicRho = ent.value("conic_rho", 0.0);
             entity.constrained = ent.value("constrained", false);
             entity.isConstruction = ent.value("is_construction", false);
             entity.isCenterline = ent.value("is_centerline", false);

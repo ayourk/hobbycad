@@ -285,18 +285,37 @@ std::vector<SnapPoint> collectSnapPoints(const Entity& entity)
 
     case EntityType::Ellipse:
         if (!entity.points.empty()) {
-            Point2D center = entity.points[0];
-            double major = entity.majorRadius;
-            double minor = entity.minorRadius;
+            const Point2D center = entity.points[0];
+            const bool full = isFullEllipse(entity);
+
+            // Points are taken at parameter angles and turned by the
+            // ellipse's rotation (ellipsePointAtParamDeg). The quadrant
+            // points used to be emitted axis aligned, so on a rotated
+            // ellipse they sat off the curve.
+            auto atParam = [&](double pDeg) { return ellipsePointAtParamDeg(entity, pDeg); };
+            auto withinSweep = [&](double pDeg) {
+                return full
+                    || normalizeAngle360(pDeg - entity.ellipseStart)
+                           <= std::abs(entity.ellipseSweep) + geometry::kZeroEps;
+            };
 
             // Center
             points.push_back({center, SnapType::Center, entity.id});
 
-            // Quadrant points (major and minor axis endpoints)
-            points.push_back({center + Point2D(major, 0), SnapType::Quadrant, entity.id});
-            points.push_back({center + Point2D(-major, 0), SnapType::Quadrant, entity.id});
-            points.push_back({center + Point2D(0, minor), SnapType::Quadrant, entity.id});
-            points.push_back({center + Point2D(0, -minor), SnapType::Quadrant, entity.id});
+            // Quadrant points, and on an arc only the ones it reaches.
+            for (double pDeg : {0.0, 90.0, 180.0, 270.0}) {
+                if (withinSweep(pDeg)) {
+                    points.push_back({atParam(pDeg), SnapType::Quadrant, entity.id});
+                }
+            }
+
+            // An elliptical arc has real endpoints; offer them as endpoints.
+            if (!full) {
+                points.push_back({atParam(entity.ellipseStart),
+                                  SnapType::Endpoint, entity.id});
+                points.push_back({atParam(entity.ellipseStart + entity.ellipseSweep),
+                                  SnapType::Endpoint, entity.id});
+            }
         }
         break;
 
@@ -753,32 +772,26 @@ std::vector<SnapPoint> collectAxisCrossingSnapPoints(
 
         case EntityType::Ellipse:
             if (!entity.points.empty()) {
-                Point2D c = entity.points[0];
-                double a = entity.majorRadius;
-                double b = entity.minorRadius;
-
-                // Ellipse: (x-cx)^2/a^2 + (y-cy)^2/b^2 = 1
-                // Crosses Y axis (x=0): y = cy +/- b*sqrt(1 - cx^2/a^2)
-                if (a > kEps && std::abs(c.x) <= a + kEps) {
-                    double disc = 1.0 - (c.x * c.x) / (a * a);
-                    if (disc >= 0.0) {
-                        double sq = b * std::sqrt(disc);
-                        addAxisPoint(Point2D(0.0, c.y + sq));
-                        if (sq > kEps) {
-                            addAxisPoint(Point2D(0.0, c.y - sq));
-                        }
+                // The closed form here assumed an axis aligned FULL ellipse:
+                // it put the crossings in the wrong place for a rotated one,
+                // and invented crossings on the part of an arc that does not
+                // exist. Walk the curve the entity actually describes and
+                // take the segments that really cross an axis.
+                const int steps = 192;
+                Point2D p0 = ellipsePointAtParamDeg(entity, entity.ellipseStart);
+                for (int i = 1; i <= steps; ++i) {
+                    const Point2D p1 = ellipsePointAtParamDeg(
+                        entity, entity.ellipseStart
+                                    + entity.ellipseSweep * (static_cast<double>(i) / steps));
+                    if ((p0.x < 0.0) != (p1.x < 0.0) && std::abs(p1.x - p0.x) > kEps) {
+                        const double t = -p0.x / (p1.x - p0.x);
+                        addAxisPoint(Point2D(0.0, p0.y + t * (p1.y - p0.y)));
                     }
-                }
-                // Crosses X axis (y=0): x = cx +/- a*sqrt(1 - cy^2/b^2)
-                if (b > kEps && std::abs(c.y) <= b + kEps) {
-                    double disc = 1.0 - (c.y * c.y) / (b * b);
-                    if (disc >= 0.0) {
-                        double sq = a * std::sqrt(disc);
-                        addAxisPoint(Point2D(c.x + sq, 0.0));
-                        if (sq > kEps) {
-                            addAxisPoint(Point2D(c.x - sq, 0.0));
-                        }
+                    if ((p0.y < 0.0) != (p1.y < 0.0) && std::abs(p1.y - p0.y) > kEps) {
+                        const double t = -p0.y / (p1.y - p0.y);
+                        addAxisPoint(Point2D(p0.x + t * (p1.x - p0.x), 0.0));
                     }
+                    p0 = p1;
                 }
             }
             break;

@@ -91,16 +91,18 @@ double distanceToEntity(const Point2D& point, const Entity& entity)
 
     case EntityType::Ellipse:
         if (!entity.points.empty()) {
-            // Approximate: use distance to closest point on ellipse
-            // This is a simplified calculation
-            Point2D center = entity.points[0];
-            Point2D rel = point - center;
-            double angle = std::atan2(rel.y, rel.x);
-            Point2D ellipsePoint(
-                center.x + entity.majorRadius * std::cos(angle),
-                center.y + entity.minorRadius * std::sin(angle)
-            );
-            return std::hypot(point.x - ellipsePoint.x, point.y - ellipsePoint.y);
+            // Sample the entity's own parameter range, so a rotated ellipse
+            // is measured where it actually is and an arc is not measured
+            // against the part of the ellipse it does not cover.
+            double best = std::numeric_limits<double>::max();
+            const int steps = 96;
+            Point2D prev = pointAtParameter(entity, 0.0);
+            for (int i = 1; i <= steps; ++i) {
+                Point2D cur = pointAtParameter(entity, static_cast<double>(i) / steps);
+                best = std::min(best, pointToLineDistance(point, prev, cur));
+                prev = cur;
+            }
+            return best;
         }
         break;
 
@@ -649,12 +651,22 @@ double entityLength(const Entity& entity)
         }
 
     case EntityType::Ellipse:
-        // Ramanujan approximation for ellipse circumference
         {
-            double a = entity.majorRadius;
-            double b = entity.minorRadius;
-            double h = std::pow((a - b) / (a + b), 2);
-            return M_PI * (a + b) * (1.0 + 3.0 * h / (10.0 + std::sqrt(4.0 - 3.0 * h)));
+            if (isFullEllipse(entity)) {
+                return ellipseCircumference(entity.majorRadius, entity.minorRadius);
+            }
+            // An elliptical arc's length is NOT the circumference scaled by
+            // its sweep: arc length is not proportional to the parameter
+            // unless a == b. Integrate along the tessellation instead.
+            double len = 0.0;
+            const int steps = 128;
+            Point2D prev = pointAtParameter(entity, 0.0);
+            for (int i = 1; i <= steps; ++i) {
+                Point2D cur = pointAtParameter(entity, static_cast<double>(i) / steps);
+                len += lineLength(prev, cur);
+                prev = cur;
+            }
+            return len;
         }
 
     case EntityType::Slot:
@@ -721,6 +733,19 @@ Point2D pointAtParameter(const Entity& entity, double t)
                 entity.radius * std::cos(angle),
                 entity.radius * std::sin(angle)
             );
+        }
+        break;
+
+    case EntityType::Ellipse:
+        if (!entity.points.empty()) {
+            // Same shape as the Arc case: t walks the stored parameter range.
+            // A full ellipse is start 0, sweep 360, so this covers both. The
+            // parameter is an angle in the ellipse's OWN frame (x = a cos p,
+            // y = b sin p), which is not the polar angle unless a == b; the
+            // point is then turned by ellipseRotation. Renderer, DXF and
+            // projection all use this convention.
+            return ellipsePointAtParamDeg(entity, entity.ellipseStart
+                                                  + t * entity.ellipseSweep);
         }
         break;
 
@@ -945,20 +970,19 @@ std::vector<Point2D> tessellateWith(const Entity& entity, SegmentsFor segmentsFo
         break;
 
     case EntityType::Ellipse:
-        {
-            // Approximate ellipse circumference for segment count
-            double a = entity.majorRadius;
-            double b = entity.minorRadius;
-            double approxCircum = M_PI * (a + b);
-            const int segments = segmentsFor(TessCurve::Ellipse, approxCircum);
+        if (!entity.points.empty()) {
+            // Ramanujan's circumference, scaled by how much of the ellipse
+            // this entity actually sweeps, so a quarter arc is not given a
+            // whole ellipse's worth of segments.
+            const double full = ellipseCircumference(entity.majorRadius, entity.minorRadius);
+            const double frac = std::min(1.0, std::abs(entity.ellipseSweep) / 360.0);
+            const int segments = segmentsFor(TessCurve::Ellipse, full * frac);
             for (int i = 0; i <= segments; ++i) {
-                double angle = 2.0 * M_PI * i / segments;
-                if (!entity.points.empty()) {
-                    points.push_back(entity.points[0] + Point2D(
-                        a * std::cos(angle),
-                        b * std::sin(angle)
-                    ));
-                }
+                // pointAtParameter honors ellipseRotation and the arc range;
+                // this loop used to do neither, so a rotated or partial
+                // ellipse tessellated as a full axis-aligned one.
+                points.push_back(pointAtParameter(entity,
+                                                  static_cast<double>(i) / segments));
             }
         }
         break;
@@ -992,8 +1016,16 @@ std::vector<Point2D> tessellateWith(const Entity& entity, SegmentsFor segmentsFo
         break;
 
     case EntityType::Spline: {
-        // Smooth Catmull-Rom curve through the control points.
-        const std::vector<Point3> t = tessellateSpline(entity.points, 12, entity.splineBezier);
+        // Bezier (rational when weighted) or Catmull-Rom, the same choice the
+        // renderer makes. This path used to ignore the weights and closure,
+        // so export, profiles, snapping and the tests saw the plain cubic
+        // while the screen showed the rational curve; a conic stored as a
+        // rational cubic (conicFromRho) is what caught it (2026-09-16).
+        const bool rational = entity.splineRational
+                              && entity.weights.size() == entity.points.size();
+        const std::vector<Point3> t = rational
+            ? tessellateRationalSpline(entity.points, entity.weights, 12)
+            : tessellateSpline(entity.points, 12, entity.splineBezier, entity.splineClosed);
         points.assign(t.begin(), t.end());
         break;
     }

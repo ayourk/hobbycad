@@ -43,6 +43,11 @@ SketchOptionsWidget::SketchOptionsWidget(QWidget* parent) : QWidget(parent) {
            "(off by default, like Fusion)"));
     m_showConstruction = new QCheckBox(tr("Construction geometry"), show);
     m_showProjected    = new QCheckBox(tr("Projected geometry"), show);
+    m_ellipseAxes      = new QCheckBox(tr("Ellipse axes"), show);
+    m_ellipseAxes->setToolTip(
+        tr("Draw the major and minor axes of ellipses so they can be dragged "
+           "and dimensioned (off by default; the Properties panel can override "
+           "it per ellipse)"));
     sl->addWidget(m_profiles);
     sl->addWidget(m_points);
     sl->addWidget(m_dims);
@@ -51,6 +56,7 @@ SketchOptionsWidget::SketchOptionsWidget(QWidget* parent) : QWidget(parent) {
       sub->addSpacing(18); sub->addWidget(m_coincidenceMarkers); sl->addLayout(sub); }
     sl->addWidget(m_showConstruction);
     sl->addWidget(m_showProjected);
+    sl->addWidget(m_ellipseAxes);
     root->addWidget(show);
 
     // ---- Selection ----
@@ -97,6 +103,8 @@ SketchOptionsWidget::SketchOptionsWidget(QWidget* parent) : QWidget(parent) {
         if (!m_syncing && m_canvas) m_canvas->setShowConstruction(on); });
     connect(m_showProjected, &QCheckBox::toggled, this, [this](bool on) {
         if (!m_syncing && m_canvas) m_canvas->setShowProjected(on); });
+    connect(m_ellipseAxes, &QCheckBox::toggled, this, [this](bool on) {
+        if (!m_syncing && m_canvas) m_canvas->setEllipseAxesDefault(on); });
     connect(m_linetype, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int index) {
         if (m_syncing || !m_canvas) return;
@@ -133,6 +141,7 @@ void SketchOptionsWidget::syncFromCanvas() {
     m_coincidenceMarkers->setEnabled(m_canvas->showConstraints());
     m_showConstruction->setChecked(m_canvas->showConstruction());
     m_showProjected->setChecked(m_canvas->showProjected());
+    m_ellipseAxes->setChecked(m_canvas->ellipseAxesDefault());
     m_syncing = false;
     onSelectionChanged();
 }

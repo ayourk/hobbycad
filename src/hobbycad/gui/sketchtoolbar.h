@@ -94,11 +94,21 @@ enum class CreationMode {
     // Ellipse modes
     EllipseCenterAxes = 0,   // Center + axes (default)
     EllipseThreePoint,       // 3-point
+    EllipseArc,              // Elliptical arc: ellipse, then start and end on it
+    // Span + Rise elliptical arc: two ends, then the apex (half ellipse)
+    EllipseSpanRiseArc,
+    // Corner elliptical arc: corner, a point on each leg (quarter ellipse)
+    EllipseCornerArc,
+    // Endpoints elliptical arc: two perimeter points, center, axis direction
+    EllipseEndpointsArc,
 
     // Spline modes
     SplineControlPoints = 0, // Bezier with editable handles (default)
     SplineFitPoints,         // Catmull-Rom (through points, no handles)
     SplineRational,          // Rational (weighted) Bezier
+    // Conic arc by rho: start, end, apex (where the end tangents meet), then
+    // rho; stored as a rational Bezier with the rho kept on it
+    SplineConic,
 
     // Polygon modes
     PolygonInscribed = 0,    // Inscribed in circle (default)

@@ -131,6 +131,8 @@ const ModeText kModeText[] = {
     {SketchTool::Spline, CreationMode::SplineControlPoints,  QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Cubic Bezier")},
     {SketchTool::Spline, CreationMode::SplineFitPoints,      QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Catmull-Rom")},
     {SketchTool::Spline, CreationMode::SplineRational,      QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Rational Bezier")},
+    {SketchTool::Spline, CreationMode::SplineConic,
+     QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Conic Arc (Rho)")},
 
     {SketchTool::Polygon, CreationMode::PolygonInscribed,     QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Inscribed")},
     {SketchTool::Polygon, CreationMode::PolygonCircumscribed, QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Circumscribed")},
@@ -143,6 +145,14 @@ const ModeText kModeText[] = {
 
     {SketchTool::Ellipse, CreationMode::EllipseCenterAxes,    QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Center + Axes")},
     {SketchTool::Ellipse, CreationMode::EllipseThreePoint,    QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "3-Point")},
+    {SketchTool::Ellipse, CreationMode::EllipseArc,
+     QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Elliptical Arc")},
+    {SketchTool::Ellipse, CreationMode::EllipseSpanRiseArc,
+     QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Span + Rise Elliptical Arc")},
+    {SketchTool::Ellipse, CreationMode::EllipseCornerArc,
+     QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Corner Elliptical Arc")},
+    {SketchTool::Ellipse, CreationMode::EllipseEndpointsArc,
+     QT_TRANSLATE_NOOP("hobbycad::SketchToolbar", "Endpoints Elliptical Arc")},
 };
 
 
@@ -291,6 +301,7 @@ void SketchToolbar::createTools()
     createDropdown->addVariant(tr("Cubic Bezier"), static_cast<int>(CreationMode::SplineControlPoints));
     createDropdown->addVariant(tr("Catmull-Rom"), static_cast<int>(CreationMode::SplineFitPoints));
     createDropdown->addVariant(tr("Rational Bezier"), static_cast<int>(CreationMode::SplineRational));
+    createDropdown->addVariant(tr("Conic Arc (Rho)"), static_cast<int>(CreationMode::SplineConic));
 
     // Polygon - with variants
     createDropdown->addButton(
@@ -318,6 +329,13 @@ void SketchToolbar::createTools()
         tr("Ellipse"), tr("Draw ellipse"));
     createDropdown->addVariant(tr("Center + Axes"), static_cast<int>(CreationMode::EllipseCenterAxes));
     createDropdown->addVariant(tr("3-Point"), static_cast<int>(CreationMode::EllipseThreePoint));
+    createDropdown->addVariant(tr("Elliptical Arc"), static_cast<int>(CreationMode::EllipseArc));
+    createDropdown->addVariant(tr("Span + Rise Elliptical Arc"),
+                               static_cast<int>(CreationMode::EllipseSpanRiseArc));
+    createDropdown->addVariant(tr("Corner Elliptical Arc"),
+                               static_cast<int>(CreationMode::EllipseCornerArc));
+    createDropdown->addVariant(tr("Endpoints Elliptical Arc"),
+                               static_cast<int>(CreationMode::EllipseEndpointsArc));
 
     // Point - no variants
     createDropdown->addButton(
@@ -721,7 +739,9 @@ void SketchToolbar::retranslate()
                                      CreationMode::ArcTangent,
                                      CreationMode::ArcThreePoint}},
             {SketchTool::Spline,    {CreationMode::SplineControlPoints,
-                                     CreationMode::SplineFitPoints}},
+                                     CreationMode::SplineFitPoints,
+                                     CreationMode::SplineRational,
+                                     CreationMode::SplineConic}},
             {SketchTool::Polygon,   {CreationMode::PolygonInscribed,
                                      CreationMode::PolygonCircumscribed,
                                      CreationMode::PolygonFreeform}},
@@ -730,7 +750,11 @@ void SketchToolbar::retranslate()
                                      CreationMode::SlotArcRadius,
                                      CreationMode::SlotArcEnds}},
             {SketchTool::Ellipse,   {CreationMode::EllipseCenterAxes,
-                                     CreationMode::EllipseThreePoint}},
+                                     CreationMode::EllipseThreePoint,
+                                     CreationMode::EllipseArc,
+                                     CreationMode::EllipseSpanRiseArc,
+                                     CreationMode::EllipseCornerArc,
+                                     CreationMode::EllipseEndpointsArc}},
             {SketchTool::Point,     {}},
         }},
         {m_constrainBtn, {

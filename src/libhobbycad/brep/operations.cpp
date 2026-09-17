@@ -139,17 +139,42 @@ TopoDS_Edge buildEdge(const sketch::Entity& entity, bool reversed = false)
 
     case sketch::EntityType::Ellipse:
         if (!entity.points.empty()) {
-            gp_Pnt center = toPoint3D(entity.points[0]);
-            gp_Dir zDir(0, 0, 1);
-            gp_Ax2 axis(center, zDir);
-            // gp_Elips requires major >= minor
-            double majorR = std::max(entity.majorRadius, entity.minorRadius);
-            double minorR = std::min(entity.majorRadius, entity.minorRadius);
+            // Three things this used to drop on the floor: the ellipse's
+            // rotation (gp_Ax2 was built with no X direction, so OCCT chose
+            // its own), the arc range (a partial ellipse became a full one),
+            // and the 90 degree turn implied by swapping the radii to satisfy
+            // OCCT's major >= minor rule.
+            double majorR = entity.majorRadius;
+            double minorR = entity.minorRadius;
+            double rotDeg = entity.ellipseRotation;
+            double startDeg = entity.ellipseStart;
+            if (minorR > majorR) {
+                // Swapping the axes turns the frame a quarter turn, and the
+                // parameter origin moves with it: a point at p on (a,b) is
+                // the point at p - 90 on (b,a) turned by +90.
+                std::swap(majorR, minorR);
+                rotDeg += 90.0;
+                startDeg -= 90.0;
+            }
+            const gp_Pnt center = toPoint3D(entity.points[0]);
+            const double th = degreesToRadians(rotDeg);
+            gp_Ax2 axis(center, gp_Dir(0, 0, 1), gp_Dir(std::cos(th), std::sin(th), 0.0));
             gp_Elips ellipse(axis, majorR, minorR);
 
-            BRepBuilderAPI_MakeEdge makeEdge(ellipse);
-            if (makeEdge.IsDone()) {
-                edge = makeEdge.Edge();
+            if (sketch::isFullEllipse(entity)) {
+                BRepBuilderAPI_MakeEdge makeEdge(ellipse);
+                if (makeEdge.IsDone()) {
+                    edge = makeEdge.Edge();
+                }
+            } else {
+                // OCCT parameterizes an ellipse the same way we do: the angle
+                // in the ellipse's own frame, measured from the major axis.
+                const double u1 = degreesToRadians(startDeg);
+                const double u2 = degreesToRadians(startDeg + entity.ellipseSweep);
+                BRepBuilderAPI_MakeEdge makeEdge(ellipse, std::min(u1, u2), std::max(u1, u2));
+                if (makeEdge.IsDone()) {
+                    edge = makeEdge.Edge();
+                }
             }
         }
         break;

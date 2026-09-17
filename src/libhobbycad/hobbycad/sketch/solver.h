@@ -298,6 +298,19 @@ HOBBYCAD_EXPORT bool solverFatalHandlerAvailable();
 /// application will not survive it.
 HOBBYCAD_EXPORT bool solverCanRecoverFromFaults();
 
+/// TEST HOOK, off by default and never set by the application. While on,
+/// every Solver::solve() adds one constraint libslvs cannot evaluate (a
+/// DIAMETER whose operand is a line), so the kernel's assertion path, the
+/// fatal-error handoff and the recovery are exercised end to end through
+/// this public API. It exists because HobbyCAD's own operand checks stop
+/// every known real input from reaching that path: a recovery test that
+/// leaned on a validation hole died the day the hole was closed. No effect
+/// on a solve without a line entity. With a libslvs that cannot recover
+/// (solverCanRecoverFromFaults() false) the injected fault is still fatal,
+/// so a test must check that first.
+HOBBYCAD_EXPORT void setSolverFaultInjectionForTesting(bool on);
+HOBBYCAD_EXPORT bool solverFaultInjectionForTesting();
+
 /// What the constraint solver reports itself as: "3.2p3" for a
 /// HobbyCAD-patched libslvs, "stock (unversioned)" for an unpatched one
 /// (upstream exposes no version macro at all, so that case cannot be named

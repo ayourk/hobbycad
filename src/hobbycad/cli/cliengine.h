@@ -266,6 +266,7 @@ private:
     std::string slotUsage() const;
     CliResult cmdSketchSpline(std::vector<std::string> args);
     CliResult cmdSketchBezier(std::vector<std::string> args);
+    CliResult cmdSketchConic(std::vector<std::string> args);
     CliResult cmdSketchText(std::vector<std::string> args);
     CliResult cmdConstrain(std::vector<std::string> args);
     CliResult cmdConstrainEdit(const std::vector<std::string>& args);

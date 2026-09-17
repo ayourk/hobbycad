@@ -1281,9 +1281,22 @@ std::vector<std::string> sketchToScript(const std::string& name,
                        " sides " + std::to_string(e.sides);
             break;
         case EntityType::Ellipse:
-            if (!e.points.empty())
+            // Rotation and the arc range were dropped here, so a replayed
+            // script quietly turned every ellipse upright and every
+            // elliptical arc into a whole ellipse. Both are emitted only
+            // when they differ from the default, so scripts for plain
+            // upright ellipses are byte for byte what they were.
+            if (!e.points.empty()) {
                 line = "ellipse at " + pt(e.points[0]) + " major " + num(e.majorRadius) +
                        " minor " + num(e.minorRadius);
+                if (!geometry::isZeroAngleDeg(e.ellipseRotation)) {
+                    line += " rotation " + num(e.ellipseRotation);
+                }
+                if (!isFullEllipse(e)) {
+                    line += " angle " + num(e.ellipseStart) +
+                            " to " + num(e.ellipseStart + e.ellipseSweep);
+                }
+            }
             break;
         case EntityType::Slot:
             // A slot that follows a path replays as "slot along": the path has
@@ -1306,13 +1319,27 @@ std::vector<std::string> sketchToScript(const std::string& name,
                 if (e.arcFlipped) line += " long";
             }
             break;
-        case EntityType::Spline:
-            if (e.splineBezier) {
+        case EntityType::Spline: {
+            Point2D apex;
+            if (e.conicRho > 0.0 && conicApex(e, apex)) {
+                // A conic authored by rho replays as one: its rho is a
+                // stored property, and a `bezier` line would lose it.
+                line = "conic " + pt(Point2D(e.points.front()))
+                     + " to " + pt(Point2D(e.points.back()))
+                     + " apex " + pt(apex) + " rho " + num(e.conicRho);
+            } else if (e.splineBezier) {
                 // As `bezier` (anchors + angle/length handles) so replay
                 // recreates the handle-spline, not a Catmull-Rom reading of
                 // the control points.
                 const std::vector<Point2D> poly(e.points.begin(), e.points.end());
-                const std::vector<BezierAnchor> anchors = bezierAnchorsFromControlPolygon(poly);
+                std::vector<BezierAnchor> anchors = bezierAnchorsFromControlPolygon(poly);
+                // Anchor k's weight is the weight of its control point P_k
+                // (index 3k), the same mapping bezierControlPolygonWeights()
+                // uses; export used to drop the weights of every rational
+                // bezier, so a replayed script came back non-rational.
+                if (e.splineRational && e.weights.size() == poly.size())
+                    for (std::size_t k = 0; k < anchors.size(); ++k)
+                        anchors[k].weight = e.weights[3 * k];
                 if (!anchors.empty()) {
                     std::vector<std::string> toks;
                     for (const BezierAnchor& a : anchors) {
@@ -1326,6 +1353,10 @@ std::vector<std::string> sketchToScript(const std::string& name,
                         };
                         emitH("in",  BezierHandleSide::In);
                         emitH("out", BezierHandleSide::Out);
+                        if (std::abs(a.weight - 1.0) > geometry::kExactEps) {
+                            toks.push_back("weight");
+                            toks.push_back(num(a.weight));
+                        }
                     }
                     line = "bezier " + joinStrings(toks, ' ');
                 }
@@ -1335,6 +1366,7 @@ std::vector<std::string> sketchToScript(const std::string& name,
                 line = "spline through " + joinStrings(pts, ' ');
             }
             break;
+        }
         case EntityType::Text: {
             if (e.points.empty() || e.text.empty()) break;
             // Quote unconditionally, and escape what would end the quote. A

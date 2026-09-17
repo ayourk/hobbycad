@@ -41,6 +41,7 @@
 #include <hobbycad/units.h>
 
 #include <QWidget>
+#include <QSet>
 
 #include <memory>
 #include <cstdio>   // FILE (debugLogFile)
@@ -202,6 +203,19 @@ public:
     /// the entity or point index does not exist. Used by the properties panel's
     /// editable coordinate fields.
     bool applyPointEdit(int entityId, int pointIndex, const Point3& p);
+
+    /// Which number of an ellipse a panel edit is setting.
+    enum class EllipseField { Major, Minor, Rotation, ArcStart, ArcSweep };
+
+    /// Apply an external edit to one of an ellipse's numbers.
+    ///
+    /// Not expressible as applyPointEdit: a radius or rotation change moves
+    /// BOTH axis points (the axis being edited, and the other one swung to
+    /// stay perpendicular), so two point edits would record two undo entries
+    /// for one user action and leave a transient non-perpendicular state in
+    /// between. This is one compound edit instead. Returns false for a
+    /// non-ellipse, a locked group, or a non-positive radius.
+    bool applyEllipseAxisEdit(int entityId, EllipseField field, double value);
     const SketchEntity* selectedEntity() const;
 
     /// Get selected constraint ID (-1 if none)
@@ -225,6 +239,16 @@ public:
     enum class RectMode { Corner, Center, ThreePoint, Parallelogram };
     enum class PolygonMode { Inscribed, Circumscribed, Freeform };
     enum class SlotMode { CenterToCenter, Overall, ArcRadius, ArcEnds };
+    /// CenterAxes: center, major-axis end, then a point giving the minor
+    /// radius. ThreePoint: the two ENDS of the major axis, then the minor.
+    /// Both are three-click; the third click is projected perpendicular.
+    /// Arc: the CenterAxes three clicks, then two more on the curve for
+    /// the start and end of an elliptical arc.
+    enum class EllipseMode { CenterAxes, ThreePoint, Arc, SpanRise, Corner, Endpoints };
+    /// ControlPoints: the Bezier pen. FitPoints: a Catmull-Rom point run.
+    /// Rational: the pen with a weight per anchor. Conic: a conic arc by
+    /// rho, four staged clicks (start, end, apex, rho).
+    enum class SplineMode { ControlPoints, FitPoints, Rational, Conic };
 
     /// How a click is interpreted. Everything below the input layer is
     /// shared between the two; only click semantics differ.
@@ -274,6 +298,27 @@ public:
     void setSlotMode(SlotMode m) { m_slotMode = m; }
     LineMode lineMode() const { return m_lineMode; }
     void setLineMode(LineMode m) { m_lineMode = m; }
+    EllipseMode ellipseMode() const { return m_ellipseMode; }
+    void setEllipseMode(EllipseMode m) { m_ellipseMode = m; }
+    SplineMode splineMode() const { return m_splineMode; }
+    void setSplineMode(SplineMode m) { m_splineMode = m; }
+
+    /// Ellipse axis display: FreeCAD's "Toggle Internal Geometry". The axis
+    /// points are real solver geometry either way; this only decides whether
+    /// they are drawn and grabbable. The DEFAULT is the Sketch Options toggle
+    /// (off, so an untouched ellipse stays one clean curve); the Properties
+    /// panel overrides it per ellipse. Session state, deliberately not saved.
+    bool ellipseAxesDefault() const { return m_ellipseAxesDefault; }
+    void setEllipseAxesDefault(bool on) { m_ellipseAxesDefault = on; update(); }
+    bool ellipseAxesShown(int entityId) const
+    {
+        return m_ellipseAxesOverride.value(entityId, m_ellipseAxesDefault);
+    }
+    void setEllipseAxesShown(int entityId, bool on)
+    {
+        m_ellipseAxesOverride.insert(entityId, on);
+        update();
+    }
 
     // Rectangle rotation-lock state. This is per-TOOL state that still lives
     // on the canvas because startEntity() and mouseMoveEvent() also touch it.
@@ -350,6 +395,25 @@ public:
     // three groups are the natural split; do not add a fourth ad hoc.
     QPoint  toScreen(const QPointF& world) const { return worldToScreen(world); }
     QPointF toScreenF(const QPointF& world) const { return worldToScreenF(world); }
+    /// Stroke a world-space polyline with the painter's current pen, solid
+    /// when asked (the preview pen is dashed; arc and conic ghosts are drawn
+    /// solid, Aaron 2026-09-16). Shared by the tool handlers' previews.
+    void strokeWorldPolyline(QPainter& painter, const std::vector<Point2D>& pts,
+                             bool solid) const;
+
+    // Staged placement with a live cursor slot. A staged tool that shows the
+    // cursor as the point still being placed keeps it in the pending slot
+    // after the placed clicks, so the pending point vector runs one longer
+    // than previewPointCount(). These three keep that slot consistent.
+
+    /// Put the cursor in the slot after the placed clicks.
+    void setCursorSlot(const QPointF& world);
+    /// Place a click: drop the cursor slot, then append the point. Appending
+    /// behind the slot left the stale cursor as a phantom click.
+    void appendStagedPoint(const QPointF& world);
+    /// Paint the placed clicks as dots, and unless `rubberLine` is false a
+    /// line from the last one to the cursor, with the painter's current pen.
+    void paintPlacedClicks(QPainter& painter, bool rubberLine = true) const;
     /// Tangent-arc solve, needed by the Arc tool's tangent preview.
     using TangentArcResult = geometry::TangentArcResult;
     TangentArcResult tangentArcFor(const SketchEntity& target, const QPointF& tangentPoint,
@@ -426,6 +490,11 @@ public:
     void setBezierAnchorHandleLen(int splineId, int anchorIdx, bool outHandle, double len);
     /// Set an anchor's rational weight (all its control points); re-solves.
     void setBezierAnchorWeight(int splineId, int anchorIdx, double weight);
+    /// Re-author a conic (a Spline with a stored rho, sketch::conicFromRho)
+    /// with a new rho: the ends, their tangent directions and the apex stay,
+    /// the shoulder moves along the apex line. One undo step; re-solves.
+    /// False for a non-conic, a locked group or a rho outside (0, 1).
+    bool applyConicRho(int entityId, double rho);
     /// Delete a Bezier fit point (anchor): removes the anchor + its handles
     /// (3 control points), fixes up constraint indices, re-solves. No-op if it
     /// would leave fewer than one segment.
@@ -1459,6 +1528,16 @@ private:
 
     // Slot creation modes
     SlotMode m_slotMode = SlotMode::CenterToCenter;
+
+    // Ellipse creation modes
+    EllipseMode m_ellipseMode = EllipseMode::CenterAxes;
+    // Sketch Options: draw ellipse axes unless overridden.
+    bool m_ellipseAxesDefault = false;
+    // Properties panel: per-ellipse override (session only).
+    QHash<int, bool> m_ellipseAxesOverride;
+
+    // Spline creation mode ("Control Points", the pen, is the default).
+    SplineMode m_splineMode = SplineMode::ControlPoints;
     bool m_arcSlotFlipped = false;  // For > 180 degree arc slots (Shift key)
 
     // Inline dimension input during entity creation

@@ -5,12 +5,18 @@
 //  The only UNBOUNDED tool: clicks keep adding points until the user
 //  right-clicks to finish.
 //
-//  Two creation modes (the toolbar dropdown):
+//  Creation modes (the toolbar dropdown):
 //   • "Control Points" (default): a Bezier PEN; click drops a corner anchor,
 //     click-drag pulls out symmetric tangent handles (angle = tangent/G1,
 //     length = per-side curvature). Produces a splineBezier entity whose points
 //     are the cubic control polygon (via sketch::bezierControlPolygon).
 //   • "Fit Points": the interpolating Catmull-Rom spline (points-only).
+//   • "Rational Bezier": the pen, with a weight per anchor (all 1 until edited).
+//   • "Conic Arc (Rho)": the one BOUNDED variant: start, end, apex (where
+//     the end tangents meet), then rho by cursor along the apex line; commits
+//     one rational cubic Bezier segment (sketch::conicFromRho) with the rho
+//     stored on the entity, the Fusion route: rho stays an editable property
+//     (Properties panel, `conic <id> rho`). Right-click aborts a half-placed one.
 //
 //  Finishes on Enter/Return, ESCAPE, or RIGHT-CLICK; all keep the placed
 //  anchors (a valid spline commits, an incomplete one is dropped), so Escape is
@@ -42,13 +48,16 @@ public:
     bool drawPreview(SketchCanvas& canvas, QPainter& painter) override;
     void cancel(SketchCanvas& canvas) override;
 
-    /// "Control Points" (0) = Bezier pen; "Fit Points" (1) = Catmull-Rom.
+    /// "Control Points" (0) = Bezier pen; "Fit Points" (1) = Catmull-Rom;
+    /// "Rational Bezier" (2) = the pen with weights; "Conic Arc (Rho)" (3).
     bool applyCreationMode(SketchCanvas& canvas, int modeValue) override;
 
     /// A spline collects points until the user right-clicks.
     bool isMultiClick(const SketchCanvas&) const override { return true; }
-    /// Right-click ends the point run.
-    bool finishesOnRightClick(const SketchCanvas&) const override { return true; }
+    /// Right-click ends the point run; a conic is bounded, so there it aborts.
+    bool finishesOnRightClick(const SketchCanvas& canvas) const override;
+    /// Conic, choosing rho: the cursor rides the chord-midpoint-to-apex line.
+    bool constrainCursor(SketchCanvas& canvas, QPointF& world, bool altHeld) override;
 
     /// Pen mode owns press+drag+release to author anchors with tangent handles.
     bool mousePress(SketchCanvas& canvas, QMouseEvent* event,
@@ -56,17 +65,16 @@ public:
     bool mouseMove(SketchCanvas& canvas, QMouseEvent* event,
                    const QPointF& world) override;
     /// Fit-points mode adds a control point per release; pen finalizes the
-    /// current anchor's handles.
+    /// current anchor's handles; a conic places its next click when the
+    /// stage was dragged through.
     bool mouseRelease(SketchCanvas& canvas, QMouseEvent* event,
                       const QPointF& world) override;
     /// Enter/Return finishes the spline (Fusion parity); right-click also does.
     bool keyPress(SketchCanvas& canvas, QKeyEvent* event) override;
 
 private:
-    // "Control Points" is the default variant (SplineControlPoints == 0), so the
-    // pen is the default authoring mode; "Fit Points" switches to Catmull-Rom.
-    bool m_bezierMode = true;
-    bool m_rational = false;   ///< rational (weighted) Bezier
+    // The creation mode lives on the canvas (SketchCanvas::splineMode). What
+    // stays here is the pen's anchor run while one is being authored.
     std::vector<sketch::BezierAnchor> m_anchors;  ///< pen-authored anchors
     std::vector<bool> m_manual;   ///< per anchor: handles set by dragging (keep)
     /// Give every non-dragged anchor smooth auto handles (Catmull-Rom -> Bezier),

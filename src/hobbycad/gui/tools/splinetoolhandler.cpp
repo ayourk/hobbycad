@@ -10,6 +10,7 @@
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/sketch/bezier.h>
 #include <hobbycad/sketch/operations.h>
+#include <hobbycad/sketch/queries.h>      // tessellate (the conic ghost)
 
 #include <cmath>
 #include <vector>
@@ -23,36 +24,144 @@
 
 namespace hobbycad {
 
+namespace {
+
+using SplineMode = SketchCanvas::SplineMode;
+
+bool isConic(const SketchCanvas& canvas)
+{
+    return canvas.splineMode() == SplineMode::Conic;
+}
+
+/// The Bezier family: the pen, the weighted pen, and the conic, which is
+/// stored as one rational Bezier segment.
+bool isBezier(const SketchCanvas& canvas)
+{
+    return canvas.splineMode() != SplineMode::FitPoints;
+}
+
+bool isRational(const SketchCanvas& canvas)
+{
+    return canvas.splineMode() == SplineMode::Rational || isConic(canvas);
+}
+
+std::vector<Point2D> toPoints(const std::vector<Point3>& pts)
+{
+    std::vector<Point2D> out;
+    out.reserve(pts.size());
+    for (const Point3& p : pts) out.push_back(Point2D(p));
+    return out;
+}
+
+/// A conic's rho from its clicks: start, end, apex, then the point that
+/// sets rho (a click, or the cursor slot); 0.5, a parabola, until then.
+double conicRhoOf(const std::vector<Point2D>& p)
+{
+    return p.size() >= 4 ? sketch::conicRhoFromPoint(p[0], p[1], p[2], p[3]) : 0.5;
+}
+
+/// The conic the pending points describe. The one library rule
+/// (sketch::conicFromRho) serves the ghost and the commit.
+bool conicGhost(const SketchCanvas& canvas, sketch::Entity& out)
+{
+    const std::vector<Point2D> p = toPoints(canvas.pendingEntity().points);
+    if (canvas.previewPointCount() < 3 || p.size() < 3) return false;
+    return sketch::conicFromRho(canvas.pendingEntity().id, p[0], p[1], p[2], conicRhoOf(p),
+                                out);
+}
+
+/// Where the rho-setting point lands for a cursor at `world`: the shoulder
+/// on the segment from the chord's midpoint to the apex, which is ON the
+/// curve.
+QPointF conicShoulderFor(const SketchCanvas& canvas, const QPointF& world)
+{
+    const std::vector<Point2D> p = toPoints(canvas.pendingEntity().points);
+    const double rho = sketch::conicRhoFromPoint(p[0], p[1], p[2], world);
+    return sketch::conicShoulder(p[0], p[1], p[2], rho);
+}
+
+/// Place the conic's next click at `world`, committing at the fourth. A
+/// click places on press; a drag through a stage places on release
+/// (coding_standards 12.2), so both call this.
+void placeConicClick(SketchCanvas& canvas, const QPointF& world)
+{
+    QPointF at = canvas.snapToGeometry(world);
+    if (canvas.previewPointCount() >= 3) at = conicShoulderFor(canvas, at);
+    canvas.appendStagedPoint(at);
+    if (canvas.previewPointCount() >= 4) {
+        canvas.commitEntity();
+    } else {
+        canvas.update();
+    }
+}
+
+}  // namespace
+
 QString SplineToolHandler::hint(const SketchCanvas& canvas) const
 {
     const char* s;
-    if (m_bezierMode) {
-        s = (m_anchors.empty())
-            ? "Bezier: click for a corner, click-drag to pull tangent handles"
-            : "Bezier: click/drag to add anchors; Enter, Esc, or right-click to finish";
+    if (isConic(canvas)) {
+        const int placed = canvas.previewPointCount();
+        if (placed < 1) {
+            s = QT_TRANSLATE_NOOP("hobbycad::SketchCanvas", "Conic arc: click the start");
+        } else if (placed < 2) {
+            s = QT_TRANSLATE_NOOP("hobbycad::SketchCanvas", "Conic arc: click the end");
+        } else if (placed < 3) {
+            s = QT_TRANSLATE_NOOP(
+                "hobbycad::SketchCanvas",
+                "Conic arc: click the apex, where the two end tangents meet");
+        } else {
+            s = QT_TRANSLATE_NOOP(
+                "hobbycad::SketchCanvas",
+                "Conic arc: slide to set rho (0.5 parabola, less elliptical, "
+                "more hyperbolic), click to place");
+        }
+    } else if (isBezier(canvas)) {
+        s = m_anchors.empty()
+            ? QT_TRANSLATE_NOOP(
+                  "hobbycad::SketchCanvas",
+                  "Bezier: click for a corner, click-drag to pull tangent handles")
+            : QT_TRANSLATE_NOOP(
+                  "hobbycad::SketchCanvas",
+                  "Bezier: click/drag to add anchors; Enter, Esc, or right-click to finish");
     } else {
         s = (canvas.previewPointCount() < 2)
-            ? "Spline: click to add fit points"
-            : "Spline: click to add points; Enter, Esc, or right-click to finish";
+            ? QT_TRANSLATE_NOOP("hobbycad::SketchCanvas", "Spline: click to add fit points")
+            : QT_TRANSLATE_NOOP(
+                  "hobbycad::SketchCanvas",
+                  "Spline: click to add points; Enter, Esc, or right-click to finish");
     }
     return QCoreApplication::translate("hobbycad::SketchCanvas", s);
 }
 
 QString SplineToolHandler::cursorHint(const SketchCanvas& canvas) const
 {
-    const bool canFinish = m_bezierMode ? (m_anchors.size() >= 2)
-                                        : (canvas.previewPointCount() >= 2);
+    if (isConic(canvas)) {
+        return canvas.previewPointCount() >= 3 ? tr("(Slide to set rho, click to place)")
+                                               : tr("(Click to place)");
+    }
+    const bool pen = isBezier(canvas);
+    const bool canFinish = pen ? (m_anchors.size() >= 2) : (canvas.previewPointCount() >= 2);
     return canFinish
         ? tr("(Right-click to finish)")
-        : (m_bezierMode ? tr("(Click to add points, drag for handles)")
-                        : tr("(Click to add points)"));
+        : (pen ? tr("(Click to add points, drag for handles)") : tr("(Click to add points)"));
 }
 
-bool SplineToolHandler::applyCreationMode(SketchCanvas&, int modeValue)
+bool SplineToolHandler::finishesOnRightClick(const SketchCanvas& canvas) const
 {
-    // 0 = Bezier pen, 1 = Catmull-Rom, 2 = Rational (weighted) Bezier.
-    m_bezierMode = (modeValue == 0 || modeValue == 2);
-    m_rational   = (modeValue == 2);
+    return !isConic(canvas);
+}
+
+bool SplineToolHandler::applyCreationMode(SketchCanvas& canvas, int modeValue)
+{
+    // The toolbar's order: 0 Bezier pen, 1 Catmull-Rom, 2 Rational (weighted)
+    // Bezier, 3 Conic Arc (Rho), a rational Bezier from four staged clicks.
+    switch (modeValue) {
+    case 1:  canvas.setSplineMode(SplineMode::FitPoints);     break;
+    case 2:  canvas.setSplineMode(SplineMode::Rational);      break;
+    case 3:  canvas.setSplineMode(SplineMode::Conic);         break;
+    default: canvas.setSplineMode(SplineMode::ControlPoints); break;
+    }
     return true;
 }
 
@@ -89,12 +198,12 @@ void SplineToolHandler::recomputeAutoHandles()
     sketch::autoBezierHandles(m_anchors, m_manual);
 }
 
-bool SplineToolHandler::beginEntity(SketchCanvas&, SketchEntity& entity)
+bool SplineToolHandler::beginEntity(SketchCanvas& canvas, SketchEntity& entity)
 {
     entity.type = SketchEntityType::Spline;
-    entity.splineBezier = m_bezierMode;
-    entity.splineRational = m_rational;
-    if (m_bezierMode) {
+    entity.splineBezier = isBezier(canvas);
+    entity.splineRational = isRational(canvas);
+    if (entity.splineBezier) {
         m_anchors.clear();
         m_manual.clear();
         m_dragging = false;
@@ -103,15 +212,31 @@ bool SplineToolHandler::beginEntity(SketchCanvas&, SketchEntity& entity)
     return true;
 }
 
-bool SplineToolHandler::updateEntity(SketchCanvas&, const QPointF&)
+bool SplineToolHandler::updateEntity(SketchCanvas& canvas, const QPointF& pos)
 {
+    if (isConic(canvas)) {
+        // The cursor tracks the slot AFTER the placed clicks, so the ghost
+        // and the rho stage see it as the point still being placed.
+        if (!canvas.pendingEntity().points.empty()) canvas.setCursorSlot(pos);
+        return true;
+    }
     // Points are placed on press/release; movement only updates the preview.
     return true;
 }
 
-bool SplineToolHandler::normalize(SketchCanvas&, SketchEntity& entity, bool& valid)
+bool SplineToolHandler::normalize(SketchCanvas& canvas, SketchEntity& entity, bool& valid)
 {
     if (entity.type != SketchEntityType::Spline) return false;
+    if (isConic(canvas)) {
+        // Commits one exact rational cubic segment with the rho stored on it
+        // (conicFromRho), the same rule the ghost was drawn with.
+        const std::vector<Point2D> pts = toPoints(entity.points);
+        sketch::Entity conic;
+        valid = pts.size() >= 3
+             && sketch::conicFromRho(entity.id, pts[0], pts[1], pts[2], conicRhoOf(pts), conic);
+        if (valid) static_cast<sketch::Entity&>(entity) = conic;
+        return true;
+    }
     if (entity.splineBezier) {
         // Build the cubic control polygon from the authored anchors.
         const std::vector<Point2D> poly = sketch::bezierControlPolygon(m_anchors);
@@ -130,8 +255,19 @@ bool SplineToolHandler::normalize(SketchCanvas&, SketchEntity& entity, bool& val
 bool SplineToolHandler::mousePress(SketchCanvas& canvas, QMouseEvent* event,
                                    const QPointF& world)
 {
-    if (!m_bezierMode) return false;                 // fit-points uses the release path
     if (event && event->button() != Qt::LeftButton) return false;
+    if (isConic(canvas)) {
+        // Four clicks staged on PRESS, the ellipse tool's way.
+        if (event) canvas.beginDragDetection(event->pos());   // per stage, not per entity
+        if (!canvas.isDrawing()) {
+            canvas.beginPlacement(canvas.snapToGeometry(world));
+            canvas.update();
+        } else {
+            placeConicClick(canvas, world);
+        }
+        return true;
+    }
+    if (!isBezier(canvas)) return false;             // fit-points uses the release path
 
     const QPointF a = canvas.snapToGeometry(world);
     if (!canvas.isDrawing()) {
@@ -152,7 +288,8 @@ bool SplineToolHandler::mousePress(SketchCanvas& canvas, QMouseEvent* event,
 bool SplineToolHandler::mouseMove(SketchCanvas& canvas, QMouseEvent*,
                                   const QPointF& world)
 {
-    if (!m_bezierMode || !m_dragging || m_anchors.empty()) return false;
+    if (isConic(canvas)) return false;               // the canvas's move path -> updateEntity()
+    if (!isBezier(canvas) || !m_dragging || m_anchors.empty()) return false;
     const QPointF d = world - m_anchorPos;
     const double len = geometry::length(d);
     sketch::BezierAnchor& a = m_anchors.back();
@@ -180,7 +317,14 @@ bool SplineToolHandler::mouseRelease(SketchCanvas& canvas, QMouseEvent*,
                                      const QPointF& world)
 {
     if (!canvas.isDrawing()) return false;
-    if (!m_bezierMode) {
+    // Conic: a click was placed on press; a drag through the stage places the
+    // next point here (coding_standards 12.2). The release is consumed
+    // either way, so the canvas's click-drag finish cannot end it early.
+    if (isConic(canvas)) {
+        if (canvas.wasDragged()) placeConicClick(canvas, world);
+        return true;
+    }
+    if (!isBezier(canvas)) {
         // Catmull-Rom: each release adds a fit point; right-click finishes.
         canvas.appendPlacementPoint(canvas.snapToGeometry(world));
         canvas.update();
@@ -192,9 +336,40 @@ bool SplineToolHandler::mouseRelease(SketchCanvas& canvas, QMouseEvent*,
     return true;
 }
 
+bool SplineToolHandler::constrainCursor(SketchCanvas& canvas, QPointF& world, bool /*altHeld*/)
+{
+    // Conic, choosing rho: the cursor rides the segment from the chord's
+    // midpoint to the apex; the shoulder it lands on is ON the curve. Alt
+    // does not release it: rho is a fraction of that line, nothing else.
+    if (!isConic(canvas) || !canvas.isDrawing()) return false;
+    if (canvas.previewPointCount() < 3 || canvas.pendingEntity().points.size() < 3) {
+        return false;
+    }
+    world = conicShoulderFor(canvas, world);
+    return true;
+}
+
 bool SplineToolHandler::drawPreview(SketchCanvas& canvas, QPainter& painter)
 {
-    if (m_bezierMode) {
+    if (isConic(canvas)) {
+        const int placed = canvas.previewPointCount();
+        if (!canvas.isDrawing() || placed == 0) return true;
+        sketch::Entity ghost;
+        const bool choosingRho = placed >= 3 && conicGhost(canvas, ghost);
+        // Ends and apex being chosen: a rubber line from the last click.
+        canvas.paintPlacedClicks(painter, !choosingRho);
+        if (!choosingRho) return true;
+        // Rho being chosen: the two tangent legs dashed, the curve solid,
+        // the shoulder ringed where the cursor rides the apex line.
+        const std::vector<Point2D> p = toPoints(canvas.pendingEntity().points);
+        painter.drawLine(canvas.toScreen(p[0]), canvas.toScreen(p[2]));
+        painter.drawLine(canvas.toScreen(p[2]), canvas.toScreen(p[1]));
+        canvas.strokeWorldPolyline(painter, sketch::tessellate(ghost, 96), true);
+        const Point2D sh = sketch::conicShoulder(p[0], p[1], p[2], conicRhoOf(p));
+        painter.drawEllipse(canvas.toScreen(sh), 4, 4);
+        return true;
+    }
+    if (isBezier(canvas)) {
         if (!canvas.isDrawing() || m_anchors.empty()) return true;
         // Rubber-band: while moving toward the next click (not dragging a handle),
         // append a provisional anchor at the cursor and re-smooth, so the curve

@@ -180,6 +180,9 @@ protected:
 private:
     Bnd_Box selectedBoundingBox() const;
     void initViewer();
+    /// Viewer init threw: report it as softcrash would, mark the viewport
+    /// failed so nothing touches the view again, and tell the host.
+    void failInit(const char* message);
     void setupAxisTrihedron();
     void setupGrid();
     void setupViewCube();
@@ -209,6 +212,8 @@ private:
     Handle(ScaleBarWidget)         m_scaleBar;
     Handle(AisGrid)                m_grid;
     bool                           m_initialized = false;
+    /// Viewer init threw: never touch m_view again.
+    bool                           m_initFailed = false;
     bool                           m_gridVisible = true;
     bool                           m_zUpOrientation = true;
     bool                           m_orbitSelectedObject = false;

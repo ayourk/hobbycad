@@ -216,6 +216,12 @@ inline double oppositeSweepRad(double sweep) { return sweep > 0 ? sweep - 2.0 * 
 /// Compute the midpoint of a line segment
 HOBBYCAD_EXPORT Point2D lineMidpoint(const Point2D& p1, const Point2D& p2);
 
+/// The circumference of an ellipse with semi-axes `a` and `b`, by
+/// Ramanujan's second approximation (exact for a circle, within a few
+/// parts per million for any ellipse a CAD sketch holds). 0 when the
+/// ellipse is degenerate.
+HOBBYCAD_EXPORT double ellipseCircumference(double a, double b);
+
 /// Compute the direction vector of a line (normalized)
 HOBBYCAD_EXPORT Point2D lineDirection(const Point2D& p1, const Point2D& p2);
 

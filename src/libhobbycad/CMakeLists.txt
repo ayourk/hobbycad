@@ -114,6 +114,7 @@ set(LIBHOBBYCAD_SOURCES
     parameters.cpp
     crashhandler.cpp
     opengl_info.cpp
+    gl_diagnostics.cpp
     occt_viewer_probe.cpp
     project.cpp
     plane_frame.cpp
@@ -168,6 +169,7 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/parameters.h
     hobbycad/crashhandler.h
     hobbycad/opengl_info.h
+    hobbycad/gl_diagnostics.h
     hobbycad/occt_failure.h
     hobbycad/project.h
     hobbycad/project_undo.h
@@ -204,6 +206,20 @@ set(LIBHOBBYCAD_HEADERS
 )
 
 # ---- Library target --------------------------------------------------
+
+# GL failure diagnostics: one fact gatherer per platform, chosen here so
+# that no source file carries another platform's code
+# (gl_diagnostics.h explains the split).
+# gl_facts_common is shared by every gatherer but Windows's.
+if(WIN32)
+    list(APPEND LIBHOBBYCAD_SOURCES gl_facts_windows.cpp)
+elseif(APPLE)
+    list(APPEND LIBHOBBYCAD_SOURCES gl_facts_macos.cpp gl_facts_common.cpp gl_facts_common.h)
+elseif(UNIX)
+    list(APPEND LIBHOBBYCAD_SOURCES gl_facts_unix.cpp gl_facts_common.cpp gl_facts_common.h)
+else()
+    list(APPEND LIBHOBBYCAD_SOURCES gl_facts_other.cpp gl_facts_common.cpp gl_facts_common.h)
+endif()
 
 add_library(hobbycad-lib ${HOBBYCAD_CORE_LINKAGE}
     ${LIBHOBBYCAD_SOURCES}
@@ -315,6 +331,15 @@ target_link_libraries(hobbycad-lib
         ${HOBBYCAD_OCCT_LIBS}
         nlohmann_json::nlohmann_json
 )
+
+# The GL diagnostics use dlopen() on Unix (in libc on current glibc and the
+# BSDs, libdl on older glibc) and the registry, display and toolhelp APIs
+# on Windows (user32, gdi32, advapi32, kernel32).
+if(WIN32)
+    target_link_libraries(hobbycad-lib PRIVATE user32 gdi32 advapi32)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(hobbycad-lib PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # backtrace()/backtrace_symbols() are in libc on glibc, but on the BSDs they
 # live in a separate libexecinfo. crashhandler.cpp guards the include with

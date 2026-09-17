@@ -47,7 +47,14 @@ int main() {
         es.push_back(createEllipse(1, {3,4}, 20.0, 10.0));
         int dof = s.degreesOfFreedom(es, cs);
         std::printf("ellipse DOF = %d\n", dof);
-        check(dof == 2, "ellipse contributes 2 DOF (center only)");
+        // Was 2: the axes were scalars the solver could not see, so only the
+        // center was registered and no dimension could ever reach a radius.
+        // The axes are geometry now (center plus a point on each axis, the
+        // two joined by lines held perpendicular), which is six parameters
+        // less one constraint. The five that remain are exactly what an
+        // ellipse has: center x, center y, rotation, major, minor. libslvs
+        // reports this itself; it is not bookkeeping on our side.
+        check(dof == 5, "ellipse contributes 5 DOF (center, rotation, both axes)");
     }
     {
         Solver s;

@@ -490,10 +490,23 @@ Still not reachable from the CLI: parallelogram, trim, extend, split, offset,
 fillet, chamfer, and patterns. The GUI sketcher can still do more than the CLI
 can express.
 
-Two entity types are drawable but not fully constrainable, and this is a
-solver limit rather than a CLI one: a regular polygon's radius and rotation,
-and an ellipse's axes, have no libslvs primitive. The geometry is real and
-saves correctly; the solver simply cannot constrain those quantities.
+One entity type is drawable but not fully constrainable, and this is a
+solver limit rather than a CLI one: a regular polygon's radius and rotation
+have no libslvs primitive. The geometry is real and saves correctly; the
+solver simply cannot constrain those quantities.
+
+An ellipse's axes ARE constrainable. The center and a point on each axis are
+real solver points, so a Distance dimension on an axis point sets that
+radius, and the two axes stay perpendicular through every solve. With the
+HobbyCAD libslvs from patch 0028 on (SLVS_HAS_ELLIPSE) the ellipse is a
+native solver entity: Point On Circle accepts an ellipse, and Tangent between
+a line and an ellipse is exact, moving whichever side is free. With an older
+libslvs the point-on is skipped with a diagnostic and the tangency is
+approximate: at the point of the ellipse nearest the line, the ellipse is
+stood in for by its osculating circle, re-derived on each solve, which moves
+the line onto the ellipse and never the ellipse, so a fully fixed line cannot
+satisfy it. Tangency between an ellipse and a circle, arc, or another ellipse
+is not supported.
 
 
 ================================================================================
@@ -986,16 +999,31 @@ polygon [at] <x>,<y> radius <r> sides <n>
     is no libslvs primitive for either. The shape is real and saves fine.
 
 ellipse [at] <x>,<y> major <a> minor <b>
+        [rotation <deg>] [angle <start> to <end>]
     Create an ellipse with the given semi-axes. If the minor radius is
     larger than the major, the two are swapped and the command says so;
     the field names describe which is which, so the input was mislabeled
-    rather than impossible.
+    rather than impossible. A swap also turns the rotation and the arc
+    range a quarter turn, so the shape you described is the shape you get.
+
+    rotation turns the major axis, counter-clockwise from +X.
+
+    angle <start> to <end> makes an elliptical ARC instead of a whole
+    ellipse. The angles are parameters in the ellipse's own frame, the
+    same convention DXF and projection use: 0 is the +major axis and 90
+    is the +minor axis, which is the polar angle only when the two radii
+    are equal.
 
     Examples:
       ellipse at 0,0 major 40 minor 20
       ellipse 10,10 major (width/2) minor 15
+      ellipse at 0,0 major 40 minor 20 rotation 30
+      ellipse at 0,0 major 40 minor 20 angle 0 to 90
 
-    Note: as with polygons, the solver cannot constrain the axes.
+    Note: the axes are solver points, so a Distance dimension on the
+    major or minor axis point sets that radius. Tangent to a line is
+    exact with the 0028 libslvs and approximate before it; see the
+    solver note near the top of this file.
 
 slot along <entity id> width <w>
 slot [from] <x1>,<y1> to <x2>,<y2> width <w>
@@ -1099,6 +1127,38 @@ bezier <id> handle <anchor> in|out|tan <ang> <len>
     Use `points <id>` to inspect a bezier: it prints each anchor as its
     position plus its in/out handles as angle+length, with a
     [smooth]/[asymmetric]/[corner] label, the read half of the edit loop.
+
+    An anchor may also carry "weight <w>" (positive; 1 is the default): the
+    spline is then rational, and the anchor and its two handles all take
+    that weight. `export` writes the weights back out, so a rational bezier
+    replays as one.
+
+conic [from] <x>,<y> to <x>,<y> apex <x>,<y> rho <r>
+    Create a conic arc by rho, the transition curve Fusion, Onshape and
+    SolidWorks share. The two points are its ends, the apex is where the
+    end tangents meet (the curve is tangent to start-apex at the start and
+    to apex-end at the end), and rho in (0, 1) says where the shoulder sits
+    between the chord's midpoint (0) and the apex (1): below 0.5 an
+    elliptical arc, exactly 0.5 a parabola, above 0.5 a hyperbola. The two
+    ends must be apart and the apex off their line.
+
+    The curve is stored as ONE rational cubic Bezier segment, exact (a
+    quarter circle comes back to machine precision), so drawing, DXF, the
+    solver's curve constraints and `bezier`'s handle grammar all apply. Rho
+    stays a stored property of the curve as authored: `points <id>` prints
+    the ends, the apex and rho, `export` writes a `conic` line, and the
+    Properties panel shows a Conic section. Editing a handle (`bezier <id>
+    handle`, or dragging one) makes it a plain bezier and the rho is gone.
+
+    Examples:
+      conic 0,0 to 40,0 apex 20,30 rho 0.5          (a parabola)
+      conic 0,0 to 40,40 apex 40,0 rho 0.41421      (a quarter circle)
+
+conic <id> rho <r>
+    Re-author an existing conic with a new rho. The ends, the end tangent
+    directions and the apex stay; the shoulder moves along the apex line.
+    Rejected for an entity that is not a conic arc (a bezier that started
+    as one but has since had a handle edited counts as not a conic).
 
 text <string> [at] <x>,<y> [size <n>] [rotation <deg>]
     Create a text annotation. Quote the string if it contains spaces.

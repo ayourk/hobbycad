@@ -348,6 +348,51 @@ bool SketchCanvas::applyPointEdit(int entityId, int pointIndex, const Point3& p)
     return true;
 }
 
+bool SketchCanvas::applyEllipseAxisEdit(int entityId, EllipseField field, double value)
+{
+    SketchEntity* entity = entityById(entityId);
+    if (!entity || entity->type != SketchEntityType::Ellipse) return false;
+    if (isEntityLocked(entityId)) {
+        emit toolHintChanged(
+            tr("This entity is in a locked group; unlock the group to edit it."));
+        return false;
+    }
+
+    const SketchEntity oldEntity = *entity;
+    // Which axis point the edit moves, so the re-solve pins the right one.
+    int movedPoint = 0;
+    switch (field) {
+    case EllipseField::Major:
+        if (!geometry::isPositiveLength(value)) return false;
+        entity->majorRadius = value;
+        movedPoint = 1;
+        break;
+    case EllipseField::Minor:
+        if (!geometry::isPositiveLength(value)) return false;
+        entity->minorRadius = value;
+        movedPoint = 2;
+        break;
+    case EllipseField::Rotation:
+        entity->ellipseRotation = value;
+        movedPoint = 1;
+        break;
+    case EllipseField::ArcStart:
+        entity->ellipseStart = value;
+        break;
+    case EllipseField::ArcSweep:
+        entity->ellipseSweep = value;
+        break;
+    }
+
+    // The axis points are the geometry the solver sees, so they follow the
+    // numbers immediately rather than waiting for a solve.
+    sketch::syncEllipseAxisPoints(*entity);
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(
+        oldEntity, *entity, "Edit ellipse"));
+    notifyEntityPointChanged(entityId, movedPoint);
+    return true;
+}
+
 void SketchCanvas::setSketchMode(bool threeD)
 {
     if (m_is3D == threeD) return;
@@ -649,6 +694,25 @@ void SketchCanvas::setBezierAnchorHandleLen(int splineId, int a, bool outHandle,
     if (!sketch::setBezierAnchorHandleLength(*e, a, outHandle, len)) return;
     pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e));
     solveConstraints(); update();
+}
+
+bool SketchCanvas::applyConicRho(int entityId, double rho)
+{
+    SketchEntity* e = entityById(entityId);
+    if (!e || e->type != SketchEntityType::Spline || !(e->conicRho > 0.0)) return false;
+    if (!(rho > 0.0) || !(rho < 1.0)) return false;
+    if (isEntityLocked(entityId)) {
+        emit toolHintChanged(
+            tr("This entity is in a locked group; unlock the group to edit it."));
+        return false;
+    }
+    const SketchEntity oldE = *e;
+    if (!sketch::setConicRho(*e, rho)) return false;
+    pushUndoCommand(sketch::UndoCommand::modifyEntity(oldE, *e, "Edit conic rho"));
+    solveConstraints();
+    update();
+    emit entityModified(entityId);
+    return true;
 }
 
 void SketchCanvas::setBezierAnchorWeight(int splineId, int a, double weight)
@@ -8690,6 +8754,22 @@ void SketchCanvas::solveConstraints()
             }
         }
 
+        // A conic authored by rho stays that conic: the solver (or a drag
+        // through it) moves control points as a plain rational cubic, so the
+        // inner two are re-derived from the solved ends, their tangent
+        // directions (the apex is where those meet) and the STORED rho, the
+        // property the panel shows. Dragging an end therefore keeps the
+        // other end's tangent and slides the apex along it; dragging a
+        // handle turns that tangent. Without this the stored rho would go
+        // stale at the first move. A conic whose tangents have become
+        // parallel has no apex; it is then a plain Bezier, honestly.
+        for (SketchEntity& ent : m_entities) {
+            if (ent.type == SketchEntityType::Spline && ent.conicRho > 0.0
+                && !sketch::setConicRho(ent, ent.conicRho)) {
+                ent.conicRho = 0.0;
+            }
+        }
+
         // Associative offsets follow their parent through the solve, the way
         // a slot follows its centerline: re-derive each offset copy from the
         // (now solved) parent geometry.
@@ -8827,6 +8907,57 @@ QPointF SketchCanvas::rawMouseWorld() const
 bool SketchCanvas::allDimFieldsLocked() const
 {
     return m_dimInput.allLocked();
+}
+
+void SketchCanvas::strokeWorldPolyline(QPainter& painter, const std::vector<Point2D>& pts,
+                                       bool solid) const
+{
+    QPolygonF poly;
+    poly.reserve(static_cast<int>(pts.size()));
+    for (const auto& p : pts) poly << worldToScreenF(QPointF(p.x, p.y));
+    painter.setBrush(Qt::NoBrush);
+    if (!solid) {
+        painter.drawPolyline(poly);
+        return;
+    }
+    QPen pen = painter.pen();
+    pen.setStyle(Qt::SolidLine);
+    painter.save();
+    painter.setPen(pen);
+    painter.drawPolyline(poly);
+    painter.restore();
+}
+
+void SketchCanvas::setCursorSlot(const QPointF& world)
+{
+    const int slot = previewPointCount();
+    if (m_pendingEntity.points.size() <= static_cast<std::size_t>(slot)) {
+        m_pendingEntity.points.push_back(world);
+    } else {
+        m_pendingEntity.points[slot] = world;
+    }
+}
+
+void SketchCanvas::appendStagedPoint(const QPointF& world)
+{
+    const std::size_t placed = static_cast<std::size_t>(previewPointCount());
+    if (m_pendingEntity.points.size() > placed) m_pendingEntity.points.resize(placed);
+    appendPlacementPoint(world);
+}
+
+void SketchCanvas::paintPlacedClicks(QPainter& painter, bool rubberLine) const
+{
+    const int placed = previewPointCount();
+    const auto& pend = m_pendingEntity.points;
+    painter.setBrush(QColor(0, 120, 215));
+    for (int i = 0; i < placed && i < static_cast<int>(pend.size()); ++i) {
+        painter.drawEllipse(worldToScreen(QPointF(pend[i])), 3, 3);
+    }
+    painter.setBrush(Qt::NoBrush);
+    if (rubberLine && placed >= 1) {
+        painter.drawLine(worldToScreen(previewPoint(placed - 1)),
+                         worldToScreen(currentMouseWorld()));
+    }
 }
 
 void SketchCanvas::appendPlacementPoint(const QPointF& worldPos)

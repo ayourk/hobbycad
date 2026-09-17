@@ -49,6 +49,8 @@ private:
     QCheckBox* m_coincidenceMarkers = nullptr;  ///< sub of Constraints
     QCheckBox* m_showConstruction = nullptr;  ///< filter: hide construction geometry
     QCheckBox* m_showProjected = nullptr;     ///< filter: hide projected (reference) geometry
+    /// Default for ellipse axis display (Properties overrides it per ellipse).
+    QCheckBox* m_ellipseAxes = nullptr;
     QComboBox* m_linetype = nullptr;          ///< linetype of the selection (Normal/Construction/Centerline)
     QPushButton* m_lookAt = nullptr;
     QCheckBox* m_slice = nullptr;   ///< Section model at the sketch plane (bound to sliceAction)

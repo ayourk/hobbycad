@@ -1001,6 +1001,8 @@ void MainWindow::createViewMenu()
     // Sketch drawing tools also live in a menu, not only the toolbar, so they
     // are discoverable by browsing. Bezier (the pen) and Spline (Catmull-Rom
     // fit points) are the two spline variants; the rest mirror the toolbar.
+    // Ellipse opens in Center + Axes, the toolbar button's own default; its
+    // other placements are on the toolbar dropdown.
 void MainWindow::createSketchMenu()
 {
     QMenu* mSketch = new QMenu(this);
@@ -1018,11 +1020,13 @@ void MainWindow::createSketchMenu()
     addTool(tr("&Rectangle"),   SketchTool::Rectangle, CreationMode::Default);
     addTool(tr("&Circle"),      SketchTool::Circle,    CreationMode::Default);
     addTool(tr("&Arc"),         SketchTool::Arc,       CreationMode::Default);
+    addTool(tr("&Ellipse"),     SketchTool::Ellipse,   CreationMode::EllipseCenterAxes);
     addTool(tr("&Point"),       SketchTool::Point,     CreationMode::Default);
     mSketch->addSeparator();
     addTool(tr("&Cubic Bezier"),        SketchTool::Spline, CreationMode::SplineControlPoints);
     addTool(tr("&Catmull-Rom Spline"),  SketchTool::Spline, CreationMode::SplineFitPoints);
     addTool(tr("&Rational Bezier"),     SketchTool::Spline, CreationMode::SplineRational);
+    addTool(tr("Conic Arc (Rh&o)"),     SketchTool::Spline, CreationMode::SplineConic);
     mSketch->addSeparator();
     QAction* combA = mSketch->addAction(tr("Curvature Comb"));
     combA->setCheckable(true);

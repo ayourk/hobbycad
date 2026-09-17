@@ -48,7 +48,15 @@ OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
 STATUS=0
-for t in entity_types regression arc_endpoints slvs_capabilities sketch_state driven_dimensions over_constraint redundancy_finder redundant_scale overconstrained_file line_circle_tangent curve_curve_tangent inference tangent_arc offset_associative trim_extend projection_dof sketch3d_solve solve3d_wrapper solve_preserves_z validate_groups ground_origin deforming_drag autoconstrain bezier_spline curvature_g2 rational_spline tangent_angle cut_constraints arc_open; do
+TESTS="entity_types regression arc_endpoints slvs_capabilities sketch_state
+       driven_dimensions over_constraint redundancy_finder redundant_scale
+       overconstrained_file line_circle_tangent line_ellipse_tangent
+       ellipse_native fault_recovery curve_curve_tangent inference tangent_arc
+       offset_associative trim_extend projection_dof sketch3d_solve
+       solve3d_wrapper solve_preserves_z validate_groups ground_origin
+       deforming_drag autoconstrain bezier_spline curvature_g2 rational_spline
+       tangent_angle cut_constraints arc_open"
+for t in $TESTS; do
     printf '\n=== %s ===\n' "$t"
 
     # Only a test that touches the PROJECT model needs OCCT at link time:

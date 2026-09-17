@@ -23,6 +23,26 @@ namespace sketch {
 
 namespace {
 inline Point3 at3(const Point2D& p) { return Point3{p.x, p.y, 0.0}; }
+
+/// Clamp an ellipse parameter (radians, the ellipse's own frame) into the
+/// entity's stored arc range. A full ellipse returns the angle untouched.
+/// Outside the range, the nearer of the two ends wins, so a hit test against
+/// an elliptical arc reports the arc and not the ellipse it was cut from.
+inline double clampEllipseParam(const Entity& e, double angleRad)
+{
+    if (isFullEllipse(e)) return angleRad;
+    const double s0 = degreesToRadians(e.ellipseStart);
+    const double sw = degreesToRadians(e.ellipseSweep);
+    // Offset of the query from the start, wrapped into [0, 2pi).
+    double rel = std::fmod(angleRad - s0, 2.0 * M_PI);
+    if (rel < 0.0) rel += 2.0 * M_PI;
+    const double span = std::abs(sw);
+    if (rel <= span) return s0 + (sw < 0.0 ? -rel : rel);
+    // Past the end: pick whichever end the query sits nearer to.
+    const double pastEnd = rel - span;
+    const double beforeStart = 2.0 * M_PI - rel;
+    return (pastEnd <= beforeStart) ? s0 + sw : s0;
+}
 }  // namespace
 
 using namespace geometry;
@@ -304,7 +324,8 @@ Point2D Entity::closestPoint(const Point2D& point) const
             // Into local frame, take the same-angle point, then rotate back.
             const double lxq =  dx * ct + dy * st;
             const double lyq = -dx * st + dy * ct;
-            const double angle = std::atan2(lyq, lxq);
+            // Clamped, so an elliptical arc answers with a point ON the arc.
+            const double angle = clampEllipseParam(*this, std::atan2(lyq, lxq));
             const double lx = a * std::cos(angle);
             const double ly = b * std::sin(angle);
             return Point2D(points[0].x + lx * ct - ly * st,
@@ -496,6 +517,14 @@ double Entity::distanceTo(const Point2D& point) const
             const double dy = point.y - points[0].y;
             const double lx =  dx * ct + dy * st;
             const double ly = -dx * st + dy * ct;
+            if (!isFullEllipse(*this)) {
+                // Elliptical arc: measure to the nearest point ON the arc,
+                // because the closed-form below answers for the whole
+                // ellipse and would report a hit off the end of the arc.
+                const double pr = clampEllipseParam(*this, std::atan2(ly, lx));
+                return lineLength(Point2D(lx, ly),
+                                  Point2D(a * std::cos(pr), b * std::sin(pr)));
+            }
             // Normalized ellipse equation: (lx/a)^2 + (ly/b)^2 = 1 on the outline
             double normalized = (lx * lx) / (a * a) + (ly * ly) / (b * b);
             // Approximate distance: |normalized - 1| * min(a,b)
@@ -1024,7 +1053,389 @@ Entity createEllipse(int id, const Point2D& center, double majorRadius, double m
     e.majorRadius = majorRadius;
     e.minorRadius = minorRadius;
     e.ellipseRotation = rotationDeg;
+    syncEllipseAxisPoints(e);
     return e;
+}
+
+void syncEllipseAxisPoints(Entity& e)
+{
+    if (e.type != EntityType::Ellipse || e.points.empty()) return;
+    // +major axis, then +minor axis a quarter turn from it.
+    const Point2D major = ellipsePointAtParamDeg(e, 0.0);
+    const Point2D minor = ellipsePointAtParamDeg(e, 90.0);
+    if (e.points.size() < 2) e.points.push_back(at3(major));
+    else                     e.points[1] = at3(major);
+    if (e.points.size() < 3) e.points.push_back(at3(minor));
+    else                     e.points[2] = at3(minor);
+}
+
+bool ensureEllipseAxisPoints(Entity& e)
+{
+    if (e.type != EntityType::Ellipse || e.points.empty()) return false;
+    if (e.points.size() >= 3) return false;
+    syncEllipseAxisPoints(e);
+    return true;
+}
+
+namespace {
+
+/// The second radius of an ellipse centered at `c` whose first axis runs
+/// along the unit vector `u` with radius `a`, chosen so the curve passes
+/// through `p`: in the axis frame (x' along u, y' across it) that radius is
+/// |y'| / sqrt(1 - (x'/a)^2). Beyond the first axis's extent (|x'| >= a) no
+/// such ellipse exists and the perpendicular distance |y'| stands in.
+/// `side` receives y' itself, whose sign says which side of the axis `p`
+/// lies on.
+double radiusThrough(const Point2D& c, const Point2D& u, double a, const Point2D& p,
+                     double& side)
+{
+    const Point2D r = p - c;
+    const double along = dot(r, u);
+    side = cross(u, r);
+    const double k = 1.0 - (along * along) / (a * a);
+    return k > kZeroEps ? std::abs(side) / std::sqrt(k) : std::abs(side);
+}
+
+/// Store an arc range from p1 to p2 on `e`: the shorter way by default, the
+/// long way on request (the circular arc tools' Shift), always as a positive
+/// counter-clockwise sweep in (0, 360]. Measured only counter-clockwise from
+/// p1, a cursor moving clockwise drew the long complement and the arc looked
+/// subtracted from the ellipse (Aaron, 2026-09-16), so the short clockwise
+/// arc is stored from p2 instead. The same point twice is a full turn.
+void applyArcRange(Entity& e, const Point2D& p1, const Point2D& p2, bool longWay)
+{
+    const double s = ellipseParamDeg(e, p1);
+    double sweep = std::fmod(ellipseParamDeg(e, p2) - s, 360.0);
+    if (sweep <= 0.0) sweep += 360.0;
+    e.ellipseStart = s;
+    if (sweep < 360.0) {
+        const bool isLong = sweep > 180.0;
+        if (isLong != longWay) {
+            e.ellipseStart = ellipseParamDeg(e, p2);
+            sweep = 360.0 - sweep;
+        }
+    }
+    e.ellipseSweep = sweep;
+}
+
+}  // namespace
+
+bool ellipseFromClicks(bool threePoint, const std::vector<Point2D>& clicks,
+                       Entity& out, bool longWay)
+{
+    if (clicks.size() < 2) return false;
+
+    // Center: given by the first click, or the midpoint of the two rim
+    // clicks when the major axis was drawn end to end.
+    const Point2D c = threePoint ? lineMidpoint(clicks[0], clicks[1]) : clicks[0];
+    const Point2D axis = clicks[1] - c;
+    const double major = length(axis);
+    if (!isPositiveLength(major)) return false;
+
+    out.type = EntityType::Ellipse;
+    out.majorRadius = major;
+    out.ellipseRotation = radiansToDegrees(std::atan2(axis.y, axis.x));
+
+    double minor = major * 0.5;          // interrupted placement default
+    if (clicks.size() >= 3) {
+        // The third click is a point the ellipse PASSES THROUGH, as in
+        // Fusion and Onshape: in the ellipse's own frame (x' along the major
+        // axis, y' across it) the minor radius is |y'| / sqrt(1 - (x'/a)^2),
+        // so the curve stays under the cursor wherever it goes. It used to
+        // be the perpendicular distance alone, which put the minor-axis end
+        // at the foot of the cursor rather than the curve under it, and read
+        // as "the minor dot does not follow the cursor" (Aaron, 2026-09-16).
+        // radiusThrough() also covers a click beyond the major extent.
+        double side = 0.0;
+        const double d = radiusThrough(c, axis / major, major, clicks[2], side);
+        if (isPositiveLength(d)) minor = d;
+    }
+    out.minorRadius = minor;
+
+    out.points.clear();
+    out.points.push_back(at3(c));
+    syncEllipseAxisPoints(out);          // writes +major and +minor ends
+
+    // An arc range, when the placement went on to choose one: click four is
+    // the start and click five the end (applyArcRange). Four clicks means
+    // the end is still being placed, so the sweep stays a full turn.
+    out.ellipseStart = 0.0;
+    out.ellipseSweep = 360.0;
+    if (clicks.size() >= 5) {
+        applyArcRange(out, clicks[3], clicks[4], longWay);
+    } else if (clicks.size() == 4) {
+        out.ellipseStart = ellipseParamDeg(out, clicks[3]);
+    }
+    return true;
+}
+
+namespace {
+
+/// The first `n` clicks (fewer when there are fewer).
+std::vector<Point2D> firstClicks(const std::vector<Point2D>& clicks, std::size_t n)
+{
+    return std::vector<Point2D>(clicks.begin(), clicks.begin() + std::min(n, clicks.size()));
+}
+
+/// Write the scalar fields and canonical points of an ellipse from its
+/// center, semi-axes and rotation, keeping the longer axis the major one.
+void setEllipse(Entity& out, const Point2D& c, double a, double b, double rotDeg)
+{
+    if (b > a) { std::swap(a, b); rotDeg += 90.0; }
+    out.type = EntityType::Ellipse;
+    out.majorRadius = a;
+    out.minorRadius = b;
+    out.ellipseRotation = normalizeAngle360(rotDeg);
+    out.points.clear();
+    out.points.push_back(Point3(c.x, c.y, 0.0));
+    syncEllipseAxisPoints(out);
+    out.ellipseStart = 0.0;
+    out.ellipseSweep = 360.0;
+}
+
+}  // namespace
+
+int ellipsePlacementClicks(EllipsePlacement mode)
+{
+    switch (mode) {
+    case EllipsePlacement::Arc:       return 5;
+    case EllipsePlacement::Endpoints: return 4;
+    default:                          return 3;
+    }
+}
+
+bool ellipseFromPlacement(EllipsePlacement mode, const std::vector<Point2D>& clicks,
+                          bool longWay, Entity& out)
+{
+    switch (mode) {
+    case EllipsePlacement::CenterAxes:
+    case EllipsePlacement::ThreePoint:
+        return ellipseFromClicks(mode == EllipsePlacement::ThreePoint, firstClicks(clicks, 3),
+                                 out, longWay);
+    case EllipsePlacement::Arc:
+        return ellipseFromClicks(false, clicks, out, longWay);
+
+    case EllipsePlacement::SpanRise: {
+        // The span is one axis end to end (3-Point rule: center = midpoint),
+        // the apex a point the curve passes through, and the arc is the half
+        // on the apex's side. Without the apex yet the half is the counter-
+        // clockwise one from the first end.
+        if (!ellipseFromClicks(true, firstClicks(clicks, 3), out)) return false;
+        const double s1 = ellipseParamDeg(out, clicks[0]);
+        const double s2 = ellipseParamDeg(out, clicks[1]);
+        out.ellipseStart = s1;
+        out.ellipseSweep = 180.0;
+        if (clicks.size() >= 3
+            && normalizeAngle360(ellipseParamDeg(out, clicks[2]) - s1) > 180.0) {
+            out.ellipseStart = s2;   // the apex is on the other half
+        }
+        return true;
+    }
+
+    case EllipsePlacement::Corner: {
+        // Corner = center; the second click ends one axis (it sets the axis
+        // direction and the first radius); the third click is a point the
+        // curve PASSES THROUGH: the second radius is solved from it (the
+        // pass-through rule, as for a whole ellipse), and the arc stays the
+        // full quarter from the first leg point to the second axis end, on
+        // the click's side. Passing through a point does not mean ending on
+        // it (Aaron, 2026-09-16). It used to keep only the click's
+        // perpendicular distance, which left the curve "just shy" of a point
+        // clicked slightly off the perpendicular. Beyond the first axis's
+        // extent no such ellipse exists; the perpendicular distance stands in.
+        if (clicks.size() < 2) return false;
+        const Point2D c = clicks[0];
+        const Point2D axis = clicks[1] - c;
+        const double a = length(axis);
+        if (!isPositiveLength(a)) return false;
+        double b = a * 0.5;
+        bool minorSide = true;   // the +90 side until a third click says otherwise
+        if (clicks.size() >= 3) {
+            double side = 0.0;
+            const double d = radiusThrough(c, axis / a, a, clicks[2], side);
+            if (isPositiveLength(d)) b = d;
+            minorSide = side >= 0.0;
+        }
+        setEllipse(out, c, a, b, radiansToDegrees(std::atan2(axis.y, axis.x)));
+        // The quarter from the first leg point (read back: setEllipse may have
+        // swapped the axes when b > a) toward the click's side.
+        const double s1 = ellipseParamDeg(out, clicks[1]);
+        out.ellipseStart = minorSide ? s1 : normalizeAngle360(s1 + 270.0);
+        out.ellipseSweep = 90.0;
+        return true;
+    }
+
+    case EllipsePlacement::Endpoints: {
+        // Two points ON the curve, the center, then a point giving the axis
+        // direction. In that frame each point gives  x'^2/a^2 + y'^2/b^2 = 1,
+        // two equations linear in 1/a^2 and 1/b^2; no solution (or a
+        // negative one) means no ellipse with that center and axis passes
+        // through both points, and the placement is refused rather than
+        // guessed. Two points mirror-symmetric about an axis (equal x'^2 and
+        // y'^2) leave one radius free; refused too.
+        if (clicks.size() < 3) return false;
+        const Point2D p1 = clicks[0], p2 = clicks[1], c = clicks[2];
+        double th = 0.0;
+        if (clicks.size() >= 4 && isPositiveLength(lineLength(c, clicks[3]))) {
+            th = std::atan2(clicks[3].y - c.y, clicks[3].x - c.x);
+        }
+        const double ux = std::cos(th), uy = std::sin(th);
+        auto frame = [&](const Point2D& p, double& x, double& y) {
+            const double rx = p.x - c.x, ry = p.y - c.y;
+            x = rx * ux + ry * uy;
+            y = -rx * uy + ry * ux;
+        };
+        double x1, y1, x2, y2;
+        frame(p1, x1, y1);
+        frame(p2, x2, y2);
+        const double X1 = x1 * x1, Y1 = y1 * y1, X2 = x2 * x2, Y2 = y2 * y2;
+        const double det = X1 * Y2 - X2 * Y1;
+        // Relative test: the squares scale with the sketch's units. The
+        // floor only keeps an all-zero set from comparing against zero.
+        const double scale = std::max({X1, Y1, X2, Y2, std::numeric_limits<double>::min()});
+        if (std::abs(det) <= kZeroEps * scale * scale) return false;
+        const double alpha = (Y2 - Y1) / det;   // 1/a^2
+        const double beta  = (X1 - X2) / det;   // 1/b^2
+        if (alpha <= 0.0 || beta <= 0.0) return false;
+        const double a = 1.0 / std::sqrt(alpha), b = 1.0 / std::sqrt(beta);
+        if (!isPositiveLength(a) || !isPositiveLength(b)) return false;
+        setEllipse(out, c, a, b, radiansToDegrees(th));
+        applyArcRange(out, p1, p2, longWay);
+        return true;
+    }
+    }
+    return false;
+}
+
+Point2D conicShoulder(const Point2D& start, const Point2D& end, const Point2D& apex, double rho)
+{
+    return lerp(lineMidpoint(start, end), apex, rho);
+}
+
+double conicRhoFromPoint(const Point2D& start, const Point2D& end, const Point2D& apex,
+                         const Point2D& p)
+{
+    const Point2D m = lineMidpoint(start, end);
+    const Point2D toApex = apex - m;
+    if (!isPositiveLength(length(toApex))) return 0.5;
+    const double t = dot(p - m, toApex) / lengthSquared(toApex);
+    return std::min(0.98, std::max(0.02, t));
+}
+
+bool conicFromRho(int id, const Point2D& start, const Point2D& end, const Point2D& apex,
+                  double rho, Entity& out)
+{
+    const Point2D chordVec = end - start;
+    const double chord = length(chordVec);
+    if (!isPositiveLength(chord)) return false;
+    // The apex must be off the chord's line, or there is no curve to bend.
+    if (!isPositiveLength(std::abs(cross(chordVec, apex - start)) / chord)) return false;
+    rho = std::min(0.999, std::max(0.001, rho));
+
+    // Rational quadratic with weights (1, w, 1), w = rho / (1 - rho), then
+    // exact degree elevation in homogeneous coordinates:
+    //   Q1h = (R0 + 2 R1) / 3,  Q2h = (2 R1 + R2) / 3
+    // so the inner cubic weights are (1 + 2w) / 3 and the inner points are
+    // (P0 + 2w A) / (1 + 2w) and (2w A + P2) / (1 + 2w).
+    const double w = rho / (1.0 - rho);
+    const double d = 1.0 + 2.0 * w;
+    const Point2D q1{(start.x + 2.0 * w * apex.x) / d, (start.y + 2.0 * w * apex.y) / d};
+    const Point2D q2{(2.0 * w * apex.x + end.x) / d, (2.0 * w * apex.y + end.y) / d};
+    const double W = d / 3.0;
+    out = createRationalBezierSpline(id, {start, q1, q2, end}, {1.0, W, W, 1.0});
+    out.conicRho = rho;
+    return true;
+}
+
+bool conicApex(const Entity& e, Point2D& apex)
+{
+    if (e.type != EntityType::Spline || !e.splineBezier || e.points.size() != 4) return false;
+    const Point2D p0(e.points[0]), p1(e.points[1]), p2(e.points[2]), p3(e.points[3]);
+    if (!isPositiveLength(lineLength(p0, p1)) || !isPositiveLength(lineLength(p3, p2))) {
+        return false;
+    }
+    const LineLineIntersection x = infiniteLineIntersection(p0, p1, p3, p2);
+    if (!x.intersects || x.parallel) return false;
+    apex = x.point;
+    return true;
+}
+
+const char* conicKindName(double rho)
+{
+    if (!(rho > 0.0) || !(rho < 1.0)) return "";
+    if (std::abs(rho - 0.5) < kZeroEps) return "parabolic";
+    return rho < 0.5 ? "elliptical" : "hyperbolic";
+}
+
+bool setConicRho(Entity& e, double rho)
+{
+    if (!(e.conicRho > 0.0)) return false;
+    Point2D apex;
+    if (!conicApex(e, apex)) return false;
+    Entity fresh;
+    if (!conicFromRho(e.id, Point2D(e.points.front()), Point2D(e.points.back()), apex, rho,
+                      fresh)) {
+        return false;
+    }
+    e.points = fresh.points;
+    e.weights = fresh.weights;
+    e.splineRational = true;
+    e.conicRho = fresh.conicRho;
+    return true;
+}
+
+double ellipseParamDeg(const Entity& e, const Point2D& p)
+{
+    if (e.points.empty() || !isPositiveLength(e.majorRadius)
+        || !isPositiveLength(e.minorRadius)) {
+        return 0.0;
+    }
+    const double th = degreesToRadians(e.ellipseRotation);
+    const double ct = std::cos(th), st = std::sin(th);
+    const double dx = p.x - e.points[0].x, dy = p.y - e.points[0].y;
+    // Into the ellipse's own frame, then undo the axis scaling so the
+    // angle is the curve's parameter rather than a polar angle.
+    const double lx =  dx * ct + dy * st;
+    const double ly = -dx * st + dy * ct;
+    return normalizeAngle360(
+        radiansToDegrees(std::atan2(ly / e.minorRadius, lx / e.majorRadius)));
+}
+
+Point2D ellipsePointAtParamDeg(const Entity& e, double paramDeg)
+{
+    if (e.points.empty()) return Point2D();
+    const double t = degreesToRadians(paramDeg);
+    const Point2D local(e.majorRadius * std::cos(t), e.minorRadius * std::sin(t));
+    return Point2D(e.points[0]) + rotatePoint(local, e.ellipseRotation);
+}
+
+bool isFullEllipse(const Entity& e)
+{
+    // A sweep goes through text and the solver, so a whole turn can come
+    // back a hair short of 360.
+    constexpr double FULL_TURN_TOLERANCE_DEG = 1e-3;
+    return std::abs(e.ellipseSweep) >= 360.0 - FULL_TURN_TOLERANCE_DEG;
+}
+
+bool syncEllipseFields(Entity& e)
+{
+    if (e.type != EntityType::Ellipse || e.points.size() < 3) return false;
+    const Point2D c{e.points[0].x, e.points[0].y};
+
+    // Whichever axis came out longer IS the major one. Onshape and BricsCAD
+    // both say so outright, and OCCT refuses an ellipse built the other way.
+    // Swapping the two points turns the frame a quarter turn, so the stored
+    // arc range moves with it or the drawn arc would jump.
+    if (lineLength(c, Point2D(e.points[2])) > lineLength(c, Point2D(e.points[1]))) {
+        std::swap(e.points[1], e.points[2]);
+        e.ellipseStart -= 90.0;
+    }
+
+    const Point2D p1(e.points[1]);
+    e.majorRadius = lineLength(c, p1);
+    e.minorRadius = lineLength(c, Point2D(e.points[2]));
+    e.ellipseRotation = normalizeAngle360(radiansToDegrees(std::atan2(p1.y - c.y, p1.x - c.x)));
+    return true;
 }
 
 Entity createText(int id, const Point2D& position, const std::string& text,

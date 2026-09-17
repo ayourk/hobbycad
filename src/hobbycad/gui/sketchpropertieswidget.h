@@ -38,6 +38,7 @@ class QStackedWidget;
 namespace hobbycad {
 
 class SketchCanvas;
+struct SketchEntity;
 
 /// Widget for displaying and editing sketch properties
 class SketchPropertiesWidget : public QWidget {
@@ -108,6 +109,16 @@ private slots:
     void onEditPositionToggled(bool checked);
     void onLabelAngleChanged(double degrees);
     void onCoordChanged();  // an editable coordinate spin changed
+    // Ellipse editor. Each goes through one compound canvas edit, because a
+    // radius or rotation change moves both axis points at once.
+    void onEllipseMajorChanged(double v);
+    void onEllipseMinorChanged(double v);
+    void onEllipseRotationChanged(double deg);
+    void onEllipseArcToggled(bool on);
+    void onEllipseStartChanged(double deg);
+    void onEllipseSweepChanged(double deg);
+    void onEllipseShowAxesToggled(bool on);
+    void onConicRhoChanged(double rho);   // the conic's stored rho (Conic section)
     void onCoordPointChanged(int index);  // the point-selector combo changed
     void loadCoordSpinsFromPoint(int index);  // fill u/v/w from the entity's point
     void onBezierAngleChanged(double deg);
@@ -136,6 +147,10 @@ private:
     void setupBackgroundSection();
     void setupEntitySection();
     void setupTransformSection();
+    void setupEllipseSection();
+    void setupConicSection();
+    QString conicKindText(double rho) const;   // elliptical / parabolic / hyperbolic, translated
+    void refreshConicReadout(const SketchEntity& conic);   // kind + apex labels
     void updateTransformRows();
     void resetTransformForm();
     bool currentTransformParams(sketch::GroupTransformParams& out, QString* whyNot = nullptr) const;
@@ -167,6 +182,22 @@ private:
     QGroupBox* m_bezierLegGroup = nullptr;
     QDoubleSpinBox* m_blLength = nullptr;
     int m_blSplineId = -1; int m_blI0 = -1; int m_blI1 = -1;
+    // ---- Ellipse editor ----
+    QGroupBox* m_ellipseGroup = nullptr;
+    QDoubleSpinBox* m_ellMajor = nullptr;
+    QDoubleSpinBox* m_ellMinor = nullptr;
+    QDoubleSpinBox* m_ellRotation = nullptr;
+    QCheckBox* m_ellArcCheck = nullptr;
+    QDoubleSpinBox* m_ellStart = nullptr;
+    QDoubleSpinBox* m_ellSweep = nullptr;
+    QCheckBox* m_ellShowAxes = nullptr;
+    int m_ellEntityId = -1;
+    // ---- Conic editor: a Spline authored by rho (conicRho > 0) ----
+    QGroupBox* m_conicGroup = nullptr;
+    QDoubleSpinBox* m_conicRho = nullptr;
+    QLabel* m_conicKind = nullptr;
+    QLabel* m_conicApex = nullptr;
+    int m_conicId = -1;
     QWidget* m_transformBody = nullptr;
     QComboBox* m_moveType = nullptr;
     QDoubleSpinBox* m_txDx = nullptr; QDoubleSpinBox* m_txDy = nullptr;

@@ -60,6 +60,66 @@ std::string translateThroughQt(const char* context, const char* source)
     QT_TRANSLATE_NOOP("QObject", "Nothing to redo."),
     QT_TRANSLATE_NOOP("QObject", "Redone: %1"),
     QT_TRANSLATE_NOOP("QObject", "\nNext redo: %1"),
+    // ellipse (sketch)
+    QT_TRANSLATE_NOOP("QObject",
+        "Usage: ellipse [at] <x>,<y> major <a> minor <b>\n"
+        "                [rotation <deg>] [angle <start> to <end>]\n"
+        "                [construction]\n"
+        "\n"
+        "Examples:\n"
+        "  ellipse at 0,0 major 40 minor 20\n"
+        "  ellipse 10,10 major (width/2) minor 15\n"
+        "  ellipse at 0,0 major 40 minor 20 rotation 30\n"
+        "  ellipse at 0,0 major 40 minor 20 angle 0 to 90"),
+    QT_TRANSLATE_NOOP("QObject",
+                      "Invalid rotation. Must be a number, parameter, or (expression)."),
+    QT_TRANSLATE_NOOP("QObject",
+                      "Invalid start angle. Must be a number, parameter, or (expression)."),
+    QT_TRANSLATE_NOOP("QObject", "Expected 'to' between the start and end angles"),
+    QT_TRANSLATE_NOOP("QObject",
+                      "Invalid end angle. Must be a number, parameter, or (expression)."),
+    QT_TRANSLATE_NOOP("QObject", "An elliptical arc needs a non-zero sweep."),
+    // conic (sketch)
+    QT_TRANSLATE_NOOP("QObject",
+        "Usage: conic [from] <x>,<y> to <x>,<y> apex <x>,<y> rho <r>\n"
+        "             [construction]\n"
+        "\n"
+        "A conic arc by rho, as in Fusion, Onshape and SolidWorks: the two\n"
+        "points are its ends, the apex is where the end tangents meet, and rho\n"
+        "says where the curve's shoulder sits between the chord's midpoint (0)\n"
+        "and the apex (1). Below 0.5 it is an elliptical arc, at 0.5 a parabola,\n"
+        "above 0.5 a hyperbola. It is stored as one rational Bezier segment; rho\n"
+        "stays a property of the curve (see `points <id>`, `conic <id> rho`).\n"
+        "\n"
+        "Examples:\n"
+        "  conic 0,0 to 40,0 apex 20,30 rho 0.5          (a parabola)\n"
+        "  conic 0,0 to 40,40 apex 40,0 rho 0.41421      (a quarter circle)"),
+    QT_TRANSLATE_NOOP("QObject", "Usage: conic <id> rho <r>"),
+    QT_TRANSLATE_NOOP("QObject", "Entity %1 is not a conic arc."),
+    QT_TRANSLATE_NOOP("QObject", "rho must be a number between 0 and 1, exclusive ('%1')."),
+    QT_TRANSLATE_NOOP("QObject", "Entity %1 has no recoverable apex; it is not a conic arc."),
+    QT_TRANSLATE_NOOP("QObject", "Updated conic %1: rho %2 (%3)."),
+    QT_TRANSLATE_NOOP("QObject", "Invalid start coordinates. Use format: x,y"),
+    QT_TRANSLATE_NOOP("QObject", "Expected 'to' between the start and end points"),
+    QT_TRANSLATE_NOOP("QObject", "Invalid end coordinates. Use format: x,y"),
+    QT_TRANSLATE_NOOP("QObject", "Expected 'apex' keyword"),
+    QT_TRANSLATE_NOOP("QObject", "Invalid apex coordinates. Use format: x,y"),
+    QT_TRANSLATE_NOOP("QObject", "Expected 'rho' keyword"),
+    QT_TRANSLATE_NOOP("QObject", "Invalid rho. Must be a number, parameter, or (expression)."),
+    QT_TRANSLATE_NOOP("QObject", "rho must be between 0 and 1, exclusive."),
+    QT_TRANSLATE_NOOP("QObject", "The two ends must be apart and the apex off their line."),
+    QT_TRANSLATE_NOOP("QObject",
+        "Created %6conic arc (%5) from (%1, %2) to (%3, %4), rho %7 [id %8]"),
+    QT_TRANSLATE_NOOP("QObject", "entity %1 (conic arc, %2, rho %3):"),
+    QT_TRANSLATE_NOOP("QObject", "  start (%1, %2)"),
+    QT_TRANSLATE_NOOP("QObject", "  end   (%1, %2)"),
+    QT_TRANSLATE_NOOP("QObject",
+        "  apex  (%1, %2)   (where the end tangents meet; not a stored point)"),
+    QT_TRANSLATE_NOOP("QObject",
+        "Change rho: conic %1 rho <r>. Editing a handle makes it a plain bezier."),
+    QT_TRANSLATE_NOOP("QObject", "elliptical"),
+    QT_TRANSLATE_NOOP("QObject", "parabolic"),
+    QT_TRANSLATE_NOOP("QObject", "hyperbolic"),
 };
 
 }  // namespace

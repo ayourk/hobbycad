@@ -81,6 +81,10 @@ struct HOBBYCAD_EXPORT Entity {
     bool splineClosed = false;            ///< Bezier spline is a closed loop (last segment wraps to control point 0)            ///< Spline is piecewise cubic Bezier (control points are handles, a solver curve) vs Catmull-Rom (interpolating, points-only)
     bool splineRational = false;          ///< Bezier spline is rational (weighted): weights[] per control point, registered as SLVS_E_RATIONAL_CUBIC
     std::vector<double> weights;          ///< Rational spline control-point weights (one per control point; empty = non-rational, all 1)
+    /// Conic arc by rho (conicFromRho): the stored rho, a property of the
+    /// curve as authored; 0 = not a conic. Cleared by any hand edit of the
+    /// control polygon.
+    double conicRho = 0.0;
 
     /// For a Slot: the id(s) of the centerline segment(s) this slot follows,
     /// empty when it is not path-following.
@@ -466,6 +470,156 @@ HOBBYCAD_EXPORT Entity createArcSlot(int id, const Point2D& arcCenter, const Poi
 /// Create an ellipse entity
 HOBBYCAD_EXPORT Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius,
                                      double rotationDeg = 0.0);
+
+// ---------------------------------------------------------------------
+//  An ellipse's axes, as geometry
+// ---------------------------------------------------------------------
+//  An ellipse stores its axes as scalars (majorRadius, minorRadius,
+//  ellipseRotation), which the solver cannot move: a scalar has no
+//  handle to constrain. It ALSO carries two points beside its center,
+//  points[1] on the +major axis and points[2] on the +minor axis, and
+//  those are ordinary solver points that can be dimensioned and dragged.
+//  Fusion exposes the same thing as majorAxisLine / minorAxisLine, and
+//  FreeCAD as internal-alignment geometry.
+//
+//  The two representations must agree, so everything that changes one
+//  goes through these. The scalars stay the serialized form: a file is
+//  unchanged by this, and an ellipse read from an older file (center
+//  only) is brought up to date by ensureEllipseAxisPoints().
+
+/// Give `e` its two axis points, computed from the scalars, replacing
+/// whatever was there. No effect on a non-ellipse.
+HOBBYCAD_EXPORT void syncEllipseAxisPoints(Entity& e);
+
+/// Add the axis points only if they are missing (an ellipse from an older
+/// file, from DXF, or from a projection). Returns true if it added them.
+HOBBYCAD_EXPORT bool ensureEllipseAxisPoints(Entity& e);
+
+/// Re-derive majorRadius, minorRadius and ellipseRotation from the axis
+/// points, after the solver or a drag has moved them. Keeps major >= minor
+/// by swapping the roles and turning the frame a quarter turn, so the
+/// SHAPE is preserved rather than silently redrawn. Returns false if `e`
+/// is not an ellipse or has no axis points to read.
+HOBBYCAD_EXPORT bool syncEllipseFields(Entity& e);
+
+/// Turn the CLICK ORDER of an ellipse placement into the stored layout.
+///
+/// Both GUI modes take three clicks and mean different things by them:
+///   - Center + Axes: [center, major-axis end, a point giving the minor]
+///   - 3-Point:       [one major end, the other major end, minor point]
+/// so the center is either given outright or is the midpoint of the first
+/// two clicks. In both, the THIRD click is a point the ellipse passes
+/// through (Fusion, Onshape): the minor radius is solved so the curve goes
+/// under that click, and only when the click lies beyond the major extent
+/// does its perpendicular distance stand in.
+///
+/// `out` receives majorRadius, minorRadius, ellipseRotation and the
+/// canonical points (center, +major end, +minor end). Two clicks are
+/// accepted so an interrupted placement still commits, with the minor
+/// axis defaulting to half the major. Returns false if `clicks` has fewer
+/// than two entries or the major axis is degenerate.
+///
+/// This lives here, not in the tool handler, because a wrong layout
+/// renders identically on screen and is invisible until something
+/// downstream reads the points.
+/// With FIVE clicks the last two are points on the ellipse choosing an arc,
+/// the SHORTER way around between them by default and the long way when
+/// `longWay` is set (the circular arc tools' Shift). The stored sweep is
+/// always positive and counter-clockwise, in (0, 360]: when the short arc
+/// runs clockwise from click four it is stored from click five instead.
+/// Clicking the same point twice is a full turn. Four clicks (the end still
+/// being placed) set the start and leave the sweep full.
+HOBBYCAD_EXPORT bool ellipseFromClicks(bool threePoint,
+                                       const std::vector<Point2D>& clicks,
+                                       Entity& out,
+                                       bool longWay = false);
+
+/// How an ellipse (or elliptical arc) is placed by clicks. One entry point,
+/// ellipseFromPlacement(), turns any prefix of the clicks (the last one
+/// usually being the live cursor) into the entity the placement describes,
+/// so the preview, the cursor constraint and the commit all read one rule.
+enum class EllipsePlacement {
+    CenterAxes,   ///< center, +major end, a point the ellipse passes through
+    ThreePoint,   ///< the two major ends, a point the ellipse passes through
+    Arc,          ///< CenterAxes, then start and end on the perimeter (5)
+    SpanRise,     ///< arc: the two ends of the span, then the apex (half ellipse)
+    Corner,       ///< arc: the corner (center), a point on each leg (quarter ellipse)
+    Endpoints     ///< arc: two perimeter points, the center, then the axis direction
+};
+
+/// How many clicks a placement takes to commit.
+HOBBYCAD_EXPORT int ellipsePlacementClicks(EllipsePlacement mode);
+
+/// The entity a placement's clicks describe so far; false while there are
+/// too few clicks or the clicks describe no ellipse (a degenerate span, an
+/// Endpoints center/axis pair that no ellipse through both points fits).
+///
+/// SpanRise: clicks are the two ends of the span (the chord is one axis, its
+/// midpoint the center) and the apex, a point the curve passes through; the
+/// arc is the half on the apex's side (180). Corner: the corner is the
+/// center, the second click the end of one axis, the third a point the
+/// curve passes through (it sets the other radius); the arc is the quarter
+/// from the first leg point to the other axis end, on the click's side.
+/// Endpoints: two points ON the curve, the center, then a point giving the
+/// axis direction; both radii are solved from the two points, the arc runs
+/// from the first to the second, the shorter way unless `longWay`.
+HOBBYCAD_EXPORT bool ellipseFromPlacement(EllipsePlacement mode,
+                                          const std::vector<Point2D>& clicks,
+                                          bool longWay, Entity& out);
+
+/// A conic arc by rho, the transition curve Fusion, Onshape and SolidWorks
+/// share: `start` and `end` are its endpoints, `apex` is where the two end
+/// tangents meet, and `rho` in (0, 1) is how far from the chord's midpoint
+/// toward the apex the curve's shoulder sits (below 0.5 an elliptical arc,
+/// 0.5 a parabola, above 0.5 a hyperbola). A conic is a rational quadratic
+/// Bezier (weights 1, rho/(1-rho), 1); it is stored as ONE rational CUBIC
+/// Bezier segment by exact degree elevation, so the spline machinery
+/// (drawing, export, the fork's SLVS_E_RATIONAL_CUBIC) already handles it.
+/// False when the chord is degenerate or the apex lies on the chord's line.
+HOBBYCAD_EXPORT bool conicFromRho(int id, const Point2D& start, const Point2D& end,
+                                  const Point2D& apex, double rho, Entity& out);
+
+/// The rho a cursor position implies: its projection onto the segment from
+/// the chord's midpoint to the apex, clamped to [0.02, 0.98].
+HOBBYCAD_EXPORT double conicRhoFromPoint(const Point2D& start, const Point2D& end,
+                                         const Point2D& apex, const Point2D& p);
+
+/// The shoulder point, midpoint + rho * (apex - midpoint): it is ON the curve.
+HOBBYCAD_EXPORT Point2D conicShoulder(const Point2D& start, const Point2D& end,
+                                      const Point2D& apex, double rho);
+
+/// The apex of a conic stored by conicFromRho(): where the end tangents
+/// (P0 toward P1, P3 toward P2) of its one rational cubic segment meet. It is
+/// not a stored point, so this is how the panel and export show it. False
+/// unless `e` is a four-point Bezier whose end tangents are not parallel.
+HOBBYCAD_EXPORT bool conicApex(const Entity& e, Point2D& apex);
+
+/// Re-author a conic (conicRho > 0) with a new rho, the Fusion property
+/// route: ends, end tangent directions and the apex stay, the inner control
+/// points and weights are rebuilt, and the new rho is stored. Only the
+/// points, weights and rho change; every other field of `e` is untouched.
+/// False when `e` is not a conic or its apex cannot be recovered.
+HOBBYCAD_EXPORT bool setConicRho(Entity& e, double rho);
+
+/// The kind of conic a rho makes: "elliptical" below 0.5, "parabolic" at
+/// 0.5, "hyperbolic" above. English, for the command layer and as a
+/// translation key; "" for a rho outside (0, 1).
+HOBBYCAD_EXPORT const char* conicKindName(double rho);
+
+/// The parameter angle (degrees, the ellipse's own frame, 0 = the +major
+/// axis) of the direction from the ellipse's center to `p`. This is what a
+/// click on the curve means as an arc endpoint, and it is NOT the polar
+/// angle unless the two radii are equal. Returns 0 for a degenerate ellipse.
+HOBBYCAD_EXPORT double ellipseParamDeg(const Entity& e, const Point2D& p);
+
+/// The point of ellipse `e` at parameter angle `paramDeg` (degrees, the
+/// ellipse's own frame, 0 = the +major axis), rotation included: the
+/// inverse of ellipseParamDeg(). The arc range is not applied.
+HOBBYCAD_EXPORT Point2D ellipsePointAtParamDeg(const Entity& e, double paramDeg);
+
+/// True when an ellipse's arc range is a whole turn, so it is a closed
+/// ellipse rather than an elliptical arc.
+HOBBYCAD_EXPORT bool isFullEllipse(const Entity& e);
 
 /// Create a text entity
 HOBBYCAD_EXPORT Entity createText(int id, const Point2D& position, const std::string& text,

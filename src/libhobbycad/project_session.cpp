@@ -149,6 +149,7 @@ bool sameEntity(const sketch::Entity& a, const sketch::Entity& b)
         && a.textRotation == b.textRotation && a.arcFlipped == b.arcFlipped
         && a.splineBezier == b.splineBezier && a.splineClosed == b.splineClosed
         && a.splineRational == b.splineRational && a.weights == b.weights
+        && a.conicRho == b.conicRho
         && a.pathEntityIds == b.pathEntityIds && a.offsetParentId == b.offsetParentId
         && a.offsetDistance == b.offsetDistance && a.offsetSide == b.offsetSide
         && a.projectionSourceId == b.projectionSourceId

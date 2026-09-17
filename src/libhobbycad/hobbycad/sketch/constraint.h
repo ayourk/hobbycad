@@ -286,6 +286,11 @@ HOBBYCAD_EXPORT bool angleFromLabelSide(const Entity& e1, const Entity& e2,
 /// True when `c` is the FixedPoint pinning point `pointIndex` of `entityId`.
 HOBBYCAD_EXPORT bool isFixedPointOn(const Constraint& c, int entityId, int pointIndex);
 
+/// True when `c` is a Distance dimension naming point `pointIndex` of
+/// `entityId`, so that point is placed by the dimension. An ellipse's axis
+/// point (1 major, 2 minor) dimensioned this way owns that axis's length.
+HOBBYCAD_EXPORT bool dimensionDrivesPoint(const Constraint& c, int entityId, int pointIndex);
+
 /// A FixedPoint constraint pinning one point (enabled, driving, no label).
 HOBBYCAD_EXPORT Constraint makeFixedPoint(int id, int entityId, int pointIndex);
 

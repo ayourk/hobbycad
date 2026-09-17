@@ -144,6 +144,7 @@ const CommandSpec kCommands[] = {
     {"slot",       CmdScope::Sketch},
     {"spline",     CmdScope::Sketch},
     {"bezier",     CmdScope::Sketch},
+    {"conic",      CmdScope::Sketch},
     {"text",       CmdScope::Sketch},
     {"constrain",  CmdScope::Sketch},
     {"solve",      CmdScope::Sketch},
@@ -1026,6 +1027,7 @@ CliResult CliEngine::execute(const std::string& line)
         if (cmd == "slot")      return cmdSketchSlot(slice(tokens, 1));
         if (cmd == "spline")    return cmdSketchSpline(slice(tokens, 1));
         if (cmd == "bezier")    return cmdSketchBezier(slice(tokens, 1));
+        if (cmd == "conic")     return cmdSketchConic(slice(tokens, 1));
         if (cmd == "text")      return cmdSketchText(slice(tokens, 1));
         if (cmd == "constrain") return cmdConstrain(slice(tokens, 1));
         if (cmd == "solve")     return cmdSolve(slice(tokens, 1));
@@ -1141,8 +1143,11 @@ CliResult CliEngine::cmdHelp() const
         "  arc [at] <x>,<y> radius <r> [angle] <start> to <end>\n"
         "  polygon [at] <x>,<y> radius <r> sides <n>\n"
         "  ellipse [at] <x>,<y> major <a> minor <b>\n"
+        "          [rotation <deg>] [angle <start> to <end>]\n"
         "  slot [from] <x>,<y> to <x>,<y> radius <r>\n"
         "  spline [through] <x>,<y> <x>,<y> [<x>,<y> ...]\n"
+        "  bezier <x>,<y> [in|out|tan <ang> <len>] [weight <w>] <x>,<y> ...\n"
+        "  conic [from] <x>,<y> to <x>,<y> apex <x>,<y> rho <r>\n"
         "  text <string> [at] <x>,<y> [size <n>] [rotation <deg>]\n"
         "                          Every one of these takes an optional\n"
         "                          trailing 'construction' keyword.\n"
@@ -2449,6 +2454,13 @@ std::vector<std::string> CliEngine::describeEntities(const hobbycad::SketchData&
             }
             break;
         case sketch::EntityType::Spline: {
+            hobbycad::Point2D apex;
+            if (e.conicRho > 0.0 && sketch::conicApex(e, apex)) {
+                desc = subst("conic      %1 to %2  apex %3  rho %4 (%5)", ptAt(e, 0),
+                             ptAt(e, e.points.size() - 1), pt(apex), e.conicRho,
+                             sketch::conicKindName(e.conicRho));
+                break;
+            }
             std::vector<std::string> pts;
             for (const auto& p : e.points) pts.push_back(pt(p));
             desc = subst("%1 %2", e.splineBezier ? "bezier    "
@@ -2940,6 +2952,31 @@ CliResult CliEngine::cmdPoints(std::vector<std::string> args)
     const hobbycad::SketchEntityData* e = pendingEntity(id);
     if (!e) {
         return failure(subst("No entity %1 in the current sketch.", id));
+    }
+    // A conic authored by rho reads as what it is: ends, apex and rho (its
+    // stored property), with the edit form beside it. The inner control
+    // points are derived from those and are not shown as handles.
+    if (e->type == sketch::EntityType::Spline && e->conicRho > 0.0) {
+        hobbycad::Point2D apex;
+        if (sketch::conicApex(*e, apex)) {
+            std::vector<std::string> cl;
+            cl.push_back(subst(translate("QObject", "entity %1 (conic arc, %2, rho %3):"), id,
+                               translate("QObject", sketch::conicKindName(e->conicRho)),
+                               e->conicRho));
+            cl.push_back(subst(translate("QObject", "  start (%1, %2)"),
+                               e->points.front().x, e->points.front().y));
+            cl.push_back(subst(translate("QObject", "  end   (%1, %2)"),
+                               e->points.back().x, e->points.back().y));
+            cl.push_back(subst(translate("QObject", "  apex  (%1, %2)   (where the end tangents "
+                                                    "meet; not a stored point)"),
+                               apex.x, apex.y));
+            cl.push_back(subst(translate("QObject", "Change rho: conic %1 rho <r>. Editing a "
+                                                    "handle makes it a plain bezier."),
+                               id));
+            r.exitCode = 0;
+            r.output = join(cl, '\n');
+            return r;
+        }
     }
     // A Bezier spline reads best as anchors + handles (angle/length), the same
     // form the `bezier` create/edit grammar uses, not a raw control-point dump.
@@ -5049,12 +5086,16 @@ CliResult CliEngine::cmdSketchEllipse(std::vector<std::string> args)
     const bool construction = takeConstructionFlag(args);
 
     if (static_cast<int>(args.size()) < 5) {
-        return failure(
-            "Usage: ellipse [at] <x>,<y> major <a> minor <b> [construction]\n"
+        return failure(translate("QObject",
+            "Usage: ellipse [at] <x>,<y> major <a> minor <b>\n"
+            "                [rotation <deg>] [angle <start> to <end>]\n"
+            "                [construction]\n"
             "\n"
             "Examples:\n"
             "  ellipse at 0,0 major 40 minor 20\n"
-            "  ellipse 10,10 major (width/2) minor 15");
+            "  ellipse 10,10 major (width/2) minor 15\n"
+            "  ellipse at 0,0 major 40 minor 20 rotation 30\n"
+            "  ellipse at 0,0 major 40 minor 20 angle 0 to 90"));
     }
 
     ArgCursor cur(args, parameterValues(), namedPointValues());
@@ -5077,6 +5118,45 @@ CliResult CliEngine::cmdSketchEllipse(std::vector<std::string> args)
         return failure("Both radii must be greater than zero.");
     }
 
+    // Optional: the major axis angle, and an arc range. The arc range uses
+    // the arc command's own "angle <start> to <end>" wording rather than a
+    // new one, and the angles are parameters in the ellipse's own frame,
+    // the same convention the renderer, DXF and projection already use.
+    double rotation = 0.0;
+    std::string rotationExpr;
+    if (cur.accept("rotation")) {
+        if (!cur.value(rotation, rotationExpr,
+                       translate("QObject", "Invalid rotation. Must be a number, parameter, "
+                                            "or (expression)."))) {
+            return cur.result();
+        }
+    }
+
+    double startAngle = 0.0;
+    double endAngle = 360.0;
+    bool partial = false;
+    if (cur.accept("angle")) {
+        std::string tmp;
+        if (!cur.value(startAngle, tmp,
+                       translate("QObject", "Invalid start angle. Must be a number, "
+                                            "parameter, or (expression)."))) {
+            return cur.result();
+        }
+        if (!cur.expect("to", translate("QObject",
+                                        "Expected 'to' between the start and end angles"))) {
+            return cur.result();
+        }
+        if (!cur.value(endAngle, tmp,
+                       translate("QObject", "Invalid end angle. Must be a number, "
+                                            "parameter, or (expression)."))) {
+            return cur.result();
+        }
+        if (geometry::isZeroAngleDeg(endAngle - startAngle)) {
+            return failure(translate("QObject", "An elliptical arc needs a non-zero sweep."));
+        }
+        partial = true;
+    }
+
     // Naming, not geometry: the fields mean "major" and "minor", so an
     // ellipse whose minor exceeds its major is mislabelled rather than
     // impossible. Swapping silently would contradict what was typed, so
@@ -5085,6 +5165,12 @@ CliResult CliEngine::cmdSketchEllipse(std::vector<std::string> args)
     if (minor > major) {
         std::swap(major, minor);
         std::swap(majorExpr, minorExpr);
+        // Swapping the axes turns the frame a quarter turn, and the
+        // parameter origin moves with it, so the SHAPE has to be turned
+        // back or the swap would silently redraw what was typed.
+        rotation += 90.0;
+        startAngle -= 90.0;
+        endAngle -= 90.0;
         note = 
             "\nNote: minor radius exceeded major, so they were swapped.";
     }
@@ -5093,6 +5179,14 @@ CliResult CliEngine::cmdSketchEllipse(std::vector<std::string> args)
     e.points = { {cx, cy} };
     e.majorRadius = major;
     e.minorRadius = minor;
+    e.ellipseRotation = rotation;
+    if (partial) {
+        e.ellipseStart = startAngle;
+        e.ellipseSweep = endAngle - startAngle;
+    }
+    // The axes are solver geometry, so they need their points. Last, because
+    // the points are computed from the radii and the rotation set above.
+    sketch::ensureEllipseAxisPoints(e);
     // Several places size an entity from `radius`; leaving it zero makes an
     // ellipse look degenerate to anything that reads the shared field.
     e.radius = major;
@@ -5913,6 +6007,111 @@ CliResult CliEngine::cmdSketchBezier(std::vector<std::string> args)
     const int id = addPendingEntity(e);
 
     r.output = subst("Created %4bezier through %1 anchors (%2 control points) [id %3]", anchors.size(), poly.size(), id, anyRational ? "rational " : std::string());
+    return r;
+}
+
+CliResult CliEngine::cmdSketchConic(std::vector<std::string> args)
+{
+    CliResult r;
+
+    // Edit form: conic <id> rho <r>
+    // Re-author an existing conic with a new rho; ends, end tangents and the
+    // apex stay. This is the Properties panel's edit, on the command line
+    // first (every capability lands in the command layer).
+    {
+        bool idOk = false;
+        const int eid = toInt(valueAt(args, 0), &idOk);
+        if (idOk && toLower(valueAt(args, 1)) == "rho") {
+            if (args.size() != 3) {
+                return failure(translate("QObject", "Usage: conic <id> rho <r>"));
+            }
+            hobbycad::SketchEntityData* ent =
+                sketch::findEntityById(m_pendingSketch.entities, eid);
+            if (!ent) {
+                return failure(subst("No entity %1 in the current sketch.", eid));
+            }
+            if (ent->type != sketch::EntityType::Spline || !(ent->conicRho > 0.0)) {
+                return failure(subst(translate("QObject", "Entity %1 is not a conic arc."), eid));
+            }
+            bool okR = false;
+            const double rho = toDouble(args[2], &okR);
+            if (!okR || !(rho > 0.0) || !(rho < 1.0)) {
+                return failure(subst(translate("QObject", "rho must be a number between 0 and "
+                                                          "1, exclusive ('%1')."),
+                                     args[2]));
+            }
+            if (!sketch::setConicRho(*ent, rho)) {
+                return failure(subst(translate("QObject", "Entity %1 has no recoverable apex; "
+                                                          "it is not a conic arc."),
+                                     eid));
+            }
+            r.exitCode = 0;
+            r.output = subst(translate("QObject", "Updated conic %1: rho %2 (%3)."), eid, rho,
+                             translate("QObject", sketch::conicKindName(rho)));
+            return r;
+        }
+    }
+
+    const bool construction = takeConstructionFlag(args);
+
+    if (static_cast<int>(args.size()) < 7) {
+        return failure(translate("QObject",
+            "Usage: conic [from] <x>,<y> to <x>,<y> apex <x>,<y> rho <r>\n"
+            "             [construction]\n"
+            "\n"
+            "A conic arc by rho, as in Fusion, Onshape and SolidWorks: the two\n"
+            "points are its ends, the apex is where the end tangents meet, and rho\n"
+            "says where the curve's shoulder sits between the chord's midpoint (0)\n"
+            "and the apex (1). Below 0.5 it is an elliptical arc, at 0.5 a parabola,\n"
+            "above 0.5 a hyperbola. It is stored as one rational Bezier segment; rho\n"
+            "stays a property of the curve (see `points <id>`, `conic <id> rho`).\n"
+            "\n"
+            "Examples:\n"
+            "  conic 0,0 to 40,0 apex 20,30 rho 0.5          (a parabola)\n"
+            "  conic 0,0 to 40,40 apex 40,0 rho 0.41421      (a quarter circle)"));
+    }
+
+    ArgCursor cur(args, parameterValues(), namedPointValues());
+    cur.accept("from");
+    double sx, sy;
+    if (!cur.coord(sx, sy, translate("QObject", "Invalid start coordinates. Use format: x,y"))
+        || !cur.expect("to", translate("QObject",
+                                       "Expected 'to' between the start and end points"))) {
+        return cur.result();
+    }
+    double ex, ey;
+    if (!cur.coord(ex, ey, translate("QObject", "Invalid end coordinates. Use format: x,y"))
+        || !cur.expect("apex", translate("QObject", "Expected 'apex' keyword"))) {
+        return cur.result();
+    }
+    double ax, ay;
+    if (!cur.coord(ax, ay, translate("QObject", "Invalid apex coordinates. Use format: x,y"))
+        || !cur.expect("rho", translate("QObject", "Expected 'rho' keyword"))) {
+        return cur.result();
+    }
+    double rho = 0.0;
+    std::string rhoExpr;
+    if (!cur.value(rho, rhoExpr,
+                   translate("QObject",
+                             "Invalid rho. Must be a number, parameter, or (expression)."))) {
+        return cur.result();
+    }
+    if (!(rho > 0.0) || !(rho < 1.0)) {
+        return failure(translate("QObject", "rho must be between 0 and 1, exclusive."));
+    }
+
+    auto e = makeEntity(sketch::EntityType::Spline);
+    if (!sketch::conicFromRho(e.id, {sx, sy}, {ex, ey}, {ax, ay}, rho, e)) {
+        return failure(translate("QObject",
+                                 "The two ends must be apart and the apex off their line."));
+    }
+    e.isConstruction = construction;
+    const int id = addPendingEntity(e);
+
+    r.output = subst(translate("QObject", "Created %6conic arc (%5) from (%1, %2) to (%3, %4), "
+                                          "rho %7 [id %8]"),
+                     sx, sy, ex, ey, translate("QObject", sketch::conicKindName(rho)),
+                     construction ? "construction " : std::string(), rhoExpr, id);
     return r;
 }
 

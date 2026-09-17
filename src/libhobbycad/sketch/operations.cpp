@@ -407,6 +407,10 @@ void emitConic(Entity& child, const Point2D& c, double M, double m,
         child.ellipseStart = startDeg;
         child.ellipseSweep = sweepDeg;
         child.radius = 0.0;
+        // A projected ellipse gets its axis points like any other, so it is
+        // the same kind of object everywhere downstream. The projection is
+        // still solver-skipped; this only keeps the representation uniform.
+        syncEllipseAxisPoints(child);
     }
 }
 
@@ -431,7 +435,7 @@ bool updateProjectionFromSource(Entity& child, const Entity& source,
         Point2D c; double M, m, rot;
         projectConic(source.points[0], source.majorRadius, source.minorRadius,
                      source.ellipseRotation, sourcePlane, targetPlane, c, M, m, rot);
-        if (source.ellipseSweep >= 359.999) {
+        if (isFullEllipse(source)) {
             emitConic(child, c, M, m, rot, 0.0, 360.0);
         } else {
             // Partial ellipse: map its start/mid/end onto the projected ellipse.

@@ -51,6 +51,18 @@ const char* kScript[] = {
     // they must export as `bezier` and come back with their handles intact.
     "bezier 10,10 out 45 1  13,13 in 225 1",
     "bezier 13,13 out 20 1  16,10 in 135 1",
+    // An ellipse carries a rotation and an arc range, and export used to
+    // emit neither: a replayed script turned every ellipse upright and
+    // every elliptical arc into a whole ellipse. Nothing caught it,
+    // because sameEntities did not compare those three fields either.
+    "ellipse at 30,30 major 20 minor 10 rotation 30",
+    "ellipse at 60,60 major 20 minor 10 angle 0 to 90",
+    // A conic by rho carries its rho as a stored property; export must emit
+    // a `conic` line, not a `bezier` one, or the rho is lost. And a rational
+    // bezier's weights were dropped by export until 2026-09-16: a replayed
+    // script came back non-rational, and sameEntities did not look.
+    "conic 0,0 to 40,40 apex 40,0 rho 0.41421",
+    "bezier 70,20 out 0 2 weight 2  76,20 in 180 2 weight 0.5",
     // Constraints too: they reference entities by id, so replay only works
     // if the ids come out the same on the far side.
     "constrain horizontal 2",
@@ -98,14 +110,29 @@ bool sameEntities(const std::vector<SketchEntityData>& a,
             !near(x.minorRadius, y.minorRadius) ||
             !near(x.startAngle, y.startAngle) ||
             !near(x.sweepAngle, y.sweepAngle) ||
+            !near(x.ellipseRotation, y.ellipseRotation) ||
+            !near(x.ellipseStart, y.ellipseStart) ||
+            !near(x.ellipseSweep, y.ellipseSweep) ||
             !near(x.fontSize, y.fontSize) ||
             !near(x.textRotation, y.textRotation) ||
             x.sides != y.sides ||
             x.text != y.text ||
             x.splineBezier != y.splineBezier ||
+            x.splineRational != y.splineRational ||
+            !near(x.conicRho, y.conicRho) ||
             x.isConstruction != y.isConstruction) {
             *why = subst("entity %1: a field differs", i);
             return false;
+        }
+        if (x.weights.size() != y.weights.size()) {
+            *why = subst("entity %1: weight count differs", i);
+            return false;
+        }
+        for (size_t j = 0; j < x.weights.size(); ++j) {
+            if (!near(x.weights[j], y.weights[j])) {
+                *why = subst("entity %1: weight %2 differs", i, j);
+                return false;
+            }
         }
     }
     return true;
@@ -137,8 +164,11 @@ int main() {
         ck(sketches.size() == 1, "the original sketch exists");
         if (sketches.empty()) return 1;
         original = sketches[0].entities;
-        ck(original.size() == 13,
-           "all ten entity kinds, the slot centerline, and two bezier splines");
+        ck(original.size() == 17,
+           "all ten entity kinds, the slot centerline, two bezier splines, "
+           "a rotated ellipse, an elliptical arc, a conic and a weighted bezier");
+        ck(original.size() == 17 && original[15].conicRho > 0.41 && original[16].splineRational,
+           "the conic carries its rho; the weighted bezier is rational");
         originalConstraints = sketches[0].constraints;
         ck(originalConstraints.size() == 5, "and five constraints (incl. curvature)");
         originalGroups = sketches[0].groups;

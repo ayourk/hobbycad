@@ -101,6 +101,12 @@ void SketchPropertiesWidget::setupUi()
     mainLayout->addWidget(m_bezierAnchorGroup);
     mainLayout->addWidget(m_bezierLegGroup);
 
+    setupEllipseSection();
+    mainLayout->addWidget(m_ellipseGroup);
+
+    setupConicSection();
+    mainLayout->addWidget(m_conicGroup);
+
     setupTransformSection();
     mainLayout->addWidget(m_transformGroup);
 
@@ -108,6 +114,8 @@ void SketchPropertiesWidget::setupUi()
     makeGroupCollapsible(m_entityGroup, /*defaultExpanded=*/false);
     makeGroupCollapsible(m_bezierAnchorGroup);
     makeGroupCollapsible(m_bezierLegGroup);
+    makeGroupCollapsible(m_ellipseGroup);
+    makeGroupCollapsible(m_conicGroup);
 }
 
 void SketchPropertiesWidget::setupBackgroundSection()
@@ -561,6 +569,80 @@ void SketchPropertiesWidget::updateForSelection()
         m_backgroundGroup->setVisible(nothingSelected);
     }
 
+    // Ellipse editor: shown when exactly one ellipse is picked. Unlike the
+    // Bezier sections below, this does NOT take over the entity page: Type,
+    // ID and the Center / Major axis / Minor axis selector stay useful, so
+    // both surfaces show at once.
+    {
+        const auto sel = m_canvas->selectedEntities();
+        const SketchEntity* ell =
+            (sel.size() == 1 && sel.first()
+             && sel.first()->type == SketchEntityType::Ellipse)
+                ? sel.first() : nullptr;
+        if (m_ellipseGroup) m_ellipseGroup->setVisible(ell != nullptr);
+        m_ellEntityId = ell ? ell->id : -1;
+        if (ell) {
+            const bool isArc = !sketch::isFullEllipse(*ell);
+            m_updatingUi = true;
+            m_ellMajor->setValue(ell->majorRadius);
+            m_ellMinor->setValue(ell->minorRadius);
+            m_ellRotation->setValue(ell->ellipseRotation);
+            m_ellArcCheck->setChecked(isArc);
+            m_ellStart->setValue(ell->ellipseStart);
+            m_ellSweep->setValue(ell->ellipseSweep);
+            m_ellShowAxes->setChecked(m_canvas->ellipseAxesShown(ell->id));
+            m_updatingUi = false;
+            // A projection is driven by its source, so it is read-only here
+            // exactly as the coordinate spins are.
+            // An axis carrying a dimension is driven by that dimension, so
+            // typing here would fight the solver; the spin is dimmed instead,
+            // exactly as the coordinate spins refuse projected geometry. A
+            // Distance whose target is this ellipse's point 1 owns the major
+            // axis, point 2 the minor.
+            bool majorDimmed = false, minorDimmed = false;
+            for (const auto& c : m_canvas->constraints()) {
+                majorDimmed = majorDimmed || sketch::dimensionDrivesPoint(c, ell->id, 1);
+                minorDimmed = minorDimmed || sketch::dimensionDrivesPoint(c, ell->id, 2);
+            }
+            const bool editable = ell->projectionSourceId < 0;
+            m_ellMajor->setEnabled(editable && !majorDimmed);
+            m_ellMinor->setEnabled(editable && !minorDimmed);
+            m_ellMajor->setToolTip(majorDimmed
+                ? tr("Driven by a dimension; edit the dimension instead.") : QString());
+            m_ellMinor->setToolTip(minorDimmed
+                ? tr("Driven by a dimension; edit the dimension instead.") : QString());
+            m_ellRotation->setEnabled(editable);
+            m_ellArcCheck->setEnabled(editable);
+            m_ellStart->setEnabled(editable && isArc);
+            m_ellSweep->setEnabled(editable && isArc);
+        }
+    }
+
+    // Conic editor: shown when exactly one conic is picked, a Spline authored
+    // by rho (conicRho > 0). Like the ellipse section it leaves the entity
+    // page in place. Rho is the curve's one stored property (the Fusion
+    // route, Aaron 2026-09-16); the two inner control points are derived
+    // from it and the apex, so they are shown but not edited here.
+    {
+        const auto sel = m_canvas->selectedEntities();
+        const SketchEntity* con =
+            (sel.size() == 1 && sel.first()
+             && sel.first()->type == SketchEntityType::Spline
+             && sel.first()->conicRho > 0.0)
+                ? sel.first() : nullptr;
+        if (m_conicGroup) m_conicGroup->setVisible(con != nullptr);
+        m_conicId = con ? con->id : -1;
+        if (con) {
+            m_updatingUi = true;
+            m_conicRho->setValue(con->conicRho);
+            m_updatingUi = false;
+            refreshConicReadout(*con);
+            // A projection is driven by its source, read-only here as the
+            // coordinate spins are.
+            m_conicRho->setEnabled(con->projectionSourceId < 0);
+        }
+    }
+
     // Bezier anchor editor: shown when exactly one splineBezier anchor is picked.
     {
         int baS = -1, baA = -1;
@@ -651,7 +733,12 @@ void SketchPropertiesWidget::updateForSelection()
         m_entityStack->setCurrentIndex(0);  // No selection page
     } else {
         const SketchEntity* ent = selected.first();
-        m_entityTypeLabel->setText(tr(sketch::entityTypeName(ent->type)));   // one table, in the library
+        // A conic authored by rho reads as what it is, not as "Spline":
+        // the kind follows the rho (elliptical, parabolic, hyperbolic).
+        const bool isConic = ent->type == SketchEntityType::Spline && ent->conicRho > 0.0;
+        m_entityTypeLabel->setText(isConic
+            ? tr("Conic arc, %1").arg(conicKindText(ent->conicRho))
+            : tr(sketch::entityTypeName(ent->type)));   // one table, in the library
 
         m_entityIdLabel->setText(QString::number(ent->id));
         m_entityConstructionLabel->setText(ent->isConstruction ? tr("Yes") : tr("No"));
@@ -676,6 +763,19 @@ void SketchPropertiesWidget::updateForSelection()
             case SketchEntityType::Line: roles = {tr("Start"), tr("End")}; break;
             case SketchEntityType::Arc:  roles = {tr("Center"), tr("Start"), tr("End")}; break;
             case SketchEntityType::Circle: roles = {tr("Center")}; break;
+            // An ellipse's axes are real points now, so name them rather
+            // than leaving the selector saying "Point 2" and "Point 3".
+            case SketchEntityType::Ellipse:
+                roles = {tr("Center"), tr("Major axis"), tr("Minor axis")}; break;
+            // A conic's inner control points are set by rho and the apex,
+            // so they are named for what they are and not offered for edit
+            // (loadCoordSpinsFromPoint dims their spins).
+            case SketchEntityType::Spline:
+                if (isConic) {
+                    roles = {tr("Start"), tr("Handle (derived)"), tr("Handle (derived)"),
+                             tr("End")};
+                }
+                break;
             default: break;
             }
             m_updatingUi = true;
@@ -746,6 +846,21 @@ void SketchPropertiesWidget::loadCoordSpinsFromPoint(int index)
     m_coordVSpin->setValue(p.y);
     m_coordWSpin->setValue(p.z);
     m_updatingUi = false;
+    // A conic's two inner control points are derived from its rho and apex;
+    // typing them would be undone by the next solve's re-authoring. Rho is
+    // edited in the Conic section instead; the ends stay editable.
+    const bool derived = ent->type == SketchEntityType::Spline && ent->conicRho > 0.0
+                      && (index == 1 || index == 2);
+    const bool editable = ent->projectionSourceId < 0 && !derived;
+    m_coordUSpin->setEnabled(editable);
+    m_coordVSpin->setEnabled(editable);
+    m_coordWSpin->setEnabled(editable);
+    const QString tip = derived
+        ? tr("Set by rho and the apex. Edit rho in the Conic section; a handle "
+             "edit in the Bezier anchor section makes this a plain Bezier.")
+        : QString();
+    m_coordUSpin->setToolTip(tip);
+    m_coordVSpin->setToolTip(tip);
 }
 
 void SketchPropertiesWidget::onCoordPointChanged(int index)
@@ -1114,6 +1229,185 @@ void SketchPropertiesWidget::setupBezierAnchorSection()
             this, &SketchPropertiesWidget::onBezierLegLengthChanged);
     legForm->addRow(tr("Leg length:"), m_blLength);
     m_bezierLegGroup->setVisible(false);
+}
+
+void SketchPropertiesWidget::setupEllipseSection()
+{
+    m_ellipseGroup = new QGroupBox(tr("Ellipse"));
+    auto* form = new QFormLayout(m_ellipseGroup);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+
+    m_ellMajor = new QDoubleSpinBox;
+    m_ellMajor->setRange(0.001, 1.0e6); m_ellMajor->setDecimals(3);
+    m_ellMajor->setKeyboardTracking(false);
+    connect(m_ellMajor, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SketchPropertiesWidget::onEllipseMajorChanged);
+    form->addRow(tr("Major radius:"), m_ellMajor);
+
+    m_ellMinor = new QDoubleSpinBox;
+    m_ellMinor->setRange(0.001, 1.0e6); m_ellMinor->setDecimals(3);
+    m_ellMinor->setKeyboardTracking(false);
+    connect(m_ellMinor, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SketchPropertiesWidget::onEllipseMinorChanged);
+    form->addRow(tr("Minor radius:"), m_ellMinor);
+
+    m_ellRotation = new QDoubleSpinBox;
+    m_ellRotation->setRange(0.0, 360.0); m_ellRotation->setDecimals(2);
+    m_ellRotation->setWrapping(true);
+    m_ellRotation->setSuffix(QStringLiteral(" \xC2\xB0"));
+    m_ellRotation->setKeyboardTracking(false);
+    connect(m_ellRotation, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SketchPropertiesWidget::onEllipseRotationChanged);
+    form->addRow(tr("Rotation:"), m_ellRotation);
+
+    // An elliptical arc is the same entity with a sweep under a full turn,
+    // so it is a checkbox here rather than a different kind of object.
+    m_ellArcCheck = new QCheckBox(tr("Elliptical arc"));
+    connect(m_ellArcCheck, &QCheckBox::toggled,
+            this, &SketchPropertiesWidget::onEllipseArcToggled);
+    form->addRow(QString(), m_ellArcCheck);
+
+    m_ellStart = new QDoubleSpinBox;
+    m_ellStart->setRange(-360.0, 360.0); m_ellStart->setDecimals(2);
+    m_ellStart->setSuffix(QStringLiteral(" \xC2\xB0"));
+    m_ellStart->setKeyboardTracking(false);
+    connect(m_ellStart, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SketchPropertiesWidget::onEllipseStartChanged);
+    form->addRow(tr("Arc start:"), m_ellStart);
+
+    m_ellSweep = new QDoubleSpinBox;
+    m_ellSweep->setRange(-360.0, 360.0); m_ellSweep->setDecimals(2);
+    m_ellSweep->setSuffix(QStringLiteral(" \xC2\xB0"));
+    m_ellSweep->setKeyboardTracking(false);
+    connect(m_ellSweep, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SketchPropertiesWidget::onEllipseSweepChanged);
+    form->addRow(tr("Arc sweep:"), m_ellSweep);
+
+    // FreeCAD's "Toggle Internal Geometry": draw the axis points and lines
+    // so they can be grabbed and dimensioned. The default is the Sketch
+    // Options "Ellipse axes" toggle (off); this overrides it for one ellipse.
+    m_ellShowAxes = new QCheckBox(tr("Show axes"));
+    m_ellShowAxes->setToolTip(tr("Draw this ellipse's major and minor axis points and "
+                                 "lines so they can be dragged and dimensioned. "
+                                 "Overrides the Sketch Options default for this ellipse."));
+    connect(m_ellShowAxes, &QCheckBox::toggled,
+            this, &SketchPropertiesWidget::onEllipseShowAxesToggled);
+    form->addRow(QString(), m_ellShowAxes);
+
+    m_ellipseGroup->setVisible(false);
+}
+
+void SketchPropertiesWidget::onEllipseMajorChanged(double v)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    m_canvas->applyEllipseAxisEdit(m_ellEntityId,
+                                   SketchCanvas::EllipseField::Major, v);
+}
+void SketchPropertiesWidget::onEllipseMinorChanged(double v)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    m_canvas->applyEllipseAxisEdit(m_ellEntityId,
+                                   SketchCanvas::EllipseField::Minor, v);
+}
+void SketchPropertiesWidget::onEllipseRotationChanged(double deg)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    m_canvas->applyEllipseAxisEdit(m_ellEntityId,
+                                   SketchCanvas::EllipseField::Rotation, deg);
+}
+void SketchPropertiesWidget::onEllipseArcToggled(bool on)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    // Off restores a whole ellipse. On starts from whatever partial sweep
+    // the entity already had, or a quarter turn if it had none.
+    double sweep = 360.0;
+    if (on) {
+        const double cur = m_ellSweep->value();
+        const bool partial = geometry::isPositiveAngleDeg(std::fabs(cur))
+                          && std::fabs(cur) < 360.0 - geometry::kAngleEpsDeg;
+        sweep = partial ? cur : 90.0;
+    }
+    m_canvas->applyEllipseAxisEdit(m_ellEntityId,
+                                   SketchCanvas::EllipseField::ArcSweep, sweep);
+}
+void SketchPropertiesWidget::onEllipseStartChanged(double deg)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    m_canvas->applyEllipseAxisEdit(m_ellEntityId,
+                                   SketchCanvas::EllipseField::ArcStart, deg);
+}
+void SketchPropertiesWidget::onEllipseSweepChanged(double deg)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    m_canvas->applyEllipseAxisEdit(m_ellEntityId,
+                                   SketchCanvas::EllipseField::ArcSweep, deg);
+}
+void SketchPropertiesWidget::onEllipseShowAxesToggled(bool on)
+{
+    if (m_updatingUi || !m_canvas || m_ellEntityId < 0) return;
+    m_canvas->setEllipseAxesShown(m_ellEntityId, on);   // display only, no undo entry
+}
+
+void SketchPropertiesWidget::setupConicSection()
+{
+    m_conicGroup = new QGroupBox(tr("Conic"));
+    auto* form = new QFormLayout(m_conicGroup);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+
+    // Rho is the conic's one stored property (Fusion's rhoValue): where the
+    // shoulder sits between the chord's midpoint (0) and the apex (1). The
+    // range is the tool's own; the open ends are not curves.
+    m_conicRho = new QDoubleSpinBox;
+    m_conicRho->setRange(0.02, 0.98); m_conicRho->setDecimals(3);
+    m_conicRho->setSingleStep(0.01);
+    m_conicRho->setKeyboardTracking(false);
+    m_conicRho->setToolTip(tr("0.5 is a parabola; less is an elliptical arc, more a "
+                              "hyperbola. The ends, their tangents and the apex stay."));
+    connect(m_conicRho, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SketchPropertiesWidget::onConicRhoChanged);
+    form->addRow(tr("Rho:"), m_conicRho);
+
+    m_conicKind = new QLabel;
+    form->addRow(tr("Kind:"), m_conicKind);
+
+    // The apex is where the two end tangents meet. It is not a stored point
+    // (the inner control points are), so it is a readout: it moves when an
+    // end or a handle is dragged on the canvas.
+    m_conicApex = new QLabel;
+    m_conicApex->setToolTip(tr("Where the end tangents meet. Not a stored point: drag an "
+                               "end or a handle on the canvas to move it."));
+    form->addRow(tr("Apex:"), m_conicApex);
+
+    m_conicGroup->setVisible(false);
+}
+
+QString SketchPropertiesWidget::conicKindText(double rho) const
+{
+    // The library names the kind in English (the CLI's word); the panel
+    // translates it. Literal tr() calls so lupdate sees the three words.
+    const std::string kind = sketch::conicKindName(rho);
+    if (kind == "parabolic")  return tr("parabolic");
+    if (kind == "hyperbolic") return tr("hyperbolic");
+    return tr("elliptical");
+}
+
+void SketchPropertiesWidget::refreshConicReadout(const SketchEntity& conic)
+{
+    m_conicKind->setText(conicKindText(conic.conicRho));
+    hobbycad::Point2D apex;
+    m_conicApex->setText(sketch::conicApex(conic, apex)
+        ? pointText(QPointF(apex.x, apex.y)) : tr("(none: the end tangents are parallel)"));
+}
+
+void SketchPropertiesWidget::onConicRhoChanged(double rho)
+{
+    if (m_updatingUi || !m_canvas || m_conicId < 0) return;
+    if (!m_canvas->applyConicRho(m_conicId, rho)) return;
+    if (const SketchEntity* e = m_canvas->entityById(m_conicId)) {
+        refreshConicReadout(*e);
+        // The derived handles moved; the coordinate readout follows.
+        if (m_coordPointIndex >= 0) loadCoordSpinsFromPoint(m_coordPointIndex);
+    }
 }
 
 void SketchPropertiesWidget::onBezierAngleChanged(double deg)

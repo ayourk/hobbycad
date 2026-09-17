@@ -532,10 +532,44 @@ HandleDragResult dragEntityHandle(Entity& entity, int handleIndex,
     case EntityType::Ellipse:
         if (np < 2) { handled = false; break; }
         if (handleIndex == 0) {
+            // The center carries the whole ellipse, axis points included.
             const Point2D delta = target - entity.points[0];
-            entity.points[0] = target;
-            entity.points[1] += delta;
+            for (Point3& p : entity.points) { p.x += delta.x; p.y += delta.y; }
+        } else if (handleIndex == 1 && np >= 3) {
+            // The major axis point sets the length AND the angle. The minor
+            // axis keeps its own length but is swung to stay perpendicular,
+            // because perpendicular axes are what makes it an ellipse.
+            const Point2D c = entity.points[0];
+            entity.points[1] = target;
+            const Point2D dir = target - c;
+            const double len = geometry::length(dir);
+            if (len > kEps) {
+                const Point2D perp = geometry::perpendicular(geometry::normalize(dir));
+                const double minor = entity.minorRadius > kEps
+                                   ? entity.minorRadius
+                                   : geometry::length(entity.points[2] - c);
+                entity.points[2] = c + minor * perp;
+            }
+            syncEllipseFields(entity);
+        } else if (handleIndex == 2 && np >= 3) {
+            // The minor axis point sets only a length: its direction is not
+            // free, so the drag is projected onto the perpendicular of the
+            // major axis rather than followed exactly.
+            const Point2D c = entity.points[0];
+            const Point2D major = entity.points[1] - c;
+            const double mlen = geometry::length(major);
+            if (mlen > kEps) {
+                const Point2D perp = geometry::perpendicular(geometry::normalize(major));
+                // Either side of the major axis is the same axis.
+                const double along = std::abs(geometry::dot(target - c, perp));
+                entity.points[2] = c + along * perp;
+            } else {
+                entity.points[2] = target;
+            }
+            syncEllipseFields(entity);
         } else if (handleIndex == 1) {
+            // Pre-migration ellipse with no minor-axis point: the old
+            // proportional behavior, so an old file still drags.
             const double oldMajor = entity.majorRadius;
             entity.points[1] = target;
             entity.majorRadius = geometry::length(target - entity.points[0]);

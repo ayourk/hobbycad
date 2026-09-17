@@ -451,6 +451,16 @@ bool isFixedPointOn(const Constraint& c, int entityId, int pointIndex)
         && (c.pointIndices.empty() ? 0 : c.pointIndices[0]) == pointIndex;
 }
 
+bool dimensionDrivesPoint(const Constraint& c, int entityId, int pointIndex)
+{
+    if (c.type != ConstraintType::Distance) return false;
+    for (std::size_t k = 0; k < c.entityIds.size(); ++k) {
+        const int pi = k < c.pointIndices.size() ? c.pointIndices[k] : -1;
+        if (c.entityIds[k] == entityId && pi == pointIndex) return true;
+    }
+    return false;
+}
+
 Constraint makeFixedPoint(int id, int entityId, int pointIndex)
 {
     Constraint fp;
@@ -865,6 +875,7 @@ std::string constraintOperandError(ConstraintType type,
 {
     auto isLine  = [](EntityType e) { return e == EntityType::Line; };
     auto isCurve = [](EntityType e) { return e == EntityType::Circle || e == EntityType::Arc; };
+    auto isEllipse = [](EntityType e) { return e == EntityType::Ellipse; };
     auto isSpline = [](EntityType e) { return e == EntityType::Spline; };
     auto need = [&](bool ok, const char* msg) -> std::string {
         return ok ? std::string() : std::string(msg);
@@ -892,9 +903,14 @@ std::string constraintOperandError(ConstraintType type,
         return need(isCurve(t[0]) && isCurve(t[1]), "Concentric applies to two circles or arcs.");
     case ConstraintType::Tangent:
         if (t.size() < 2) return {};
+        // A line and an ellipse is allowed too (solved approximately, via
+        // the osculating circle). Ellipse against a circle, arc or another
+        // ellipse is not: libslvs has no ellipse entity to build that on.
+        if ((isEllipse(t[0]) && isLine(t[1])) || (isLine(t[0]) && isEllipse(t[1]))) return {};
         return need((isCurve(t[0]) || isCurve(t[1])) && (isLine(t[0]) || isCurve(t[0]))
                     && (isLine(t[1]) || isCurve(t[1])),
-                    "Tangent needs a circle or arc and a line, or two curves.");
+                    "Tangent needs a circle or arc and a line, two curves, "
+                    "or an ellipse and a line.");
     case ConstraintType::Equal:
         if (t.size() < 2) return {};
         return need((isLine(t[0]) && isLine(t[1])) || (isCurve(t[0]) && isCurve(t[1])),
@@ -913,7 +929,8 @@ std::string constraintOperandError(ConstraintType type,
         return need(isLine(t[1]), "Point on line: the second entity must be a line.");
     case ConstraintType::PointOnCircle:
         if (t.size() < 2) return {};
-        return need(isCurve(t[1]), "Point on circle: the second entity must be a circle or arc.");
+        return need(isCurve(t[1]) || isEllipse(t[1]),
+                    "Point on circle: the second entity must be a circle, arc, or ellipse.");
     case ConstraintType::PointOnSpline:
         if (t.size() < 2) return {};
         return need(isSpline(t[0]) || isSpline(t[1]),

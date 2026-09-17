@@ -16,6 +16,9 @@
 
 #include "viewportwidget.h"
 #include <hobbycad/units.h>
+#include <hobbycad/opengl_info.h>
+#include <hobbycad/occt_failure.h>
+#include <hobbycad/crashhandler.h>
 #include <hobbycad/geometry/types.h>
 #include "aisgrid.h"
 #include "scalebarwidget.h"
@@ -58,6 +61,7 @@
 #include <gp_Vec.hxx>
 
 #include <cmath>
+#include <stdexcept>
 
 namespace hobbycad {
 
@@ -356,17 +360,42 @@ bool ViewportWidget::isOrbitSelectedObject() const
 
 // ---- Paint / resize -------------------------------------------------
 
+void ViewportWidget::failInit(const char* message)
+{
+    m_initialized = true;
+    m_initFailed = true;
+    hobbycad::CrashHandler::reportException("ViewportWidget::paintEvent (viewer init)",
+                                            message);
+    emit viewInitFailed();
+}
+
 void ViewportWidget::paintEvent(QPaintEvent* /*event*/)
 {
     // Lazy initialization: create the viewer on first paint, when
     // the native window handle is guaranteed to be valid.
     if (!m_initialized) {
-        initViewer();
+        // A throwing init used to escape this paint event into softcrash,
+        // which degraded the window but never fired viewInitFailed, the one
+        // signal whose handler opens a pending --exec sketch. So with a broken
+        // GL stack `run-script "create sketch XY"` came up in the model view
+        // with a notice and no sketch (Aaron, 2026-09-16). The failure is
+        // reported the same way softcrash reports one, then handed to the
+        // host through the signal, so the viewport is dropped AND the sketch
+        // opens; 2D needs no GL.
+        try {
+            initViewer();
+        } catch (const Standard_Failure& e) {
+            failInit(hobbycad::occtFailureMessage(e));
+            return;
+        } catch (const std::exception& e) {
+            failInit(e.what());
+            return;
+        }
         m_initialized = true;
         if (m_view.IsNull()) {
-            // CreateView produced no view without throwing (a throwing failure
-            // is caught by softcrash). Tell the host so it drops the viewport
-            // and notifies the user rather than leaving a blank surface.
+            // CreateView produced no view without throwing. Tell the host so it
+            // drops the viewport and notifies the user rather than leaving a
+            // blank surface.
             emit viewInitFailed();
             return;
         }
@@ -375,7 +404,10 @@ void ViewportWidget::paintEvent(QPaintEvent* /*event*/)
         emit viewInitialized();
     }
 
-    if (!m_view.IsNull()) {
+    // After a failed init the view may exist without a window (SetWindow is
+    // what threw); asking it to draw would fault again. The host removes
+    // this widget on viewInitFailed; until then, paint nothing.
+    if (!m_initFailed && !m_view.IsNull()) {
         m_view->Redraw();
     }
 }
@@ -440,7 +472,17 @@ void ViewportWidget::initViewer()
     nativeWindow->SetNativeHandle(nativeHandle);
     nativeWindow->SetSize(width(), height());
 
-    m_view->SetWindow(nativeWindow);
+    // This is where OCCT creates the GL context (OpenGl_Window::CreateWindow
+    // -> glXCreateContext). When it fails, OCCT says only that it failed;
+    // append what the process can see about the driver environment, so the
+    // crash log names the cause (a kernel/user-space driver version mismatch
+    // is the common one) instead of leaving it to be guessed.
+    try {
+        m_view->SetWindow(nativeWindow);
+    } catch (const Standard_Failure& e) {
+        throw std::runtime_error(std::string(occtFailureMessage(e)) + "\n"
+            + describeGlDriverEnvironment(displayConnection->GetDisplayAspect()));
+    }
 
     // Create the interactive context
     m_context = new AIS_InteractiveContext(m_viewer);

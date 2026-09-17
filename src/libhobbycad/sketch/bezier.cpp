@@ -41,6 +41,13 @@ bool bezierAnchorInfo(const Entity& e, int a, BezierAnchorInfo& out)
     return true;
 }
 
+namespace {
+// A conic authored by rho (conicFromRho) is defined by its stored rho; any
+// hand edit of the control polygon makes it a plain Bezier again, so the
+// panel's Conic section and the `conic` export line go away honestly.
+void dropConicMark(Entity& e) { e.conicRho = 0.0; }
+} // namespace
+
 bool setBezierAnchorAngle(Entity& e, int a, double angleDeg)
 {
     if (!isBezierEntity(e)) return false;
@@ -57,6 +64,7 @@ bool setBezierAnchorAngle(Entity& e, int a, double angleDeg)
         const double L = geometry::lineLength(anchor, e.points[a - 1]);
         e.points[a - 1] = at(anchor - u * L);
     }
+    dropConicMark(e);
     return true;
 }
 
@@ -71,6 +79,7 @@ bool setBezierAnchorHandleLength(Entity& e, int a, bool outHandle, double len)
     const double cur = geometry::length(dir);
     if (cur < geometry::kZeroEps) return false;
     e.points[h] = at(anchor + dir * (len / cur));
+    dropConicMark(e);
     return true;
 }
 
@@ -85,6 +94,7 @@ bool setBezierAnchorWeight(Entity& e, int a, double weight)
         e.weights.assign(e.points.size(), 1.0);
     }
     e.weights[a] = weight;
+    dropConicMark(e);
     return true;
 }
 
@@ -102,6 +112,7 @@ int deleteBezierAnchor(Entity& e, int a)
     e.points.erase(e.points.begin() + lo, e.points.begin() + lo + 3);
     if (e.splineRational && static_cast<int>(e.weights.size()) == n)
         e.weights.erase(e.weights.begin() + lo, e.weights.begin() + lo + 3);
+    dropConicMark(e);
     return lo;
 }
 
@@ -138,6 +149,7 @@ int insertBezierFitPoint(Entity& e, const Point2D& near)
         e.weights.erase(e.weights.begin() + b + 1, e.weights.begin() + b + 3);
         e.weights.insert(e.weights.begin() + b + 1, 5, w);
     }
+    dropConicMark(e);
     return b + 1;
 }
 
@@ -153,6 +165,7 @@ bool setBezierLegLength(Entity& e, int i0, int i1, double len)
     const double cur = geometry::length(dir);
     if (cur < geometry::kZeroEps) return false;
     e.points[moved] = at(f + dir * (len / cur));
+    dropConicMark(e);
     return true;
 }
 
@@ -182,6 +195,7 @@ bool toggleBezierClosed(Entity& e)
         }
         e.splineClosed = false;
     }
+    dropConicMark(e);
     return true;
 }
 

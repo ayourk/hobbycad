@@ -330,7 +330,7 @@ void EntityRenderer::drawEntity(QPainter& painter, const SketchEntity& entity)
 
     case SketchEntityType::Ellipse:
         if (!entity.points.empty()) {
-            if (entity.ellipseSweep >= 359.999) {
+            if (sketch::isFullEllipse(entity)) {
                 // Full ellipse: smooth rotated draw. Screen Y grows downward,
                 // so a CCW world angle is a CW screen rotation.
                 QPointF centerF = m_canvas.worldToScreenF(entity.points[0]);
@@ -545,15 +545,33 @@ void EntityRenderer::drawUnconstrainedPoints(QPainter& painter)
     std::set<std::pair<int, int>> freeSet(m_canvas.m_freePoints.begin(), m_canvas.m_freePoints.end());
     for (const auto& e : m_canvas.m_entities) {
         const bool isArc = (e.type == SketchEntityType::Arc);
+        const bool ellipseAxes = e.type == SketchEntityType::Ellipse
+                                 && e.points.size() >= 3
+                                 && m_canvas.ellipseAxesShown(e.id);
         if (e.type != SketchEntityType::Line
             && e.type != SketchEntityType::Spline
-            && !isArc) {
+            && !isArc && !ellipseAxes) {
             continue;
+        }
+        if (ellipseAxes) {
+            // Show-axes: the two axis lines, dashed, from the center to each
+            // axis end. These are the solver's own geometry made visible so
+            // the ends can be grabbed and dimensioned; the dots below mark
+            // whichever ends are still free.
+            painter.save();
+            QPen axisPen = painter.pen();
+            axisPen.setStyle(Qt::DashLine);
+            painter.setPen(axisPen);
+            const QPoint c = m_canvas.toScreen(QPointF(e.points[0]));
+            painter.drawLine(c, m_canvas.toScreen(QPointF(e.points[1])));
+            painter.drawLine(c, m_canvas.toScreen(QPointF(e.points[2])));
+            painter.restore();
         }
         for (int i = 0; i < static_cast<int>(e.points.size()); ++i) {
             // An arc stores [center, start, end]; point[0] is the center, not
             // an endpoint, so skip it (start/end still get their dots).
             if (isArc && i == 0) continue;
+            // An ellipse with axes shown: dots at the axis ends and center.
             bool isFree = m_canvas.m_freePointsValid
                 ? freeSet.count({e.id, i}) > 0
                 : !isPointConstrained(e.id, i);

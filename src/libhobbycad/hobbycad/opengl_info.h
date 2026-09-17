@@ -18,6 +18,7 @@
 #define HOBBYCAD_OPENGL_INFO_H
 
 #include "core.h"
+#include "gl_diagnostics.h"
 #include "types.h"
 
 #include <string>
@@ -101,6 +102,10 @@ void probeOcctViewer(OpenGLInfo& info);
 /// Non-Qt path: Uses EGL for headless probing if available, otherwise
 /// returns a stub with errorMessage set.
 HOBBYCAD_EXPORT OpenGLInfo probeOpenGL();
+
+// describeGlDriverEnvironment() and nvidiaVersionVerdict(), the report of
+// why a GL context could not be created, are declared in gl_diagnostics.h,
+// included above, beside the parts they are made of.
 
 }  // namespace hobbycad
 

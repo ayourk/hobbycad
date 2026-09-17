@@ -300,4 +300,9 @@ OpenGLInfo probeOpenGL()
 
 #endif  // HOBBYCAD_HAS_QT / HOBBYCAD_HAS_EGL
 
+// describeGlDriverEnvironment() and nvidiaVersionVerdict() are declared
+// in gl_diagnostics.h and defined in gl_diagnostics.cpp, apart from the
+// probe here: a caller of the report must not need the EGL libraries this
+// file's probe links.
+
 }  // namespace hobbycad

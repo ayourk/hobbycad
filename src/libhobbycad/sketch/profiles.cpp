@@ -327,8 +327,15 @@ std::vector<Profile> detectProfiles(
 
         switch (entity.type) {
         case EntityType::Circle:
-        case EntityType::Ellipse:
             isClosed = true;
+            break;
+
+        case EntityType::Ellipse:
+            // A partial ellipse is an OPEN curve and closes a loop only with
+            // its neighbors, exactly like an Arc. Only a full sweep is a
+            // closed profile on its own. Projection and DXF import both
+            // produce partial ellipses, so this is reachable today.
+            isClosed = isFullEllipse(entity);
             break;
 
         case EntityType::Polygon:
