@@ -467,6 +467,13 @@ HOBBYCAD_EXPORT double absoluteMaxArcSlotSweepDegrees(double pathRadius,
 HOBBYCAD_EXPORT Entity createArcSlot(int id, const Point2D& arcCenter, const Point2D& start,
                                       const Point2D& end, double radius, bool flipped = false);
 
+/// The closed outline of an arc slot [center, start, end] of half width
+/// `slot.radius`, the short way round unless `slot.arcFlipped`: the outer
+/// arc, the end cap, the inner arc back and the start cap. Empty when the
+/// half width reaches the arc's center or the ends coincide with it.
+HOBBYCAD_EXPORT std::vector<Point2D> arcSlotOutline(const Entity& slot, int arcSegments = 64,
+                                                    int capSegments = 16);
+
 /// Create an ellipse entity
 HOBBYCAD_EXPORT Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius,
                                      double rotationDeg = 0.0);

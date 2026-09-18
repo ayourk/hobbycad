@@ -27,20 +27,17 @@
 #include <QFileSystemModel>
 #include <QToolBar>
 #include <QMenu>
-#include <QSet>
 #include <QStringList>
+
+#include <hobbycad/project_files.h>
+
+#include <set>
+#include <string>
+#include <vector>
 
 namespace hobbycad {
 
 class Project;
-
-/// File status in the project
-enum class ProjectFileStatus {
-    CadFile,        ///< Listed in manifest (geometry, sketches, etc.)
-    ForeignFile,    ///< Listed in foreign_files array
-    Untracked,      ///< Not in manifest or foreign_files
-    GitIgnored      ///< In .gitignore (if present)
-};
 
 /// Category for foreign files
 struct ForeignFileEntry {
@@ -64,20 +61,20 @@ public:
     void setProjectRoot(const QString& path);
     void setCadFiles(const QStringList& files);
     void setForeignFiles(const QVector<ForeignFileEntry>& files);
-    void setGitIgnoredFiles(const QStringList& files);
+    void setGitIgnore(const GitIgnore& gitIgnore);
     void refresh();
 
     // Query file status
-    ProjectFileStatus fileStatus(const QString& relativePath) const;
+    ProjectFileStatus fileStatus(const QString& relativePath, bool isDirectory) const;
     bool isCadFile(const QString& relativePath) const;
     bool isForeignFile(const QString& relativePath) const;
-    bool isGitIgnored(const QString& relativePath) const;
+    bool isGitIgnored(const QString& relativePath, bool isDirectory) const;
 
 private:
     QString m_projectRoot;
-    QSet<QString> m_cadFiles;
-    QSet<QString> m_foreignFiles;
-    QSet<QString> m_gitIgnoredFiles;
+    std::set<std::string> m_cadFiles;
+    std::vector<std::string> m_foreignFiles;
+    GitIgnore m_gitIgnore;
     QVector<ForeignFileEntry> m_foreignFileEntries;
 
     QString relativePath(const QModelIndex& index) const;
@@ -160,11 +157,13 @@ private:
     bool addToGitIgnore(const QString& relativePath);
     bool removeFromGitIgnore(const QString& relativePath);
     bool isInGitIgnore(const QString& relativePath) const;
+    /// True when .gitignore can stop ignoring the path (no folder above it
+    /// is ignored).
+    bool canRemoveFromGitIgnore(const QString& relativePath) const;
+    bool isDirectory(const QString& relativePath) const;
 
     // Helpers
     QString absolutePath(const QString& relativePath) const;
-    QStringList parseGitIgnore() const;
-    void writeGitIgnore(const QStringList& patterns);
 
     // Project reference
     Project* m_project = nullptr;
@@ -197,7 +196,7 @@ private:
     QAction* m_actionRemoveFromGitIgnore = nullptr;
 
     // Git ignore patterns (cached)
-    QStringList m_gitIgnorePatterns;
+    GitIgnore m_gitIgnore;
 };
 
 }  // namespace hobbycad

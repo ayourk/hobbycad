@@ -616,27 +616,19 @@ void ParametersDialog::onSelectionChanged()
 
 void ParametersDialog::updateParameterValues()
 {
-    // Build parameter map for evaluation
-    QMap<QString, double> paramMap;
-    for (const auto& p : m_parameters) {
-        paramMap[QString::fromStdString(p.name)] = p.value;
-    }
-
-    // Re-evaluate all expressions with updated parameter values
-    bool changed = true;
-    int iterations = 0;
-    const int maxIterations = 10;  // Prevent infinite loops
-
-    while (changed && iterations++ < maxIterations) {
-        changed = false;
-        for (auto& param : m_parameters) {
-            double newVal = evaluateExpression(QString::fromStdString(param.expression));
-            if (!std::isnan(newVal) && newVal != param.value) {
-                param.value = newVal;
-                paramMap[QString::fromStdString(param.name)] = newVal;
-                changed = true;
-            }
-        }
+    // One pass in dependency order (the library's), which also catches a
+    // cycle. Repeating every expression until nothing changed stopped after
+    // ten rounds, so a longer chain could be left stale, and a parameter
+    // whose inputs had failed kept its old value instead of showing Error.
+    ParameterEngine engine;
+    engine.setParameters(std::vector<Parameter>(m_parameters.begin(), m_parameters.end()));
+    engine.evaluate();
+    for (Parameter& param : m_parameters) {
+        if (param.isReference) continue;   // measured, not evaluated
+        const Parameter* evaluated = engine.parameter(param.name);
+        param.value = (evaluated && evaluated->isValid)
+            ? evaluated->value
+            : std::numeric_limits<double>::quiet_NaN();
     }
 
     // Update displayed values
@@ -687,34 +679,6 @@ double ParametersDialog::evaluateExpression(const QString& expr) const
     if (!pv.evaluate(paramMap))
         return std::numeric_limits<double>::quiet_NaN();
     return pv.value();
-}
-
-bool ParametersDialog::isValidParameterName(const QString& name) const
-{
-    if (name.isEmpty()) return false;
-
-    // Must start with letter or underscore
-    QChar first = name[0];
-    if (!first.isLetter() && first != QLatin1Char('_')) return false;
-
-    // Rest must be letters, numbers, or underscores
-    for (int i = 1; i < name.length(); ++i) {
-        QChar c = name[i];
-        if (!c.isLetterOrNumber() && c != QLatin1Char('_')) return false;
-    }
-
-    // Check for reserved words (math functions)
-    static const QStringList reserved = {
-        QStringLiteral("sin"), QStringLiteral("cos"), QStringLiteral("tan"),
-        QStringLiteral("asin"), QStringLiteral("acos"), QStringLiteral("atan"),
-        QStringLiteral("sqrt"), QStringLiteral("abs"), QStringLiteral("floor"),
-        QStringLiteral("ceil"), QStringLiteral("round"), QStringLiteral("log"),
-        QStringLiteral("log10"), QStringLiteral("exp"), QStringLiteral("pow"),
-        QStringLiteral("min"), QStringLiteral("max"), QStringLiteral("pi"),
-        QStringLiteral("e")
-    };
-
-    return !reserved.contains(name.toLower());
 }
 
 void ParametersDialog::rejectNameEdit(int row)
@@ -804,43 +768,30 @@ void ParametersDialog::validateNameCell(int row, const QString& text)
     if (!nameItem) return;
     int paramIdx = nameItem->data(Qt::UserRole).toInt();
 
-    // Check for various validation errors
-    if (name.isEmpty()) {
+    // The rules are the library's (the same the CLI applies); the messages
+    // are this dialog's.
+    const NameCheck check = ParameterEngine::checkName(name.toStdString());
+    const QString character = QString::fromStdString(check.character);
+    switch (check.problem) {
+    case NameProblem::None:
+        break;
+    case NameProblem::Empty:
         showError(row, ColName, tr("Parameter name cannot be empty."));
         return;
-    }
-
-    if (name[0].isDigit()) {
+    case NameProblem::StartsWithDigit:
         showError(row, ColName, tr("Parameter name cannot start with a digit."));
         return;
-    }
-
-    if (!name[0].isLetter() && name[0] != QLatin1Char('_')) {
+    case NameProblem::BadStart:
         showError(row, ColName, tr("Parameter name must start with a letter or underscore."));
         return;
-    }
-
-    // Check remaining characters
-    for (int i = 1; i < name.length(); ++i) {
-        QChar c = name[i];
-        if (!c.isLetterOrNumber() && c != QLatin1Char('_')) {
-            showError(row, ColName, tr("Invalid character '%1' in parameter name.").arg(c));
-            return;
-        }
-    }
-
-    // Check for reserved words
-    static const QStringList reserved = {
-        QStringLiteral("sin"), QStringLiteral("cos"), QStringLiteral("tan"),
-        QStringLiteral("asin"), QStringLiteral("acos"), QStringLiteral("atan"),
-        QStringLiteral("sqrt"), QStringLiteral("abs"), QStringLiteral("floor"),
-        QStringLiteral("ceil"), QStringLiteral("round"), QStringLiteral("log"),
-        QStringLiteral("log10"), QStringLiteral("exp"), QStringLiteral("pow"),
-        QStringLiteral("min"), QStringLiteral("max"), QStringLiteral("pi"),
-        QStringLiteral("e")
-    };
-    if (reserved.contains(name.toLower())) {
-        showError(row, ColName, tr("'%1' is a reserved word and cannot be used as a parameter name.").arg(name));
+    case NameProblem::BadCharacter:
+        showError(row, ColName,
+                  tr("Invalid character '%1' in parameter name.").arg(character));
+        return;
+    case NameProblem::Reserved:
+        showError(row, ColName,
+                  tr("'%1' is a reserved word and cannot be used as a parameter name.")
+                      .arg(name));
         return;
     }
 

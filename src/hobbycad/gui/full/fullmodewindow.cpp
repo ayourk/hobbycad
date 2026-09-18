@@ -6,6 +6,7 @@
 #include "../propertyrow.h"
 #include <hobbycad/units.h>
 #include "fullmodewindow.h"
+#include "../settingvalue.h"
 #include "../planetransformpanel.h"
 #include <QPushButton>
 #include "viewportwidget.h"
@@ -582,42 +583,33 @@ SketchCanvas* FullModeWindow::activeSketchCanvas() const
 
 void FullModeWindow::applyPreferences()
 {
-    QSettings s;
-    s.beginGroup(QStringLiteral("preferences"));
+    namespace keys = settings::keys;
 
-    // Rotation axis
-    int axis = s.value(QStringLiteral("defaultAxis"), 0).toInt();
+    // Rotation axis (defaults and ranges: hobbycad/settings_schema.h)
     m_viewport->setRotationAxis(
-        static_cast<ViewportWidget::RotationAxis>(qBound(0, axis, 2)));
+        static_cast<ViewportWidget::RotationAxis>(settingInt(keys::DefaultAxis)));
 
     // PgUp/PgDn
-    int pgStep = s.value(QStringLiteral("pgUpStepDeg"), 10).toInt();
-    int pgInt  = s.value(QStringLiteral("spinInterval"), 10).toInt();
-    m_viewport->setSpinParams(pgStep, pgInt);
+    m_viewport->setSpinParams(settingInt(keys::PageStepDeg), settingInt(keys::SpinInterval));
 
     // Arrow snap animation
-    int snapStep = s.value(QStringLiteral("snapStepDeg"), 10).toInt();
-    int snapInt  = s.value(QStringLiteral("snapInterval"), 10).toInt();
-    m_viewport->setSnapParams(snapStep, snapInt);
+    m_viewport->setSnapParams(settingInt(keys::SnapStepDeg), settingInt(keys::SnapInterval));
 
     // Grid
-    bool showGrid = s.value(QStringLiteral("showGrid"), true).toBool();
-    m_viewport->setGridVisible(showGrid);
+    m_viewport->setGridVisible(settingBool(keys::ShowGrid));
 
     // Coordinate system and orbit behavior
-    bool zUp = s.value(QStringLiteral("zUpOrientation"), true).toBool();
+    const bool zUp = settingBool(keys::ZUpOrientation);
     m_viewport->setZUpOrientation(zUp);
     if (zUpAction()) {
         zUpAction()->setChecked(zUp);
     }
 
-    bool orbitSelected = s.value(QStringLiteral("orbitSelected"), false).toBool();
+    const bool orbitSelected = settingBool(keys::OrbitSelected);
     m_viewport->setOrbitSelectedObject(orbitSelected);
     if (orbitSelectedAction()) {
         orbitSelectedAction()->setChecked(orbitSelected);
     }
-
-    s.endGroup();
 
     // Update axis label
     static const char* names[] = { "X", "Y", "Z" };

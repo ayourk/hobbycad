@@ -3,7 +3,11 @@
 // =====================================================================
 
 #include "mainwindow.h"
+
+#include "arrangementstore.h"
+#include "customizedialog.h"
 #include "propertyrow.h"
+#include "settingvalue.h"
 #include <hobbycad/sketch/undo.h>
 #include <hobbycad/sketch/parsing.h>
 #include <QMouseEvent>
@@ -12,13 +16,17 @@
 #include <hobbycad/sketch/transform.h>
 #include <hobbycad/sketch/queries.h>
 #include <hobbycad/sketch/properties.h>
+#include <hobbycad/sketch/property_schema.h>
 #include <hobbycad/geometry/utils.h>
 #include "editinplace.h"
 #include "objectsbrowserwidget.h"
 
 #include <hobbycad/browser.h>
+#include <hobbycad/commands.h>
+#include <hobbycad/layout/arrangement.h>
 #include <hobbycad/naming.h>
 #include <cstdlib>
+#include <cstring>
 #include <QDateTime>
 #include <QTextStream>
 #include <QDir>
@@ -26,6 +34,7 @@
 #include "aboutdialog.h"
 #include "bindingsdialog.h"
 #include "changelogpanel.h"
+#include "commandtext.h"
 #include "clipanel.h"
 #include "../cli/cliengine.h"
 #include "formulafield.h"
@@ -149,6 +158,10 @@ MainWindow::MainWindow(const OpenGLInfo& glInfo, QWidget* parent)
     setObjectName(QStringLiteral("MainWindow"));
     setMinimumSize(800, 600);
     createMenus();
+    // A change in the Customize dialog reaches the menus and toolbars at
+    // once, so nothing has to be reopened.
+    connect(&ArrangementStore::instance(), &ArrangementStore::changed,
+            this, &MainWindow::rebuildArrangedUi);
     createStatusBar();
     createDockPanels();
 
@@ -559,8 +572,7 @@ void MainWindow::finalizeLayout()
     // Restore window geometry and dock/toolbar state from settings,
     // but only if the user hasn't disabled session restore.
     QSettings settings;
-    bool restoreSession = settings.value(
-        QStringLiteral("preferences/restoreSession"), true).toBool();
+    const bool restoreSession = settingBool(settings::keys::RestoreSession);
 
     if (restoreSession) {
         if (settings.contains(QStringLiteral("window/geometry"))) {
@@ -630,81 +642,178 @@ void MainWindow::finalizeLayout()
 }
 
 // ---- Menus ----------------------------------------------------------
+//
+// Every menu entry is a command from the registry (hobbycad/commands.h),
+// and where it sits is the arrangement's business
+// (hobbycad/layout/arrangement.h). The create*Menu() functions below make
+// each command's action and say what it does; populateMenus() then places
+// the actions, and retranslateCommands() names them.
+
+QAction* MainWindow::commandAction(const char* id)
+{
+    const QString key = QString::fromLatin1(id);
+    if (QAction* existing = m_commandActions.value(key)) return existing;
+    const commands::Command* cmd = commands::findCommand(id);
+    if (!cmd) return nullptr;
+
+    auto* action = new QAction(this);
+    action->setObjectName(key);
+    action->setIcon(commandtext::icon(*cmd, style()));
+    // Menus here have always been text only; the icon is kept for any
+    // toolbar that shows the same action.
+    action->setIconVisibleInMenu(false);
+    if (cmd->kind == commands::Kind::Toggle) {
+        action->setCheckable(true);
+        action->setChecked(cmd->checkedByDefault);
+    }
+    if (*cmd->radioGroup) {
+        const QString groupName = QString::fromLatin1(cmd->radioGroup);
+        QActionGroup*& group = m_radioGroups[groupName];
+        if (!group) {
+            group = new QActionGroup(this);
+            group->setExclusive(true);
+        }
+        group->addAction(action);
+    }
+    m_commandActions.insert(key, action);
+    return action;
+}
+
+QMenu* MainWindow::commandMenu(const std::string& id)
+{
+    const QString key = QString::fromStdString(id);
+    QMenu*& menu = m_commandMenus[key];
+    if (!menu) {
+        menu = new QMenu(this);
+        menu->setObjectName(key);
+    }
+    return menu;
+}
+
+void MainWindow::populateMenus()
+{
+    const layout::Arrangement& arr = ArrangementStore::instance().current();
+    // Depth-first, one container at a time; the arrangement has already
+    // been checked for loops and depth (Arrangement::problems()).
+    std::function<void(const std::string&, QMenu*)> fill =
+        [&](const std::string& container, QMenu* menu) {
+        for (const layout::Element* e : arr.children(container)) {
+            switch (e->kind) {
+            case layout::ElementKind::Command:
+                if (QAction* a = commandAction(e->id.c_str())) menu->addAction(a);
+                break;
+            case layout::ElementKind::Container: {
+                QMenu* sub = commandMenu(e->id);
+                menu->addMenu(sub);
+                fill(e->id, sub);
+                break;
+            }
+            case layout::ElementKind::Separator:
+                menu->addSeparator();
+                break;
+            case layout::ElementKind::Placeholder:
+                // Only the language list is a placeholder, and
+                // createLanguageMenu() fills that menu itself.
+                break;
+            }
+        }
+    };
+    for (const layout::Element* e : arr.children(layout::kMenuBar)) {
+        if (e->kind != layout::ElementKind::Container) continue;
+        QMenu* menu = commandMenu(e->id);
+        menuBar()->addMenu(menu);
+        fill(e->id, menu);
+    }
+}
+
+void MainWindow::rebuildArrangedUi()
+{
+    // The actions stay as they are, with their connections; only where
+    // they are shown changes.
+    menuBar()->clear();
+    for (auto it = m_commandMenus.constBegin(); it != m_commandMenus.constEnd(); ++it) {
+        it.value()->clear();
+    }
+    populateMenus();
+    createLanguageMenu();
+    retranslateCommands();
+    if (m_sketchToolbar) m_sketchToolbar->rebuild();
+    if (m_toolbar) m_toolbar->rebuild();
+    applyBindings();
+}
+
+void MainWindow::retranslateCommands()
+{
+    for (auto it = m_commandActions.constBegin(); it != m_commandActions.constEnd(); ++it) {
+        const commands::Command* cmd = commandtext::find(it.key());
+        if (!cmd) continue;
+        QString text = commandtext::menuText(*cmd);
+        // A key heard by the canvas or the 3D view is not a window
+        // shortcut (applyBindings()), so the menu names it in the text.
+        const commands::BindingContext* context = commands::findBindingContext(cmd->context);
+        if (context && context->scope == commands::BindingScope::Surface) {
+            const QString key = commandtext::keyText(cmd->id, m_keyTable);
+            if (!key.isEmpty()) text += QLatin1Char('\t') + key;
+        }
+        it.value()->setText(text);
+        it.value()->setToolTip(commandtext::tooltip(*cmd, nullptr));
+    }
+    for (auto it = m_commandMenus.constBegin(); it != m_commandMenus.constEnd(); ++it) {
+        if (const commands::Command* cmd = commandtext::find(it.key())) {
+            it.value()->setTitle(commandtext::menuText(*cmd));
+        }
+    }
+}
 
 // File menu
 void MainWindow::createFileMenu()
 {
-    m_menuFile = menuBar()->addMenu(QString());
+    m_actionNew = commandAction("file.new");
+    connect(m_actionNew, &QAction::triggered, this, &MainWindow::onFileNew);
 
-    m_actionNew = m_menuFile->addAction(QString(), this, &MainWindow::onFileNew);
-    m_actionNew->setShortcut(QKeySequence::New);
+    m_actionOpen = commandAction("file.open");
+    connect(m_actionOpen, &QAction::triggered, this, &MainWindow::onFileOpen);
 
-    m_actionOpen = m_menuFile->addAction(QString(), this, &MainWindow::onFileOpen);
-    m_actionOpen->setShortcut(QKeySequence::Open);
+    m_actionSave = commandAction("file.save");
+    connect(m_actionSave, &QAction::triggered, this, &MainWindow::onFileSave);
 
-    m_menuFile->addSeparator();
+    m_actionSaveAs = commandAction("file.saveAs");
+    connect(m_actionSaveAs, &QAction::triggered, this, &MainWindow::onFileSaveAs);
 
-    m_actionSave = m_menuFile->addAction(QString(), this, &MainWindow::onFileSave);
-    m_actionSave->setShortcut(QKeySequence::Save);
+    m_actionClose = commandAction("file.close");
+    connect(m_actionClose, &QAction::triggered, this, &MainWindow::onFileClose);
 
-    m_actionSaveAs = m_menuFile->addAction(QString(), this, &MainWindow::onFileSaveAs);
-    m_actionSaveAs->setShortcut(QKeySequence::SaveAs);
-
-    m_menuFile->addSeparator();
-
-    m_actionClose = m_menuFile->addAction(QString(), this, &MainWindow::onFileClose);
-    m_actionClose->setShortcut(QKeySequence::Close);
-
-    m_menuFile->addSeparator();
-
-    // Import submenu
-    m_menuImport = m_menuFile->addMenu(QString());
-    m_actionImportStep = m_menuImport->addAction(QString(),
-        this, &MainWindow::onFileImportStep);
-    m_actionImportDXF = m_menuImport->addAction(QString(),
-        this, &MainWindow::onFileImportDXF);
+    m_actionImportStep = commandAction("file.import.step");
+    connect(m_actionImportStep, &QAction::triggered, this, &MainWindow::onFileImportStep);
+    m_actionImportDXF = commandAction("file.import.dxf");
+    connect(m_actionImportDXF, &QAction::triggered, this, &MainWindow::onFileImportDXF);
     m_actionImportDXF->setEnabled(false);
 
-    // Export submenu
-    m_menuExport = m_menuFile->addMenu(QString());
-    m_actionExportStep = m_menuExport->addAction(QString(),
-        this, &MainWindow::onFileExportStep);
+    m_actionExportStep = commandAction("file.export.step");
+    connect(m_actionExportStep, &QAction::triggered, this, &MainWindow::onFileExportStep);
 
-    m_actionExportStl = m_menuExport->addAction(QString(),
-        this, &MainWindow::onFileExportStl);
+    m_actionExportStl = commandAction("file.export.stl");
+    connect(m_actionExportStl, &QAction::triggered, this, &MainWindow::onFileExportStl);
 
-    m_menuExport->addSeparator();
-
-    m_actionExportDXF = m_menuExport->addAction(QString(),
-        this, &MainWindow::onFileExportDXF);
+    m_actionExportDXF = commandAction("file.export.dxf");
+    connect(m_actionExportDXF, &QAction::triggered, this, &MainWindow::onFileExportDXF);
     m_actionExportDXF->setEnabled(false);
 
-    m_actionExportSVG = m_menuExport->addAction(QString(),
-        this, &MainWindow::onFileExportSVG);
+    m_actionExportSVG = commandAction("file.export.svg");
+    connect(m_actionExportSVG, &QAction::triggered, this, &MainWindow::onFileExportSVG);
     m_actionExportSVG->setEnabled(false);
 
-    m_menuFile->addSeparator();
-
-    m_actionQuit = m_menuFile->addAction(QString(), this, &MainWindow::onFileQuit);
-    m_actionQuit->setShortcut(QKeySequence::Quit);
+    m_actionQuit = commandAction("file.quit");
+    connect(m_actionQuit, &QAction::triggered, this, &MainWindow::onFileQuit);
 }
 
 // Edit menu
 void MainWindow::createEditMenu()
 {
-    m_menuEdit = menuBar()->addMenu(QString());
-
-    m_actionUndo = m_menuEdit->addAction(QString());
-    m_actionUndo->setShortcut(QKeySequence::Undo);
+    m_actionUndo = commandAction("edit.undo");
     m_actionUndo->setEnabled(false);  // Enabled when undo stack is not empty
 
-    m_actionRedo = m_menuEdit->addAction(QString());
-    // Startup fallback only. BindingsDialog::defaultBindings() is where these
-    // are decided, and applyBindings() overwrites whatever is set here as
-    // soon as settings are read; keep the two in step, or a shortcut will
-    // appear to work for a moment at startup and then change.
-    m_actionRedo->setShortcuts({QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z),
-                                QKeySequence(Qt::CTRL | Qt::Key_Y)});
+    m_actionRedo = commandAction("edit.redo");
     m_actionRedo->setEnabled(false);  // Enabled when redo stack is not empty
 
     // Outer (document) undo. While a sketch is open these are re-pointed at
@@ -718,63 +827,41 @@ void MainWindow::createEditMenu()
         if (!m_inSketchMode) { redoDocument(nullptr); }
     });
 
-    m_menuEdit->addSeparator();
-
-    m_actionCut = m_menuEdit->addAction(QString());
-    m_actionCut->setShortcut(QKeySequence::Cut);
+    m_actionCut = commandAction("edit.cut");
     m_actionCut->setEnabled(false);  // Enabled when selection exists
 
-    m_actionCopy = m_menuEdit->addAction(QString());
-    m_actionCopy->setShortcut(QKeySequence::Copy);
+    m_actionCopy = commandAction("edit.copy");
     m_actionCopy->setEnabled(false);  // Enabled when selection exists
 
-    m_actionPaste = m_menuEdit->addAction(QString());
-    m_actionPaste->setShortcut(QKeySequence::Paste);
+    m_actionPaste = commandAction("edit.paste");
     m_actionPaste->setEnabled(false);  // Enabled when clipboard has compatible data
 
-    m_actionDelete = m_menuEdit->addAction(QString());
-    m_actionDelete->setShortcut(QKeySequence::Delete);
+    m_actionDelete = commandAction("edit.delete");
     m_actionDelete->setEnabled(false);  // Enabled when selection exists
 
-    m_menuEdit->addSeparator();
-
-    m_actionSelectAll = m_menuEdit->addAction(QString());
-    m_actionSelectAll->setShortcut(QKeySequence::SelectAll);
+    m_actionSelectAll = commandAction("edit.selectAll");
     m_actionSelectAll->setEnabled(false);  // Enabled when document has selectable items
 }
 
-// View > Workspace submenu (exclusive group)
+// View > Workspace submenu (an exclusive group in the registry)
 void MainWindow::createWorkspaceMenu()
 {
-    m_menuWorkspace = m_menuView->addMenu(QString());
-    auto* workspaceGroup = new QActionGroup(this);
-    workspaceGroup->setExclusive(true);
-
-    m_actionWorkspaceDesign = m_menuWorkspace->addAction(QString());
-    m_actionWorkspaceDesign->setCheckable(true);
-    m_actionWorkspaceDesign->setChecked(true);
-    workspaceGroup->addAction(m_actionWorkspaceDesign);
+    m_actionWorkspaceDesign = commandAction("view.workspace.design");
     connect(m_actionWorkspaceDesign, &QAction::triggered, this, [this]() {
         emit workspaceChanged(Workspace::Design);
     });
 
-    m_actionWorkspaceRender = m_menuWorkspace->addAction(QString());
-    m_actionWorkspaceRender->setCheckable(true);
-    workspaceGroup->addAction(m_actionWorkspaceRender);
+    m_actionWorkspaceRender = commandAction("view.workspace.render");
     connect(m_actionWorkspaceRender, &QAction::triggered, this, [this]() {
         emit workspaceChanged(Workspace::Render);
     });
 
-    m_actionWorkspaceAnimation = m_menuWorkspace->addAction(QString());
-    m_actionWorkspaceAnimation->setCheckable(true);
-    workspaceGroup->addAction(m_actionWorkspaceAnimation);
+    m_actionWorkspaceAnimation = commandAction("view.workspace.animation");
     connect(m_actionWorkspaceAnimation, &QAction::triggered, this, [this]() {
         emit workspaceChanged(Workspace::Animation);
     });
 
-    m_actionWorkspaceSimulation = m_menuWorkspace->addAction(QString());
-    m_actionWorkspaceSimulation->setCheckable(true);
-    workspaceGroup->addAction(m_actionWorkspaceSimulation);
+    m_actionWorkspaceSimulation = commandAction("view.workspace.simulation");
     connect(m_actionWorkspaceSimulation, &QAction::triggered, this, [this]() {
         emit workspaceChanged(Workspace::Simulation);
     });
@@ -783,78 +870,46 @@ void MainWindow::createWorkspaceMenu()
 // View > Theme submenu: Light / Dark (exclusive) + Edit...
 void MainWindow::createThemeMenu()
 {
-    m_menuTheme = m_menuView->addMenu(QString());
-    {
-        auto* themeGroup = new QActionGroup(this);
-        themeGroup->setExclusive(true);
-        m_actionThemeLight = m_menuTheme->addAction(QString());
-        m_actionThemeLight->setCheckable(true);
-        themeGroup->addAction(m_actionThemeLight);
-        connect(m_actionThemeLight, &QAction::triggered, this, &MainWindow::onThemeLight);
-        m_actionThemeDark = m_menuTheme->addAction(QString());
-        m_actionThemeDark->setCheckable(true);
-        themeGroup->addAction(m_actionThemeDark);
-        connect(m_actionThemeDark, &QAction::triggered, this, &MainWindow::onThemeDark);
-        m_menuTheme->addSeparator();
-        m_actionThemeEdit = m_menuTheme->addAction(QString(), this, &MainWindow::onThemeEdit);
-    }
+    m_actionThemeLight = commandAction("view.theme.light");
+    connect(m_actionThemeLight, &QAction::triggered, this, &MainWindow::onThemeLight);
+    m_actionThemeDark = commandAction("view.theme.dark");
+    connect(m_actionThemeDark, &QAction::triggered, this, &MainWindow::onThemeDark);
+    m_actionThemeEdit = commandAction("view.theme.edit");
+    connect(m_actionThemeEdit, &QAction::triggered, this, &MainWindow::onThemeEdit);
 }
 
 // View > Selection Filter: restrict picking to points or curves (Fusion
 // filters).
 void MainWindow::createSelectionFilterMenu()
 {
-    QMenu* mf = m_menuView->addMenu(tr("Selection &Filter"));
-    auto* g = new QActionGroup(this);
-    g->setExclusive(true);
-    auto addf = [&](const QString& t, SketchCanvas::SelectFilter f, bool checked) {
-        QAction* a = mf->addAction(t);
-        a->setCheckable(true);
-        a->setChecked(checked);
-        g->addAction(a);
-        connect(a, &QAction::triggered, this, [this, f]() {
+    const struct {
+        const char* id;
+        SketchCanvas::SelectFilter filter;
+    } filters[] = {
+        {"view.filter.all", SketchCanvas::SelectFilter::All},
+        {"view.filter.points", SketchCanvas::SelectFilter::PointsOnly},
+        {"view.filter.curves", SketchCanvas::SelectFilter::CurvesOnly},
+    };
+    for (const auto& entry : filters) {
+        const SketchCanvas::SelectFilter f = entry.filter;
+        connect(commandAction(entry.id), &QAction::triggered, this, [this, f]() {
             if (SketchCanvas* c = activeSketchCanvas()) c->setSelectFilter(f);
         });
-    };
-    addf(tr("All"),         SketchCanvas::SelectFilter::All, true);
-    addf(tr("Points only"), SketchCanvas::SelectFilter::PointsOnly, false);
-    addf(tr("Curves only"), SketchCanvas::SelectFilter::CurvesOnly, false);
+    }
 }
 
-// View menu (inserted between Edit and Help)
+// View menu
 void MainWindow::createViewMenu()
 {
-    m_menuView = new QMenu(this);
-    menuBar()->insertMenu(m_menuHelp->menuAction(), m_menuView);
-
-    m_actionToggleTerminal = m_menuView->addAction(QString());
-    m_actionToggleTerminal->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft));
-    m_actionToggleTerminal->setCheckable(true);
-    m_actionToggleTerminal->setChecked(false);
-
-    m_actionToggleFeatureTree = m_menuView->addAction(QString());
-    m_actionToggleFeatureTree->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
-    m_actionToggleFeatureTree->setCheckable(true);
-    m_actionToggleFeatureTree->setChecked(true);
-
-    m_actionToggleProperties = m_menuView->addAction(QString());
-    m_actionToggleProperties->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_P));
-    m_actionToggleProperties->setCheckable(true);
-    m_actionToggleProperties->setChecked(true);
-
-    m_actionToggleToolbar = m_menuView->addAction(QString());
-    m_actionToggleToolbar->setCheckable(true);
-    m_actionToggleToolbar->setChecked(true);
-
-    m_actionToggleChangelog = m_menuView->addAction(QString());
-    m_actionToggleChangelog->setCheckable(true);
-    m_actionToggleChangelog->setChecked(false);
+    m_actionToggleTerminal = commandAction("view.terminal");
+    m_actionToggleFeatureTree = commandAction("view.project");
+    m_actionToggleProperties = commandAction("view.properties");
+    m_actionToggleToolbar = commandAction("view.toolbar");
+    m_actionToggleChangelog = commandAction("view.changelog");
 
     // Draw-then-constrain: place roughly, then constrain, rather than
     // snapping and typing dimensions during placement.
-    m_actionDrawThenConstrain = m_menuView->addAction(QString());
-    m_actionDrawThenConstrain->setCheckable(true);
-    m_actionDrawThenConstrain->setChecked(false);
+    m_actionDrawThenConstrain = commandAction("view.drawThenConstrain");
     connect(m_actionDrawThenConstrain, &QAction::toggled, this,
             [this](bool on) {
         SketchCanvas* canvas = activeSketchCanvas();
@@ -874,9 +929,7 @@ void MainWindow::createViewMenu()
     });
 
     // Fusion's Sketch Palette equivalent of "Show Points".
-    m_actionShowUnconstrained = m_menuView->addAction(QString());
-    m_actionShowUnconstrained->setCheckable(true);
-    m_actionShowUnconstrained->setChecked(true);
+    m_actionShowUnconstrained = commandAction("view.showUnconstrained");
     connect(m_actionShowUnconstrained, &QAction::toggled, this,
             [this](bool on) {
         if (SketchCanvas* canvas = activeSketchCanvas()) {
@@ -886,9 +939,7 @@ void MainWindow::createViewMenu()
 
     // Fusion's Sketch Palette equivalent of "Show Constraints". Hides the
     // geometric glyph chips only; dimensional labels have their own state.
-    m_actionShowConstraints = m_menuView->addAction(QString());
-    m_actionShowConstraints->setCheckable(true);
-    m_actionShowConstraints->setChecked(true);
+    m_actionShowConstraints = commandAction("view.showConstraints");
     connect(m_actionShowConstraints, &QAction::toggled, this,
             [this](bool on) {
         if (SketchCanvas* canvas = activeSketchCanvas()) {
@@ -898,9 +949,7 @@ void MainWindow::createViewMenu()
 
     // Fusion's Sketch Palette equivalent of "Show Dimensions". The mirror of
     // Show Constraints: hides the dimensional labels, leaves the glyphs.
-    m_actionShowDimensions = m_menuView->addAction(QString());
-    m_actionShowDimensions->setCheckable(true);
-    m_actionShowDimensions->setChecked(true);
+    m_actionShowDimensions = commandAction("view.showDimensions");
     connect(m_actionShowDimensions, &QAction::toggled, this,
             [this](bool on) {
         if (SketchCanvas* canvas = activeSketchCanvas()) {
@@ -910,9 +959,7 @@ void MainWindow::createViewMenu()
 
     // Fusion's Sketch Palette equivalent of "Show Profile": blue shading of
     // closed profiles. Off by default; the canvas function had no caller.
-    m_actionShowProfiles = m_menuView->addAction(QString());
-    m_actionShowProfiles->setCheckable(true);
-    m_actionShowProfiles->setChecked(false);
+    m_actionShowProfiles = commandAction("view.showProfiles");
     connect(m_actionShowProfiles, &QAction::toggled, this,
             [this](bool on) {
         if (SketchCanvas* canvas = activeSketchCanvas()) canvas->setShowProfiles(on);
@@ -920,46 +967,29 @@ void MainWindow::createViewMenu()
 
     // Frame the sketch in the viewport. Mirrors Fusion's "Fit"; the canvas
     // function existed but nothing invoked it.
-    m_actionZoomToFit = m_menuView->addAction(QString());
+    m_actionZoomToFit = commandAction("view.fitSketch");
     connect(m_actionZoomToFit, &QAction::triggered, this, [this]() {
         if (SketchCanvas* canvas = activeSketchCanvas()) canvas->zoomToFit();
     });
 
-    m_menuView->addSeparator();
-
     createWorkspaceMenu();
 
-    m_menuView->addSeparator();
-
-    m_actionResetView = m_menuView->addAction(QString());
-    m_actionResetView->setShortcut(QKeySequence(Qt::Key_Home));
     // Connected in FullModeWindow to viewport->resetCamera()
+    m_actionResetView = commandAction("view.resetView");
 
     // Fusion's "Look At": orient the 3D camera square onto the active sketch
     // plane. Connected in FullModeWindow (the 3D viewport lives there).
-    m_actionLookAt = m_menuView->addAction(QString());
+    m_actionLookAt = commandAction("view.lookAt");
 
     // Fusion's "Slice": section the 3D model at the active sketch plane so its
     // interior is visible while sketching. A clip plane, toggled on and off.
-    m_actionSlice = m_menuView->addAction(QString());
-    m_actionSlice->setCheckable(true);
-    m_actionSlice->setChecked(false);
+    m_actionSlice = commandAction("view.slice");
 
-    m_actionRotateLeft = m_menuView->addAction(QString());
+    m_actionRotateLeft = commandAction("view.rotateLeft");
+    m_actionRotateRight = commandAction("view.rotateRight");
 
-    m_actionRotateRight = m_menuView->addAction(QString());
-
-    m_menuView->addSeparator();
-
-    m_actionShowGrid = m_menuView->addAction(QString());
-    m_actionShowGrid->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
-    m_actionShowGrid->setCheckable(true);
-    m_actionShowGrid->setChecked(true);  // On by default
-
-    m_actionSnapToGrid = m_menuView->addAction(QString());
-    m_actionSnapToGrid->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
-    m_actionSnapToGrid->setCheckable(true);
-    m_actionSnapToGrid->setChecked(false);  // Off by default
+    m_actionShowGrid = commandAction("view.showGrid");      // On by default
+    m_actionSnapToGrid = commandAction("view.snapToGrid");  // Off by default
 
     // Snap to grid is only available when grid is visible
     connect(m_actionShowGrid, &QAction::toggled, this, [this](bool visible) {
@@ -969,76 +999,55 @@ void MainWindow::createViewMenu()
         }
     });
 
-    m_menuView->addSeparator();
+    // Z-up is the default. Connected in FullModeWindow to handle
+    // coordinate system change.
+    m_actionZUp = commandAction("view.zUpOrientation");
 
-    m_actionZUp = m_menuView->addAction(QString());
-    m_actionZUp->setCheckable(true);
-    m_actionZUp->setChecked(true);  // Z-up is the default
-    // Connected in FullModeWindow to handle coordinate system change
-
-    m_actionOrbitSelected = m_menuView->addAction(QString());
-    m_actionOrbitSelected->setCheckable(true);
-    m_actionOrbitSelected->setChecked(false);  // Off by default
-    // Connected in FullModeWindow to viewport
-
-    m_menuView->addSeparator();
+    // Off by default. Connected in FullModeWindow to viewport.
+    m_actionOrbitSelected = commandAction("view.orbitSelected");
 
     createThemeMenu();
-
     createSelectionFilterMenu();
 
-    m_menuView->addSeparator();
+    m_actionCustomize = commandAction("view.customize");
+    connect(m_actionCustomize, &QAction::triggered, this, &MainWindow::onCustomize);
 
-    // Language submenu. Built last so it sits directly above Preferences,
-    // which is where a user looks for it.
-    m_menuLanguage = m_menuView->addMenu(QString());
-    createLanguageMenu();
-
-    m_actionPreferences = m_menuView->addAction(QString(), this, &MainWindow::onEditPreferences);
-    m_actionPreferences->setShortcut(QKeySequence::Preferences);
+    m_actionPreferences = commandAction("view.preferences");
+    connect(m_actionPreferences, &QAction::triggered, this, &MainWindow::onEditPreferences);
 }
 
-    // Sketch drawing tools also live in a menu, not only the toolbar, so they
-    // are discoverable by browsing. Bezier (the pen) and Spline (Catmull-Rom
-    // fit points) are the two spline variants; the rest mirror the toolbar.
-    // Ellipse opens in Center + Axes, the toolbar button's own default; its
-    // other placements are on the toolbar dropdown.
+void MainWindow::onCustomize()
+{
+    CustomizeDialog dialog(this);
+    dialog.exec();
+}
+
+// Sketch menu: the sketch tools and the tool modes the arrangement puts
+// there, plus the curvature comb and Finish Sketch.
 void MainWindow::createSketchMenu()
 {
-    QMenu* mSketch = new QMenu(this);
-    mSketch->setTitle(tr("S&ketch"));
-    menuBar()->insertMenu(m_menuHelp->menuAction(), mSketch);
-    auto addTool = [&](const QString& text, SketchTool t, CreationMode m) {
-        QAction* a = mSketch->addAction(text);
-        connect(a, &QAction::triggered, this, [this, t, m]() {
+    for (const commands::Command& cmd : commands::allCommands()) {
+        if (cmd.kind != commands::Kind::Tool || cmd.modelTool != ModelTool::None
+            || std::strcmp(cmd.context, "sketch") != 0) {
+            continue;
+        }
+        const SketchTool t = cmd.sketchTool;
+        const CreationMode m = cmd.hasMode ? cmd.mode : CreationMode::Default;
+        connect(commandAction(cmd.id), &QAction::triggered, this, [this, t, m]() {
             onSketchToolSelected(t);                 // activate on canvas + hint
             if (m_sketchCanvas) m_sketchCanvas->setCreationMode(m);
             if (m_sketchToolbar) m_sketchToolbar->setActiveTool(t, m);  // sync (no emit)
         });
-    };
-    addTool(tr("&Line"),        SketchTool::Line,      CreationMode::Default);
-    addTool(tr("&Rectangle"),   SketchTool::Rectangle, CreationMode::Default);
-    addTool(tr("&Circle"),      SketchTool::Circle,    CreationMode::Default);
-    addTool(tr("&Arc"),         SketchTool::Arc,       CreationMode::Default);
-    addTool(tr("&Ellipse"),     SketchTool::Ellipse,   CreationMode::EllipseCenterAxes);
-    addTool(tr("&Point"),       SketchTool::Point,     CreationMode::Default);
-    mSketch->addSeparator();
-    addTool(tr("&Cubic Bezier"),        SketchTool::Spline, CreationMode::SplineControlPoints);
-    addTool(tr("&Catmull-Rom Spline"),  SketchTool::Spline, CreationMode::SplineFitPoints);
-    addTool(tr("&Rational Bezier"),     SketchTool::Spline, CreationMode::SplineRational);
-    addTool(tr("Conic Arc (Rh&o)"),     SketchTool::Spline, CreationMode::SplineConic);
-    mSketch->addSeparator();
-    QAction* combA = mSketch->addAction(tr("Curvature Comb"));
-    combA->setCheckable(true);
-    connect(combA, &QAction::toggled, this, [this](bool on) {
+    }
+
+    connect(commandAction("sketch.curvatureComb"), &QAction::toggled, this, [this](bool on) {
         if (m_sketchCanvas) m_sketchCanvas->setCurvatureCombVisible(on);
     });
 
     // Finish Sketch: a reliable, always-findable way to leave the sketch
     // (the action bar's button lives in a properties surface that is not
     // always the visible one). Enabled only while a sketch is open.
-    mSketch->addSeparator();
-    m_finishSketchAction = mSketch->addAction(tr("Finish Sketch"));
+    m_finishSketchAction = commandAction("sketch.finish");
     m_finishSketchAction->setEnabled(false);
     connect(m_finishSketchAction, &QAction::triggered,
             this, &MainWindow::finishSketchInteractive);
@@ -1050,45 +1059,23 @@ void MainWindow::createSketchMenu()
     // selection via the canvas; insufficient selections report what they need.
 void MainWindow::createConstraintsMenu()
 {
-    QMenu* mCon = new QMenu(this);
-    mCon->setTitle(tr("C&onstraints"));
-    menuBar()->insertMenu(m_menuHelp->menuAction(), mCon);
-    auto add = [&](const QString& text, sketch::ConstraintType t) {
-        QAction* a = mCon->addAction(text);
-        connect(a, &QAction::triggered, this, [this, t]() {
-            onConstraintMenu(static_cast<int>(t));
-        });
-    };
-    add(tr("Coincident"),    sketch::ConstraintType::Coincident);
-    add(tr("Horizontal"),    sketch::ConstraintType::Horizontal);
-    add(tr("Vertical"),      sketch::ConstraintType::Vertical);
-    add(tr("Parallel"),      sketch::ConstraintType::Parallel);
-    add(tr("Perpendicular"), sketch::ConstraintType::Perpendicular);
-    add(tr("Tangent"),       sketch::ConstraintType::Tangent);
-    add(tr("Curvature (G2)"), sketch::ConstraintType::Curvature);
-    add(tr("Equal"),         sketch::ConstraintType::Equal);
-    add(tr("Midpoint"),      sketch::ConstraintType::Midpoint);
-    add(tr("Concentric"),    sketch::ConstraintType::Concentric);
-    add(tr("Collinear"),     sketch::ConstraintType::Collinear);
-    add(tr("Point on Spline"), sketch::ConstraintType::PointOnSpline);
-    add(tr("Tangent Angle"),   sketch::ConstraintType::TangentAngle);
-    {   // Angle dimension between two selected lines (dimensional, not the
-        // geometric-constraint path; refuses parallel lines).
-        QAction* angleA = mCon->addAction(tr("Angle (2 lines)"));
-        connect(angleA, &QAction::triggered, this, [this]() {
-            if (SketchCanvas* c = activeSketchCanvas()) c->dimensionSelectedLinesAngle();
+    for (const commands::Command& cmd : commands::allCommands()) {
+        if (std::strncmp(cmd.id, "sketch.constrain.", 17) != 0 || cmd.arg < 0) continue;
+        const int type = cmd.arg;   // a sketch::ConstraintType
+        connect(commandAction(cmd.id), &QAction::triggered, this, [this, type]() {
+            onConstraintMenu(type);
         });
     }
-    add(tr("Symmetric"),     sketch::ConstraintType::Symmetric);
-    mCon->addSeparator();
+    // Angle dimension between two selected lines (dimensional, not the
+    // geometric-constraint path; refuses parallel lines).
+    connect(commandAction("sketch.constrain.angleTwoLines"), &QAction::triggered, this, [this]() {
+        if (SketchCanvas* c = activeSketchCanvas()) c->dimensionSelectedLinesAngle();
+    });
     // Fix applies to the selection directly (no tool-first mode).
-    QAction* fixA = mCon->addAction(tr("Fix / Unfix"));
-    connect(fixA, &QAction::triggered, this, [this]() {
+    connect(commandAction("sketch.constrain.fix"), &QAction::triggered, this, [this]() {
         if (SketchCanvas* c = activeSketchCanvas()) c->applyFixConstraint();
     });
-    mCon->addSeparator();
-    QAction* autoA = mCon->addAction(tr("Auto Constrain"));
-    connect(autoA, &QAction::triggered, this, [this]() {
+    connect(commandAction("sketch.constrain.auto"), &QAction::triggered, this, [this]() {
         if (SketchCanvas* c = activeSketchCanvas()) c->autoConstrainSketch();
     });
 }
@@ -1098,21 +1085,29 @@ void MainWindow::createMenus()
     createFileMenu();
     createEditMenu();
 
-    // Construct menu
-    m_menuConstruct = menuBar()->addMenu(QString());
-
-    m_actionNewConstructionPlane = m_menuConstruct->addAction(QString());
-    // Connected in FullModeWindow to open dialog
+    // Construct menu. Connected in FullModeWindow to open dialog.
+    m_actionNewConstructionPlane = commandAction("construct.plane");
 
     // Help menu
-    m_menuHelp = menuBar()->addMenu(QString());
-
-    m_actionAbout = m_menuHelp->addAction(QString(),
-        this, &MainWindow::onHelpAbout);
+    m_actionAbout = commandAction("help.about");
+    connect(m_actionAbout, &QAction::triggered, this, &MainWindow::onHelpAbout);
 
     createViewMenu();
     createSketchMenu();
     createConstraintsMenu();
+
+    populateMenus();
+    m_menuFile = commandMenu("menu.file");
+    m_menuImport = commandMenu("menu.file.import");
+    m_menuExport = commandMenu("menu.file.export");
+    m_menuEdit = commandMenu("menu.edit");
+    m_menuConstruct = commandMenu("menu.construct");
+    m_menuView = commandMenu("menu.view");
+    m_menuWorkspace = commandMenu("menu.view.workspace");
+    m_menuTheme = commandMenu("menu.view.theme");
+    m_menuLanguage = commandMenu("menu.view.language");
+    m_menuHelp = commandMenu("menu.help");
+    createLanguageMenu();
 
     // Reflect the current theme in the Light/Dark checks, and restore a saved
     // choice, unless the launch set the theme explicitly (--theme / env),
@@ -1195,87 +1190,8 @@ void MainWindow::onLanguageSelected(QAction* action)
 
 void MainWindow::retranslate()
 {
-    m_menuFile->setTitle(tr("&File"));
-    m_actionNew->setText(tr("&New"));
-    m_actionOpen->setText(tr("&Open..."));
-    m_actionSave->setText(tr("&Save"));
-    m_actionSaveAs->setText(tr("Save &As..."));
-    m_actionClose->setText(tr("&Close"));
-    m_menuImport->setTitle(tr("&Import"));
-    m_actionImportStep->setText(tr("STEP File..."));
-    m_actionImportStep->setToolTip(tr("Import geometry from STEP file"));
-    m_actionImportDXF->setText(tr("DXF File (Sketch)..."));
-    m_actionImportDXF->setToolTip(tr("Import DXF geometry into the active sketch"));
-    m_menuExport->setTitle(tr("&Export"));
-    m_actionExportStep->setText(tr("STEP File..."));
-    m_actionExportStep->setToolTip(tr("Export geometry to STEP file"));
-    m_actionExportStl->setText(tr("STL File..."));
-    m_actionExportStl->setToolTip(tr("Export geometry to STL file for 3D printing"));
-    m_actionExportDXF->setText(tr("DXF File (Sketch)..."));
-    m_actionExportDXF->setToolTip(tr("Export sketch to DXF file"));
-    m_actionExportSVG->setText(tr("SVG File (Sketch)..."));
-    m_actionExportSVG->setToolTip(tr("Export sketch to SVG file"));
-    m_actionQuit->setText(tr("&Quit"));
-    m_menuEdit->setTitle(tr("&Edit"));
-    m_actionUndo->setText(tr("&Undo"));
-    m_actionRedo->setText(tr("&Redo"));
-    m_actionCut->setText(tr("Cu&t"));
-    m_actionCopy->setText(tr("&Copy"));
-    m_actionPaste->setText(tr("&Paste"));
-    m_actionDelete->setText(tr("&Delete"));
-    m_actionSelectAll->setText(tr("Select &All"));
-    m_menuConstruct->setTitle(tr("&Construct"));
-    m_actionNewConstructionPlane->setText(tr("New Construction &Plane..."));
-    m_actionNewConstructionPlane->setToolTip(tr("Create a new construction plane"));
-    m_menuHelp->setTitle(tr("&Help"));
-    m_actionAbout->setText(tr("&About HobbyCAD..."));
-    m_menuView->setTitle(tr("&View"));
-    m_actionToggleTerminal->setText(tr("&Terminal"));
-    m_actionToggleFeatureTree->setText(tr("P&roject"));
-    m_actionToggleProperties->setText(tr("&Properties"));
-    m_actionToggleToolbar->setText(tr("Tool&bar"));
-    m_actionToggleChangelog->setText(tr("Change &History"));
-    m_actionDrawThenConstrain->setText(tr("&Draw, then Constrain"));
-    m_actionShowUnconstrained->setText(tr("Show &Unconstrained Points"));
-    m_actionShowUnconstrained->setToolTip(
-        tr("Mark endpoints that are not constrained to other geometry"));
-    m_actionShowConstraints->setText(tr("Show &Constraints"));
-    m_actionShowConstraints->setToolTip(
-        tr("Show the constraint symbols on the canvas; dimensions are "
-           "unaffected"));
-    m_actionShowDimensions->setText(tr("Show &Dimensions"));
-    m_actionShowDimensions->setToolTip(
-        tr("Show the dimensional labels on the canvas; constraint symbols "
-           "are unaffected"));
-    m_actionShowProfiles->setText(tr("Show &Profiles"));
-    m_actionShowProfiles->setToolTip(tr("Shade closed sketch profiles in blue"));
-    m_actionZoomToFit->setText(tr("&Fit Sketch to View"));
-    m_actionZoomToFit->setToolTip(tr("Zoom and pan so the whole sketch is visible"));
-    m_actionDrawThenConstrain->setToolTip(
-        tr("Place geometry roughly and fix it with constraints afterwards, "
-           "instead of snapping and typing dimensions as you place it"));
-    m_menuWorkspace->setTitle(tr("&Workspace"));
-    m_menuLanguage->setTitle(tr("L&anguage"));
-    if (m_menuTheme) m_menuTheme->setTitle(tr("&Theme"));
-    if (m_actionThemeLight) m_actionThemeLight->setText(tr("&Light"));
-    if (m_actionThemeDark)  m_actionThemeDark->setText(tr("&Dark"));
-    if (m_actionThemeEdit)  m_actionThemeEdit->setText(tr("&Edit..."));
-    m_actionWorkspaceDesign->setText(tr("&Design"));
-    m_actionWorkspaceRender->setText(tr("&Render"));
-    m_actionWorkspaceAnimation->setText(tr("&Animation"));
-    m_actionWorkspaceSimulation->setText(tr("&Simulation"));
-    m_actionResetView->setText(tr("Reset &View"));
-    m_actionLookAt->setText(tr("Look &At Sketch Plane"));
-    m_actionLookAt->setToolTip(tr("Orient the camera square onto the active sketch plane"));
-    m_actionSlice->setText(tr("&Slice at Sketch Plane"));
-    m_actionSlice->setToolTip(tr("Section the model at the active sketch plane to see inside"));
-    m_actionRotateLeft->setText(tr("Rotate &Left 90°"));
-    m_actionRotateRight->setText(tr("Rotate Ri&ght 90°"));
-    m_actionShowGrid->setText(tr("Show Gri&d"));
-    m_actionSnapToGrid->setText(tr("&Snap to Grid"));
-    m_actionZUp->setText(tr("&Z-Up Orientation"));
-    m_actionOrbitSelected->setText(tr("&Orbit Selected Object"));
-    m_actionPreferences->setText(tr("Pre&ferences..."));
+    // Menu titles and entries come from the command registry.
+    retranslateCommands();
 
     // Rebuilt from current state rather than restored, because what "system
     // default" resolves to depends on which catalogs are present, and the
@@ -2968,8 +2884,7 @@ void MainWindow::applyPreferences()
 
     // Cursor-trailing sketch hints: a global preference, pushed to every open
     // canvas in any window (mirrors applyThemeChoice). Default on. (Aaron)
-    const bool showHints = QSettings()
-        .value(QStringLiteral("preferences/showCursorHints"), true).toBool();
+    const bool showHints = settingBool(settings::keys::ShowCursorHints);
     for (QWidget* w : qApp->allWidgets())
         if (auto* c = qobject_cast<SketchCanvas*>(w))
             c->setShowCursorHints(showHints);
@@ -2979,72 +2894,22 @@ void MainWindow::applyPreferences()
 
 void MainWindow::applyBindings()
 {
-    // Load bindings from settings and apply to actions
-    auto bindings = BindingsDialog::loadBindings();
-
-    // Map action IDs to QAction pointers
-    QHash<QString, QAction*> actionMap;
-    actionMap.insert(QStringLiteral("file.new"), m_actionNew);
-    actionMap.insert(QStringLiteral("file.open"), m_actionOpen);
-    actionMap.insert(QStringLiteral("file.save"), m_actionSave);
-    actionMap.insert(QStringLiteral("file.saveAs"), m_actionSaveAs);
-    actionMap.insert(QStringLiteral("file.close"), m_actionClose);
-    actionMap.insert(QStringLiteral("file.quit"), m_actionQuit);
-    actionMap.insert(QStringLiteral("edit.cut"), m_actionCut);
-    actionMap.insert(QStringLiteral("edit.copy"), m_actionCopy);
-    actionMap.insert(QStringLiteral("edit.paste"), m_actionPaste);
-    actionMap.insert(QStringLiteral("edit.delete"), m_actionDelete);
-    actionMap.insert(QStringLiteral("edit.selectAll"), m_actionSelectAll);
-    actionMap.insert(QStringLiteral("view.terminal"), m_actionToggleTerminal);
-    actionMap.insert(QStringLiteral("view.project"), m_actionToggleFeatureTree);
-    actionMap.insert(QStringLiteral("view.properties"), m_actionToggleProperties);
-    actionMap.insert(QStringLiteral("view.resetView"), m_actionResetView);
-    actionMap.insert(QStringLiteral("view.rotateLeft"), m_actionRotateLeft);
-    actionMap.insert(QStringLiteral("view.rotateRight"), m_actionRotateRight);
-    actionMap.insert(QStringLiteral("view.preferences"), m_actionPreferences);
-    actionMap.insert(QStringLiteral("view.toolbar"), m_actionToggleToolbar);
-    actionMap.insert(QStringLiteral("edit.undo"), m_actionUndo);
-    actionMap.insert(QStringLiteral("edit.redo"), m_actionRedo);
-    actionMap.insert(QStringLiteral("construct.plane"), m_actionNewConstructionPlane);
-
-    // Apply keyboard bindings to each action
-    for (auto it = bindings.constBegin(); it != bindings.constEnd(); ++it) {
-        QAction* action = actionMap.value(it.key());
-        if (!action) continue;
-
-        const ActionBinding& ab = it.value();
-
-        // Collect all keyboard bindings (skip mouse bindings)
-        QList<QKeySequence> shortcuts;
-
-        auto addIfKeyboard = [&shortcuts](const QString& binding) {
-            if (binding.isEmpty()) return;
-            // Skip mouse bindings
-            if (binding.contains(QStringLiteral("Button"), Qt::CaseInsensitive) ||
-                binding.contains(QStringLiteral("Wheel"), Qt::CaseInsensitive) ||
-                binding.contains(QStringLiteral("Drag"), Qt::CaseInsensitive) ||
-                binding.contains(QStringLiteral("Click"), Qt::CaseInsensitive)) {
-                return;
-            }
-            // A comma in a binding string means multiple separate shortcuts
-            // (e.g. "Ctrl+Shift+Z,Ctrl+Y"), not a multi-key chord.
-            // Split and add each as an independent shortcut.
-            const QStringList parts = binding.split(QLatin1Char(','),
-                                                     Qt::SkipEmptyParts);
-            for (const QString& part : parts) {
-                QKeySequence seq(part.trimmed());
-                if (!seq.isEmpty()) {
-                    shortcuts.append(seq);
-                }
-            }
-        };
-
-        addIfKeyboard(ab.binding1);
-        addIfKeyboard(ab.binding2);
-        addIfKeyboard(ab.binding3);
-
-        action->setShortcuts(shortcuts);
+    // A key in a global or window-wide context becomes a shortcut on its
+    // action. A key heard by one view (the sketch canvas, the 3D view) is
+    // handled by that view when it has focus, so it is only named in the
+    // menu entry and the tooltips.
+    m_keyTable = BindingsDialog::loadTable();
+    for (auto it = m_commandActions.constBegin(); it != m_commandActions.constEnd(); ++it) {
+        const commands::Command* cmd = commandtext::find(it.key());
+        const commands::BindingContext* context =
+            cmd ? commands::findBindingContext(cmd->context) : nullptr;
+        const bool windowWide = context && context->scope != commands::BindingScope::Surface;
+        it.value()->setShortcuts(windowWide ? commandtext::keySequences(cmd->id, m_keyTable)
+                                            : QList<QKeySequence>());
     }
+    retranslateCommands();
+    if (m_sketchToolbar) m_sketchToolbar->setBindings(m_keyTable);
+    if (m_toolbar) m_toolbar->setBindings(m_keyTable);
 }
 
 void MainWindow::updateTitle()
@@ -3877,16 +3742,13 @@ void MainWindow::connectClipboardActions()
 void MainWindow::loadSketchViewPreferences()
 {
     if (!m_sketchCanvas) return;
-    const QSettings s;
-    auto b = [&](const char* key, bool def) {
-        return s.value(QStringLiteral("sketch/view/") + QLatin1String(key), def).toBool();
-    };
-    const bool points = b("points", true);
-    const bool cons   = b("constraints", true);
-    const bool dims   = b("dimensions", true);
-    const bool prof   = b("profiles", false);
-    const bool grid   = b("grid", true);
-    const bool snap   = b("snapGrid", false);
+    namespace keys = settings::keys;
+    const bool points = settingBool(keys::SketchShowPoints);
+    const bool cons   = settingBool(keys::SketchShowConstraints);
+    const bool dims   = settingBool(keys::SketchShowDimensions);
+    const bool prof   = settingBool(keys::SketchShowProfiles);
+    const bool grid   = settingBool(keys::SketchShowGrid);
+    const bool snap   = settingBool(keys::SketchSnapToGrid);
 
     m_sketchCanvas->setShowUnconstrainedPoints(points);
     m_sketchCanvas->setShowConstraints(cons);
@@ -3909,12 +3771,13 @@ void MainWindow::saveSketchViewPreferences()
 {
     if (!m_sketchCanvas) return;
     QSettings s;
-    s.setValue(QStringLiteral("sketch/view/points"), m_sketchCanvas->showUnconstrainedPoints());
-    s.setValue(QStringLiteral("sketch/view/constraints"), m_sketchCanvas->showConstraints());
-    s.setValue(QStringLiteral("sketch/view/dimensions"), m_sketchCanvas->showDimensions());
-    s.setValue(QStringLiteral("sketch/view/profiles"), m_sketchCanvas->showProfiles());
-    s.setValue(QStringLiteral("sketch/view/grid"), m_sketchCanvas->isGridVisible());
-    s.setValue(QStringLiteral("sketch/view/snapGrid"), m_sketchCanvas->snapToGrid());
+    namespace keys = settings::keys;
+    s.setValue(QLatin1String(keys::SketchShowPoints), m_sketchCanvas->showUnconstrainedPoints());
+    s.setValue(QLatin1String(keys::SketchShowConstraints), m_sketchCanvas->showConstraints());
+    s.setValue(QLatin1String(keys::SketchShowDimensions), m_sketchCanvas->showDimensions());
+    s.setValue(QLatin1String(keys::SketchShowProfiles), m_sketchCanvas->showProfiles());
+    s.setValue(QLatin1String(keys::SketchShowGrid), m_sketchCanvas->isGridVisible());
+    s.setValue(QLatin1String(keys::SketchSnapToGrid), m_sketchCanvas->snapToGrid());
 }
 
 void MainWindow::createSketchOnPlane(SketchPlane plane, double offset,
@@ -4158,157 +4021,40 @@ void MainWindow::initSketchConnections()
             this, &MainWindow::showParametersDialog);
 }
 
-// Geometry rows of the properties tree for a line.
-void MainWindow::addLineGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
+// Geometry rows of the properties tree: the fields the library lists for
+// the entity (sketch/property_schema.h), editable unless the entity or a
+// dimension drives them.
+void MainWindow::addGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
+                                 int entityId, const QString& units)
 {
-    if (entity->points.size() >= 2) {
-                addEditablePropertyRow(geomHeader, tr("Start"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-
-                addEditablePropertyRow(geomHeader, tr("End"), pointText(entity->points[1], units), entityId, QStringLiteral("point1"));
-
-        auto* lenItem = new QTreeWidgetItem(geomHeader);
-        lenItem->setText(0, tr("Length"));
-        double len = QLineF(entity->points[0], entity->points[1]).length();
-        lenItem->setText(1, lengthText(len, units));
-        lenItem->setFlags(lenItem->flags() | Qt::ItemIsEditable);
-        lenItem->setData(0, Qt::UserRole, entityId);
-        lenItem->setData(0, Qt::UserRole + 1, QStringLiteral("length"));
-    }
-}
-
-// Geometry rows of the properties tree for a rectangle.
-void MainWindow::addRectangleGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (entity->points.size() >= 4) {
-        // Four stored corners (a rotated rectangle or a parallelogram): list
-        // them. Width and height describe only an axis-aligned rectangle.
-        for (int i = 0; i < 4; ++i)
-            addPropertyRow(geomHeader, tr("Corner %1").arg(i + 1), pointText(entity->points[i], units));
-        return;
-    }
-    if (entity->points.size() >= 2) {
-                addPropertyRow(geomHeader, tr("Corner 1"), pointText(entity->points[0], units));
-
-                addPropertyRow(geomHeader, tr("Corner 2"), pointText(entity->points[1], units));
-
-        auto* widthItem = new QTreeWidgetItem(geomHeader);
-        widthItem->setText(0, tr("Width"));
-        double w = qAbs(entity->points[1].x - entity->points[0].x);
-        widthItem->setText(1, lengthText(w, units));
-        widthItem->setFlags(widthItem->flags() | Qt::ItemIsEditable);
-        widthItem->setData(0, Qt::UserRole, entityId);
-        widthItem->setData(0, Qt::UserRole + 1, QStringLiteral("width"));
-
-        auto* heightItem = new QTreeWidgetItem(geomHeader);
-        heightItem->setText(0, tr("Height"));
-        double h = qAbs(entity->points[1].y - entity->points[0].y);
-        heightItem->setText(1, lengthText(h, units));
-        heightItem->setFlags(heightItem->flags() | Qt::ItemIsEditable);
-        heightItem->setData(0, Qt::UserRole, entityId);
-        heightItem->setData(0, Qt::UserRole + 1, QStringLiteral("height"));
-    }
-}
-
-// Geometry rows of the properties tree for a circle.
-void MainWindow::addCircleGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (!entity->points.empty()) {
-                addEditablePropertyRow(geomHeader, tr("Center"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-
-                addEditablePropertyRow(geomHeader, tr("Radius"), lengthText(entity->radius, units), entityId, QStringLiteral("radius"));
-
-                addEditablePropertyRow(geomHeader, tr("Diameter"), lengthText(entity->radius * 2, units), entityId, QStringLiteral("diameter"));
-    }
-}
-
-// Geometry rows of the properties tree for a arc.
-void MainWindow::addArcGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (!entity->points.empty()) {
-                addPropertyRow(geomHeader, tr("Center"), pointText(entity->points[0], units));
-
-                addEditablePropertyRow(geomHeader, tr("Radius"), lengthText(entity->radius, units), entityId, QStringLiteral("radius"));
-
-                addEditablePropertyRow(geomHeader, tr("Start Angle"), QStringLiteral("%1°").arg(entity->startAngle, 0, 'f', 1), entityId, QStringLiteral("startAngle"));
-
-                addEditablePropertyRow(geomHeader, tr("Sweep Angle"), QStringLiteral("%1°").arg(entity->sweepAngle, 0, 'f', 1), entityId, QStringLiteral("sweepAngle"));
-    }
-}
-
-// Geometry rows of the properties tree for a polygon.
-void MainWindow::addPolygonGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (!entity->points.empty()) {
-                addEditablePropertyRow(geomHeader, tr("Center"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-
-                addEditablePropertyRow(geomHeader, tr("Sides"), QString::number(entity->sides), entityId, QStringLiteral("sides"));
-
-                addEditablePropertyRow(geomHeader, tr("Radius"), lengthText(entity->radius, units), entityId, QStringLiteral("radius"));
-    }
-}
-
-// Geometry rows of the properties tree for a slot.
-void MainWindow::addSlotGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (entity->points.size() >= 2) {
-                addEditablePropertyRow(geomHeader, tr("Center 1"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-
-                addEditablePropertyRow(geomHeader, tr("Center 2"), pointText(entity->points[1], units), entityId, QStringLiteral("point1"));
-
-        auto* lenItem = new QTreeWidgetItem(geomHeader);
-        lenItem->setText(0, tr("Length"));
-        double len = QLineF(entity->points[0], entity->points[1]).length();
-        lenItem->setText(1, lengthText(len, units));
-
-                addEditablePropertyRow(geomHeader, tr("Width"), lengthText(entity->radius * 2, units), entityId, QStringLiteral("radius"));
-    }
-}
-
-// Geometry rows of the properties tree for a ellipse.
-void MainWindow::addEllipseGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (!entity->points.empty()) {
-                addEditablePropertyRow(geomHeader, tr("Center"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-
-                addEditablePropertyRow(geomHeader, tr("Major Radius"), lengthText(entity->majorRadius, units), entityId, QStringLiteral("majorRadius"));
-
-                addEditablePropertyRow(geomHeader, tr("Minor Radius"), lengthText(entity->minorRadius, units), entityId, QStringLiteral("minorRadius"));
-    }
-}
-
-// Geometry rows of the properties tree for a spline.
-void MainWindow::addSplineGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (!entity->points.empty()) {
-                addPropertyRow(geomHeader, tr("Control Points"), QString::number(entity->points.size()));
-
-        // Show each control point
-        for (int i = 0; i < entity->points.size(); ++i) {
-                        addEditablePropertyRow(geomHeader, tr("Point %1").arg(i + 1), pointText(entity->points[i], units), entityId, QStringLiteral("point%1").arg(i));
+    const auto& constraints = m_sketchCanvas->constraints();
+    for (const sketch::PropertyField& field : sketch::entityGeometryFields(*entity)) {
+        const double number = sketch::fieldNumber(*entity, field);
+        QString value;
+        switch (field.kind) {
+        case sketch::FieldKind::Point:
+            value = pointText(entity->points[field.pointIndex], units);
+            break;
+        case sketch::FieldKind::Length:
+            value = lengthText(number, units);
+            break;
+        case sketch::FieldKind::Angle:
+            value = QStringLiteral("%1\u00B0").arg(number, 0, 'f', 1);
+            break;
+        case sketch::FieldKind::Count:
+            value = QString::number(qRound(number));
+            break;
+        case sketch::FieldKind::Text:
+            value = QString::fromStdString(entity->text);
+            break;
         }
-    }
-}
-
-// Geometry rows of the properties tree for a text.
-void MainWindow::addTextGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                                     int entityId, const QString& units)
-{
-    if (!entity->points.empty()) {
-                addEditablePropertyRow(geomHeader, tr("Position"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-
-                addEditablePropertyRow(geomHeader, tr("Text"), QString::fromStdString(entity->text), entityId, QStringLiteral("text"));
-
-                addEditablePropertyRow(geomHeader, tr("Font Size"), QStringLiteral("%1 %2").arg(entity->fontSize, 0, 'f', 1).arg(units), entityId, QStringLiteral("fontSize"));
-
-                addEditablePropertyRow(geomHeader, tr("Rotation"), QStringLiteral("%1%2").arg(entity->textRotation, 0, 'f', 1).arg(QChar(0x00B0)), entityId, QStringLiteral("textRotation"));
+        const QString name = propertyLabelText(field.label);
+        if (sketch::fieldLocked(*entity, field, constraints)) {
+            addPropertyRow(geomHeader, name, value);
+        } else {
+            addEditablePropertyRow(geomHeader, name, value, entityId,
+                                   QString::fromStdString(field.key));
+        }
     }
 }
 
@@ -4335,83 +4081,19 @@ void MainWindow::showSketchEntityProperties(int entityId)
         addGroupSection(propsTree, gid);
 
     // Entity type
-    auto* typeItem = new QTreeWidgetItem(propsTree);
-    typeItem->setText(0, tr("Type"));
-    QString typeName;
-    switch (entity->type) {
-    case SketchEntityType::Point:     typeName = tr("Point"); break;
-    case SketchEntityType::Line:      typeName = tr("Line"); break;
-    case SketchEntityType::Rectangle: typeName = tr("Rectangle"); break;
-    case SketchEntityType::Parallelogram: typeName = tr("Parallelogram"); break;
-    case SketchEntityType::Circle:    typeName = tr("Circle"); break;
-    case SketchEntityType::Arc:       typeName = tr("Arc"); break;
-    case SketchEntityType::Spline:    typeName = tr("Spline"); break;
-    case SketchEntityType::Polygon:   typeName = tr("Polygon"); break;
-    case SketchEntityType::Slot:      typeName = tr("Slot"); break;
-    case SketchEntityType::Ellipse:   typeName = tr("Ellipse"); break;
-    case SketchEntityType::Text:      typeName = tr("Text"); break;
-    case SketchEntityType::Dimension: typeName = tr("Dimension"); break;
-    }
-    typeItem->setText(1, typeName);
+    addPropertyRow(propsTree, tr("Type"), entityTypeText(entity->type));
 
     // Entity ID
-        addPropertyRow(propsTree, tr("ID"), QString::number(entity->id));
+    addPropertyRow(propsTree, tr("ID"), QString::number(entity->id));
 
     // Geometry header
     auto* geomHeader = new QTreeWidgetItem(propsTree);
     geomHeader->setText(0, tr("Geometry"));
 
-    // Entity-specific properties
-    switch (entity->type) {
-    case SketchEntityType::Point:
-        if (!entity->points.empty()) {
-                        addEditablePropertyRow(geomHeader, tr("Position"), pointText(entity->points[0], units), entityId, QStringLiteral("point0"));
-        }
-        break;
-
-    case SketchEntityType::Line:
-        addLineGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Rectangle:
-    case SketchEntityType::Parallelogram:
-        addRectangleGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Circle:
-        addCircleGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Arc:
-        addArcGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Polygon:
-        addPolygonGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Slot:
-        addSlotGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Ellipse:
-        addEllipseGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Spline:
-        addSplineGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    case SketchEntityType::Text:
-        addTextGeometryRows(geomHeader, entity, entityId, units);
-        break;
-
-    default:
-        break;
-    }
+    addGeometryRows(geomHeader, entity, entityId, units);
 
     // Constraints
-        addPropertyRow(propsTree, tr("Constrained"), entity->constrained ? tr("Yes") : tr("No"));
+    addPropertyRow(propsTree, tr("Constrained"), entity->constrained ? tr("Yes") : tr("No"));
 
     propsTree->expandAll();
 }
@@ -4686,41 +4368,20 @@ void MainWindow::showSketchConstraintProperties(int constraintId)
     // Constraint type name
     auto* typeItem = new QTreeWidgetItem(propsTree);
     typeItem->setText(0, tr("Type"));
-    QString typeName;
+    // The display name comes from the library (one list for every front
+    // end); an Angle that belongs to a sweep-angle group reads as that.
+    QString typeName = QCoreApplication::translate(
+        sketch::constraintDisplayContext(), sketch::constraintDisplayName(constraint->type));
     bool isSweep = false;
-    switch (constraint->type) {
-    case ConstraintType::Distance:     typeName = tr("Distance"); break;
-    case ConstraintType::Radius:       typeName = tr("Radius"); break;
-    case ConstraintType::Diameter:     typeName = tr("Diameter"); break;
-    case ConstraintType::Angle:
+    if (constraint->type == ConstraintType::Angle) {
         for (const auto& g : m_sketchCanvas->groups()) {
             if (m_sketchCanvas->isSweepAngleGroup(g.id)
                     && g.containsConstraint(constraintId)) {
                 isSweep = true;
+                typeName = tr("Sweep Angle");
                 break;
             }
         }
-        typeName = isSweep ? tr("Sweep Angle") : tr("Angle");
-        break;
-    case ConstraintType::FixedAngle:   typeName = tr("Fixed Angle"); break;
-    case ConstraintType::Horizontal:   typeName = tr("Horizontal"); break;
-    case ConstraintType::Vertical:     typeName = tr("Vertical"); break;
-    case ConstraintType::Parallel:     typeName = tr("Parallel"); break;
-    case ConstraintType::Perpendicular:typeName = tr("Perpendicular"); break;
-    case ConstraintType::Coincident:   typeName = tr("Coincident"); break;
-    case ConstraintType::Tangent:      typeName = tr("Tangent"); break;
-    case ConstraintType::Equal:        typeName = tr("Equal"); break;
-    case ConstraintType::Midpoint:     typeName = tr("Midpoint"); break;
-    case ConstraintType::Symmetric:    typeName = tr("Symmetric"); break;
-    case ConstraintType::Concentric:   typeName = tr("Concentric"); break;
-    case ConstraintType::Collinear:    typeName = tr("Collinear"); break;
-    case ConstraintType::PointOnLine:  typeName = tr("Point On Line"); break;
-    case ConstraintType::PointOnCircle:typeName = tr("Point On Circle"); break;
-    case ConstraintType::FixedPoint:   typeName = tr("Fixed Point"); break;
-    case ConstraintType::Curvature:    typeName = tr("Curvature (G2)"); break;
-    case ConstraintType::PointOnSpline:typeName = tr("Point on Spline"); break;
-    case ConstraintType::CurvatureDimension: typeName = tr("Radius of Curvature"); break;
-    case ConstraintType::TangentAngle: typeName = tr("Tangent Angle"); break;
     }
     typeItem->setText(1, typeName);
 

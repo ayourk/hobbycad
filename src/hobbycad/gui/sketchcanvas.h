@@ -27,6 +27,7 @@
 #include "entityrenderer.h"
 #include "sketchtheme.h"
 
+#include <hobbycad/bindings.h>
 #include <hobbycad/project.h>
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/sketch/background.h>
@@ -36,6 +37,11 @@
 #include <hobbycad/sketch/inference.h>
 #include <hobbycad/sketch/solver.h>
 #include <hobbycad/sketch/handles.h>
+#include <hobbycad/sketch/edit_session.h>
+#include <hobbycad/sketch/handle_drag.h>
+#include <hobbycad/sketch/pick.h>
+#include <hobbycad/sketch/selection.h>
+#include <hobbycad/sketch/view.h>
 #include <hobbycad/sketch/undo.h>
 #include <hobbycad/sketch/transform.h>
 #include <hobbycad/units.h>
@@ -269,7 +275,8 @@ public:
     // friend of this class. Kept deliberately small: every addition here is a
     // piece of canvas internals a handler now depends on.
     int  previewPointCount() const { return m_previewPoints.size(); }
-    void addDimField(const QString& label, bool isAngle);
+    /// Offer a typed-value field; its label is dimFieldLabel(), translated.
+    void addDimField(sketch::DimField field);
     /// Status-bar prompt from the active handler; empty if none.
     QString currentToolHint() const;
     /// Locked value of dimension field `index`, or -1.0 when not locked.
@@ -394,39 +401,25 @@ public:
     // commit, refresh). If this is ever replaced by a context object, those
     // three groups are the natural split; do not add a fourth ad hoc.
     QPoint  toScreen(const QPointF& world) const { return worldToScreen(world); }
+    /// Where the sketch sits in this widget.
+    sketch::SketchView view() const;
     QPointF toScreenF(const QPointF& world) const { return worldToScreenF(world); }
-    /// Stroke a world-space polyline with the painter's current pen, solid
-    /// when asked (the preview pen is dashed; arc and conic ghosts are drawn
-    /// solid, Aaron 2026-09-16). Shared by the tool handlers' previews.
-    void strokeWorldPolyline(QPainter& painter, const std::vector<Point2D>& pts,
-                             bool solid) const;
 
     // Staged placement with a live cursor slot. A staged tool that shows the
     // cursor as the point still being placed keeps it in the pending slot
     // after the placed clicks, so the pending point vector runs one longer
-    // than previewPointCount(). These three keep that slot consistent.
+    // than previewPointCount(). These two keep that slot consistent.
 
     /// Put the cursor in the slot after the placed clicks.
     void setCursorSlot(const QPointF& world);
     /// Place a click: drop the cursor slot, then append the point. Appending
     /// behind the slot left the stale cursor as a phantom click.
     void appendStagedPoint(const QPointF& world);
-    /// Paint the placed clicks as dots, and unless `rubberLine` is false a
-    /// line from the last one to the cursor, with the painter's current pen.
-    void paintPlacedClicks(QPainter& painter, bool rubberLine = true) const;
-    /// Tangent-arc solve, needed by the Arc tool's tangent preview.
+    /// Tangent-arc solve, for the tangent arc a line chain turns into.
     using TangentArcResult = geometry::TangentArcResult;
     TangentArcResult tangentArcFor(const SketchEntity& target, const QPointF& tangentPoint,
                                    const QPointF& endPoint) const
     { return calculateTangentArc(target, tangentPoint, endPoint); }
-    /// Tangent-circle solves, needed by the Circle tool's tangent modes.
-    using TangentCircleResult = geometry::TangentCircleResult;
-    TangentCircleResult tangentCircleFor(const SketchEntity& e1, const SketchEntity& e2,
-                                         const QPointF& hint) const
-    { return calculate2TangentCircle(e1, e2, hint); }
-    TangentCircleResult tangentCircleFor(const SketchEntity& e1, const SketchEntity& e2,
-                                         const SketchEntity& e3) const
-    { return calculate3TangentCircle(e1, e2, e3); }
     /// Forget the picked tangent targets (a tangent placement has finished).
     void clearTangentTargets() { m_tangentTargets.clear(); }
     QPointF currentMouseWorld() const { return m_currentMouseWorld; }
@@ -437,6 +430,8 @@ public:
     void setDimFieldValue(int i, double v) { m_dimInput.setFieldValue(i, v); }
     int  dimFieldCount() const { return m_dimInput.fieldCount(); }
     int  activeDimField() const { return m_dimInput.activeIndex(); }
+    /// The fields' state, for the placement rules to read the locks from.
+    const sketch::DimensionInput& dimInputState() const { return m_dimInput.state(); }
     /// Ctrl-held angle snapping, shown as an orange guide in some previews.
     bool   angleSnapActive() const { return m_snapEngine.angleSnapActive(); }
     double snappedAngle() const { return m_snapEngine.snappedAngle(); }
@@ -576,10 +571,11 @@ public:
     void selectEntity(int entityId, bool addToSelection = false,
                       bool individualOnly = false);
 
-    /// Select entities within a rectangular region
-    /// If crossing is true, selects entities that intersect the region
-    /// If crossing is false, selects only entities fully enclosed
-    void selectEntitiesInRect(const QRectF& rect, bool crossing, bool addToSelection = false);
+    /// Select what a window dragged between two screen points catches:
+    /// dragged right to left, whatever it touches; left to right, what it
+    /// encloses.
+    void selectInWindow(const QPointF& screenStart, const QPointF& screenEnd,
+                        bool addToSelection = false);
 
     /// Select chain of connected entities starting from the given entity
     void selectConnectedChain(int startEntityId);
@@ -976,7 +972,7 @@ public:
 
     /// Selection filter: restrict what a click/box grabs. All = point-priority
     /// then curve (default); PointsOnly / CurvesOnly restrict to one kind.
-    enum class SelectFilter { All, PointsOnly, CurvesOnly };
+    using SelectFilter = sketch::SelectFilter;
     void setSelectFilter(SelectFilter f) { m_selectFilter = f; }
     SelectFilter selectFilter() const { return m_selectFilter; }
     const SketchTheme& theme() const { return m_theme; }
@@ -996,10 +992,10 @@ public:
     void redo();
 
     /// Check if undo is available
-    bool canUndo() const { return m_libUndoStack.canUndo(); }
+    bool canUndo() const { return m_edits.history().canUndo(); }
 
     /// Check if redo is available
-    bool canRedo() const { return m_libUndoStack.canRedo(); }
+    bool canRedo() const { return m_edits.history().canRedo(); }
 
     /// Get descriptions of all undo operations (most recent first)
     QStringList undoDescriptions() const;
@@ -1337,14 +1333,13 @@ private:
 
     // Hit testing
     int hitTest(const QPointF& worldPos) const;
-    bool hitTestEntity(const SketchEntity& entity, const QPointF& worldPos) const;
-    bool hitTestTextEntity(const SketchEntity& entity, const QPointF& worldPos, double tolerance) const;
+    bool hitTestTextEntity(const sketch::Entity& entity, const QPointF& worldPos) const;
+    /// The text test the library's pickers call.
+    sketch::TextHitTest textHitTest() const;
     int hitTestConstraintLabel(const QPointF& worldPos) const;
 
 
     // Rectangle selection helpers
-    bool entityIntersectsRect(const SketchEntity& entity, const QRectF& rect) const;
-    bool entityEnclosedByRect(const SketchEntity& entity, const QRectF& rect) const;
 
     // Constraint conversion
     bool convertToDriving(int constraintId);   // Convert Driven to Driving (returns false if would over-constrain)
@@ -1361,7 +1356,7 @@ private:
     /// Decompose a compound entity (Rectangle, Parallelogram) into lines + constraints + group.
     /// Returns true if decomposition occurred. Populates compoundCmd for undo.
     bool decomposeCompoundEntity(const SketchEntity& pendingEntity,
-                                 const QVector<QPair<QString, double>>& lockedDims,
+                                 const sketch::LockedDims& lockedDims,
                                  sketch::UndoCommand& compoundCmd);
 
     /// Decompose a SIMPLE linear slot into offset sides + round caps +
@@ -1385,11 +1380,23 @@ private:
                              sketch::UndoCommand& compoundCmd);
 
     // Undo/redo single-command helpers (used by Compound undo)
-    void undoSingleCommand(const sketch::UndoCommand& cmd);
-    void redoSingleCommand(const sketch::UndoCommand& cmd);
+    /// Forget selection state naming something an undo or redo removed.
+    sketch::EditCallbacks undoListener();
+    /// Add a constraint through the sketch's edit session (checks, id,
+    /// constrained flags, undo). False, with the refusal shown, when refused.
+    bool addCheckedConstraint(SketchConstraint& constraint,
+                              const sketch::ConstraintCheckOptions& options);
+    /// The same, then solve a driving constraint, and record the addition and
+    /// what the solve moved as one undo step.
+    bool addConstraintAndSolve(SketchConstraint& constraint,
+                               const sketch::ConstraintCheckOptions& options);
 
     // Handle dragging helpers
+    /// A modifier or axis key changed mid-drag: move the handle as the next
+    /// mouse move would.
     void applyCtrlSnapToHandle();
+    /// Move the dragged handle for the cursor at `raw`.
+    void moveDraggedHandle(const QPointF& raw, bool shift, bool ctrl, bool alt);
 
     // Handle drag: geometry lives in libhobbycad (sketch/handles.h);
     // these cover the GUI/model side of a drag.
@@ -1416,7 +1423,6 @@ private:
     /// finished (or closed) on an existing point gets its Coincident.
     /// The 2-point line path sets its end via updateEntity(), which,
     /// unlike appendPlacementPoint(), does not record the snap.
-    QPointF axisLockedSnapPoint(const QPointF& worldPos) const;
 
     // View state
     QPointF m_viewCenter = {0, 0};  ///< Center of view in world coords
@@ -1680,19 +1686,9 @@ private:
     int m_dragHandleIndex = -1;      ///< Index of handle point being dragged
     int m_fixedHandleIndex = -1;     ///< Index of fixed handle for arc slot resize (-1 = none)
     QPointF m_dragStartWorld;        ///< World position when drag started
-    QPointF m_dragHandleOriginal;    ///< Original handle position before drag
-    QPointF m_dragHandleOriginal2;   ///< Second point for circles (radius point)
-    double m_dragOriginalRadius = 0; ///< Original radius for circles/arcs
-    sketch::Entity m_dragOriginalEntity; ///< Full entity snapshot before drag (for undo)
-    // Opening a full circle (one 360-degree arc) by dragging one end: the
-    // fixed end stays at the cut angle; the sweep shrinks from 360, and the
-    // dragged endpoint may swap at the inflection. See openFullArcByDrag.
-    bool m_openingFullArc = false;     ///< This drag is opening a full arc
-    double m_openArcPrevSweep = 0.0;   ///< Previous frame's sweep (continuity; +/-360 seeds)
-    double m_openArcFixedAngle = 0.0;  ///< Angle (deg) of the endpoint left at the cut
-    int m_openArcDraggedIndex = 1;     ///< Endpoint the drag now controls (1 or 2)
-    QVector<SketchEntity> m_dragOriginalGroupEntities;       ///< Every member of the dragged entity's group, before the drag
-    QVector<SketchConstraint> m_dragOriginalGroupConstraints; ///< The group's constraints (label positions move too), before the drag
+    /// The drag in progress: where it began, what it changes (for undo), its
+    /// axis lock, and an opened circle's progress.
+    sketch::HandleDrag m_handleDrag;
     void syncGroupMembership(const SketchGroup& group, int groupIdOrMinusOne); ///< Set or clear Entity::groupId on the group's members
     void dropStaleEnteredGroup();                              ///< Leave the entered group if it no longer exists
     /// Run the shared transform pipeline on scratch copies of the sketch.
@@ -1707,10 +1703,6 @@ private:
     bool m_shiftWasPressed = false;  ///< Track Shift state for snap-to-grid during drag
     bool m_ctrlWasPressed = false;   ///< Track Ctrl state for axis constraint during drag
 
-    /// Axis lock for Ctrl+drag constraint
-    enum class SnapAxis { None, X, Y };
-    SnapAxis m_snapAxis = SnapAxis::None;  ///< Locked axis during Ctrl+drag
-
     // Snap/inference transient state and the snap queries live in m_snapEngine.
 
     // Handle hit testing
@@ -1719,18 +1711,14 @@ private:
     bool hitTestAnyPoint(const QPointF& worldPos, int& entityId, int& pointIndex) const;
     /// Add/toggle/replace a point in the point selection (see selectEntity).
     void selectPoint(int entityId, int pointIndex, bool addToSelection, bool toggle);
+    /// The selection as the library's rules read and write it.
+    sketch::SelectionState selectionState() const;
+    void applySelectionState(const sketch::SelectionState& state);
 
     /// Hit-test handles across all entities in the primary entity's group.
     /// Returns the point index via handleIdx and the owning entity ID via
     /// entityId.  Returns true if a handle was hit.
     bool hitTestGroupHandle(const QPointF& worldPos, int& entityId, int& handleIdx) const;
-
-    // Tangent circle helpers: use library result types directly
-    using TangentCircle = geometry::TangentCircleResult;
-    TangentCircle calculate2TangentCircle(const SketchEntity& e1, const SketchEntity& e2,
-                                          const QPointF& hint) const;
-    TangentCircle calculate3TangentCircle(const SketchEntity& e1, const SketchEntity& e2,
-                                          const SketchEntity& e3) const;
 
     // Tangent arc helper: uses library result type directly
     using TangentArc = geometry::TangentArcResult;
@@ -1738,9 +1726,13 @@ private:
                                    const QPointF& endPoint) const;
 
     // Key bindings (loaded from settings)
-    QHash<QString, QList<QKeySequence>> m_keyBindings;
+    bindings::Table m_keyBindings;
     void loadKeyBindings();
-    bool matchesBinding(const QString& actionId, QKeyEvent* event) const;
+    /// The command the canvas hears for this key press, or "".
+    std::string boundCommand(QKeyEvent* event) const;
+    /// Run a command bound to a key; false when the canvas has nothing to
+    /// do for it.
+    bool runBoundCommand(const std::string& commandId);
 
     // Profile visualization
     bool m_showProfiles = false;
@@ -1810,12 +1802,10 @@ private:
     void armBodyDragIfPastThreshold(QMouseEvent* event);   // falls through by design
     bool handleBodyDragMove(const QPointF& worldPos);
 
-    // The handle-drag path: one shared final-position step, then the
+    // The handle-drag path: one shared target step (the library's), then the
     // library's drag (applyHandleDrag) for every type but a line, which is a
-    // dragged-point solve of its own; the type-gated solve tail stays in
-    // mouseMoveEvent.
-    QPointF computeHandleFinalPos(const SketchEntity* sel, const QPointF& worldPos,
-                                  bool shiftPressed, bool ctrlPressed);
+    // dragged-point solve of its own, then the type-gated solve.
+    QPointF handleTarget(const QPointF& raw, bool shift, bool ctrl) const;
     void dragLineHandle(SketchEntity* sel, const QPointF& finalPos);
     void beginHandleDrag(int entityId, int handleIdx, const QPointF& worldPos, Qt::KeyboardModifiers mods);
     void pushConstraintAndEntityEdit(const SketchConstraint& oldConstraint, const SketchConstraint& newConstraint,
@@ -1825,8 +1815,6 @@ private:
     void syncArcAfterSolve(int entityId);
     void finishUndoRedo(const sketch::UndoCommand& cmd);
     void finishUndoRedoMultiple();
-    void removeEntityForUndo(int entityId);
-    void removeConstraintForUndo(int constraintId);
     double lockedRadiusFor(int entityId) const;
     void clampArcSlotSweep(SketchEntity* sel, const QPointF& center, double radius);
     void commitPatternEntities(const std::vector<sketch::Entity>& entities, int nextId);
@@ -1854,10 +1842,9 @@ private:
     bool handleCalibrationPress(const QPointF& worldPos);
     bool handleBackgroundEditPress(const QPointF& worldPos);
     void handleSelectToolPress(QMouseEvent* event, const QPointF& worldPos);
-    bool pressSelectsHandle(QMouseEvent* event, const QPointF& worldPos);
-    bool pressSelectsConstraint(QMouseEvent* event, const QPointF& worldPos);
-    bool pressSelectsPoint(QMouseEvent* event, const QPointF& worldPos);
-    void pressSelectsEntityOrWindow(QMouseEvent* event, const QPointF& worldPos);
+    void armPointPress(QMouseEvent* event, int entityId, int pointIndex);
+    void pressOnConstraint(const QPointF& worldPos, int constraintId, bool glyph);
+    void pressOnEntityOrEmpty(QMouseEvent* event, const QPointF& worldPos, int hitId);
     void handleDrawToolPress(QMouseEvent* event, const QPointF& worldPos);
     // keyPressEvent
     void handleInlineEditKey(QKeyEvent* event);
@@ -1914,7 +1901,10 @@ private:
     void updateCursorForBackgroundHandle(BackgroundHandle handle);
 
     // Undo/Redo support
-    sketch::UndoStack m_libUndoStack{100};
+    /// This sketch's edits and their undo history (shared with the CLI's
+    /// rules: hobbycad/sketch/edit_session.h). Cleared when the canvas is
+    /// given another sketch.
+    sketch::EditSession m_edits{100};
 
     /// Update undo/redo action availability
     void updateUndoRedoState();

@@ -5,6 +5,10 @@
 
 #pragma once
 
+#include <hobbycad/sketch/property_schema.h>
+#include <hobbycad/sketch/undo.h>
+
+#include <QCoreApplication>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -39,6 +43,19 @@ inline QTreeWidgetItem* addEditablePropertyRow(QTreeWidgetItem* parent, const QS
     item->setData(0, Qt::UserRole, entityId);
     item->setData(0, Qt::UserRole + 1, key);
     return item;
+}
+
+/// A property label from the library, translated, with its number filled in.
+inline QString propertyLabelText(const sketch::FieldLabel& label)
+{
+    const QString text = QCoreApplication::translate(sketch::propertyLabelContext(), label.source);
+    return label.number > 0 ? text.arg(label.number) : text;
+}
+
+/// An entity type's name, translated.
+inline QString entityTypeText(sketch::EntityType type)
+{
+    return QCoreApplication::translate(sketch::entityTypeContext(), sketch::entityTypeName(type));
 }
 
 }  // namespace hobbycad

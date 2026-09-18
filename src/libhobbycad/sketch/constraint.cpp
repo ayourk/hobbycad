@@ -9,6 +9,7 @@
 
 #include <hobbycad/sketch/constraint.h>
 #include "hobbycad/parameters.h"
+#include <hobbycad/translate.h>
 #include <hobbycad/sketch/entity.h>
 #include <hobbycad/geometry/utils.h>
 
@@ -118,6 +119,64 @@ const char* constraintTypeName(ConstraintType type)
     case ConstraintType::FixedAngle:    return "Fixed Angle";
     default:                            return "Unknown";
     }
+}
+
+const char* constraintDisplayContext()
+{
+    return "hobbycad::Constraint";
+}
+
+const char* constraintDisplayName(ConstraintType type)
+{
+    switch (type) {
+    case ConstraintType::Distance:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Distance");
+    case ConstraintType::Radius:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Radius");
+    case ConstraintType::Diameter:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Diameter");
+    case ConstraintType::Angle:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Angle");
+    case ConstraintType::FixedAngle:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Fixed Angle");
+    case ConstraintType::Horizontal:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Horizontal");
+    case ConstraintType::Vertical:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Vertical");
+    case ConstraintType::Parallel:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Parallel");
+    case ConstraintType::Perpendicular:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Perpendicular");
+    case ConstraintType::Coincident:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Coincident");
+    case ConstraintType::Tangent:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Tangent");
+    case ConstraintType::Equal:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Equal");
+    case ConstraintType::Midpoint:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Midpoint");
+    case ConstraintType::Symmetric:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Symmetric");
+    case ConstraintType::Concentric:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Concentric");
+    case ConstraintType::Collinear:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Collinear");
+    case ConstraintType::PointOnLine:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Point On Line");
+    case ConstraintType::PointOnCircle:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Point On Circle");
+    case ConstraintType::FixedPoint:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Fixed Point");
+    case ConstraintType::Curvature:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Curvature (G2)");
+    case ConstraintType::PointOnSpline:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Point on Spline");
+    case ConstraintType::CurvatureDimension:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Radius of Curvature");
+    case ConstraintType::TangentAngle:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::Constraint", "Tangent Angle");
+    }
+    return "";
 }
 
 std::vector<ConstraintType> allConstraintTypes()

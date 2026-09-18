@@ -26,10 +26,9 @@
 //
 //  Layering: handlers are the Qt half. Placement RULES (stage meanings,
 //  per-stage dimension fields, point-list normalization, completion tests)
-//  belong in libhobbycad, which is Qt-free. Handlers should end up thin,
-//  translating events into calls on library placement objects, but do not
-//  design that library API until at least two tools have been migrated and
-//  the shape is evidence rather than guesswork.
+//  are libhobbycad's sketch/placement.h; the drawing tools' handlers derive
+//  from PlacementToolHandler, which translates events into those calls
+//  (coding_standards 12.4).
 //
 //  SPDX-License-Identifier: GPL-3.0-only
 //

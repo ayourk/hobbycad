@@ -30,6 +30,11 @@
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/file_format.h>
 #include <hobbycad/sketch/export.h>
+#include <hobbycad/sketch/properties.h>
+#include <hobbycad/sketch/property_schema.h>
+#include <hobbycad/sketch/undo.h>
+#include <hobbycad/sketch/edit_session.h>
+#include <hobbycad/commands.h>
 
 #include <cmath>
 
@@ -56,6 +61,22 @@ std::string homeDirectory()
         return std::string(profile);
 #endif
     return {};
+}
+
+/// A constraint's name as it is shown, translated. constraintTypeName()
+/// is the keyword a person types and must stay English; the display name
+/// is a separate string ("Curvature (G2)" is shown where "Curvature" is
+/// typed), so a message never carries an untranslated word.
+std::string constraintName(sketch::ConstraintType type)
+{
+    return hobbycad::translate(sketch::constraintDisplayContext(),
+                               sketch::constraintDisplayName(type));
+}
+
+/// An entity type's name as it is shown, translated.
+std::string entityName(sketch::EntityType type)
+{
+    return sketch::entityTypeDisplayName(type);
 }
 
 }  // namespace
@@ -90,6 +111,9 @@ enum class CmdScope {
 struct CommandSpec {
     const char* name = nullptr;
     CmdScope scope{};
+    /// The same command in the front-end registry (hobbycad/commands.h),
+    /// whose description "help <command>" shows; null when there is none.
+    const char* registryId = nullptr;
 };
 
 /// The single list of command names and where each one works.
@@ -102,8 +126,8 @@ struct CommandSpec {
 const CommandSpec kCommands[] = {
     {"help",       CmdScope::Always},
     {"version",    CmdScope::Always},
-    {"open",       CmdScope::Always},
-    {"save",       CmdScope::Always},
+    {"open", CmdScope::Always, "file.open"},
+    {"save", CmdScope::Always, "file.save"},
     {"convert",    CmdScope::Always},
     {"script",     CmdScope::Always},
     {"info",       CmdScope::Always},
@@ -115,46 +139,75 @@ const CommandSpec kCommands[] = {
     {"planes",     CmdScope::Always},
     {"constraints", CmdScope::Always},
     {"groups",     CmdScope::Always},
-    {"parameters", CmdScope::Always},
-    {"new",        CmdScope::Always},
+    {"parameters", CmdScope::Always, "design.parameters"},
+    {"new", CmdScope::Always, "file.new"},
     {"cd",         CmdScope::Always},
     {"pwd",        CmdScope::Always},
     {"history",    CmdScope::Always},
-    {"undo",       CmdScope::Always},
-    {"redo",       CmdScope::Always},
+    {"undo", CmdScope::Always, "edit.undo"},
+    {"redo", CmdScope::Always, "edit.redo"},
     {"select",     CmdScope::Always},
     {"create",     CmdScope::Always},
     {"delete",     CmdScope::Always},
     {"rename",     CmdScope::Always},
-    {"extrude",    CmdScope::Always},
-    {"revolve",    CmdScope::Always},
+    {"extrude", CmdScope::Always, "design.extrude"},
+    {"revolve", CmdScope::Always, "design.revolve"},
     {"zoom",       CmdScope::Always},
     {"panto",      CmdScope::Always},
     {"rotate",     CmdScope::Always},
     {"exit",       CmdScope::Always},
     {"quit",       CmdScope::Always},
 
-    {"point",      CmdScope::Sketch},
-    {"line",       CmdScope::Sketch},
-    {"circle",     CmdScope::Sketch},
-    {"rectangle",  CmdScope::Sketch},
-    {"arc",        CmdScope::Sketch},
-    {"polygon",    CmdScope::Sketch},
-    {"ellipse",    CmdScope::Sketch},
-    {"slot",       CmdScope::Sketch},
-    {"spline",     CmdScope::Sketch},
-    {"bezier",     CmdScope::Sketch},
-    {"conic",      CmdScope::Sketch},
-    {"text",       CmdScope::Sketch},
+    {"point", CmdScope::Sketch, "sketch.point"},
+    {"line", CmdScope::Sketch, "sketch.line"},
+    {"circle", CmdScope::Sketch, "sketch.circle"},
+    {"rectangle", CmdScope::Sketch, "sketch.rectangle"},
+    {"arc", CmdScope::Sketch, "sketch.arc"},
+    {"polygon", CmdScope::Sketch, "sketch.polygon"},
+    {"ellipse", CmdScope::Sketch, "sketch.ellipse"},
+    {"slot", CmdScope::Sketch, "sketch.slot"},
+    {"spline", CmdScope::Sketch, "sketch.spline.catmullRom"},
+    {"bezier", CmdScope::Sketch, "sketch.spline.cubicBezier"},
+    {"conic", CmdScope::Sketch, "sketch.spline.conic"},
+    {"text", CmdScope::Sketch, "sketch.text"},
     {"constrain",  CmdScope::Sketch},
     {"solve",      CmdScope::Sketch},
     {"group",      CmdScope::Sketch},
     {"transform",  CmdScope::Sketch},
     {"sweep",      CmdScope::Sketch},
-    {"projection", CmdScope::Sketch},
+    {"projection", CmdScope::Sketch, "sketch.project"},
     {"points",     CmdScope::Sketch},
-    {"finish",     CmdScope::Sketch},
+    {"set",        CmdScope::Sketch},
+    {"finish", CmdScope::Sketch, "sketch.finish"},
     {"discard",    CmdScope::Sketch},
+};
+
+/// Commands that change the sketch being edited. Inside a sketch each one
+/// is recorded in the sketch's history, so "undo" can take it back.
+bool editsSketch(const std::string& cmd)
+{
+    static const char* const kEdits[] = {
+        "point", "line", "circle", "rectangle", "arc", "polygon", "ellipse", "slot",
+        "spline", "bezier", "conic", "text", "constrain", "solve", "group",
+        "transform", "sweep", "projection", "points", "set", "delete",
+    };
+    for (const char* e : kEdits) {
+        if (cmd == e) return true;
+    }
+    return false;
+}
+
+/// Forgets a selected entity that an undo or redo removed.
+class SelectionKeeper : public sketch::EditListener {
+public:
+    explicit SelectionKeeper(int& selectedEntityId) : m_selected(selectedEntityId) {}
+    void entityRemoved(int entityId) override
+    {
+        if (m_selected == entityId) m_selected = -1;
+    }
+
+private:
+    int& m_selected;
 };
 
 /// Find a command by name, or null.
@@ -878,12 +931,51 @@ int parseRepeatCount(const std::vector<std::string>& args)
 
 }  // namespace
 
+CliResult CliEngine::sketchUndoRedo(int count, bool redo)
+{
+    // Inside a sketch, undo and redo walk the sketch's own history, as the
+    // canvas does; the document's history waits until the sketch is
+    // finished or discarded.
+    SelectionKeeper keeper(m_selectedEntityId);
+    const std::vector<sketch::UndoCommand> applied = redo
+        ? m_sketchEdits.redo(m_pendingSketch.entities, m_pendingSketch.constraints,
+                             m_pendingSketch.groups, count, &keeper)
+        : m_sketchEdits.undo(m_pendingSketch.entities, m_pendingSketch.constraints,
+                             m_pendingSketch.groups, count, &keeper);
+    std::vector<std::string> done;
+    for (const sketch::UndoCommand& cmd : applied) done.push_back(cmd.description);
+    CliResult r;
+    if (done.empty()) {
+        r.output = redo ? translate("QObject", "Nothing to redo.")
+                        : translate("QObject", "Nothing to undo.");
+        return r;
+    }
+    r.output = subst(redo ? translate("QObject", "Redone: %1")
+                          : translate("QObject", "Undone: %1"),
+                     join(done, ", "));
+    if (static_cast<int>(done.size()) < count) {
+        r.output += subst(translate("QObject", "\n(only %1 of %2 steps were available)"),
+                          done.size(), count);
+    }
+    const std::string next = redo ? m_sketchEdits.history().redoDescription()
+                                  : m_sketchEdits.history().undoDescription();
+    if (!next.empty()) {
+        r.output += subst(redo ? translate("QObject", "\nNext redo: %1")
+                               : translate("QObject", "\nNext undo: %1"),
+                          next);
+    }
+    return r;
+}
+
 CliResult CliEngine::cmdUndo(const std::vector<std::string>& args)
 {
     CliResult r;
     const int count = parseRepeatCount(args);
     if (count < 0) {
         return failure(translate("QObject", "Usage: undo [count]"));
+    }
+    if (m_inSketchMode) {
+        return sketchUndoRedo(count, false);
     }
     if (!m_undoHost) {
         return failure(translate("QObject", "No document is open, so there is nothing to undo."));
@@ -921,6 +1013,9 @@ CliResult CliEngine::cmdRedo(const std::vector<std::string>& args)
     const int count = parseRepeatCount(args);
     if (count < 0) {
         return failure(translate("QObject", "Usage: redo [count]"));
+    }
+    if (m_inSketchMode) {
+        return sketchUndoRedo(count, true);
     }
     if (!m_undoHost) {
         return failure(translate("QObject", "No document is open, so there is nothing to redo."));
@@ -976,7 +1071,22 @@ CliResult CliEngine::execute(const std::string& line)
         return r;
     }
 
-    if (cmd == "help")    return cmdHelp();
+    // Inside a sketch, a command that edits it is run once more under a
+    // snapshot, and what it changed goes into the sketch's history.
+    if (m_inSketchMode && !m_recordingSketchEdit && editsSketch(cmd)) {
+        const SketchData before = m_pendingSketch;
+        m_recordingSketchEdit = true;
+        CliResult result = execute(line);
+        m_recordingSketchEdit = false;
+        if (m_inSketchMode) {
+            m_sketchEdits.recordChanges(before.entities, before.constraints, before.groups,
+                                        m_pendingSketch.entities, m_pendingSketch.constraints,
+                                        m_pendingSketch.groups, trim(line));
+        }
+        return result;
+    }
+
+    if (cmd == "help")    return cmdHelp(slice(tokens, 1));
     if (cmd == "version") return cmdVersion();
     if (cmd == "new")     return cmdNew(slice(tokens, 1));
     if (cmd == "open")    return cmdOpen(slice(tokens, 1));
@@ -1036,6 +1146,7 @@ CliResult CliEngine::execute(const std::string& line)
         if (cmd == "sweep")     return cmdSweep(slice(tokens, 1));
         if (cmd == "projection") return cmdProject(slice(tokens, 1));
         if (cmd == "points")    return cmdPoints(slice(tokens, 1));
+        if (cmd == "set")       return cmdSet(slice(tokens, 1));
     }
 
     CliResult r;
@@ -1083,8 +1194,33 @@ CliResult CliEngine::execute(const std::string& line)
 
 // ---- Individual commands --------------------------------------------
 
-CliResult CliEngine::cmdHelp() const
+CliResult CliEngine::cmdHelp(const std::vector<std::string>& args) const
 {
+    if (!args.empty()) {
+        // One command: what it does, from the registry the menus and
+        // toolbars use, and where it works.
+        const std::string name = toLower(args.front());
+        const CommandSpec* spec = findCommand(name);
+        if (!spec) {
+            const std::vector<std::string> nearby = nearestCommands(name);
+            return failure(nearby.empty()
+                ? subst("Unknown command: %1", name)
+                : subst("Unknown command: %1\nDid you mean: %2?", name, join(nearby, ", ")));
+        }
+        std::string text = spec->name;
+        if (const commands::Command* c =
+                spec->registryId ? commands::findCommand(spec->registryId) : nullptr) {
+            const commands::Text& about = c->tooltip.empty() ? c->label : c->tooltip;
+            text += " - " + hobbycad::translate(commands::commandContext(), about.source,
+                                                about.disambiguation);
+        }
+        text += spec->scope == CmdScope::Sketch ? "\nWorks while a sketch is open."
+                                                : "\nWorks at any prompt.";
+        CliResult r;
+        r.output = text;
+        return r;
+    }
+
     CliResult r;
     std::string helpText = subst(
         "Available commands:\n"
@@ -1097,7 +1233,7 @@ CliResult CliEngine::cmdHelp() const
         "  script <file>           Execute a script file\n"
         "\n"
         "Information:\n"
-        "  help                    Show this help message\n"
+        "  help [<command>]        Show this help message, or what one command does\n"
         "  version                 Show HobbyCAD version\n"
         "  info                    Show current document info\n"        "\n"
         "Contents:\n"
@@ -1163,6 +1299,10 @@ CliResult CliEngine::cmdHelp() const
         "                          Move the selected entity, or a whole\n"
         "                          group, as one unit; then re-solve\n"
         "  select [entity] <id>    Select an entity by id\n"
+        "  set [<id>] <property> <value>\n"
+        "                          Change one property of an entity (the\n"
+        "                          selected one without an id); \"set <id>\"\n"
+        "                          alone lists its properties\n"
         "  delete [entity] <id>    Remove an entity from the sketch\n"
         "  delete constraint <id>  Remove a constraint\n"
         "  finish                  Commit the sketch to the document\n"
@@ -2458,7 +2598,7 @@ std::vector<std::string> CliEngine::describeEntities(const hobbycad::SketchData&
             if (e.conicRho > 0.0 && sketch::conicApex(e, apex)) {
                 desc = subst("conic      %1 to %2  apex %3  rho %4 (%5)", ptAt(e, 0),
                              ptAt(e, e.points.size() - 1), pt(apex), e.conicRho,
-                             sketch::conicKindName(e.conicRho));
+                             translate("QObject", sketch::conicKindName(e.conicRho)));
                 break;
             }
             std::vector<std::string> pts;
@@ -2494,7 +2634,7 @@ std::vector<std::string> CliEngine::describeEntities(const hobbycad::SketchData&
 
     for (const auto& c : sk.constraints) {
         const std::vector<std::string> ids = constraintRefs(c);
-        std::string line = subst("%1 on %2", std::string(sketch::constraintTypeName(c.type)), join(ids, " and "));
+        std::string line = subst("%1 on %2", constraintName(c.type), join(ids, " and "));
         if (sketch::isDimensionalConstraint(c.type)) {
             line += subst(" = %1", sketch::isAngularConstraint(c.type)
                     ? subst("%1%2", c.value,
@@ -2853,12 +2993,12 @@ static bool parseConstraintValue(const std::string& token,
     std::string t, badPart;
     switch (sk::resolveConstraintValue(token, type, params, v, t, &badPart)) {
     case sk::ConstraintValueProblem::AngleForLength:
-        *error = subst("'%1' is an angle, but %2 measures a length.", token, std::string(sk::constraintTypeName(type)));
+        *error = subst("'%1' is an angle, but %2 measures a length.", token, constraintName(type));
         return false;
     case sk::ConstraintValueProblem::LengthForAngle:
         *error = subst(
             "'%1' is a length, but %2 measures an angle. Use degrees, "
-            "for example \"45\" or \"45deg\".", token, std::string(sk::constraintTypeName(type)));
+            "for example \"45\" or \"45deg\".", token, constraintName(type));
         return false;
     case sk::ConstraintValueProblem::NotANumber:
         *error = subst("'%1' is not a number.", (badPart));
@@ -3546,7 +3686,8 @@ CliResult CliEngine::cmdConstrainEdit(const std::vector<std::string>& args)
     const std::string field = toLower(args[2]);
     if (field == "value") {
         if (!sketch::isDimensionalConstraint(target->type)) {
-            return failure(subst("Constraint %1 (%2) has no value to edit.", cid, std::string(sketch::constraintTypeName(target->type))));
+            return failure(subst("Constraint %1 (%2) has no value to edit.", cid,
+                                 constraintName(target->type)));
         }
         if (static_cast<int>(args.size()) < 4) {
             return failure("Usage: constrain edit <id> value <expr>");
@@ -3557,7 +3698,7 @@ CliResult CliEngine::cmdConstrainEdit(const std::vector<std::string>& args)
             return failure(subst("Cannot evaluate '%1': %2", expr, (err)));
         }
         if (!sketch::isValidConstraintValue(target->type, v)) {
-            return failure(subst("%1 must be greater than zero.", std::string(sketch::constraintTypeName(target->type))));
+            return failure(subst("%1 must be greater than zero.", constraintName(target->type)));
         }
         target->value = v;
         r.exitCode = 0;
@@ -3620,7 +3761,10 @@ CliResult CliEngine::cmdConstrain(std::vector<std::string> args)
 
     if (static_cast<int>(args.size()) < wantEntities) {
         return failure(subst(
-            "%1 needs %2 entity id%3%4, and %5 %6 given.", std::string(sketch::constraintTypeName(type)), wantEntities, wantEntities == 1 ? std::string() : "s", wantsValue ? " and a value" : std::string(), static_cast<int>(args.size()), static_cast<int>(args.size()) == 1 ? "was" : "were"));
+            "%1 needs %2 entity id%3%4, and %5 %6 given.", constraintName(type),
+            wantEntities, wantEntities == 1 ? std::string() : "s",
+            wantsValue ? " and a value" : std::string(), static_cast<int>(args.size()),
+            static_cast<int>(args.size()) == 1 ? "was" : "were"));
     }
 
     // Entity ids first, then the value if this type takes one.
@@ -3648,33 +3792,64 @@ CliResult CliEngine::cmdConstrain(std::vector<std::string> args)
         }
         if (hadPoint) anyPointGiven = true;
         pointIndices.push_back(pointIndex);
-        if (!pendingEntity(id)) {
-            return failure(subst("No entity with id %1 in this sketch.", id));
-        }
-        // A constraint between an entity and itself is not a relation. The
-        // solver would either ignore it or report a redundancy, neither of
-        // which explains the typo.
-        for (int k = 0; k < static_cast<int>(ids.size()); ++k) {
-            // Naming the same entity twice is a typo UNLESS different points
-            // of it were meant: "coincident 1.0 1.1" closes a line onto
-            // itself, which is a real thing to ask for.
-            if (ids[static_cast<size_t>(k)] == id &&
-                pointIndices[static_cast<size_t>(k)] == pointIndex) {
-                r.exitCode = 1;
-                r.error = subst(
-                    "Entity %1 is listed twice; a %2 constraint relates "
-                    "different entities or different points.", id, std::string(sketch::constraintTypeName(type)));
-                return r;
-            }
-        }
         ids.push_back(id);
+    }
+
+    // The operands' checks come first, before the value is read, and are
+    // the library's, shared with the canvas.
+    const auto refusal = [&](const sketch::ConstraintCheck& check) -> std::string {
+        switch (check.problem) {
+        case sketch::ConstraintProblem::None:
+            break;
+        case sketch::ConstraintProblem::UnknownEntity:
+            return subst("No entity with id %1 in this sketch.", check.entityId);
+        case sketch::ConstraintProblem::RepeatedOperand:
+            // Naming the same entity twice is a typo unless different
+            // points of it were meant: "coincident 1.0 1.1" closes a line
+            // onto itself, which is a real thing to ask for.
+            return subst("Entity %1 is listed twice; a %2 constraint relates "
+                         "different entities or different points.",
+                         check.entityId, constraintName(type));
+        case sketch::ConstraintProblem::WrongOperands:
+            return check.reason;
+        case sketch::ConstraintProblem::BadValue:
+            // A radius or a distance of zero collapses geometry rather than
+            // constraining it; an angle of zero is legitimate.
+            return subst("%1 must be greater than zero.",
+                         constraintName(type));
+        case sketch::ConstraintProblem::Redundant:
+            return subst("That %1 is already implied by the constraints in "
+                         "place, so it would add nothing.\n"
+                         "Add \"reference\" to record it as a measurement "
+                         "instead.", constraintName(type));
+        case sketch::ConstraintProblem::OverConstrains:
+            return subst("That %1 would over-constrain the sketch: %2\n"
+                         "Add \"reference\" to record it as a measurement "
+                         "instead.", constraintName(type),
+                         check.reason);
+        }
+        return std::string();
+    };
+    {
+        hobbycad::ConstraintData operands;
+        operands.type = type;
+        operands.entityIds = ids;
+        operands.pointIndices = pointIndices;
+        sketch::ConstraintCheckOptions only;
+        only.operands = false;
+        only.value = false;
+        only.solver = false;
+        const sketch::ConstraintCheck check = sketch::checkNewConstraint(
+            m_pendingSketch.entities, m_pendingSketch.constraints, operands, only);
+        if (!check.ok()) return failure(refusal(check));
     }
 
     double value = 0.0;
     std::string valueText;
     if (wantsValue) {
         if (static_cast<int>(args.size()) <= wantEntities) {
-            return failure(subst("%1 needs a value, for example \"%2\".", std::string(sketch::constraintTypeName(type)), sketch::isAngularConstraint(type)
+            return failure(subst("%1 needs a value, for example \"%2\".",
+                                 constraintName(type), sketch::isAngularConstraint(type)
                                    ? "90deg"
                                    : "25mm"));
         }
@@ -3683,32 +3858,13 @@ CliResult CliEngine::cmdConstrain(std::vector<std::string> args)
                                   &value, &valueText, &why)) {
             return failure(why);
         }
-        // A radius or a distance of zero collapses geometry rather than
-        // constraining it; an angle of zero is legitimate. The rule lives
-        // beside the model so the GUI's doors and this one agree.
-        if (!sketch::isValidConstraintValue(type, value)) {
-            return failure(subst("%1 must be greater than zero.", std::string(sketch::constraintTypeName(type))));
-        }
     } else if (static_cast<int>(args.size()) > wantEntities) {
         return failure(subst(
             "%1 is a geometric constraint and takes no value, but '%2' was "
-            "given.", std::string(sketch::constraintTypeName(type)), args[wantEntities]));
+            "given.", constraintName(type), args[wantEntities]));
     }
 
     hobbycad::ConstraintData c;
-    // Reject wrong operand KINDS before the solver sees them: libslvs
-    // asserts on some pairings (Concentric line+circle, Angle circle+circle,
-    // PointOnLine with a circle) and the fork turns that into a stuck sketch.
-    {
-        std::vector<hobbycad::sketch::EntityType> kinds;
-        for (int eid : ids) {
-            if (const auto* ent = sketch::findEntityById(m_pendingSketch.entities, eid)) kinds.push_back(ent->type);
-        }
-        const std::string kindErr = hobbycad::sketch::constraintOperandError(type, kinds);
-        if (!kindErr.empty()) {
-            return failure((kindErr));
-        }
-    }
     c.type = type;
     c.entityIds = ids;
     // Only carry point indices when some were actually given: an all-zeros
@@ -3731,27 +3887,13 @@ CliResult CliEngine::cmdConstrain(std::vector<std::string> args)
     // second Horizontal on the same line came back clean.
     c.id = nextPendingConstraintId();
 
-    // Catch redundancy at INSERT time, which is what the GUI does and the
-    // only version of the question the solver can answer: with a redundant
-    // set already in place, libslvs cannot say which member is the extra
-    // one. See TODO section 6b.
-    if (driving) {
-        sketch::Solver solver;
-        const auto info = solver.checkOverConstrain(
-            m_pendingSketch.entities,
-            m_pendingSketch.constraints,
-            c);
-        if (info.wouldOverConstrain) {
-            return failure(info.isRedundant
-                ? subst(
-                      "That %1 is already implied by the constraints in "
-                      "place, so it would add nothing.\n"
-                      "Add \"reference\" to record it as a measurement "
-                      "instead.", std::string(sketch::constraintTypeName(type))): subst(
-                      "That %1 would over-constrain the sketch: %2\n"
-                      "Add \"reference\" to record it as a measurement "
-                      "instead.", std::string(sketch::constraintTypeName(type)), (info.reason)));
-        }
+    // The operand kinds (libslvs aborts on some wrong pairings), the value,
+    // and redundancy, caught at insert time: with a redundant set already in
+    // place, libslvs cannot say which member is the extra one.
+    {
+        const sketch::ConstraintCheck check = sketch::checkNewConstraint(
+            m_pendingSketch.entities, m_pendingSketch.constraints, c);
+        if (!check.ok()) return failure(refusal(check));
     }
 
     const int id = addPendingConstraint(c);
@@ -3759,7 +3901,7 @@ CliResult CliEngine::cmdConstrain(std::vector<std::string> args)
     std::vector<std::string> idText;
     for (int i : ids) idText.push_back(numToString(i));
 
-    r.output = subst("Added %1 on entity %2", std::string(sketch::constraintTypeName(type)), join(idText, " and "));
+    r.output = subst("Added %1 on entity %2", constraintName(type), join(idText, " and "));
     if (wantsValue) {
         // Report the PARSED value in canonical form rather than echoing the
         // typed text with a unit appended: "12mm" plus "mm" read as
@@ -3820,7 +3962,9 @@ CliResult CliEngine::cmdConstraints() const
             if (!c.isDriving) value += "  (reference)";
         }
 
-        out.push_back(subst("%1 %2 %3 %4", pad(numToString(c.id), -7), pad(std::string(sketch::constraintTypeName(c.type)), -15), pad(numToString(join(ids, ',')), -12), value));
+        out.push_back(subst("%1 %2 %3 %4", pad(numToString(c.id), -7),
+                            pad(constraintName(c.type), -15),
+                            pad(numToString(join(ids, ',')), -12), value));
     }
     r.paginate = true;
     r.output = join(out, '\n');
@@ -4414,6 +4558,7 @@ CliResult CliEngine::cmdCreate(const std::vector<std::string>& args)
 
         m_inSketchMode = true;
     m_pendingSketch = SketchData{};
+    m_sketchEdits.clear();   // a new sketch starts a new history
     m_selectedEntityId = -1;   // entities die with their sketch   // start collecting geometry
         m_currentSketchName = sketchName;
         m_currentSketchPlane = plane;
@@ -4870,6 +5015,134 @@ CliResult CliEngine::cmdSketchCircle(std::vector<std::string> args)
 
     CliResult r;
     r.output = subst("Created circle at (%1, %2) with radius %3 [id %4]", cx, cy, isPlainNumber ? numToString(radius) : radiusExpr, id);
+    return r;
+}
+
+// "set [<id>] <property> <value>": one property of an entity in the sketch
+// being edited, by the names the properties panel uses. The fields, their
+// locks and the edit rules are the library's (sketch/property_schema.h,
+// sketch/properties.h), so the panel and this command agree.
+CliResult CliEngine::cmdSet(std::vector<std::string> args)
+{
+    const std::string usage =
+        "Usage: set [<id>] <property> <value>\n"
+        "Without an id, the selected entity is changed. \"set <id>\" alone\n"
+        "lists the entity's properties.\n"
+        "\n"
+        "Examples:\n"
+        "  set 3 radius 12.5\n"
+        "  set point0 10,20\n"
+        "  set 4 text Hello";
+
+    int id = m_selectedEntityId;
+    std::size_t at = 0;
+    bool isId = false;
+    if (!args.empty()) {
+        const int n = toInt(args[0], &isId);
+        if (isId) {
+            id = n;
+            at = 1;
+        }
+    }
+    if (args.empty() && id < 0) return failure(usage);
+    if (id < 0) {
+        return failure("Nothing selected. \"select <id>\" an entity first, "
+                       "or name one: set <id> <property> <value>.");
+    }
+    sketch::Entity* entity = sketch::findEntityById(m_pendingSketch.entities, id);
+    if (!entity) {
+        return failure(subst("No entity %1 in this sketch. \"print\" lists them.", id));
+    }
+
+    const std::vector<sketch::PropertyField> fields = sketch::entityGeometryFields(*entity);
+    const auto shown = [&](const sketch::PropertyField& f) {
+        if (f.kind == sketch::FieldKind::Point) {
+            const auto& p = entity->points[static_cast<std::size_t>(f.pointIndex)];
+            return subst("%1,%2", p.x, p.y);
+        }
+        if (f.kind == sketch::FieldKind::Text) return entity->text;
+        return numToString(sketch::fieldNumber(*entity, f));
+    };
+
+    // No property: list what can be set.
+    if (at >= args.size()) {
+        std::vector<std::string> out;
+        out.push_back(subst("%1 %2", entityName(entity->type), id));
+        for (const sketch::PropertyField& f : fields) {
+            if (f.key.empty()) continue;
+            const bool locked = sketch::fieldLocked(*entity, f, m_pendingSketch.constraints);
+            out.push_back(subst("  %1 %2%3", pad(f.key, -14), shown(f),
+                                locked ? std::string("   (read-only)") : std::string()));
+        }
+        CliResult r;
+        r.output = join(out, '\n');
+        return r;
+    }
+
+    const std::string property = args[at];
+    const sketch::PropertyField* field = nullptr;
+    std::vector<std::string> names;
+    for (const sketch::PropertyField& f : fields) {
+        if (f.key.empty()) continue;
+        names.push_back(f.key);
+        if (equalsIgnoreCase(f.key, property)) field = &f;
+    }
+    if (!field) {
+        return failure(subst("A %1 has no property '%2'. It has: %3.",
+                             entityName(entity->type), property,
+                             join(names, ", ")));
+    }
+    if (sketch::fieldLocked(*entity, *field, m_pendingSketch.constraints)) {
+        std::string why = "it is read-only here";
+        if (entity->projectionSourceId >= 0) {
+            why = "it is projected from another sketch; change the source";
+        } else if (field->editable) {
+            why = "a dimension drives it; change the dimension";
+        }
+        return failure(subst("'%1' cannot be set: %2.", field->key, why));
+    }
+    if (at + 1 >= args.size()) return failure(usage);
+
+    const std::vector<std::string> rest(args.begin() + static_cast<long>(at) + 1, args.end());
+    sketch::PropertyEdit edit;
+    if (field->kind == sketch::FieldKind::Text) {
+        edit = sketch::setEntityText(*entity, join(rest, " "));
+    } else {
+        ArgCursor cur(rest, parameterValues(), namedPointValues());
+        if (field->kind == sketch::FieldKind::Point) {
+            double x = 0, y = 0;
+            if (!cur.coord(x, y, "Invalid point. Use format: x,y")) return cur.result();
+            edit = sketch::setEntityPoint(*entity, field->pointIndex, Point2D(x, y));
+        } else {
+            double v = 0;
+            std::string expr;
+            if (!cur.value(v, expr,
+                           "Invalid value. Must be a number, parameter, or (expression).")) {
+                return cur.result();
+            }
+            edit = sketch::setEntityNumber(*entity, field->key, v);
+        }
+        if (!cur.atEnd()) return failure(usage);
+    }
+
+    switch (edit.problem) {
+    case sketch::PropertyProblem::None:
+        break;
+    case sketch::PropertyProblem::NotPositive:
+        return failure(subst("'%1' must be a positive number.", field->key));
+    case sketch::PropertyProblem::OutOfRange:
+        return failure(subst("'%1' is out of range (a polygon has 3 to 100 sides).", field->key));
+    case sketch::PropertyProblem::Degenerate:
+        return failure(subst("'%1' cannot be set on a zero-length entity.", field->key));
+    case sketch::PropertyProblem::NotANumber:
+    case sketch::PropertyProblem::UnknownProperty:
+    case sketch::PropertyProblem::NoSuchPoint:
+        return failure(subst("'%1' could not be set.", field->key));
+    }
+
+    CliResult r;
+    r.output = subst("Set %1 of entity %2 to %3. \"solve\" re-applies the constraints.",
+                     field->key, id, shown(*field));
     return r;
 }
 

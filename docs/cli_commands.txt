@@ -87,6 +87,14 @@ just the name.
 A front end may have no undo history at all; "delete" says which case applied
 when it ran, so there is never any doubt afterwards.
 
+Inside a sketch, "undo" and "redo" walk the sketch's own history instead, as
+Edit > Undo does on the canvas: every command that changed the sketch (the
+geometry commands, "constrain", "set", "delete", "transform", "group",
+"solve" and the rest) comes off as one step, named by the command line that
+made it. A refused command records nothing. The history starts empty with
+each sketch and is forgotten at "finish" or "discard", after which "undo"
+reaches the document's history again (and can take back the finished sketch).
+
     Reading     print          show what is in the current context
 
     Scripting   export [all] [file=<path>]
@@ -97,7 +105,10 @@ there is not one. They work identically in the GUI terminal and under --no-gui:
 in the GUI they act on the project the windows are showing, so a parameter set
 from the terminal appears in the Parameters dialog immediately.
 
-    Session     help           list commands
+    Session     help [<command>]
+                               list commands, or say what one command does
+                               (the description the menus and toolbars
+                               use) and where it works
                 history [<n>]  show recent commands
                 version        show version
                 exit / quit    leave the CLI
@@ -153,11 +164,11 @@ Sketch context: the above, plus these
                 arc [at] <x>,<y> radius <value> from <deg> to <deg>
                 polygon [at] <x>,<y> radius <value> sides <n>
                 ellipse [at] <x>,<y> major <value> minor <value>
-                slot [from] <x>,<y> to <x>,<y> radius <value>
+                slot [from] <x>,<y> to <x>,<y> width <value>
                 spline [through] <x>,<y> <x>,<y> [<x>,<y> ...]
                 text <string> [at] <x>,<y> [size <n>] [rotation <deg>]
 
-The "from", "to", "radius", "diameter", "sides", "major", "minor" and "size"
+The "from", "to", "radius", "diameter", "width", "sides", "major", "minor" and "size"
 keywords are REQUIRED where shown: "from", "at" and "through" are the only
 optional words. An earlier version of this page documented "line <x,y> <x,y>",
 which the parser rejects; scripts written from that form did not run.
@@ -172,6 +183,19 @@ count within the sketch.
     Editing     select [entity] <id>   select an entity by id
                 delete [entity] <id>   remove an entity from the sketch
                 deselect               clear the entity selection
+                set [<id>] <property> <value>
+                                       change one property of an entity
+                                       (the selected one when no id is given)
+                set <id>               list the entity's properties
+
+"set" uses the property names of the properties panel, and the same rules:
+radius, diameter, length, width, height, sides, startAngle, sweepAngle,
+majorRadius, minorRadius, fontSize, textRotation, text, and point0, point1,
+... for the entity's points (a point takes x,y). Which ones an entity has
+depends on its type; "set <id>" lists them. A property the panel shows as
+read-only is refused here too: a rectangle's corners, a projected entity's
+geometry, an ellipse radius a dimension drives. "set" does not re-solve;
+"solve" re-applies the constraints.
 
     Lifecycle   finish         commit the sketch and leave the context
                 discard        abandon the sketch and leave the context

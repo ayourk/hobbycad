@@ -3,7 +3,12 @@
 // =====================================================================
 
 #include "preferencesdialog.h"
+#include "settingvalue.h"
+#include "arrangementstore.h"
 #include "bindingsdialog.h"
+#include "customizedialog.h"
+
+#include <QMessageBox>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -188,6 +193,29 @@ QWidget* PreferencesDialog::createBindingsPage()
             this, &PreferencesDialog::openBindingsDialog);
     layout->addWidget(openBtn);
 
+    layout->addSpacing(20);
+
+    // The keys and the layout are one arrangement, kept in one file, so
+    // the way back to HobbyCAD's own is here beside the editors.
+    auto* layoutLabel = new QLabel(
+        tr("Menus and toolbars are rearranged in the Customize dialog: what a menu shows, "
+           "where a tool sits, what it is called and whether it is shown at all."));
+    layoutLabel->setWordWrap(true);
+    layout->addWidget(layoutLabel);
+
+    auto* customizeBtn = new QPushButton(tr("Open Customize Dialog..."));
+    customizeBtn->setMinimumHeight(40);
+    connect(customizeBtn, &QPushButton::clicked,
+            this, &PreferencesDialog::openCustomizeDialog);
+    layout->addWidget(customizeBtn);
+
+    layout->addSpacing(20);
+
+    auto* restoreBtn = new QPushButton(tr("Restore All Defaults..."));
+    connect(restoreBtn, &QPushButton::clicked,
+            this, &PreferencesDialog::restoreArrangement);
+    layout->addWidget(restoreBtn);
+
     layout->addStretch();
 
     return page;
@@ -199,6 +227,24 @@ void PreferencesDialog::openBindingsDialog()
     connect(&dlg, &BindingsDialog::bindingsChanged,
             this, &PreferencesDialog::bindingsChanged);
     dlg.exec();
+}
+
+void PreferencesDialog::openCustomizeDialog()
+{
+    CustomizeDialog dlg(this);
+    dlg.exec();
+}
+
+void PreferencesDialog::restoreArrangement()
+{
+    if (QMessageBox::question(this, tr("Restore All Defaults"),
+                              tr("Give HobbyCAD's own menus, toolbars and keys back? Every "
+                                 "change you have made to them is dropped."))
+        != QMessageBox::Yes) {
+        return;
+    }
+    ArrangementStore::instance().restore(layout::RestoreArea::All);
+    emit bindingsChanged();
 }
 
 QWidget* PreferencesDialog::createGeneralPage()
@@ -278,66 +324,51 @@ QWidget* PreferencesDialog::createGeneralPage()
 
 void PreferencesDialog::loadSettings()
 {
-    QSettings s;
-    s.beginGroup(QStringLiteral("preferences"));
+    // Defaults and ranges: hobbycad/settings_schema.h.
+    namespace keys = settings::keys;
 
     // Navigation
-    QString preset = s.value(QStringLiteral("mousePreset"),
-                             QStringLiteral("hobbycad")).toString();
-    int presetIdx = m_mousePreset->findData(preset);
+    const int presetIdx = m_mousePreset->findData(settingChoice(keys::MousePreset));
     m_mousePreset->setCurrentIndex(presetIdx >= 0 ? presetIdx : 0);
 
-    int axis = s.value(QStringLiteral("defaultAxis"), 0).toInt();
-    m_defaultAxis->setCurrentIndex(qBound(0, axis, 2));
+    m_defaultAxis->setCurrentIndex(settingInt(keys::DefaultAxis));
 
-    m_pgUpStepDeg->setValue(s.value(QStringLiteral("pgUpStepDeg"), 10).toInt());
-    m_spinInterval->setValue(s.value(QStringLiteral("spinInterval"), 10).toInt());
-    m_snapStepDeg->setValue(s.value(QStringLiteral("snapStepDeg"), 10).toInt());
-    m_snapInterval->setValue(s.value(QStringLiteral("snapInterval"), 10).toInt());
+    m_pgUpStepDeg->setValue(settingInt(keys::PageStepDeg));
+    m_spinInterval->setValue(settingInt(keys::SpinInterval));
+    m_snapStepDeg->setValue(settingInt(keys::SnapStepDeg));
+    m_snapInterval->setValue(settingInt(keys::SnapInterval));
 
     // General
-    m_showGridOnStart->setChecked(
-        s.value(QStringLiteral("showGrid"), true).toBool());
-    m_restoreSession->setChecked(
-        s.value(QStringLiteral("restoreSession"), true).toBool());
-    m_cliScrollback->setValue(
-        s.value(QStringLiteral("cliScrollback"), 10000).toInt());
-    m_zUpOrientation->setChecked(
-        s.value(QStringLiteral("zUpOrientation"), true).toBool());
-    m_orbitSelected->setChecked(
-        s.value(QStringLiteral("orbitSelected"), false).toBool());
-    m_showCursorHints->setChecked(
-        s.value(QStringLiteral("showCursorHints"), true).toBool());
-
-    s.endGroup();
+    m_showGridOnStart->setChecked(settingBool(keys::ShowGrid));
+    m_restoreSession->setChecked(settingBool(keys::RestoreSession));
+    m_cliScrollback->setValue(settingInt(keys::CliScrollback));
+    m_zUpOrientation->setChecked(settingBool(keys::ZUpOrientation));
+    m_orbitSelected->setChecked(settingBool(keys::OrbitSelected));
+    m_showCursorHints->setChecked(settingBool(keys::ShowCursorHints));
 }
 
 void PreferencesDialog::saveSettings()
 {
+    namespace keys = settings::keys;
     QSettings s;
-    s.beginGroup(QStringLiteral("preferences"));
+    const auto set = [&s](const char* key, const QVariant& value) {
+        s.setValue(QLatin1String(key), value);
+    };
 
-    s.setValue(QStringLiteral("mousePreset"),
-              m_mousePreset->currentData().toString());
-    s.setValue(QStringLiteral("defaultAxis"),
-              m_defaultAxis->currentIndex());
-    s.setValue(QStringLiteral("pgUpStepDeg"), m_pgUpStepDeg->value());
-    s.setValue(QStringLiteral("spinInterval"), m_spinInterval->value());
-    s.setValue(QStringLiteral("snapStepDeg"), m_snapStepDeg->value());
-    s.setValue(QStringLiteral("snapInterval"), m_snapInterval->value());
+    set(keys::MousePreset, m_mousePreset->currentData().toString());
+    set(keys::DefaultAxis, m_defaultAxis->currentIndex());
+    set(keys::PageStepDeg, m_pgUpStepDeg->value());
+    set(keys::SpinInterval, m_spinInterval->value());
+    set(keys::SnapStepDeg, m_snapStepDeg->value());
+    set(keys::SnapInterval, m_snapInterval->value());
 
-    s.setValue(QStringLiteral("showGrid"), m_showGridOnStart->isChecked());
-    s.setValue(QStringLiteral("restoreSession"),
-              m_restoreSession->isChecked());
-    s.setValue(QStringLiteral("cliScrollback"), m_cliScrollback->value());
-    s.setValue(QStringLiteral("zUpOrientation"),
-              m_zUpOrientation->isChecked());
-    s.setValue(QStringLiteral("orbitSelected"),
-              m_orbitSelected->isChecked());
-    s.setValue(QStringLiteral("showCursorHints"),
-               m_showCursorHints->isChecked());
+    set(keys::ShowGrid, m_showGridOnStart->isChecked());
+    set(keys::RestoreSession, m_restoreSession->isChecked());
+    set(keys::CliScrollback, m_cliScrollback->value());
+    set(keys::ZUpOrientation, m_zUpOrientation->isChecked());
+    set(keys::OrbitSelected, m_orbitSelected->isChecked());
+    set(keys::ShowCursorHints, m_showCursorHints->isChecked());
 
-    s.endGroup();
     s.sync();
 }
 

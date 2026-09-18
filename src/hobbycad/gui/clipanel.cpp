@@ -3,6 +3,7 @@
 // =====================================================================
 
 #include "clipanel.h"
+#include "settingvalue.h"
 #include <QSettings>
 #include <algorithm>
 #include <cstring>
@@ -50,14 +51,7 @@ CliPanel::CliPanel(QWidget* parent)
     // a long CLI-driven build wants more, a small machine wants less.
     // 0 means unlimited, which grows without bound and is offered as a
     // deliberate choice rather than the default.
-    {
-        QSettings settings;
-        settings.beginGroup(QStringLiteral("preferences"));
-        const int scrollback =
-            settings.value(QStringLiteral("cliScrollback"), 10000).toInt();
-        settings.endGroup();
-        setMaximumBlockCount(scrollback > 0 ? scrollback : 0);
-    }
+    setMaximumBlockCount(settingInt(settings::keys::CliScrollback));
     setUndoRedoEnabled(false);
     setCursorWidth(8);  // block cursor
 

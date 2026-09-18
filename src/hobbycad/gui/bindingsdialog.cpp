@@ -4,6 +4,12 @@
 
 #include "bindingsdialog.h"
 #include "bindingeditrow.h"
+#include "commandtext.h"
+
+#include <hobbycad/commands.h>
+#include "arrangementstore.h"
+
+#include <hobbycad/layout/arrangement.h>
 
 #include <QDialogButtonBox>
 #include <QGroupBox>
@@ -29,268 +35,46 @@ static const QColor kBindingTextColor(128, 128, 128);
 
 QHash<QString, ActionBinding> BindingsDialog::defaultBindings()
 {
+    // The defaults are part of the arrangement and the names come from the
+    // command registry, so the dialog, the menus, the toolbars and the
+    // canvas all agree on what a key does.
     QHash<QString, ActionBinding> defaults;
-
-    // File menu actions
-    defaults.insert("file.new", ActionBinding(
-        "file.new", tr("New Document"), tr("File"),
-        QKeySequence(QKeySequence::New).toString()));
-
-    defaults.insert("file.open", ActionBinding(
-        "file.open", tr("Open..."), tr("File"),
-        QKeySequence(QKeySequence::Open).toString()));
-
-    defaults.insert("file.save", ActionBinding(
-        "file.save", tr("Save"), tr("File"),
-        QKeySequence(QKeySequence::Save).toString()));
-
-    defaults.insert("file.saveAs", ActionBinding(
-        "file.saveAs", tr("Save As..."), tr("File"),
-        QKeySequence(QKeySequence::SaveAs).toString()));
-
-    defaults.insert("file.close", ActionBinding(
-        "file.close", tr("Close"), tr("File"),
-        QKeySequence(QKeySequence::Close).toString()));
-
-    defaults.insert("file.quit", ActionBinding(
-        "file.quit", tr("Quit"), tr("File"),
-        QKeySequence(QKeySequence::Quit).toString()));
-
-    // Edit menu actions
-    defaults.insert("edit.undo", ActionBinding(
-        "edit.undo", tr("Undo"), tr("Edit"),
-        QKeySequence(QKeySequence::Undo).toString()));
-
-    // Redo is bound BOTH ways on every platform, deliberately, rather than
-    // deferring to QKeySequence::Redo.
-    //
-    // The platform sequence is Ctrl+Y on Windows, so using it as binding1
-    // made Windows users get Ctrl+Y twice and lose Ctrl+Shift+Z entirely,
-    // while Linux users got both. The audience for a CAD application splits
-    // between AutoCAD / SolidWorks / Fusion habits (Ctrl+Y) and
-    // FreeCAD / Blender / Inkscape habits (Ctrl+Shift+Z), and there is no
-    // reason that split should be decided by which OS someone is on.
-    //
-    // Qt maps Qt::CTRL to Command on macOS, so these read as Cmd+Shift+Z and
-    // Cmd+Y there; the first is the macOS standard and the second is a
-    // harmless extra.
-    defaults.insert("edit.redo", ActionBinding(
-        "edit.redo", tr("Redo"), tr("Edit"),
-        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z).toString(),
-        QKeySequence(Qt::CTRL | Qt::Key_Y).toString()));
-
-    defaults.insert("edit.cut", ActionBinding(
-        "edit.cut", tr("Cut"), tr("Edit"),
-        QKeySequence(QKeySequence::Cut).toString()));
-
-    defaults.insert("edit.copy", ActionBinding(
-        "edit.copy", tr("Copy"), tr("Edit"),
-        QKeySequence(QKeySequence::Copy).toString()));
-
-    defaults.insert("edit.paste", ActionBinding(
-        "edit.paste", tr("Paste"), tr("Edit"),
-        QKeySequence(QKeySequence::Paste).toString()));
-
-    defaults.insert("edit.delete", ActionBinding(
-        "edit.delete", tr("Delete"), tr("Edit"),
-        QKeySequence(QKeySequence::Delete).toString()));
-
-    defaults.insert("edit.selectAll", ActionBinding(
-        "edit.selectAll", tr("Select All"), tr("Edit"),
-        QKeySequence(QKeySequence::SelectAll).toString()));
-
-    // View menu actions
-    defaults.insert("view.terminal", ActionBinding(
-        "view.terminal", tr("Toggle Terminal"), tr("View"),
-        QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft).toString()));
-
-    defaults.insert("view.project", ActionBinding(
-        "view.project", tr("Toggle Project"), tr("View"),
-        QKeySequence(Qt::CTRL | Qt::Key_R).toString()));
-
-    defaults.insert("view.properties", ActionBinding(
-        "view.properties", tr("Toggle Properties"), tr("View"),
-        QKeySequence(Qt::CTRL | Qt::Key_P).toString()));
-
-    defaults.insert("view.toolbar", ActionBinding(
-        "view.toolbar", tr("Toggle Toolbar"), tr("View")));
-
-    defaults.insert("view.resetView", ActionBinding(
-        "view.resetView", tr("Reset View"), tr("View"),
-        QKeySequence(Qt::Key_Home).toString()));
-
-    defaults.insert("view.rotateLeft", ActionBinding(
-        "view.rotateLeft", tr("Rotate Left 90\xC2\xB0"), tr("View")));
-
-    defaults.insert("view.rotateRight", ActionBinding(
-        "view.rotateRight", tr("Rotate Right 90\xC2\xB0"), tr("View")));
-
-    // Sketch canvas view rotation (2D)
-    defaults.insert("sketch.rotateCCW", ActionBinding(
-        "sketch.rotateCCW", tr("Rotate Canvas CCW"), tr("Sketch"),
-        QKeySequence(Qt::Key_Q).toString()));
-
-    defaults.insert("sketch.rotateCW", ActionBinding(
-        "sketch.rotateCW", tr("Rotate Canvas CW"), tr("Sketch"),
-        QKeySequence(Qt::Key_E).toString()));
-
-    defaults.insert("sketch.rotateReset", ActionBinding(
-        "sketch.rotateReset", tr("Reset Canvas Rotation"), tr("Sketch"),
-        QKeySequence(Qt::CTRL | Qt::Key_0).toString()));
-
-    // Sketch tools
-    defaults.insert("sketch.select", ActionBinding(
-        "sketch.select", tr("Select Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_S).toString()));
-
-    defaults.insert("sketch.line", ActionBinding(
-        "sketch.line", tr("Line Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_L).toString()));
-
-    defaults.insert("sketch.rectangle", ActionBinding(
-        "sketch.rectangle", tr("Rectangle Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_R).toString()));
-
-    defaults.insert("sketch.circle", ActionBinding(
-        "sketch.circle", tr("Circle Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_C).toString()));
-
-    defaults.insert("sketch.arc", ActionBinding(
-        "sketch.arc", tr("Arc Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_A).toString()));
-
-    defaults.insert("sketch.point", ActionBinding(
-        "sketch.point", tr("Point Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_P).toString()));
-
-    defaults.insert("sketch.dimension", ActionBinding(
-        "sketch.dimension", tr("Dimension Tool"), tr("Sketch"),
-        QKeySequence(Qt::Key_D).toString()));
-
-    defaults.insert("sketch.construction", ActionBinding(
-        "sketch.construction", tr("Toggle Construction Mode"), tr("Sketch"),
-        QKeySequence(Qt::Key_X).toString()));
-
-    defaults.insert("sketch.offset", ActionBinding(
-        "sketch.offset", tr("Offset"), tr("Sketch"),
-        QKeySequence(Qt::Key_O).toString()));
-
-    defaults.insert("sketch.trim", ActionBinding(
-        "sketch.trim", tr("Trim"), tr("Sketch"),
-        QKeySequence(Qt::Key_T).toString()));
-
-    defaults.insert("sketch.fillet", ActionBinding(
-        "sketch.fillet", tr("Fillet"), tr("Sketch"),
-        QKeySequence(Qt::Key_F).toString()));
-
-    defaults.insert("sketch.toggleGrid", ActionBinding(
-        "sketch.toggleGrid", tr("Toggle Grid"), tr("Sketch"),
-        QKeySequence(Qt::Key_G).toString()));
-
-    // Design/3D workspace (reserved for future)
-    defaults.insert("design.extrude", ActionBinding(
-        "design.extrude", tr("Extrude"), tr("Design"),
-        QKeySequence(Qt::Key_E).toString()));
-
-    defaults.insert("design.move", ActionBinding(
-        "design.move", tr("Move"), tr("Design"),
-        QKeySequence(Qt::Key_M).toString()));
-
-    defaults.insert("design.fillet", ActionBinding(
-        "design.fillet", tr("Fillet"), tr("Design"),
-        QKeySequence(Qt::Key_F).toString()));
-
-    defaults.insert("design.chamfer", ActionBinding(
-        "design.chamfer", tr("Chamfer"), tr("Design")));
-
-    defaults.insert("design.hole", ActionBinding(
-        "design.hole", tr("Hole"), tr("Design"),
-        QKeySequence(Qt::Key_H).toString()));
-
-    defaults.insert("design.joint", ActionBinding(
-        "design.joint", tr("Joint"), tr("Design"),
-        QKeySequence(Qt::Key_J).toString()));
-
-    defaults.insert("design.measure", ActionBinding(
-        "design.measure", tr("Measure"), tr("Design"),
-        QKeySequence(Qt::Key_I).toString()));
-
-    defaults.insert("design.toggleVisibility", ActionBinding(
-        "design.toggleVisibility", tr("Toggle Visibility"), tr("Design"),
-        QKeySequence(Qt::Key_V).toString()));
-
-    // Global commands
-    defaults.insert("global.commandSearch", ActionBinding(
-        "global.commandSearch", tr("Command Search"), tr("Global"),
-        QKeySequence(Qt::Key_Slash).toString()));
-
-    defaults.insert("view.showGrid", ActionBinding(
-        "view.showGrid", tr("Show Grid"), tr("View"),
-        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G).toString()));
-
-    defaults.insert("view.snapToGrid", ActionBinding(
-        "view.snapToGrid", tr("Snap to Grid"), tr("View"),
-        QKeySequence(Qt::CTRL | Qt::Key_G).toString()));
-
-    defaults.insert("view.zUpOrientation", ActionBinding(
-        "view.zUpOrientation", tr("Z-Up Orientation"), tr("View")));
-
-    defaults.insert("view.orbitSelected", ActionBinding(
-        "view.orbitSelected", tr("Orbit Selected Object"), tr("View")));
-
-    defaults.insert("view.preferences", ActionBinding(
-        "view.preferences", tr("Preferences..."), tr("View"),
-        QKeySequence(QKeySequence::Preferences).toString()));
-
-    // Navigation: Continuous rotation
-    defaults.insert("nav.rotateUp", ActionBinding(
-        "nav.rotateUp", tr("Rotate Up (continuous)"), tr("Navigation"),
-        QKeySequence(Qt::Key_Up).toString()));
-
-    defaults.insert("nav.rotateDown", ActionBinding(
-        "nav.rotateDown", tr("Rotate Down (continuous)"), tr("Navigation"),
-        QKeySequence(Qt::Key_Down).toString()));
-
-    // Navigation: Rotation axis
-    defaults.insert("nav.axisX", ActionBinding(
-        "nav.axisX", tr("Set Rotation Axis to X"), tr("Navigation"),
-        QKeySequence(Qt::Key_X).toString()));
-
-    defaults.insert("nav.axisY", ActionBinding(
-        "nav.axisY", tr("Set Rotation Axis to Y"), tr("Navigation"),
-        QKeySequence(Qt::Key_Y).toString()));
-
-    defaults.insert("nav.axisZ", ActionBinding(
-        "nav.axisZ", tr("Set Rotation Axis to Z"), tr("Navigation"),
-        QKeySequence(Qt::Key_Z).toString()));
-
-    // Navigation: Snap rotations (grouped together)
-    defaults.insert("nav.rotateLeft", ActionBinding(
-        "nav.rotateLeft", tr("Snap Rotate Left 90\xC2\xB0"), tr("Navigation"),
-        QKeySequence(Qt::Key_Left).toString()));
-
-    defaults.insert("nav.rotateRight", ActionBinding(
-        "nav.rotateRight", tr("Snap Rotate Right 90\xC2\xB0"), tr("Navigation"),
-        QKeySequence(Qt::Key_Right).toString()));
-
-    // Viewport actions (can have both keyboard and mouse bindings)
-    defaults.insert("viewport.rotate", ActionBinding(
-        "viewport.rotate", tr("Rotate View"), tr("Viewport"),
-        "RightButton+Drag"));
-
-    defaults.insert("viewport.pan", ActionBinding(
-        "viewport.pan", tr("Pan View"), tr("Viewport"),
-        "MiddleButton+Drag"));
-
-    defaults.insert("viewport.zoom", ActionBinding(
-        "viewport.zoom", tr("Zoom View"), tr("Viewport"),
-        "Wheel"));
-
-    // Construct menu actions
-    defaults.insert("construct.plane", ActionBinding(
-        "construct.plane", tr("New Construction Plane"), tr("Construct")));
-
+    for (const auto& entry : ArrangementStore::instance().base().defaultBindings()) {
+        const commands::Command* cmd = commands::findCommand(entry.first);
+        if (!cmd) continue;
+        const commands::BindingContext* context = commands::findBindingContext(cmd->context);
+        const QString id = QString::fromStdString(entry.first);
+        defaults.insert(id, ActionBinding(
+            id, commandtext::label(*cmd),
+            context ? commandtext::translate(context->title) : QString(),
+            commandtext::resolveDefault(entry.second[0]),
+            commandtext::resolveDefault(entry.second[1]),
+            commandtext::resolveDefault(entry.second[2])));
+    }
     return defaults;
+}
+
+bindings::Table BindingsDialog::toTable(const QHash<QString, ActionBinding>& actions)
+{
+    bindings::Table table;
+    // In the arrangement's order, so the first of two colliding commands is
+    // the same one every time.
+    for (const auto& entry : ArrangementStore::instance().base().defaultBindings()) {
+        const auto it = actions.constFind(QString::fromStdString(entry.first));
+        if (it == actions.constEnd()) continue;
+        const ActionBinding& ab = it.value();
+        table.addCommand(entry.first, {ab.default1.toStdString(), ab.default2.toStdString(),
+                                       ab.default3.toStdString()});
+        table.set(entry.first, 0, ab.binding1.toStdString());
+        table.set(entry.first, 1, ab.binding2.toStdString());
+        table.set(entry.first, 2, ab.binding3.toStdString());
+    }
+    return table;
+}
+
+bindings::Table BindingsDialog::loadTable()
+{
+    return toTable(loadBindings());
 }
 
 // ---- Load/save bindings ---------------------------------------------
@@ -299,52 +83,31 @@ QHash<QString, ActionBinding> BindingsDialog::loadBindings()
 {
     QHash<QString, ActionBinding> bindings = defaultBindings();
 
-    QSettings s;
-    s.beginGroup(QStringLiteral("bindings"));
-
-    for (auto it = bindings.begin(); it != bindings.end(); ++it) {
-        QString key = it.key();
-        ActionBinding& ab = it.value();
-
-        // Load custom bindings if present (overrides defaults)
-        if (s.contains(key + "/1"))
-            ab.binding1 = s.value(key + "/1").toString();
-        if (s.contains(key + "/2"))
-            ab.binding2 = s.value(key + "/2").toString();
-        if (s.contains(key + "/3"))
-            ab.binding3 = s.value(key + "/3").toString();
+    // A person's keys are part of their arrangement, beside the menus and
+    // toolbars they moved, so they live in the same file (ArrangementStore).
+    for (const auto& entry : ArrangementStore::instance().current().defaultBindings()) {
+        const auto it = bindings.find(QString::fromStdString(entry.first));
+        if (it == bindings.end()) continue;
+        it->binding1 = commandtext::resolveDefault(entry.second[0]);
+        it->binding2 = commandtext::resolveDefault(entry.second[1]);
+        it->binding3 = commandtext::resolveDefault(entry.second[2]);
     }
-
-    s.endGroup();
     return bindings;
 }
 
 void BindingsDialog::saveBindings(const QHash<QString, ActionBinding>& bindings)
 {
-    QSettings s;
-    s.beginGroup(QStringLiteral("bindings"));
-
-    // Clear previous bindings
-    s.remove(QString());
-
-    QHash<QString, ActionBinding> defaults = defaultBindings();
-
-    for (auto it = bindings.constBegin(); it != bindings.constEnd(); ++it) {
-        const QString& key = it.key();
-        const ActionBinding& ab = it.value();
-        const ActionBinding& def = defaults.value(key);
-
-        // Only save if different from defaults
-        if (ab.binding1 != def.default1)
-            s.setValue(key + "/1", ab.binding1);
-        if (ab.binding2 != def.default2)
-            s.setValue(key + "/2", ab.binding2);
-        if (ab.binding3 != def.default3)
-            s.setValue(key + "/3", ab.binding3);
+    ArrangementStore& store = ArrangementStore::instance();
+    QHash<QString, bindings::Slots> keys;
+    for (const auto& entry : store.base().defaultBindings()) {
+        const QString id = QString::fromStdString(entry.first);
+        const auto it = bindings.constFind(id);
+        if (it == bindings.constEnd()) continue;
+        keys.insert(id, {it->binding1.toStdString(), it->binding2.toStdString(),
+                         it->binding3.toStdString()});
     }
-
-    s.endGroup();
-    s.sync();
+    // One write, one notice: the menus and toolbars rebuild once.
+    store.setBindings(keys);
 }
 
 // ---- Dialog construction --------------------------------------------
@@ -470,42 +233,11 @@ void BindingsDialog::populateActions()
 {
     m_actionTree->clear();
 
-    // Define display order for actions
-    static const QStringList actionOrder = {
-        // Global
-        "global.commandSearch",
-        // File
-        "file.new", "file.open", "file.save", "file.saveAs",
-        "file.close", "file.quit",
-        // Edit
-        "edit.undo", "edit.redo",
-        "edit.cut", "edit.copy", "edit.paste", "edit.delete",
-        "edit.selectAll",
-        // View
-        "view.terminal", "view.project", "view.properties", "view.toolbar",
-        "view.resetView", "view.rotateLeft", "view.rotateRight", "view.preferences",
-        // Construct
-        "construct.plane",
-        // Sketch - Tools
-        "sketch.select", "sketch.line", "sketch.rectangle", "sketch.circle",
-        "sketch.arc", "sketch.point", "sketch.dimension",
-        // Sketch - Modifiers
-        "sketch.construction", "sketch.offset", "sketch.trim", "sketch.fillet",
-        // Sketch - View
-        "sketch.rotateCCW", "sketch.rotateCW", "sketch.rotateReset",
-        "sketch.toggleGrid",
-        // Design (3D workspace - reserved)
-        "design.extrude", "design.move", "design.fillet", "design.chamfer",
-        "design.hole", "design.joint", "design.measure", "design.toggleVisibility",
-        // Navigation - Continuous rotation
-        "nav.rotateUp", "nav.rotateDown",
-        // Navigation - Rotation axis
-        "nav.axisX", "nav.axisY", "nav.axisZ",
-        // Navigation - Snap rotations
-        "nav.rotateLeft", "nav.rotateRight",
-        // Viewport
-        "viewport.rotate", "viewport.pan", "viewport.zoom"
-    };
+    // Listed in the arrangement's order, grouped by context.
+    QStringList actionOrder;
+    for (const auto& entry : ArrangementStore::instance().base().defaultBindings()) {
+        actionOrder.append(QString::fromStdString(entry.first));
+    }
 
     // Group actions by category
     QHash<QString, QTreeWidgetItem*> categoryItems;
@@ -701,71 +433,22 @@ void BindingsDialog::updateTreeForAction(const QString& actionId)
 
 QString BindingsDialog::getActionContext(const QString& actionId)
 {
-    // Extract context from action ID prefix (e.g., "sketch.line" -> "sketch")
-    int dotIndex = actionId.indexOf(QLatin1Char('.'));
-    if (dotIndex > 0) {
-        return actionId.left(dotIndex);
+    if (const commands::Command* cmd = commandtext::find(actionId)) {
+        return QString::fromLatin1(cmd->context);
     }
-    return QString();
+    // An id the registry does not know: its first component.
+    const int dotIndex = actionId.indexOf(QLatin1Char('.'));
+    return dotIndex > 0 ? actionId.left(dotIndex) : QString();
 }
 
 QString BindingsDialog::checkConflict(const QString& actionId,
                                        const QString& binding) const
 {
-    if (binding.isEmpty()) return QString();
-
-    QString myContext = getActionContext(actionId);
-
-    for (auto it = m_bindings.constBegin();
-         it != m_bindings.constEnd(); ++it) {
-        if (it.key() == actionId) continue;  // Skip self
-
-        const ActionBinding& ab = it.value();
-
-        // Check if bindings match
-        bool hasConflict = (ab.binding1 == binding ||
-                            ab.binding2 == binding ||
-                            ab.binding3 == binding);
-
-        if (!hasConflict) continue;
-
-        // Now check if contexts conflict
-        QString otherContext = getActionContext(it.key());
-
-        // Global context conflicts with everything
-        if (myContext == QStringLiteral("global") ||
-            otherContext == QStringLiteral("global")) {
-            return ab.actionId;
-        }
-
-        // Same context conflicts (e.g., sketch vs sketch)
-        if (myContext == otherContext) {
-            return ab.actionId;
-        }
-
-        // File, Edit, View, Navigation, Viewport are always active - they conflict
-        // with each other and with mode-specific contexts
-        static const QStringList alwaysActiveContexts = {
-            QStringLiteral("file"),
-            QStringLiteral("edit"),
-            QStringLiteral("view"),
-            QStringLiteral("nav"),
-            QStringLiteral("viewport")
-        };
-
-        bool myContextAlwaysActive = alwaysActiveContexts.contains(myContext);
-        bool otherContextAlwaysActive = alwaysActiveContexts.contains(otherContext);
-
-        // If either is always-active, they conflict
-        if (myContextAlwaysActive || otherContextAlwaysActive) {
-            return ab.actionId;
-        }
-
-        // Different mode-specific contexts don't conflict
-        // (e.g., sketch vs design are mutually exclusive)
-    }
-
-    return QString();
+    // A global or window-wide key collides with the same key anywhere; two
+    // keys heard by different views (the sketch canvas, the 3D view) do
+    // not (bindings::contextsOverlap).
+    return QString::fromStdString(
+        toTable(m_bindings).findConflict(actionId.toStdString(), binding.toStdString()));
 }
 
 bool BindingsDialog::confirmConflict(const QString& conflictingActionId,
@@ -777,16 +460,29 @@ bool BindingsDialog::confirmConflict(const QString& conflictingActionId,
     QString myContext = getActionContext(m_selectedAction);
     QString otherContext = getActionContext(conflictingActionId);
 
+    const commands::BindingContext* mine =
+        commands::findBindingContext(myContext.toStdString());
+    const commands::BindingContext* theirs =
+        commands::findBindingContext(otherContext.toStdString());
+    const auto scopeOf = [](const commands::BindingContext* c) {
+        return c ? c->scope : commands::BindingScope::Application;
+    };
+
     QString contextInfo;
     if (myContext == otherContext) {
         contextInfo = tr("Both actions are in the %1 context.")
                       .arg(conflicting.category);
-    } else if (myContext == QStringLiteral("global") ||
-               otherContext == QStringLiteral("global")) {
+    } else if (scopeOf(mine) == commands::BindingScope::Global ||
+               scopeOf(theirs) == commands::BindingScope::Global) {
         contextInfo = tr("Global bindings are active in all contexts.");
-    } else {
+    } else if (scopeOf(theirs) == commands::BindingScope::Application) {
         contextInfo = tr("The %1 context is always active.")
                       .arg(conflicting.category);
+    } else if (scopeOf(mine) == commands::BindingScope::Application) {
+        contextInfo = tr("The %1 context is always active.")
+                      .arg(mine ? commandtext::translate(mine->title) : myContext);
+    } else {
+        contextInfo = tr("Both actions are used in the same view.");
     }
 
     QMessageBox msgBox(this);

@@ -4,6 +4,8 @@
 
 #include "timelinewidget.h"
 
+#include <hobbycad/project_session.h>
+
 #include <QAction>
 #include <QDrag>
 #include <QEnterEvent>
@@ -698,15 +700,16 @@ void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
     setSelectedIndex(index);
     emit itemClicked(index);
 
-    TimelineFeature feature = m_features[index];
-    QString name = m_names[index];
-    bool isSuppressed = (m_rollbackPos >= 0 && index > m_rollbackPos);
+    const QString name = m_names[index];
+    // A rolled-back feature is not suppressed: Unsuppress is for the ones
+    // that are.
+    const TimelineActions actions = timelineActions(m_features[index], isFeatureSuppressed(index));
 
     QMenu menu(this);
 
     // Edit action (for sketches and features that can be edited)
     QAction* editAction = menu.addAction(tr("Edit \"%1\"").arg(name));
-    editAction->setEnabled(feature != TimelineFeature::Origin);
+    editAction->setEnabled(actions.editable);
     connect(editAction, &QAction::triggered, this, [this, index]() {
         emit editFeatureRequested(index);
     });
@@ -715,7 +718,7 @@ void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
 
     // Rename action
     QAction* renameAction = menu.addAction(tr("Rename..."));
-    renameAction->setEnabled(feature != TimelineFeature::Origin);
+    renameAction->setEnabled(actions.editable);
     connect(renameAction, &QAction::triggered, this, [this, index]() {
         emit renameFeatureRequested(index);
     });
@@ -723,14 +726,14 @@ void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
     menu.addSeparator();
 
     // Suppress/Unsuppress action
-    if (isSuppressed) {
+    if (actions.unsuppress) {
         QAction* unsuppressAction = menu.addAction(tr("Unsuppress"));
         connect(unsuppressAction, &QAction::triggered, this, [this, index]() {
             emit suppressFeatureRequested(index, false);
         });
     } else {
         QAction* suppressAction = menu.addAction(tr("Suppress"));
-        suppressAction->setEnabled(feature != TimelineFeature::Origin);
+        suppressAction->setEnabled(actions.editable);
         connect(suppressAction, &QAction::triggered, this, [this, index]() {
             emit suppressFeatureRequested(index, true);
         });
@@ -738,14 +741,14 @@ void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
 
     // Rollback to here
     QAction* rollbackAction = menu.addAction(tr("Rollback to Here"));
-    rollbackAction->setEnabled(feature != TimelineFeature::Origin);
+    rollbackAction->setEnabled(actions.editable);
     connect(rollbackAction, &QAction::triggered, this, [this, index]() {
         setRollbackPosition(index);
         emit rollbackChanged(index);
     });
 
     // Export actions (only for sketches)
-    if (feature == TimelineFeature::Sketch) {
+    if (actions.exportable) {
         menu.addSeparator();
 
         QAction* exportDXFAction = menu.addAction(tr("Export as DXF..."));
@@ -763,7 +766,7 @@ void TimelineWidget::showItemContextMenu(int index, const QPoint& globalPos)
 
     // Delete action
     QAction* deleteAction = menu.addAction(tr("Delete"));
-    deleteAction->setEnabled(feature != TimelineFeature::Origin);
+    deleteAction->setEnabled(actions.editable);
     connect(deleteAction, &QAction::triggered, this, [this, index]() {
         emit deleteFeatureRequested(index);
     });
@@ -906,36 +909,19 @@ bool TimelineWidget::canMoveItem(int fromIndex, int toIndex) const
     if (fromIndex == toIndex)
         return true;
 
-    // Can't move Origin (index 0)
+    // The Origin row (index 0) stays first.
     if (fromIndex == 0 || toIndex == 0)
         return false;
 
-    int featureId = featureIdAt(fromIndex);
-
-    if (fromIndex < toIndex) {
-        // Moving down (later in timeline)
-        // Check if any item between fromIndex+1 and toIndex depends on this feature
-        for (int i = fromIndex + 1; i <= toIndex; ++i) {
-            QVector<int> deps = dependenciesAt(i);
-            if (deps.contains(featureId)) {
-                // Can't move past a dependent feature
-                return false;
-            }
-        }
-    } else {
-        // Moving up (earlier in timeline)
-        // Check if the moved item depends on any feature between toIndex and fromIndex-1
-        QVector<int> myDeps = dependenciesAt(fromIndex);
-        for (int i = toIndex; i < fromIndex; ++i) {
-            int otherId = featureIdAt(i);
-            if (myDeps.contains(otherId)) {
-                // Can't move before a feature this depends on
-                return false;
-            }
-        }
+    std::vector<TimelineEntry> entries(static_cast<std::size_t>(m_items.size()));
+    for (int i = 0; i < m_items.size(); ++i) {
+        TimelineEntry& e = entries[static_cast<std::size_t>(i)];
+        e.featureId = featureIdAt(i);
+        e.type = m_features[i];
+        const QVector<int> deps = dependenciesAt(i);
+        e.dependsOn.assign(deps.begin(), deps.end());
     }
-
-    return true;
+    return timelineMoveAllowed(entries, fromIndex, toIndex);
 }
 
 void TimelineWidget::clear()

@@ -22,6 +22,10 @@ find_package(OpenCASCADE REQUIRED)
 # features compiled out via #if HOBBYCAD_HAS_QT guards.
 find_package(Qt6 ${HOBBYCAD_MIN_QT_VERSION} QUIET COMPONENTS Core Gui OpenGL)
 set(HOBBYCAD_LIB_HAS_QT ${Qt6_FOUND})
+# The command line's translation tables are generated only for a build
+# with no Qt in it at all, and that block lives in src/hobbycad, which
+# would otherwise have no way to know.
+set(HOBBYCAD_LIB_HAS_QT ${Qt6_FOUND} PARENT_SCOPE)
 
 # nlohmann/json: header-only JSON library used as a Qt-free fallback
 # for project serialization, parameter import/export, etc.
@@ -143,15 +147,40 @@ set(LIBHOBBYCAD_SOURCES
     project_undo.cpp
     project_session.cpp
     browser.cpp
+    commands.cpp
+    bindings.cpp
+    settings_schema.cpp
+    layout/arrangement.cpp
+    layout/customization.cpp
     naming.cpp
     sketch/undo.cpp
     sketch/snap.cpp
     sketch/inference.cpp
     sketch/handles.cpp
     sketch/decomposition.cpp
+    sketch/dimension_field.cpp
     sketch/bezier.cpp
     sketch/align.cpp
     sketch/properties.cpp
+    sketch/property_schema.cpp
+    sketch/edit_session.cpp
+    sketch/dimension_input.cpp
+    sketch/placement.cpp
+    sketch/placement_arc.cpp
+    sketch/placement_circle.cpp
+    sketch/placement_ellipse.cpp
+    sketch/placement_line.cpp
+    sketch/placement_polygon.cpp
+    sketch/placement_rectangle.cpp
+    sketch/placement_slot.cpp
+    sketch/placement_spline.cpp
+    sketch/view.cpp
+    sketch/pick.cpp
+    sketch/selection.cpp
+    sketch/handle_drag.cpp
+    sketch/transform_form.cpp
+    project_files.cpp
+    locale.cpp
     # BREP module
     brep/operations.cpp
     brep/fit.cpp
@@ -174,6 +203,11 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/project.h
     hobbycad/project_undo.h
     hobbycad/project_session.h
+    hobbycad/commands.h
+    hobbycad/bindings.h
+    hobbycad/settings_schema.h
+    hobbycad/layout/arrangement.h
+    hobbycad/layout/customization.h
     hobbycad/base64.h
     hobbycad/image_buffer.h
     # Geometry module
@@ -198,6 +232,18 @@ set(LIBHOBBYCAD_HEADERS
     hobbycad/sketch/snap.h
     hobbycad/sketch/handles.h
     hobbycad/sketch/decomposition.h
+    hobbycad/sketch/dimension_field.h
+    hobbycad/sketch/property_schema.h
+    hobbycad/sketch/edit_session.h
+    hobbycad/sketch/dimension_input.h
+    hobbycad/sketch/placement.h
+    hobbycad/sketch/view.h
+    hobbycad/sketch/pick.h
+    hobbycad/sketch/selection.h
+    hobbycad/sketch/handle_drag.h
+    hobbycad/sketch/transform_form.h
+    hobbycad/project_files.h
+    hobbycad/locale.h
     # BREP module
     hobbycad/brep/operations.h
     hobbycad/brep/fit.h

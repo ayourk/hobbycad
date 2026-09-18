@@ -43,7 +43,7 @@ static Constraint makeConstraint(int id, ConstraintType type,
 
 static DecompositionResult decomposePolygon(
     const Entity& compound,
-    const std::vector<std::pair<std::string, double>>& lockedDims,
+    const LockedDims& lockedDims,
     std::function<int()> nextEntityId,
     std::function<int()> nextConstraintId,
     int groupId,
@@ -78,8 +78,8 @@ static DecompositionResult decomposePolygon(
     // Check if the radius is locked (determines full-constrained status)
     bool radiusLocked = false;
     if (isRegular) {
-        for (const auto& [label, value] : lockedDims) {
-            if (label == "Radius") {
+        for (const auto& [field, value] : lockedDims) {
+            if (field == DimField::Radius) {
                 radiusLocked = true;
                 break;
             }
@@ -142,8 +142,8 @@ static DecompositionResult decomposePolygon(
 
     // --- Create Radius constraint from locked dim (regular only) ---
     if (isRegular && circleId >= 0) {
-        for (const auto& [label, value] : lockedDims) {
-            if (label == "Radius") {
+        for (const auto& [field, value] : lockedDims) {
+            if (field == DimField::Radius) {
                 Constraint rc = makeConstraint(nextConstraintId(), ConstraintType::Radius,
                                                 {circleId});
                 rc.value = value;
@@ -198,7 +198,7 @@ static DecompositionResult decomposePolygon(
 
 static DecompositionResult decomposeRectParallelogram(
     const Entity& compound,
-    const std::vector<std::pair<std::string, double>>& lockedDims,
+    const LockedDims& lockedDims,
     std::function<int()> nextEntityId,
     std::function<int()> nextConstraintId,
     int groupId,
@@ -279,9 +279,9 @@ static DecompositionResult decomposeRectParallelogram(
     }
 
     // --- Create constraints from locked dimension fields ---
-    for (const auto& [label, value] : lockedDims) {
+    for (const auto& [field, value] : lockedDims) {
         // --- Angle constraints ---
-        if (label.find("Angle") != std::string::npos) {
+        if (isAngleDimField(field)) {
             Constraint ac;
             ac.id = nextConstraintId();
             ac.isDriving = true;
@@ -289,7 +289,7 @@ static DecompositionResult decomposeRectParallelogram(
             ac.satisfied = true;
             ac.labelVisible = true;
 
-            if (label == "Edge2 Angle") {
+            if (field == DimField::Edge2Angle) {
                 // Inside angle at vertex c[1] between edge1 (line0) and edge2 (line1).
                 ac.type = ConstraintType::Angle;
                 ac.value = 180.0 - value;
@@ -297,7 +297,7 @@ static DecompositionResult decomposeRectParallelogram(
                 ac.anchorPoint = c[1];
                 ac.supplementary = false;
                 ac.labelPosition = c[1] + Point2D(15, -15);
-            } else if (label == "Edge1 Angle" || label == "Edge Angle") {
+            } else if (field == DimField::Edge1Angle || field == DimField::EdgeAngle) {
                 // Absolute orientation of edge1 from horizontal (degrees)
                 ac.type = ConstraintType::FixedAngle;
                 ac.value = value;
@@ -324,19 +324,19 @@ static DecompositionResult decomposeRectParallelogram(
         dc.labelVisible = true;
         dc.value = value;
 
-        if (label == "Width") {
+        if (field == DimField::Width) {
             dc.entityIds = {lineIds[0], lineIds[0]};
             dc.pointIndices = {0, 1};
             dc.labelPosition = (c[0] + c[1]) / 2.0 + Point2D(0, -10);
-        } else if (label == "Height") {
+        } else if (field == DimField::Height) {
             dc.entityIds = {lineIds[1], lineIds[1]};
             dc.pointIndices = {0, 1};
             dc.labelPosition = (c[1] + c[2]) / 2.0 + Point2D(10, 0);
-        } else if (label == "Edge Length" || label == "Edge1") {
+        } else if (field == DimField::EdgeLength || field == DimField::Edge1) {
             dc.entityIds = {lineIds[0], lineIds[0]};
             dc.pointIndices = {0, 1};
             dc.labelPosition = (c[0] + c[1]) / 2.0 + Point2D(0, -10);
-        } else if (label == "Edge2") {
+        } else if (field == DimField::Edge2) {
             dc.entityIds = {lineIds[1], lineIds[1]};
             dc.pointIndices = {0, 1};
             dc.labelPosition = (c[1] + c[2]) / 2.0 + Point2D(10, 0);
@@ -385,7 +385,7 @@ static DecompositionResult decomposeRectParallelogram(
 
 DecompositionResult decomposeEntity(
     const Entity& compound,
-    const std::vector<std::pair<std::string, double>>& lockedDims,
+    const LockedDims& lockedDims,
     std::function<int()> nextEntityId,
     std::function<int()> nextConstraintId,
     int groupId,

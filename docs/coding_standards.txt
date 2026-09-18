@@ -56,6 +56,7 @@
        9.6  Loading Translations at Runtime
        9.7  Fun / Community Languages
        9.8  Strings That Must NOT Be Translated
+       9.9  A Front End Without Qt
     10. Theme and Resource Embedding
        10.1 Resource System Overview
        10.2 File Layout
@@ -66,10 +67,12 @@
        11.2 Rules
        11.3 Consolidating GUI Code Into the Library
        11.4 Intentional Duplication
+       11.5 The Front-End Support Layer: Capability and Arrangement
     12. Sketch Canvas Tool Handlers
        12.1 The Fallthrough Contract
        12.2 Do Not Collapse mousePress And mouseRelease
-       12.3 Handlers Are Stateless
+       12.3 Handlers Keep No Rules
+       12.4 Placement Belongs To The Library
 
 ================================================================================
   1. PURPOSE
@@ -1303,6 +1306,35 @@
     - Debug/log output
     - SPDX identifiers
 
+  9.9  A Front End Without Qt
+  ----------------------------
+
+  The library marks strings and translates nothing itself
+  (hobbycad/translate.h): a front end installs a translator with
+  setTranslator().  The Qt application forwards to
+  QCoreApplication::translate; the Qt-free command line has the .ts
+  catalogs compiled into it by scripts/ts2cpp.py, generated only for a
+  command-line-only build with no Qt (HOBBYCAD_CLI_CATALOGS) and never
+  committed.  hobbycad/locale.h decides which language, without Qt:
+  HOBBYCAD_LANG, then LC_ALL, LC_MESSAGES and LANG, then the platform's
+  own answer (GetUserDefaultLocaleName() on Windows, which sets none of
+  those).
+
+  Rules that follow from that seam:
+
+    - It carries no count, so text the library or the command layer can
+      reach must not use %n.  Use an explicit count: "Sketches not
+      finished: %1", not "%n sketch(es) not finished".
+    - A message's key is (context, disambiguation, source).  Never drop
+      the disambiguation: 24 groups of messages differ only by it, and a
+      key without it shows the right words for the wrong command.
+    - A name a person TYPES stays English (constraintTypeName); only the
+      name SHOWN is translated (constraintDisplayName).  Never translate
+      a keyword, and never interpolate an untranslated name into a
+      translated sentence.
+    - Numbers in command-line output stay in the C locale, because that
+      output is also a script's input.
+
 ================================================================================
   10. THEME AND RESOURCE EMBEDDING
 ================================================================================
@@ -1400,12 +1432,15 @@
     - File I/O and format conversion
     - Units, formatting, parsing, validation
     - Tessellation, profile detection, snapping, queries
+    - The front-end support layer (11.5): what commands, fields and
+      settings exist, and HobbyCAD's default arrangement of them
 
   Belongs in src/hobbycad/ (Qt-facing):
 
     - Event handling (mouse, keyboard, focus)
     - Painting and rendering
-    - Widget construction, layout, dialogs, actions
+    - Widget construction and placement, dialogs, QAction objects
+      (built from the library's definitions, not written out here)
     - Interaction state (what is selected, what tool is active,
       what is being dragged)
     - Conversion between library types and Qt types at the boundary
@@ -1483,10 +1518,87 @@
       the code should be written once outside the #if rather than
       duplicated inside it.
 
-    - Repetitive declarative registration blocks (key bindings, toolbar
-      actions).  These are data, not logic.  Convert them to a table
-      driven by a loop where practical, but do not attempt to
-      "de-duplicate" them as if they were algorithms.
+    - Repetitive declarative registration blocks.  These are data, not
+      logic.  Convert them to a table driven by a loop where practical,
+      but do not attempt to "de-duplicate" them as if they were
+      algorithms.  Commands, key bindings and toolbars are such tables
+      in the library now (11.5); do not start a second one in the GUI.
+
+
+  11.5 THE FRONT-END SUPPORT LAYER: CAPABILITY AND ARRANGEMENT
+  -------------------------------------------------------------
+
+  The decisions a front end makes (which commands exist, what a field
+  holds, which keys are bound, where a tool sits) live in the library,
+  so a second front end, or a rearranged Qt one, does not re-derive
+  them.  They come in two tiers, and a new definition goes in exactly
+  one of them:
+
+    Capability: what exists and what it does.  Beside its domain:
+      hobbycad/commands.h         every command: id, text, icon, what it
+                                  acts on, when it is available
+      hobbycad/bindings.h         key and mouse binding rules: parsing,
+                                  conflicts by context
+      hobbycad/settings_schema.h  every preference: key, type, default,
+                                  range
+      hobbycad/sketch/property_schema.h
+                                  an entity's fields, their locks and
+                                  point names
+      hobbycad/sketch/dimension_field.h
+                                  the fields typed while placing geometry
+      hobbycad/sketch/edit_session.h
+                                  an open sketch's edits, their undo
+                                  history, and the checks a new
+                                  constraint passes
+      hobbycad/sketch/dimension_input.h
+                                  typing a value while placing: editing,
+                                  locking, expressions
+      hobbycad/sketch/placement.h every drawing tool's stages, prompts,
+                                  fields, cursor, entity and preview
+      hobbycad/sketch/view.h, pick.h, selection.h, handle_drag.h
+                                  where the sketch sits on screen, what a
+                                  click hits, how the selection changes,
+                                  and a handle drag with its undo step
+      hobbycad/sketch/transform_form.h
+                                  the move/copy form: rows per move type,
+                                  what is missing, the point to pick next
+      hobbycad/project_session.h (timelineMoveAllowed, timelineActions)
+                                  the timeline's order rules and row
+                                  actions
+      hobbycad/project_files.h    a project folder's file status and its
+                                  .gitignore, kept line for line
+
+    Arrangement: where HobbyCAD puts things.  Only in hobbycad/layout/:
+      hobbycad/layout/arrangement.h
+                                  menus, toolbars, tool groups, variants,
+                                  default key bindings
+      hobbycad/layout/customization.h
+                                  the person's own changes to it, the
+                                  hardened reader for their file, and
+                                  restore, import and export
+
+  Rules:
+
+  1. The arrangement names capability by id and holds no text of its
+     own.  A front end with its own layout replaces the arrangement and
+     keeps all of the capability tier.
+
+  2. Includes go one way: layout/ may include capability headers; no
+     file outside layout/ may include layout/.  tests/headers checks it.
+
+  3. Text is English at the definition, marked for extraction with
+     HOBBYCAD_TRANSLATE_NOOP (or HOBBYCAD_TRANSLATE_NOOP3 with the
+     command id as the disambiguation), and translated by the front end
+     when shown.  Never compare translated text; compare ids.
+
+  4. The Qt front end builds its menus, toolbars and bindings dialog
+     from these (gui/commandtext.h, gui/arrangedtoolbar.h).  A new
+     command is one registry entry plus one arrangement line, not a new
+     QAction written out by hand.
+
+  5. A key heard by one view (the sketch canvas, the 3D viewport) is a
+     Surface binding: the view handles it when it has focus, and menus
+     only name it.  Window-wide keys become QAction shortcuts.
 
 
 ================================================================================
@@ -1545,11 +1657,24 @@
   because everything still compiles, and click-click-click still works,
   so the loss shows up only when someone tries to drag.
 
-  12.3  Handlers Are Stateless
+  12.3  Handlers Keep No Rules
   -----------------------------
 
-  A handler holds no members.  One instance per tool is created with the
-  canvas and lives as long as it does.  Per-tool mode state (the active
-  line mode, circle mode and so on) lives on SketchCanvas and is read
-  and written through accessors, so that a handler stays a pure
-  translation of input into canvas operations.
+  One instance per tool is created with the canvas and lives as long as
+  it does.  Per-tool mode state (the active line mode, circle mode and so
+  on) lives on SketchCanvas and is read and written through accessors.
+  A handler keeps only what one placement in progress needs and resets
+  it when the next begins (the Bezier pen's anchors, a rectangle's kept
+  turn); it keeps no rules.
+
+  12.4  Placement Belongs To The Library
+  ---------------------------------------
+
+  What a drawing tool does with its clicks (the stages, prompts and
+  fields, where the cursor may go, what a lock does, the entity and the
+  preview) is sketch/placement.h.  A drawing tool's handler derives from
+  PlacementToolHandler, which feeds the canvas's state to those calls and
+  paints the preview they return (gui/placementpainter.h); the handler
+  adds only how clicks reach it and what its mode is.  A fix to a tool's
+  geometry goes in the library, where the preview and the commit share
+  it and a test can reach it.

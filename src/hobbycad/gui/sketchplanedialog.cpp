@@ -197,26 +197,21 @@ void SketchPlaneDialog::updatePreviewText()
 
     switch (selectedPlane()) {
     case SketchPlane::XY:
-        if (qFuzzyIsNull(off)) {
-            text = tr("Sketch on XY plane at Z = 0");
-        } else {
-            text = tr("Sketch on XY plane at Z = %1").arg(off, 0, 'g', 6);
-        }
-        break;
     case SketchPlane::XZ:
-        if (qFuzzyIsNull(off)) {
-            text = tr("Sketch on XZ plane at Y = 0");
-        } else {
-            text = tr("Sketch on XZ plane at Y = %1").arg(off, 0, 'g', 6);
-        }
+    case SketchPlane::YZ: {
+        // The plane's axis names are the library's (planeAxisLabels), the
+        // same the properties panel labels coordinates with.
+        const PlaneAxisLabels ax = planeAxisLabels(selectedPlane());
+        const QString plane = QLatin1String(ax.u) + QLatin1String(ax.v);
+        //: %1 is a plane ("XY"), %2 the axis across it ("Z").
+        text = qFuzzyIsNull(off)
+            ? tr("Sketch on %1 plane at %2 = 0").arg(plane, QLatin1String(ax.normal))
+            //: %1 is a plane ("XY"), %2 the axis across it ("Z"), %3 the offset.
+            : tr("Sketch on %1 plane at %2 = %3")
+                  .arg(plane, QLatin1String(ax.normal))
+                  .arg(off, 0, 'g', 6);
         break;
-    case SketchPlane::YZ:
-        if (qFuzzyIsNull(off)) {
-            text = tr("Sketch on YZ plane at X = 0");
-        } else {
-            text = tr("Sketch on YZ plane at X = %1").arg(off, 0, 'g', 6);
-        }
-        break;
+    }
     case SketchPlane::Custom: {
         QString axisName;
         switch (rotationAxis()) {

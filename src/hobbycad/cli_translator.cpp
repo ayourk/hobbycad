@@ -25,9 +25,10 @@ namespace hobbycad {
 
 namespace {
 
-std::string translateThroughQt(const char* context, const char* source)
+std::string translateThroughQt(const char* context, const char* source,
+                               const char* disambiguation)
 {
-    return QCoreApplication::translate(context, source).toStdString();
+    return QCoreApplication::translate(context, source, disambiguation).toStdString();
 }
 
 // ---------------------------------------------------------------------

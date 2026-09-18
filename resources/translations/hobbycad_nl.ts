@@ -18,86 +18,93 @@
 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="886"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="52"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="975"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="53"/>
         <source>Usage: undo [count]</source>
         <translation>Gebruik: undo [aantal]</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="889"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="53"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="981"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="54"/>
         <source>No document is open, so there is nothing to undo.</source>
         <translation>Er is geen document open, dus er valt niets ongedaan te maken.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="902"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="54"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="950"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="994"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="55"/>
         <source>Nothing to undo.</source>
         <translation>Niets om ongedaan te maken.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="907"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="55"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="954"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="999"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="56"/>
         <source>Undone: %1</source>
         <translation>Ongedaan gemaakt: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="909"/>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="944"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="56"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="957"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1001"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1039"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="57"/>
         <source>
 (only %1 of %2 steps were available)</source>
         <translation>
 (slechts %1 van %2 stappen waren beschikbaar)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="913"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="57"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="964"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1005"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="58"/>
         <source>
 Next undo: %1</source>
         <translation>
 Volgende ongedaan maken: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="923"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="58"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1015"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="59"/>
         <source>Usage: redo [count]</source>
         <translation>Gebruik: redo [aantal]</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="926"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="59"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1021"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="60"/>
         <source>No document is open, so there is nothing to redo.</source>
         <translation>Er is geen document open, dus er valt niets opnieuw uit te voeren.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="939"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="60"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="949"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1034"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="61"/>
         <source>Nothing to redo.</source>
         <translation>Niets om opnieuw uit te voeren.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="942"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="61"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="953"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1037"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="62"/>
         <source>Redone: %1</source>
         <translation>Opnieuw uitgevoerd: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="948"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="62"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="963"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="1043"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="63"/>
         <source>
 Next redo: %1</source>
         <translation>
 Volgende opnieuw: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1469"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1446"/>
         <source>Not set</source>
         <translation>Niet ingesteld</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5089"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="64"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5362"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="65"/>
         <source>Usage: ellipse [at] &lt;x&gt;,&lt;y&gt; major &lt;a&gt; minor &lt;b&gt;
                 [rotation &lt;deg&gt;] [angle &lt;start&gt; to &lt;end&gt;]
                 [construction]
@@ -118,68 +125,68 @@ Voorbeelden:
   ellipse at 0,0 major 40 minor 20 angle 0 to 90</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5129"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="74"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5402"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="75"/>
         <source>Invalid rotation. Must be a number, parameter, or (expression).</source>
         <translation>Ongeldige rotatie. Moet een getal, een parameter of een (expressie) zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5141"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="76"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5414"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="77"/>
         <source>Invalid start angle. Must be a number, parameter, or (expression).</source>
         <translation>Ongeldige beginhoek. Moet een getal, een parameter of een (expressie) zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5145"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="78"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5418"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="79"/>
         <source>Expected &apos;to&apos; between the start and end angles</source>
         <translation>&apos;to&apos; verwacht tussen begin- en eindhoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5150"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="79"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5423"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="80"/>
         <source>Invalid end angle. Must be a number, parameter, or (expression).</source>
         <translation>Ongeldige eindhoek. Moet een getal, een parameter of een (expressie) zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5155"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="81"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="5428"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="82"/>
         <source>An elliptical arc needs a non-zero sweep.</source>
         <translation>Een elliptische boog heeft een veeghoek ongelijk aan nul nodig.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6026"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="97"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6299"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="98"/>
         <source>Usage: conic &lt;id&gt; rho &lt;r&gt;</source>
         <translation>Gebruik: conic &lt;id&gt; rho &lt;r&gt;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6034"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="98"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6307"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="99"/>
         <source>Entity %1 is not a conic arc.</source>
         <translation>Entiteit %1 is geen kegelsnedeboog.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6039"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="99"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6312"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="100"/>
         <source>rho must be a number between 0 and 1, exclusive (&apos;%1&apos;).</source>
         <translation>rho moet een getal tussen 0 en 1 zijn, grenzen niet inbegrepen (&apos;%1&apos;).</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6044"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="100"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6317"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="101"/>
         <source>Entity %1 has no recoverable apex; it is not a conic arc.</source>
         <translation>Entiteit %1 heeft geen te bepalen top; het is geen kegelsnedeboog.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6049"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="101"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6322"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="102"/>
         <source>Updated conic %1: rho %2 (%3).</source>
         <translation>Kegelsnede %1 bijgewerkt: rho %2 (%3).</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6058"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="83"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6331"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="84"/>
         <source>Usage: conic [from] &lt;x&gt;,&lt;y&gt; to &lt;x&gt;,&lt;y&gt; apex &lt;x&gt;,&lt;y&gt; rho &lt;r&gt;
              [construction]
 
@@ -209,107 +216,107 @@ Voorbeelden:
   conic 0,0 to 40,40 apex 40,0 rho 0.41421      (een kwartcirkel)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6077"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="102"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6350"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="103"/>
         <source>Invalid start coordinates. Use format: x,y</source>
         <translation>Ongeldige begincoördinaten. Gebruik de notatie: x,y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6078"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="103"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6351"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="104"/>
         <source>Expected &apos;to&apos; between the start and end points</source>
         <translation>&apos;to&apos; verwacht tussen begin- en eindpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6083"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="104"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6356"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="105"/>
         <source>Invalid end coordinates. Use format: x,y</source>
         <translation>Ongeldige eindcoördinaten. Gebruik de notatie: x,y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6084"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="105"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6357"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="106"/>
         <source>Expected &apos;apex&apos; keyword</source>
         <translation>Trefwoord &apos;apex&apos; verwacht</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6088"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="106"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6361"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="107"/>
         <source>Invalid apex coordinates. Use format: x,y</source>
         <translation>Ongeldige topcoördinaten. Gebruik de notatie: x,y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6089"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="107"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6362"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="108"/>
         <source>Expected &apos;rho&apos; keyword</source>
         <translation>Trefwoord &apos;rho&apos; verwacht</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6095"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="108"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6368"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="109"/>
         <source>Invalid rho. Must be a number, parameter, or (expression).</source>
         <translation>Ongeldige rho. Moet een getal, een parameter of een (expressie) zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6100"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="109"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6373"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="110"/>
         <source>rho must be between 0 and 1, exclusive.</source>
         <translation>rho moet tussen 0 en 1 liggen, grenzen niet inbegrepen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6105"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="110"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6378"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="111"/>
         <source>The two ends must be apart and the apex off their line.</source>
         <translation>De twee uiteinden moeten uit elkaar liggen en de top naast hun lijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6111"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="111"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="6384"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="112"/>
         <source>Created %6conic arc (%5) from (%1, %2) to (%3, %4), rho %7 [id %8]</source>
         <translation>%6kegelsnedeboog (%5) gemaakt van (%1, %2) naar (%3, %4), rho %7 [id %8]</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2963"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="113"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="3103"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="114"/>
         <source>entity %1 (conic arc, %2, rho %3):</source>
         <translation>entiteit %1 (kegelsnedeboog, %2, rho %3):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2966"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="114"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="3106"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="115"/>
         <source>  start (%1, %2)</source>
         <translation>  begin (%1, %2)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2968"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="115"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="3108"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="116"/>
         <source>  end   (%1, %2)</source>
         <translation>  einde (%1, %2)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2970"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="116"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="3110"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="117"/>
         <source>  apex  (%1, %2)   (where the end tangents meet; not a stored point)</source>
         <translation>  top  (%1, %2)   (snijpunt van de eindraaklijnen; geen opgeslagen punt)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="2973"/>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="118"/>
+        <location filename="../../src/hobbycad/cli/cliengine.cpp" line="3113"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="119"/>
         <source>Change rho: conic %1 rho &lt;r&gt;. Editing a handle makes it a plain bezier.</source>
         <translation>rho wijzigen: conic %1 rho &lt;r&gt;. Een greep bewerken maakt er een gewone Bézier van.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="120"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="121"/>
         <source>elliptical</source>
         <translation>elliptisch</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="121"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="122"/>
         <source>parabolic</source>
         <translation>parabolisch</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/cli_translator.cpp" line="122"/>
+        <location filename="../../src/hobbycad/cli_translator.cpp" line="123"/>
         <source>hyperbolic</source>
         <translation>hyperbolisch</translation>
     </message>
@@ -317,32 +324,32 @@ Voorbeelden:
 <context>
     <name>hobbycad</name>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="108"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="117"/>
         <source>HobbyCAD Projects (*.hcad)</source>
         <translation>HobbyCAD-projecten (*.hcad)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="110"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="119"/>
         <source>BREP Files (*.brep *.brp)</source>
         <translation>BREP-bestanden (*.brep *.brp)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="112"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="121"/>
         <source>All Files (*)</source>
         <translation>Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="114"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="123"/>
         <source>HobbyCAD Projects (*.hcad);;BREP Files (*.brep *.brp);;All Files (*)</source>
         <translation>HobbyCAD-projecten (*.hcad);;BREP-bestanden (*.brep *.brp);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="118"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="127"/>
         <source>HobbyCAD Projects (*.hcad);;All Files (*)</source>
         <translation>HobbyCAD-projecten (*.hcad);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="120"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="129"/>
         <source>HobbyCAD Projects (*.hcad);;BREP Files (*.brep *.brp)</source>
         <translation>HobbyCAD-projecten (*.hcad);;BREP-bestanden (*.brep *.brp)</translation>
     </message>
@@ -481,6 +488,24 @@ https://github.com/ayourk/HobbyCAD</translation>
         <location filename="../../src/hobbycad/gui/aboutdialog.cpp" line="177"/>
         <source>Host Info:</source>
         <translation>Hostinformatie:</translation>
+    </message>
+</context>
+<context>
+    <name>hobbycad::ArrangementStore</name>
+    <message>
+        <location filename="../../src/hobbycad/gui/arrangementstore.cpp" line="63"/>
+        <source>The arrangement file cannot be read; HobbyCAD&apos;s own layout is shown.</source>
+        <translation>Het indelingsbestand kan niet worden gelezen; HobbyCAD&apos;s eigen indeling wordt getoond.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/arrangementstore.cpp" line="78"/>
+        <source>HobbyCAD&apos;s own layout is shown until the file is fixed.</source>
+        <translation>Tot het bestand in orde is, wordt HobbyCAD&apos;s eigen indeling getoond.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/arrangementstore.cpp" line="285"/>
+        <source>The file cannot be read.</source>
+        <translation>Het bestand kan niet worden gelezen.</translation>
     </message>
 </context>
 <context>
@@ -1051,467 +1076,81 @@ Anders wordt alleen het bestandspad bewaard.</translation>
 <context>
     <name>hobbycad::BindingsDialog</name>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="36"/>
-        <source>New Document</source>
-        <translation>Nieuw document</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="36"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="40"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="44"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="48"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="52"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="56"/>
-        <source>File</source>
-        <translation>Bestand</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="40"/>
-        <source>Open...</source>
-        <translation>Openen...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="44"/>
-        <source>Save</source>
-        <translation>Opslaan</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="48"/>
-        <source>Save As...</source>
-        <translation>Opslaan als...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="52"/>
-        <source>Close</source>
-        <translation>Sluiten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="56"/>
-        <source>Quit</source>
-        <translation>Afsluiten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="61"/>
-        <source>Undo</source>
-        <translation>Ongedaan maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="61"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="78"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="83"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="87"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="95"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="99"/>
-        <source>Edit</source>
-        <translation>Bewerken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="78"/>
-        <source>Redo</source>
-        <translation>Opnieuw</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="83"/>
-        <source>Cut</source>
-        <translation>Knippen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="87"/>
-        <source>Copy</source>
-        <translation>Kopiëren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="91"/>
-        <source>Paste</source>
-        <translation>Plakken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="95"/>
-        <source>Delete</source>
-        <translation>Verwijderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="99"/>
-        <source>Select All</source>
-        <translation>Alles selecteren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="104"/>
-        <source>Toggle Terminal</source>
-        <translation>Terminal tonen/verbergen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="104"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="108"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="112"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="116"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="119"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="123"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="126"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="228"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="232"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="236"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="239"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="242"/>
-        <source>View</source>
-        <translation>Beeld</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="108"/>
-        <source>Toggle Project</source>
-        <translation>Project tonen/verbergen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="112"/>
-        <source>Toggle Properties</source>
-        <translation>Eigenschappen tonen/verbergen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="116"/>
-        <source>Toggle Toolbar</source>
-        <translation>Werkbalk tonen/verbergen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="119"/>
-        <source>Reset View</source>
-        <translation>Weergave herstellen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="123"/>
-        <source>Rotate Left 90°</source>
-        <translation>90° naar links draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="126"/>
-        <source>Rotate Right 90°</source>
-        <translation>90° naar rechts draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="130"/>
-        <source>Rotate Canvas CCW</source>
-        <translation>Canvas linksom draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="130"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="134"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="138"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="143"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="147"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="151"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="155"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="159"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="163"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="167"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="171"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="175"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="179"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="183"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="187"/>
-        <source>Sketch</source>
-        <translation>Schets</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="134"/>
-        <source>Rotate Canvas CW</source>
-        <translation>Canvas rechtsom draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="138"/>
-        <source>Reset Canvas Rotation</source>
-        <translation>Canvasrotatie herstellen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="143"/>
-        <source>Select Tool</source>
-        <translation>Selectiegereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="147"/>
-        <source>Line Tool</source>
-        <translation>Lijngereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="151"/>
-        <source>Rectangle Tool</source>
-        <translation>Rechthoekgereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="155"/>
-        <source>Circle Tool</source>
-        <translation>Cirkelgereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="159"/>
-        <source>Arc Tool</source>
-        <translation>Booggereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="163"/>
-        <source>Point Tool</source>
-        <translation>Puntgereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="167"/>
-        <source>Dimension Tool</source>
-        <translation>Maatvoeringsgereedschap</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="171"/>
-        <source>Toggle Construction Mode</source>
-        <translation>Hulpmodus in-/uitschakelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="175"/>
-        <source>Offset</source>
-        <translation>Verspringing</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="179"/>
-        <source>Trim</source>
-        <translation>Trimmen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="187"/>
-        <source>Toggle Grid</source>
-        <translation>Raster tonen/verbergen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="192"/>
-        <source>Extrude</source>
-        <translation>Extruderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="192"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="196"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="200"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="204"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="207"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="211"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="215"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="219"/>
-        <source>Design</source>
-        <translation>Ontwerp</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="196"/>
-        <source>Move</source>
-        <translation>Verplaatsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="183"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="200"/>
-        <source>Fillet</source>
-        <translation>Afronding</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="204"/>
-        <source>Chamfer</source>
-        <translation>Afschuining</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="207"/>
-        <source>Hole</source>
-        <translation>Gat</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="211"/>
-        <source>Joint</source>
-        <translation>Verbinding</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="215"/>
-        <source>Measure</source>
-        <translation>Meten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="219"/>
-        <source>Toggle Visibility</source>
-        <translation>Zichtbaarheid in-/uitschakelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="224"/>
-        <source>Command Search</source>
-        <translation>Opdrachten zoeken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="224"/>
-        <source>Global</source>
-        <translation>Globaal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="228"/>
-        <source>Show Grid</source>
-        <translation>Raster tonen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="232"/>
-        <source>Snap to Grid</source>
-        <translation>Uitlijnen op raster</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="236"/>
-        <source>Z-Up Orientation</source>
-        <translation>Z-omhoog-oriëntatie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="239"/>
-        <source>Orbit Selected Object</source>
-        <translation>Om geselecteerd object draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="242"/>
-        <source>Preferences...</source>
-        <translation>Voorkeuren...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="247"/>
-        <source>Rotate Up (continuous)</source>
-        <translation>Omhoog draaien (continu)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="247"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="251"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="256"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="260"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="264"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="269"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="273"/>
-        <source>Navigation</source>
-        <translation>Navigatie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="251"/>
-        <source>Rotate Down (continuous)</source>
-        <translation>Omlaag draaien (continu)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="256"/>
-        <source>Set Rotation Axis to X</source>
-        <translation>Rotatie-as instellen op X</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="260"/>
-        <source>Set Rotation Axis to Y</source>
-        <translation>Rotatie-as instellen op Y</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="264"/>
-        <source>Set Rotation Axis to Z</source>
-        <translation>Rotatie-as instellen op Z</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="269"/>
-        <source>Snap Rotate Left 90°</source>
-        <translation>Stapsgewijs 90° naar links draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="273"/>
-        <source>Snap Rotate Right 90°</source>
-        <translation>Stapsgewijs 90° naar rechts draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="278"/>
-        <source>Rotate View</source>
-        <translation>Weergave draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="278"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="282"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="286"/>
-        <source>Viewport</source>
-        <translation>Weergavevenster</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="282"/>
-        <source>Pan View</source>
-        <translation>Weergave verschuiven</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="286"/>
-        <source>Zoom View</source>
-        <translation>Weergave zoomen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="291"/>
-        <source>New Construction Plane</source>
-        <translation>Nieuw hulpvlak</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="291"/>
-        <source>Construct</source>
-        <translation>Construeren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="355"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="118"/>
         <source>Bindings</source>
         <translation>Toewijzingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="373"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="136"/>
         <source>Actions / Bindings</source>
         <translation>Acties / toewijzingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="389"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="582"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="597"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="152"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="314"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="329"/>
         <source>Select an action to edit bindings</source>
         <translation>Kies een actie om de toewijzingen te bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="396"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="159"/>
         <source>Binding 1</source>
         <translation>Toewijzing 1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="403"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="166"/>
         <source>Binding 2</source>
         <translation>Toewijzing 2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="410"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="173"/>
         <source>Binding 3</source>
         <translation>Toewijzing 3</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="434"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="197"/>
         <source>Restore Defaults</source>
         <translation>Standaardwaarden herstellen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="546"/>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="671"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="278"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="403"/>
         <source>(none)</source>
         <translation>(geen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="782"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="473"/>
         <source>Both actions are in the %1 context.</source>
         <translation>Beide acties bevinden zich in de context %1.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="786"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="477"/>
         <source>Global bindings are active in all contexts.</source>
         <translation>Globale toewijzingen zijn in alle contexten actief.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="788"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="479"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="482"/>
         <source>The %1 context is always active.</source>
         <translation>De context %1 is altijd actief.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="793"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="485"/>
+        <source>Both actions are used in the same view.</source>
+        <translation>Beide acties worden in dezelfde weergave gebruikt.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="489"/>
         <source>Binding Conflict</source>
         <translation>Toewijzingsconflict</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="795"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="491"/>
         <source>The binding &quot;%1&quot; is already assigned to &quot;%2&quot;.</source>
         <translation>De toewijzing &quot;%1&quot; is al aan &quot;%2&quot; toegekend.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="798"/>
+        <location filename="../../src/hobbycad/gui/bindingsdialog.cpp" line="494"/>
         <source>%1
 
 Do you want to remove it from &quot;%2&quot; and assign it here?</source>
@@ -1531,27 +1170,27 @@ Wilt u deze van &quot;%2&quot; verwijderen en hier toekennen?</translation>
 <context>
     <name>hobbycad::CliPanel</name>
     <message>
-        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="293"/>
+        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="287"/>
         <source>Copy</source>
         <translation>Kopiëren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="297"/>
+        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="291"/>
         <source>Paste</source>
         <translation>Plakken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="350"/>
+        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="344"/>
         <source>Warning: 3D viewport commands are not available in Sketch Mode. Finish or discard the sketch first.</source>
         <translation>Waarschuwing: opdrachten voor het 3D-weergavevenster zijn niet beschikbaar in de schetsmodus. Voltooi of verwerp eerst de schets.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="354"/>
+        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="348"/>
         <source>Warning: No 3D viewport available. 3D viewport commands only work in Full Mode.</source>
         <translation>Waarschuwing: geen 3D-weergavevenster beschikbaar. Opdrachten voor het 3D-weergavevenster werken alleen in de volledige modus.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="488"/>
+        <location filename="../../src/hobbycad/gui/clipanel.cpp" line="482"/>
         <source>-- %n more line(s); press Space, or resize --</source>
         <translation>
             <numerusform>-- nog %n regel; druk op Spatie of pas de grootte aan --</numerusform>
@@ -1623,6 +1262,2485 @@ Wilt u deze van &quot;%2&quot; verwijderen en hier toekennen?</translation>
         <location filename="../../src/hobbycad/gui/colorpicker.cpp" line="307"/>
         <source>Grad</source>
         <translation>Grad</translation>
+    </message>
+</context>
+<context>
+    <name>hobbycad::Commands</name>
+    <message>
+        <location filename="../../src/hobbycad/gui/commandtext.cpp" line="74"/>
+        <source>%1 (%2)</source>
+        <comment>tooltip.withKey</comment>
+        <extracomment>A tooltip followed by the key that runs the command: &quot;Draw line (L)&quot;.</extracomment>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="72"/>
+        <source>File</source>
+        <comment>menu.file</comment>
+        <translation>Bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="73"/>
+        <source>&amp;File</source>
+        <comment>menu.file</comment>
+        <translation>&amp;Bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="75"/>
+        <source>New Document</source>
+        <comment>file.new</comment>
+        <translation>Nieuw document</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="76"/>
+        <source>&amp;New</source>
+        <comment>file.new</comment>
+        <translation>&amp;Nieuw</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="78"/>
+        <source>Open</source>
+        <comment>file.open</comment>
+        <translation>Openen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="79"/>
+        <source>&amp;Open...</source>
+        <comment>file.open</comment>
+        <translation>&amp;Openen...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="81"/>
+        <source>Save</source>
+        <comment>file.save</comment>
+        <translation>Opslaan</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="82"/>
+        <source>&amp;Save</source>
+        <comment>file.save</comment>
+        <translation>Op&amp;slaan</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="84"/>
+        <source>Save As</source>
+        <comment>file.saveAs</comment>
+        <translation>Opslaan als</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="86"/>
+        <source>Save &amp;As...</source>
+        <comment>file.saveAs</comment>
+        <translation>Opslaan &amp;als...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="88"/>
+        <source>Close</source>
+        <comment>file.close</comment>
+        <translation>Sluiten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="89"/>
+        <source>&amp;Close</source>
+        <comment>file.close</comment>
+        <translation>Sl&amp;uiten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="91"/>
+        <source>Import</source>
+        <comment>menu.file.import</comment>
+        <translation>Importeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="93"/>
+        <source>&amp;Import</source>
+        <comment>menu.file.import</comment>
+        <translation>&amp;Importeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="96"/>
+        <source>Import STEP</source>
+        <comment>file.import.step</comment>
+        <translation>STEP importeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="98"/>
+        <source>STEP File...</source>
+        <comment>file.import.step</comment>
+        <translation>STEP-bestand...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="99"/>
+        <source>Import geometry from STEP file</source>
+        <comment>file.import.step</comment>
+        <translation>Geometrie importeren uit een STEP-bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="105"/>
+        <source>Import DXF</source>
+        <comment>file.import.dxf</comment>
+        <translation>DXF importeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="106"/>
+        <source>DXF File (Sketch)...</source>
+        <comment>file.import.dxf</comment>
+        <translation>DXF-bestand (schets)...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="110"/>
+        <source>Import DXF geometry into the active sketch</source>
+        <comment>file.import.dxf</comment>
+        <translation>DXF-geometrie in de actieve schets importeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="116"/>
+        <source>Export</source>
+        <comment>menu.file.export</comment>
+        <translation>Exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="118"/>
+        <source>&amp;Export</source>
+        <comment>menu.file.export</comment>
+        <translation>&amp;Exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="121"/>
+        <source>Export STEP</source>
+        <comment>file.export.step</comment>
+        <translation>STEP exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="123"/>
+        <source>STEP File...</source>
+        <comment>file.export.step</comment>
+        <translation>STEP-bestand...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="124"/>
+        <source>Export geometry to STEP file</source>
+        <comment>file.export.step</comment>
+        <translation>Geometrie exporteren naar een STEP-bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="130"/>
+        <source>Export STL</source>
+        <comment>file.export.stl</comment>
+        <translation>STL exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="132"/>
+        <source>STL File...</source>
+        <comment>file.export.stl</comment>
+        <translation>STL-bestand...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="133"/>
+        <source>Export geometry to STL file for 3D printing</source>
+        <comment>file.export.stl</comment>
+        <translation>Geometrie exporteren naar een STL-bestand voor 3D-printen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="139"/>
+        <source>Export DXF</source>
+        <comment>file.export.dxf</comment>
+        <translation>DXF exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="140"/>
+        <source>DXF File (Sketch)...</source>
+        <comment>file.export.dxf</comment>
+        <translation>DXF-bestand (schets)...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="144"/>
+        <source>Export sketch to DXF file</source>
+        <comment>file.export.dxf</comment>
+        <translation>Schets exporteren naar een DXF-bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="151"/>
+        <source>Export SVG</source>
+        <comment>file.export.svg</comment>
+        <translation>SVG exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="152"/>
+        <source>SVG File (Sketch)...</source>
+        <comment>file.export.svg</comment>
+        <translation>SVG-bestand (schets)...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="156"/>
+        <source>Export sketch to SVG file</source>
+        <comment>file.export.svg</comment>
+        <translation>Schets exporteren naar een SVG-bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="162"/>
+        <source>Quit</source>
+        <comment>file.quit</comment>
+        <translation>Afsluiten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="163"/>
+        <source>&amp;Quit</source>
+        <comment>file.quit</comment>
+        <translation>A&amp;fsluiten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="165"/>
+        <source>Edit</source>
+        <comment>menu.edit</comment>
+        <translation>Bewerken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="166"/>
+        <source>&amp;Edit</source>
+        <comment>menu.edit</comment>
+        <translation>Be&amp;werken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="168"/>
+        <source>Undo</source>
+        <comment>edit.undo</comment>
+        <translation>Ongedaan maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="169"/>
+        <source>&amp;Undo</source>
+        <comment>edit.undo</comment>
+        <translation>&amp;Ongedaan maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="171"/>
+        <source>Redo</source>
+        <comment>edit.redo</comment>
+        <translation>Opnieuw</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="172"/>
+        <source>&amp;Redo</source>
+        <comment>edit.redo</comment>
+        <translation>Op&amp;nieuw</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="174"/>
+        <source>Cut</source>
+        <comment>edit.cut</comment>
+        <translation>Knippen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="175"/>
+        <source>Cu&amp;t</source>
+        <comment>edit.cut</comment>
+        <translation>&amp;Knippen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="178"/>
+        <source>Copy</source>
+        <comment>edit.copy</comment>
+        <translation>Kopiëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="179"/>
+        <source>&amp;Copy</source>
+        <comment>edit.copy</comment>
+        <translation>Ko&amp;piëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="182"/>
+        <source>Paste</source>
+        <comment>edit.paste</comment>
+        <translation>Plakken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="183"/>
+        <source>&amp;Paste</source>
+        <comment>edit.paste</comment>
+        <translation>Pl&amp;akken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="185"/>
+        <source>Delete</source>
+        <comment>edit.delete</comment>
+        <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="186"/>
+        <source>&amp;Delete</source>
+        <comment>edit.delete</comment>
+        <translation>&amp;Verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="190"/>
+        <source>Select All</source>
+        <comment>edit.selectAll</comment>
+        <translation>Alles selecteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="192"/>
+        <source>Select &amp;All</source>
+        <comment>edit.selectAll</comment>
+        <translation>Alles &amp;selecteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="195"/>
+        <source>Construct</source>
+        <comment>menu.construct</comment>
+        <translation>Construeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="197"/>
+        <source>&amp;Construct</source>
+        <comment>menu.construct</comment>
+        <translation>&amp;Construeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="199"/>
+        <source>New Construction Plane</source>
+        <comment>construct.plane</comment>
+        <translation>Nieuw hulpvlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="203"/>
+        <source>New Construction &amp;Plane...</source>
+        <comment>construct.plane</comment>
+        <translation>Nieuw hulp&amp;vlak...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="207"/>
+        <source>Create a new construction plane</source>
+        <comment>construct.plane</comment>
+        <translation>Een nieuw hulpvlak maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="212"/>
+        <source>View</source>
+        <comment>menu.view</comment>
+        <translation>Beeld</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="213"/>
+        <source>&amp;View</source>
+        <comment>menu.view</comment>
+        <translation>Beel&amp;d</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="216"/>
+        <source>Toggle Terminal</source>
+        <comment>view.terminal</comment>
+        <translation>Terminal tonen/verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="218"/>
+        <source>&amp;Terminal</source>
+        <comment>view.terminal</comment>
+        <translation>&amp;Terminal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="221"/>
+        <source>Toggle Project</source>
+        <comment>view.project</comment>
+        <translation>Project tonen/verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="223"/>
+        <source>P&amp;roject</source>
+        <comment>view.project</comment>
+        <translation>P&amp;roject</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="226"/>
+        <source>Toggle Properties</source>
+        <comment>view.properties</comment>
+        <translation>Eigenschappen tonen/verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="231"/>
+        <source>&amp;Properties</source>
+        <comment>view.properties</comment>
+        <translation>&amp;Eigenschappen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="235"/>
+        <source>Toggle Toolbar</source>
+        <comment>view.toolbar</comment>
+        <translation>Werkbalk tonen/verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="237"/>
+        <source>Tool&amp;bar</source>
+        <comment>view.toolbar</comment>
+        <translation>&amp;Werkbalk</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="240"/>
+        <source>Toggle Change History</source>
+        <comment>view.changelog</comment>
+        <translation>Wijzigingsgeschiedenis tonen/verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="244"/>
+        <source>Change &amp;History</source>
+        <comment>view.changelog</comment>
+        <translation>Wijzigings&amp;geschiedenis</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="249"/>
+        <source>Draw, then Constrain</source>
+        <comment>view.drawThenConstrain</comment>
+        <translation>Tekenen, dan beperken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="253"/>
+        <source>&amp;Draw, then Constrain</source>
+        <comment>view.drawThenConstrain</comment>
+        <translation>&amp;Tekenen, dan beperken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="257"/>
+        <source>Place geometry roughly and fix it with constraints afterwards, instead of snapping and typing dimensions as you place it</source>
+        <comment>view.drawThenConstrain</comment>
+        <translation>Plaats geometrie grofweg en zet deze achteraf vast met beperkingen, in plaats van te snappen en maten te typen tijdens het plaatsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="263"/>
+        <source>Show Unconstrained Points</source>
+        <comment>view.showUnconstrained</comment>
+        <translation>Niet-beperkte punten tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="267"/>
+        <source>Show &amp;Unconstrained Points</source>
+        <comment>view.showUnconstrained</comment>
+        <translation>&amp;Niet-beperkte punten tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="271"/>
+        <source>Mark endpoints that are not constrained to other geometry</source>
+        <comment>view.showUnconstrained</comment>
+        <translation>Eindpunten markeren die niet aan andere geometrie zijn gebonden</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="277"/>
+        <source>Show Constraints</source>
+        <comment>view.showConstraints</comment>
+        <translation>Beperkingen tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="281"/>
+        <source>Show &amp;Constraints</source>
+        <comment>view.showConstraints</comment>
+        <translation>&amp;Beperkingen tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="285"/>
+        <source>Show the constraint symbols on the canvas; dimensions are unaffected</source>
+        <comment>view.showConstraints</comment>
+        <translation>De beperkingssymbolen op het canvas tonen; maatvoeringen worden niet beïnvloed</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="292"/>
+        <source>Show Dimensions</source>
+        <comment>view.showDimensions</comment>
+        <translation>Maatvoeringen tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="296"/>
+        <source>Show &amp;Dimensions</source>
+        <comment>view.showDimensions</comment>
+        <translation>&amp;Maatvoeringen tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="300"/>
+        <source>Show the dimensional labels on the canvas; constraint symbols are unaffected</source>
+        <comment>view.showDimensions</comment>
+        <translation>De maatlabels op het canvas tonen; beperkingssymbolen worden niet beïnvloed</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="307"/>
+        <source>Show Profiles</source>
+        <comment>view.showProfiles</comment>
+        <translation>Profielen tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="311"/>
+        <source>Show &amp;Profiles</source>
+        <comment>view.showProfiles</comment>
+        <translation>&amp;Profielen tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="315"/>
+        <source>Shade closed sketch profiles in blue</source>
+        <comment>view.showProfiles</comment>
+        <translation>Gesloten schetsprofielen blauw arceren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="320"/>
+        <source>Fit Sketch to View</source>
+        <comment>view.fitSketch</comment>
+        <translation>Schets in beeld passen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="324"/>
+        <source>&amp;Fit Sketch to View</source>
+        <comment>view.fitSketch</comment>
+        <translation>Schets in beeld &amp;passen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="328"/>
+        <source>Zoom and pan so the whole sketch is visible</source>
+        <comment>view.fitSketch</comment>
+        <translation>In-/uitzoomen en pannen zodat de hele schets zichtbaar is</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="334"/>
+        <source>Workspace</source>
+        <comment>menu.view.workspace</comment>
+        <translation>Werkruimte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="335"/>
+        <source>&amp;Workspace</source>
+        <comment>menu.view.workspace</comment>
+        <translation>Werkr&amp;uimte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="341"/>
+        <source>Design</source>
+        <comment>view.workspace.design</comment>
+        <translation>Ontwerp</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="343"/>
+        <source>&amp;Design</source>
+        <comment>view.workspace.design</comment>
+        <translation>&amp;Ontwerp</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="348"/>
+        <source>Render</source>
+        <comment>view.workspace.render</comment>
+        <translation>Rendering</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="350"/>
+        <source>&amp;Render</source>
+        <comment>view.workspace.render</comment>
+        <translation>&amp;Rendering</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="353"/>
+        <source>Animation</source>
+        <comment>view.workspace.animation</comment>
+        <translation>Animatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="357"/>
+        <source>&amp;Animation</source>
+        <comment>view.workspace.animation</comment>
+        <translation>&amp;Animatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="363"/>
+        <source>Simulation</source>
+        <comment>view.workspace.simulation</comment>
+        <translation>Simulatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="367"/>
+        <source>&amp;Simulation</source>
+        <comment>view.workspace.simulation</comment>
+        <translation>&amp;Simulatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="374"/>
+        <source>Reset View</source>
+        <comment>view.resetView</comment>
+        <translation>Weergave herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="376"/>
+        <source>Reset &amp;View</source>
+        <comment>view.resetView</comment>
+        <translation>Weergave &amp;herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="378"/>
+        <source>Look At Sketch Plane</source>
+        <comment>view.lookAt</comment>
+        <translation>Naar schetsvlak kijken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="382"/>
+        <source>Look &amp;At Sketch Plane</source>
+        <comment>view.lookAt</comment>
+        <translation>Naar schetsvlak &amp;kijken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="386"/>
+        <source>Orient the camera square onto the active sketch plane</source>
+        <comment>view.lookAt</comment>
+        <translation>De camera loodrecht op het actieve schetsvlak richten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="392"/>
+        <source>Slice at Sketch Plane</source>
+        <comment>view.slice</comment>
+        <translation>Doorsnede op schetsvlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="396"/>
+        <source>&amp;Slice at Sketch Plane</source>
+        <comment>view.slice</comment>
+        <translation>&amp;Doorsnede op schetsvlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="400"/>
+        <source>Section the model at the active sketch plane to see inside</source>
+        <comment>view.slice</comment>
+        <translation>Het model op het actieve schetsvlak doorsnijden om de binnenkant te zien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="406"/>
+        <source>Rotate Left 90°</source>
+        <comment>view.rotateLeft</comment>
+        <translation>90° naar links draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="410"/>
+        <source>Rotate &amp;Left 90°</source>
+        <comment>view.rotateLeft</comment>
+        <translation>90° naar &amp;links draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="415"/>
+        <source>Rotate Right 90°</source>
+        <comment>view.rotateRight</comment>
+        <translation>90° naar rechts draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="419"/>
+        <source>Rotate Ri&amp;ght 90°</source>
+        <comment>view.rotateRight</comment>
+        <translation>90° naar rechts &amp;draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="424"/>
+        <source>Show Grid</source>
+        <comment>view.showGrid</comment>
+        <translation>Raster tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="426"/>
+        <source>Show Gri&amp;d</source>
+        <comment>view.showGrid</comment>
+        <translation>Raster t&amp;onen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="430"/>
+        <source>Snap to Grid</source>
+        <comment>view.snapToGrid</comment>
+        <translation>Uitlijnen op raster</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="431"/>
+        <source>&amp;Snap to Grid</source>
+        <comment>view.snapToGrid</comment>
+        <translation>Uitlijnen op ra&amp;ster</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="436"/>
+        <source>Z-Up Orientation</source>
+        <comment>view.zUpOrientation</comment>
+        <translation>Z-omhoog-oriëntatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="440"/>
+        <source>&amp;Z-Up Orientation</source>
+        <comment>view.zUpOrientation</comment>
+        <translation>&amp;Z-omhoog-oriëntatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="446"/>
+        <source>Orbit Selected Object</source>
+        <comment>view.orbitSelected</comment>
+        <translation>Om geselecteerd object draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="450"/>
+        <source>&amp;Orbit Selected Object</source>
+        <comment>view.orbitSelected</comment>
+        <translation>Om geselecteerd o&amp;bject draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="455"/>
+        <source>Theme</source>
+        <comment>menu.view.theme</comment>
+        <translation>Thema</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="457"/>
+        <source>&amp;Theme</source>
+        <comment>menu.view.theme</comment>
+        <translation>&amp;Thema</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="459"/>
+        <source>Light</source>
+        <comment>view.theme.light</comment>
+        <translation>Licht</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="461"/>
+        <source>&amp;Light</source>
+        <comment>view.theme.light</comment>
+        <translation>&amp;Licht</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="464"/>
+        <source>Dark</source>
+        <comment>view.theme.dark</comment>
+        <translation>Donker</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="466"/>
+        <source>&amp;Dark</source>
+        <comment>view.theme.dark</comment>
+        <translation>&amp;Donker</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="470"/>
+        <source>Edit Theme</source>
+        <comment>view.theme.edit</comment>
+        <translation>Thema bewerken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="472"/>
+        <source>&amp;Edit...</source>
+        <comment>view.theme.edit</comment>
+        <translation>&amp;Bewerken...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="474"/>
+        <source>Selection Filter</source>
+        <comment>menu.view.selectionFilter</comment>
+        <translation>Selectiefilter</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="478"/>
+        <source>Selection &amp;Filter</source>
+        <comment>menu.view.selectionFilter</comment>
+        <translation>Selectie&amp;filter</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="483"/>
+        <source>All</source>
+        <comment>view.filter.all</comment>
+        <translation>Alles</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="488"/>
+        <source>Points only</source>
+        <comment>view.filter.points</comment>
+        <translation>Alleen punten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="492"/>
+        <source>Curves only</source>
+        <comment>view.filter.curves</comment>
+        <translation>Alleen krommen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="496"/>
+        <source>Language</source>
+        <comment>menu.view.language</comment>
+        <translation>Taal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="498"/>
+        <source>L&amp;anguage</source>
+        <comment>menu.view.language</comment>
+        <translation>Ta&amp;al</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="500"/>
+        <source>Customize Menus and Toolbars</source>
+        <comment>view.customize</comment>
+        <translation>Menu&apos;s en werkbalken aanpassen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="503"/>
+        <source>C&amp;ustomize...</source>
+        <comment>view.customize</comment>
+        <translation>Aan&amp;passen...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="506"/>
+        <source>Move, rename, hide and restore what the menus and toolbars show</source>
+        <comment>view.customize</comment>
+        <translation>Verplaatsen, hernoemen, verbergen en herstellen wat menu&apos;s en werkbalken tonen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="512"/>
+        <source>Preferences</source>
+        <comment>view.preferences</comment>
+        <translation>Voorkeuren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="513"/>
+        <source>Pre&amp;ferences...</source>
+        <comment>view.preferences</comment>
+        <translation>&amp;Voorkeuren...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="518"/>
+        <source>Help</source>
+        <comment>menu.help</comment>
+        <translation>Help</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="519"/>
+        <source>&amp;Help</source>
+        <comment>menu.help</comment>
+        <translation>&amp;Help</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="522"/>
+        <source>About HobbyCAD</source>
+        <comment>help.about</comment>
+        <translation>Over HobbyCAD</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="523"/>
+        <source>&amp;About HobbyCAD...</source>
+        <comment>help.about</comment>
+        <translation>&amp;Over HobbyCAD...</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="528"/>
+        <source>Command Search</source>
+        <comment>global.commandSearch</comment>
+        <translation>Opdrachten zoeken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="534"/>
+        <source>Sketch</source>
+        <comment>menu.sketch</comment>
+        <translation>Schets</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="536"/>
+        <source>S&amp;ketch</source>
+        <comment>menu.sketch</comment>
+        <translation>S&amp;chets</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="538"/>
+        <source>Select</source>
+        <comment>sketch.select</comment>
+        <translation>Selecteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="544"/>
+        <source>Create</source>
+        <comment>group.sketch.create</comment>
+        <translation>Maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="545"/>
+        <source>Create geometry</source>
+        <comment>group.sketch.create</comment>
+        <translation>Geometrie maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="551"/>
+        <source>Line</source>
+        <comment>sketch.line</comment>
+        <translation>Lijn</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="552"/>
+        <source>&amp;Line</source>
+        <comment>sketch.line</comment>
+        <translation>&amp;Lijn</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="553"/>
+        <source>Draw line</source>
+        <comment>sketch.line</comment>
+        <translation>Lijn tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="559"/>
+        <source>Rectangle</source>
+        <comment>sketch.rectangle</comment>
+        <translation>Rechthoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="561"/>
+        <source>&amp;Rectangle</source>
+        <comment>sketch.rectangle</comment>
+        <translation>&amp;Rechthoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="562"/>
+        <source>Draw rectangle</source>
+        <comment>sketch.rectangle</comment>
+        <translation>Rechthoek tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="570"/>
+        <source>Circle</source>
+        <comment>sketch.circle</comment>
+        <translation>Cirkel</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="572"/>
+        <source>&amp;Circle</source>
+        <comment>sketch.circle</comment>
+        <translation>&amp;Cirkel</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="574"/>
+        <source>Draw circle</source>
+        <comment>sketch.circle</comment>
+        <translation>Cirkel tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="579"/>
+        <source>Arc</source>
+        <comment>sketch.arc</comment>
+        <translation>Boog</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="580"/>
+        <source>&amp;Arc</source>
+        <comment>sketch.arc</comment>
+        <translation>&amp;Boog</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="581"/>
+        <source>Draw arc</source>
+        <comment>sketch.arc</comment>
+        <translation>Boog tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="586"/>
+        <source>Spline</source>
+        <comment>sketch.spline</comment>
+        <translation>Spline</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="587"/>
+        <source>Draw a Bezier or Catmull-Rom spline</source>
+        <comment>sketch.spline</comment>
+        <translation>Een Bézier- of Catmull-Rom-spline tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="595"/>
+        <source>Polygon</source>
+        <comment>sketch.polygon</comment>
+        <translation>Veelhoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="597"/>
+        <source>Draw polygon</source>
+        <comment>sketch.polygon</comment>
+        <translation>Veelhoek tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="602"/>
+        <source>Slot</source>
+        <comment>sketch.slot</comment>
+        <translation>Sleuf</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="603"/>
+        <source>Draw slot</source>
+        <comment>sketch.slot</comment>
+        <translation>Sleuf tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="608"/>
+        <source>Ellipse</source>
+        <comment>sketch.ellipse</comment>
+        <translation>Ellips</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="610"/>
+        <source>&amp;Ellipse</source>
+        <comment>sketch.ellipse</comment>
+        <translation>&amp;Ellips</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="612"/>
+        <source>Draw ellipse</source>
+        <comment>sketch.ellipse</comment>
+        <translation>Ellips tekenen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="618"/>
+        <source>Point</source>
+        <comment>sketch.point</comment>
+        <translation>Punt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="619"/>
+        <source>&amp;Point</source>
+        <comment>sketch.point</comment>
+        <translation>&amp;Punt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="621"/>
+        <source>Place point</source>
+        <comment>sketch.point</comment>
+        <translation>Punt plaatsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="626"/>
+        <source>Two Point</source>
+        <comment>sketch.line.twoPoint</comment>
+        <translation>Twee punten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="633"/>
+        <source>Tangent</source>
+        <comment>sketch.line.tangent</comment>
+        <translation>Rakend</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="639"/>
+        <source>Construction</source>
+        <comment>sketch.line.construction</comment>
+        <translation>Hulpgeometrie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="648"/>
+        <source>Corner to Corner</source>
+        <comment>sketch.rectangle.corner</comment>
+        <translation>Hoek tot hoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="658"/>
+        <source>Center</source>
+        <comment>sketch.rectangle.center</comment>
+        <translation>Middelpunt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="664"/>
+        <source>3-Point (Angled)</source>
+        <comment>sketch.rectangle.threePoint</comment>
+        <translation>Drie punten (schuin)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="673"/>
+        <source>Parallelogram</source>
+        <comment>sketch.rectangle.parallelogram</comment>
+        <translation>Parallellogram</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="682"/>
+        <source>Center + Radius</source>
+        <comment>sketch.circle.centerRadius</comment>
+        <translation>Middelpunt + straal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="691"/>
+        <source>2-Point (Diameter)</source>
+        <comment>sketch.circle.twoPoint</comment>
+        <translation>Twee punten (diameter)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="700"/>
+        <source>3-Point</source>
+        <comment>sketch.circle.threePoint</comment>
+        <translation>Drie punten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="709"/>
+        <source>Tangent to 2</source>
+        <comment>sketch.circle.twoTangent</comment>
+        <translation>Rakend aan 2</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="718"/>
+        <source>Tangent to 3</source>
+        <comment>sketch.circle.threeTangent</comment>
+        <translation>Rakend aan 3</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="727"/>
+        <source>Center + Start + End</source>
+        <comment>sketch.arc.centerStartEnd</comment>
+        <translation>Middelpunt + begin + einde</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="736"/>
+        <source>Start + End + Radius</source>
+        <comment>sketch.arc.startEndRadius</comment>
+        <translation>Begin + einde + straal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="746"/>
+        <source>Tangent</source>
+        <comment>sketch.arc.tangent</comment>
+        <translation>Rakend</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="753"/>
+        <source>3-Point</source>
+        <comment>sketch.arc.threePoint</comment>
+        <translation>Drie punten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="759"/>
+        <source>Cubic Bezier</source>
+        <comment>sketch.spline.cubicBezier</comment>
+        <translation>Kubische Bézier</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="763"/>
+        <source>&amp;Cubic Bezier</source>
+        <comment>sketch.spline.cubicBezier</comment>
+        <translation>&amp;Kubische Bézier</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="772"/>
+        <source>Catmull-Rom</source>
+        <comment>sketch.spline.catmullRom</comment>
+        <translation>Catmull-Rom</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="776"/>
+        <source>&amp;Catmull-Rom Spline</source>
+        <comment>sketch.spline.catmullRom</comment>
+        <translation>&amp;Catmull-Rom-spline</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="785"/>
+        <source>Rational Bezier</source>
+        <comment>sketch.spline.rational</comment>
+        <translation>Rationele Bézier</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="789"/>
+        <source>&amp;Rational Bezier</source>
+        <comment>sketch.spline.rational</comment>
+        <translation>&amp;Rationele Bézier</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="798"/>
+        <source>Conic Arc (Rho)</source>
+        <comment>sketch.spline.conic</comment>
+        <translation>Kegelsnedeboog (rho)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="802"/>
+        <source>Conic Arc (Rh&amp;o)</source>
+        <comment>sketch.spline.conic</comment>
+        <translation>Kegelsnedeboog (Rh&amp;o)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="811"/>
+        <source>Inscribed</source>
+        <comment>sketch.polygon.inscribed</comment>
+        <translation>Ingeschreven</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="820"/>
+        <source>Circumscribed</source>
+        <comment>sketch.polygon.circumscribed</comment>
+        <translation>Omgeschreven</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="829"/>
+        <source>Freeform</source>
+        <comment>sketch.polygon.freeform</comment>
+        <translation>Vrije vorm</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="838"/>
+        <source>Center to Center</source>
+        <comment>sketch.slot.centerToCenter</comment>
+        <translation>Middelpunt tot middelpunt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="847"/>
+        <source>Overall Length</source>
+        <comment>sketch.slot.overall</comment>
+        <translation>Totale lengte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="856"/>
+        <source>Arc Slot (Radius)</source>
+        <comment>sketch.slot.arcRadius</comment>
+        <translation>Boogsleuf (straal)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="865"/>
+        <source>Arc Slot (Ends)</source>
+        <comment>sketch.slot.arcEnds</comment>
+        <translation>Boogsleuf (uiteinden)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="874"/>
+        <source>Center + Axes</source>
+        <comment>sketch.ellipse.centerAxes</comment>
+        <translation>Middelpunt + assen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="883"/>
+        <source>3-Point</source>
+        <comment>sketch.ellipse.threePoint</comment>
+        <translation>Drie punten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="892"/>
+        <source>Elliptical Arc</source>
+        <comment>sketch.ellipse.arc</comment>
+        <translation>Elliptische boog</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="901"/>
+        <source>Span + Rise Elliptical Arc</source>
+        <comment>sketch.ellipse.spanRise</comment>
+        <translation>Elliptische boog overspanning + pijl</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="910"/>
+        <source>Corner Elliptical Arc</source>
+        <comment>sketch.ellipse.corner</comment>
+        <translation>Elliptische hoekboog</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="919"/>
+        <source>Endpoints Elliptical Arc</source>
+        <comment>sketch.ellipse.endpoints</comment>
+        <translation>Elliptische eindpuntboog</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="929"/>
+        <source>Dimension</source>
+        <comment>group.sketch.constrain</comment>
+        <translation>Maat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="933"/>
+        <source>Add dimension</source>
+        <comment>group.sketch.constrain</comment>
+        <translation>Maat toevoegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="940"/>
+        <source>Dimension</source>
+        <comment>sketch.dimension</comment>
+        <translation>Maat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="942"/>
+        <source>Add dimension</source>
+        <comment>sketch.dimension</comment>
+        <translation>Maat toevoegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="948"/>
+        <source>Constraint</source>
+        <comment>sketch.constraint</comment>
+        <translation>Randvoorwaarde</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="949"/>
+        <source>Add constraint</source>
+        <comment>sketch.constraint</comment>
+        <translation>Randvoorwaarde toevoegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="957"/>
+        <source>Text</source>
+        <comment>sketch.text</comment>
+        <translation>Tekst</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="958"/>
+        <source>Add text</source>
+        <comment>sketch.text</comment>
+        <translation>Tekst toevoegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="964"/>
+        <source>Trim</source>
+        <comment>group.sketch.modify</comment>
+        <translation>Trimmen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="965"/>
+        <source>Trim entity at intersections</source>
+        <comment>group.sketch.modify</comment>
+        <translation>Entiteit trimmen op snijpunten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="971"/>
+        <source>Trim</source>
+        <comment>sketch.trim</comment>
+        <translation>Trimmen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="972"/>
+        <source>Trim entity at intersections</source>
+        <comment>sketch.trim</comment>
+        <translation>Entiteit trimmen op snijpunten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="980"/>
+        <source>Extend</source>
+        <comment>sketch.extend</comment>
+        <translation>Verlengen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="981"/>
+        <source>Extend entity to nearest intersection</source>
+        <comment>sketch.extend</comment>
+        <translation>Entiteit verlengen tot het dichtstbijzijnde snijpunt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="989"/>
+        <source>Split</source>
+        <comment>sketch.split</comment>
+        <translation>Splitsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="990"/>
+        <source>Split entity at intersections</source>
+        <comment>sketch.split</comment>
+        <translation>Entiteit splitsen op snijpunten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="998"/>
+        <source>Offset</source>
+        <comment>sketch.offset</comment>
+        <translation>Verspringing</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1000"/>
+        <source>Offset geometry</source>
+        <comment>sketch.offset</comment>
+        <translation>Geometrie verspringen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1005"/>
+        <source>Fillet</source>
+        <comment>sketch.fillet</comment>
+        <translation>Afronding</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1007"/>
+        <source>Fillet corners</source>
+        <comment>sketch.fillet</comment>
+        <translation>Hoeken afronden</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1012"/>
+        <source>Chamfer</source>
+        <comment>sketch.chamfer</comment>
+        <translation>Afschuining</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1014"/>
+        <source>Chamfer corners</source>
+        <comment>sketch.chamfer</comment>
+        <translation>Hoeken afschuinen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1020"/>
+        <source>Move</source>
+        <comment>sketch.transform.move</comment>
+        <translation>Verplaatsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1021"/>
+        <source>Move the selected geometry</source>
+        <comment>sketch.transform.move</comment>
+        <translation>De geselecteerde geometrie verplaatsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1030"/>
+        <source>Rotate</source>
+        <comment>sketch.transform.rotate</comment>
+        <translation>Draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1031"/>
+        <source>Rotate the selected geometry</source>
+        <comment>sketch.transform.rotate</comment>
+        <translation>De geselecteerde geometrie draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1040"/>
+        <source>Scale</source>
+        <comment>sketch.transform.scale</comment>
+        <translation>Schalen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1041"/>
+        <source>Scale the selected geometry</source>
+        <comment>sketch.transform.scale</comment>
+        <translation>De geselecteerde geometrie schalen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1050"/>
+        <source>Mirror</source>
+        <comment>sketch.transform.mirror</comment>
+        <translation>Spiegelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1051"/>
+        <source>Mirror the selected geometry</source>
+        <comment>sketch.transform.mirror</comment>
+        <translation>De geselecteerde geometrie spiegelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1060"/>
+        <source>Copy</source>
+        <comment>sketch.transform.copy</comment>
+        <translation>Kopiëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1061"/>
+        <source>Copy the selected geometry</source>
+        <comment>sketch.transform.copy</comment>
+        <translation>De geselecteerde geometrie kopiëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1069"/>
+        <source>Rect Pattern</source>
+        <comment>group.sketch.pattern</comment>
+        <translation>Rechthoekig patroon</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1073"/>
+        <source>Rect
+Pattern</source>
+        <comment>group.sketch.pattern</comment>
+        <translation>Rechthoekig
+patroon</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1077"/>
+        <source>Create rectangular pattern</source>
+        <comment>group.sketch.pattern</comment>
+        <translation>Een rechthoekig patroon maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1083"/>
+        <source>Rect Pattern</source>
+        <comment>sketch.rectPattern</comment>
+        <translation>Rechthoekig patroon</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1087"/>
+        <source>Create rectangular pattern</source>
+        <comment>sketch.rectPattern</comment>
+        <translation>Een rechthoekig patroon maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1095"/>
+        <source>Circ Pattern</source>
+        <comment>sketch.circPattern</comment>
+        <translation>Cirkelvormig patroon</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1099"/>
+        <source>Create circular pattern</source>
+        <comment>sketch.circPattern</comment>
+        <translation>Een cirkelvormig patroon maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1108"/>
+        <source>Projection</source>
+        <comment>sketch.project</comment>
+        <translation>Projectie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1109"/>
+        <source>Project geometry from other sketches</source>
+        <comment>sketch.project</comment>
+        <translation>Geometrie uit andere schetsen projecteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1117"/>
+        <source>3D</source>
+        <comment>sketch.toggle3d</comment>
+        <translation>3D</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1118"/>
+        <source>Toggle 3D sketch mode</source>
+        <comment>sketch.toggle3d</comment>
+        <translation>3D-schetsmodus in-/uitschakelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1125"/>
+        <source>Flip</source>
+        <comment>sketch.flip</comment>
+        <translation>Omkeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1126"/>
+        <source>Draw from the far side of the plane (heads/tails)</source>
+        <comment>sketch.flip</comment>
+        <translation>Vanaf de andere zijde van het vlak tekenen (kop/munt)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1134"/>
+        <source>Finish Sketch</source>
+        <comment>sketch.finish</comment>
+        <translation>Schets voltooien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1135"/>
+        <source>Finish editing the sketch</source>
+        <comment>sketch.finish</comment>
+        <translation>Het bewerken van de schets voltooien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1141"/>
+        <source>Curvature Comb</source>
+        <comment>sketch.curvatureComb</comment>
+        <translation>Krommingskam</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1147"/>
+        <source>Rotate Canvas CCW</source>
+        <comment>sketch.rotateCCW</comment>
+        <translation>Canvas linksom draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1153"/>
+        <source>Rotate Canvas CW</source>
+        <comment>sketch.rotateCW</comment>
+        <translation>Canvas rechtsom draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1159"/>
+        <source>Reset Canvas Rotation</source>
+        <comment>sketch.rotateReset</comment>
+        <translation>Canvasrotatie herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1165"/>
+        <source>Toggle Construction Mode</source>
+        <comment>sketch.construction</comment>
+        <translation>Hulpmodus in-/uitschakelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1172"/>
+        <source>Toggle Grid</source>
+        <comment>sketch.toggleGrid</comment>
+        <translation>Raster tonen/verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1176"/>
+        <source>Constraints</source>
+        <comment>menu.constraints</comment>
+        <translation>Beperkingen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1177"/>
+        <source>C&amp;onstraints</source>
+        <comment>menu.constraints</comment>
+        <translation>&amp;Beperkingen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1182"/>
+        <source>Coincident</source>
+        <comment>sketch.constrain.coincident</comment>
+        <translation>Samenvallend</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1189"/>
+        <source>Horizontal</source>
+        <comment>sketch.constrain.horizontal</comment>
+        <translation>Horizontaal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1196"/>
+        <source>Vertical</source>
+        <comment>sketch.constrain.vertical</comment>
+        <translation>Verticaal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1203"/>
+        <source>Parallel</source>
+        <comment>sketch.constrain.parallel</comment>
+        <translation>Parallel</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1210"/>
+        <source>Perpendicular</source>
+        <comment>sketch.constrain.perpendicular</comment>
+        <translation>Loodrecht</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1217"/>
+        <source>Tangent</source>
+        <comment>sketch.constrain.tangent</comment>
+        <translation>Rakend</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1224"/>
+        <source>Curvature (G2)</source>
+        <comment>sketch.constrain.curvature</comment>
+        <translation>Kromming (G2)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1232"/>
+        <source>Equal</source>
+        <comment>sketch.constrain.equal</comment>
+        <translation>Gelijk</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1236"/>
+        <source>Midpoint</source>
+        <comment>sketch.constrain.midpoint</comment>
+        <translation>Middelpunt van lijn</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1243"/>
+        <source>Concentric</source>
+        <comment>sketch.constrain.concentric</comment>
+        <translation>Concentrisch</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1250"/>
+        <source>Collinear</source>
+        <comment>sketch.constrain.collinear</comment>
+        <translation>Collineair</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1257"/>
+        <source>Point on Spline</source>
+        <comment>sketch.constrain.pointOnSpline</comment>
+        <translation>Punt op spline</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1264"/>
+        <source>Tangent Angle</source>
+        <comment>sketch.constrain.tangentAngle</comment>
+        <translation>Raaklijnhoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1271"/>
+        <source>Symmetric</source>
+        <comment>sketch.constrain.symmetric</comment>
+        <translation>Symmetrisch</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1278"/>
+        <source>Angle (2 lines)</source>
+        <comment>sketch.constrain.angleTwoLines</comment>
+        <translation>Hoek (2 lijnen)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1284"/>
+        <source>Fix / Unfix</source>
+        <comment>sketch.constrain.fix</comment>
+        <translation>Vastzetten / Losmaken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1290"/>
+        <source>Auto Constrain</source>
+        <comment>sketch.constrain.auto</comment>
+        <translation>Automatisch beperken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1298"/>
+        <source>Sketch</source>
+        <comment>group.design.sketch</comment>
+        <translation>Schets</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1299"/>
+        <source>Create a 2D sketch</source>
+        <comment>group.design.sketch</comment>
+        <translation>Een 2D-schets maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1305"/>
+        <source>Sketch</source>
+        <comment>design.sketch</comment>
+        <translation>Schets</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1306"/>
+        <source>Create sketch on a plane</source>
+        <comment>design.sketch</comment>
+        <translation>Een schets op een vlak maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1313"/>
+        <source>Sketch on Face</source>
+        <comment>design.sketchOnFace</comment>
+        <translation>Schets op vlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1317"/>
+        <source>Sketch on
+Face</source>
+        <comment>design.sketchOnFace</comment>
+        <translation>Schets op
+vlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1321"/>
+        <source>Create sketch on existing face</source>
+        <comment>design.sketchOnFace</comment>
+        <translation>Een schets op een bestaand vlak maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1329"/>
+        <source>Plane</source>
+        <comment>group.design.plane</comment>
+        <translation>Vlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1330"/>
+        <source>Create construction plane</source>
+        <comment>group.design.plane</comment>
+        <translation>Een hulpvlak maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1336"/>
+        <source>Construction Plane</source>
+        <comment>design.constructionPlane</comment>
+        <translation>Hulpvlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1340"/>
+        <source>Construction
+Plane</source>
+        <comment>design.constructionPlane</comment>
+        <translation>Hulp-
+vlak</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1344"/>
+        <source>Create a construction plane</source>
+        <comment>design.constructionPlane</comment>
+        <translation>Een hulpvlak maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1352"/>
+        <source>Solid</source>
+        <comment>group.design.solid</comment>
+        <translation>Vast
+lichaam</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1353"/>
+        <source>Create solid geometry</source>
+        <comment>group.design.solid</comment>
+        <translation>Vaste geometrie maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1359"/>
+        <source>Extrude</source>
+        <comment>design.extrude</comment>
+        <translation>Extruderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1360"/>
+        <source>Extrude to add material</source>
+        <comment>design.extrude</comment>
+        <translation>Extruderen om materiaal toe te voegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1369"/>
+        <source>Cut Extrude</source>
+        <comment>design.cutExtrude</comment>
+        <translation>Snijextrusie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1371"/>
+        <source>Cut
+Extrude</source>
+        <comment>design.cutExtrude</comment>
+        <translation>Snij-
+extrusie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1372"/>
+        <source>Extrude to remove material</source>
+        <comment>design.cutExtrude</comment>
+        <translation>Extruderen om materiaal te verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1380"/>
+        <source>Revolve</source>
+        <comment>design.revolve</comment>
+        <translation>Wentelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1381"/>
+        <source>Revolve to add material</source>
+        <comment>design.revolve</comment>
+        <translation>Wentelen om materiaal toe te voegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1390"/>
+        <source>Cut Revolve</source>
+        <comment>design.cutRevolve</comment>
+        <translation>Snijwenteling</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1392"/>
+        <source>Cut
+Revolve</source>
+        <comment>design.cutRevolve</comment>
+        <translation>Snij-
+wenteling</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1393"/>
+        <source>Revolve to remove material</source>
+        <comment>design.cutRevolve</comment>
+        <translation>Wentelen om materiaal te verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1401"/>
+        <source>Loft</source>
+        <comment>design.loft</comment>
+        <translation>Loft</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1402"/>
+        <source>Loft to add material</source>
+        <comment>design.loft</comment>
+        <translation>Loften om materiaal toe te voegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1410"/>
+        <source>Cut Loft</source>
+        <comment>design.cutLoft</comment>
+        <translation>Snijloft</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1412"/>
+        <source>Cut
+Loft</source>
+        <comment>design.cutLoft</comment>
+        <translation>Snij-
+loft</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1413"/>
+        <source>Loft to remove material</source>
+        <comment>design.cutLoft</comment>
+        <translation>Loften om materiaal te verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1421"/>
+        <source>Sweep</source>
+        <comment>design.sweep</comment>
+        <translation>Sweep</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1422"/>
+        <source>Sweep to add material</source>
+        <comment>design.sweep</comment>
+        <translation>Sweepen om materiaal toe te voegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1431"/>
+        <source>Cut Sweep</source>
+        <comment>design.cutSweep</comment>
+        <translation>Snijsweep</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1433"/>
+        <source>Cut
+Sweep</source>
+        <comment>design.cutSweep</comment>
+        <translation>Snij-
+sweep</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1434"/>
+        <source>Sweep to remove material</source>
+        <comment>design.cutSweep</comment>
+        <translation>Sweepen om materiaal te verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1442"/>
+        <source>Box</source>
+        <comment>design.box</comment>
+        <translation>Balk</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1444"/>
+        <source>Create a box</source>
+        <comment>design.box</comment>
+        <translation>Een balk maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1450"/>
+        <source>Cylinder</source>
+        <comment>design.cylinder</comment>
+        <translation>Cilinder</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1451"/>
+        <source>Create a cylinder</source>
+        <comment>design.cylinder</comment>
+        <translation>Een cilinder maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1459"/>
+        <source>Sphere</source>
+        <comment>design.sphere</comment>
+        <translation>Bol</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1461"/>
+        <source>Create a sphere</source>
+        <comment>design.sphere</comment>
+        <translation>Een bol maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1466"/>
+        <source>Torus</source>
+        <comment>design.torus</comment>
+        <translation>Torus</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1468"/>
+        <source>Create a torus</source>
+        <comment>design.torus</comment>
+        <translation>Een torus maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1473"/>
+        <source>Coil</source>
+        <comment>design.coil</comment>
+        <translation>Spiraal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1474"/>
+        <source>Create a coil/helix</source>
+        <comment>design.coil</comment>
+        <translation>Een spiraal/helix maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1482"/>
+        <source>Pipe</source>
+        <comment>design.pipe</comment>
+        <translation>Buis</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1483"/>
+        <source>Create a pipe along a path</source>
+        <comment>design.pipe</comment>
+        <translation>Een buis langs een pad maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1492"/>
+        <source>Fillet</source>
+        <comment>group.design.fillet</comment>
+        <translation>Afronding</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1493"/>
+        <source>Round or bevel edges</source>
+        <comment>group.design.fillet</comment>
+        <translation>Randen afronden of afschuinen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1499"/>
+        <source>Fillet</source>
+        <comment>design.fillet</comment>
+        <translation>Afronding</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1501"/>
+        <source>Round edges</source>
+        <comment>design.fillet</comment>
+        <translation>Randen afronden</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1506"/>
+        <source>Chamfer</source>
+        <comment>design.chamfer</comment>
+        <translation>Afschuining</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1508"/>
+        <source>Bevel edges</source>
+        <comment>design.chamfer</comment>
+        <translation>Randen afschuinen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1514"/>
+        <source>Simple Hole</source>
+        <comment>group.design.hole</comment>
+        <translation>Eenvoudig gat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1516"/>
+        <source>Simple
+Hole</source>
+        <comment>group.design.hole</comment>
+        <translation>Eenvoudig
+gat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1517"/>
+        <source>Create a simple hole</source>
+        <comment>group.design.hole</comment>
+        <translation>Een eenvoudig gat maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1523"/>
+        <source>Simple Hole</source>
+        <comment>design.hole</comment>
+        <translation>Eenvoudig gat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1525"/>
+        <source>Simple
+Hole</source>
+        <comment>design.hole</comment>
+        <translation>Eenvoudig
+gat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1526"/>
+        <source>Create a simple hole</source>
+        <comment>design.hole</comment>
+        <translation>Een eenvoudig gat maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1535"/>
+        <source>Counterbore</source>
+        <comment>design.counterbore</comment>
+        <translation>Cilindrische verzinking</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1536"/>
+        <source>Counter-
+bore</source>
+        <comment>design.counterbore</comment>
+        <translation>Cilindrische
+verzinking</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1540"/>
+        <source>Create a counterbore hole</source>
+        <comment>design.counterbore</comment>
+        <translation>Een gat met cilindrische verzinking maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1549"/>
+        <source>Countersink</source>
+        <comment>design.countersink</comment>
+        <translation>Conische verzinking</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1550"/>
+        <source>Counter-
+sink</source>
+        <comment>design.countersink</comment>
+        <translation>Conische
+verzinking</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1554"/>
+        <source>Create a countersink hole</source>
+        <comment>design.countersink</comment>
+        <translation>Een gat met conische verzinking maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1562"/>
+        <source>Threaded Hole</source>
+        <comment>design.threadedHole</comment>
+        <translation>Draadgat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1566"/>
+        <source>Threaded
+Hole</source>
+        <comment>design.threadedHole</comment>
+        <translation>Draad-
+gat</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1570"/>
+        <source>Create a threaded hole</source>
+        <comment>design.threadedHole</comment>
+        <translation>Een draadgat maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1578"/>
+        <source>Move</source>
+        <comment>group.design.move</comment>
+        <translation>Verplaatsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1579"/>
+        <source>Transform objects</source>
+        <comment>group.design.move</comment>
+        <translation>Objecten transformeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1585"/>
+        <source>Move/Copy</source>
+        <comment>design.move</comment>
+        <translation>Verplaatsen/kopiëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1587"/>
+        <source>Move/
+Copy</source>
+        <comment>design.move</comment>
+        <translation>Verplaatsen/
+kopiëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1588"/>
+        <source>Move or copy objects</source>
+        <comment>design.move</comment>
+        <translation>Objecten verplaatsen of kopiëren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1596"/>
+        <source>Align</source>
+        <comment>design.align</comment>
+        <translation>Uitlijnen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1598"/>
+        <source>Align objects</source>
+        <comment>design.align</comment>
+        <translation>Objecten uitlijnen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1604"/>
+        <source>Mirror</source>
+        <comment>group.design.mirror</comment>
+        <translation>Spiegelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1605"/>
+        <source>Mirror or pattern objects</source>
+        <comment>group.design.mirror</comment>
+        <translation>Objecten spiegelen of in een patroon plaatsen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1611"/>
+        <source>Mirror</source>
+        <comment>design.mirror</comment>
+        <translation>Spiegelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1612"/>
+        <source>Mirror bodies or features</source>
+        <comment>design.mirror</comment>
+        <translation>Lichamen of kenmerken spiegelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1620"/>
+        <source>Pattern</source>
+        <comment>design.pattern</comment>
+        <translation>Patroon</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1621"/>
+        <source>Create rectangular or circular pattern</source>
+        <comment>design.pattern</comment>
+        <translation>Een rechthoekig of cirkelvormig patroon maken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1630"/>
+        <source>Params</source>
+        <comment>group.design.params</comment>
+        <translation>Param.</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1631"/>
+        <source>Manage parameters</source>
+        <comment>group.design.params</comment>
+        <translation>Parameters beheren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1637"/>
+        <source>Change Parameters</source>
+        <comment>design.parameters</comment>
+        <translation>Parameters wijzigen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1641"/>
+        <source>Change
+Parameters</source>
+        <comment>design.parameters</comment>
+        <translation>Parameters
+wijzigen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1645"/>
+        <source>Edit document parameters</source>
+        <comment>design.parameters</comment>
+        <translation>Documentparameters bewerken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1651"/>
+        <source>Joint</source>
+        <comment>design.joint</comment>
+        <translation>Verbinding</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1654"/>
+        <source>Measure</source>
+        <comment>design.measure</comment>
+        <translation>Meten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1657"/>
+        <source>Toggle Visibility</source>
+        <comment>design.toggleVisibility</comment>
+        <translation>Zichtbaarheid in-/uitschakelen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1663"/>
+        <source>Rotate Up (continuous)</source>
+        <comment>nav.rotateUp</comment>
+        <translation>Omhoog draaien (continu)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1669"/>
+        <source>Rotate Down (continuous)</source>
+        <comment>nav.rotateDown</comment>
+        <translation>Omlaag draaien (continu)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1675"/>
+        <source>Set Rotation Axis to X</source>
+        <comment>nav.axisX</comment>
+        <translation>Rotatie-as instellen op X</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1681"/>
+        <source>Set Rotation Axis to Y</source>
+        <comment>nav.axisY</comment>
+        <translation>Rotatie-as instellen op Y</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1687"/>
+        <source>Set Rotation Axis to Z</source>
+        <comment>nav.axisZ</comment>
+        <translation>Rotatie-as instellen op Z</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1693"/>
+        <source>Snap Rotate Left 90°</source>
+        <comment>nav.rotateLeft</comment>
+        <translation>Stapsgewijs 90° naar links draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1699"/>
+        <source>Snap Rotate Right 90°</source>
+        <comment>nav.rotateRight</comment>
+        <translation>Stapsgewijs 90° naar rechts draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1706"/>
+        <source>Rotate View</source>
+        <comment>viewport.rotate</comment>
+        <translation>Weergave draaien</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1709"/>
+        <source>Pan View</source>
+        <comment>viewport.pan</comment>
+        <translation>Weergave verschuiven</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1712"/>
+        <source>Zoom View</source>
+        <comment>viewport.zoom</comment>
+        <translation>Weergave zoomen</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1774"/>
+        <source>Global</source>
+        <comment>context.global</comment>
+        <translation>Globaal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1777"/>
+        <source>File</source>
+        <comment>context.file</comment>
+        <translation>Bestand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1780"/>
+        <source>Edit</source>
+        <comment>context.edit</comment>
+        <translation>Bewerken</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1783"/>
+        <source>View</source>
+        <comment>context.view</comment>
+        <translation>Beeld</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1786"/>
+        <source>Construct</source>
+        <comment>context.construct</comment>
+        <translation>Construeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1789"/>
+        <source>Sketch</source>
+        <comment>context.sketch</comment>
+        <translation>Schets</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1792"/>
+        <source>Design</source>
+        <comment>context.design</comment>
+        <translation>Ontwerp</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1795"/>
+        <source>Navigation</source>
+        <comment>context.nav</comment>
+        <translation>Navigatie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/commands.cpp" line="1798"/>
+        <source>Viewport</source>
+        <comment>context.viewport</comment>
+        <translation>Weergavevenster</translation>
+    </message>
+</context>
+<context>
+    <name>hobbycad::Constraint</name>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="133"/>
+        <source>Distance</source>
+        <translation>Afstand</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="135"/>
+        <source>Radius</source>
+        <translation>Straal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="137"/>
+        <source>Diameter</source>
+        <translation>Diameter</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="139"/>
+        <source>Angle</source>
+        <translation>Hoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="141"/>
+        <source>Fixed Angle</source>
+        <translation>Vaste hoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="143"/>
+        <source>Horizontal</source>
+        <translation>Horizontaal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="145"/>
+        <source>Vertical</source>
+        <translation>Verticaal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="147"/>
+        <source>Parallel</source>
+        <translation>Parallel</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="149"/>
+        <source>Perpendicular</source>
+        <translation>Loodrecht</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="151"/>
+        <source>Coincident</source>
+        <translation>Samenvallend</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="153"/>
+        <source>Tangent</source>
+        <translation>Rakend</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="155"/>
+        <source>Equal</source>
+        <translation>Gelijk</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="157"/>
+        <source>Midpoint</source>
+        <translation>Middelpunt van lijn</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="159"/>
+        <source>Symmetric</source>
+        <translation>Symmetrisch</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="161"/>
+        <source>Concentric</source>
+        <translation>Concentrisch</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="163"/>
+        <source>Collinear</source>
+        <translation>Collineair</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="165"/>
+        <source>Point On Line</source>
+        <translation>Punt op lijn</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="167"/>
+        <source>Point On Circle</source>
+        <translation>Punt op cirkel</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="169"/>
+        <source>Fixed Point</source>
+        <translation>Vast punt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="171"/>
+        <source>Curvature (G2)</source>
+        <translation>Kromming (G2)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="173"/>
+        <source>Point on Spline</source>
+        <translation>Punt op spline</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="175"/>
+        <source>Radius of Curvature</source>
+        <translation>Kromtestraal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/constraint.cpp" line="177"/>
+        <source>Tangent Angle</source>
+        <translation>Raaklijnhoek</translation>
     </message>
 </context>
 <context>
@@ -1951,54 +4069,265 @@ Wilt u deze van &quot;%2&quot; verwijderen en hier toekennen?</translation>
         <translation>Verspringing langs de normaal van het gedraaide vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="348"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="345"/>
         <source>Plane parallel to %1 origin plane at %2 = 0</source>
         <translation>Vlak evenwijdig aan het %1-oorsprongvlak bij %2 = 0</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="351"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="348"/>
         <source>Plane parallel to %1 origin plane at %2 = %3 mm</source>
         <translation>Vlak evenwijdig aan het %1-oorsprongvlak bij %2 = %3 mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="364"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="361"/>
         <source>Plane offset %1 mm from &quot;%2&quot;</source>
         <translation>Vlak %1 mm verspringend t.o.v. &quot;%2&quot;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="368"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="365"/>
         <source>No reference plane available</source>
         <translation>Geen referentievlak beschikbaar</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="397"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="394"/>
         <source>Plane rotated %1° around %2 axis</source>
         <translation>Vlak %1° gedraaid om de %2-as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="401"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="398"/>
         <source>Plane rotated %1° around %2 axis, offset %3 mm</source>
         <translation>Vlak %1° gedraaid om de %2-as, %3 mm verspringend</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="409"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="406"/>
         <source>Plane rotated %1° around %2, then %3° around %4</source>
         <translation>Vlak %1° gedraaid om %2, daarna %3° om %4</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="415"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="412"/>
         <source>Plane rotated %1° around %2, %3° around %4, offset %5 mm</source>
         <translation>Vlak %1° gedraaid om %2, %3° om %4, %5 mm verspringend</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="553"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="550"/>
         <source>Edit Construction Plane</source>
         <translation>Hulpvlak bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="555"/>
+        <location filename="../../src/hobbycad/gui/constructionplanedialog.cpp" line="552"/>
         <source>New Construction Plane</source>
         <translation>Nieuw hulpvlak</translation>
+    </message>
+</context>
+<context>
+    <name>hobbycad::CustomizeDialog</name>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="39"/>
+        <source>Customize Menus and Toolbars</source>
+        <translation>Menu&apos;s en werkbalken aanpassen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="43"/>
+        <source>Menus and toolbars are rearranged here, and nowhere else. Every change is yours alone: HobbyCAD&apos;s own layout stays put behind it, and Restore defaults brings it back.</source>
+        <translation>Menu&apos;s en werkbalken worden hier en nergens anders herschikt. Elke wijziging is alleen van u: HobbyCAD&apos;s eigen indeling blijft erachter staan, en Standaardwaarden herstellen brengt die terug.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="53"/>
+        <source>Shown</source>
+        <translation>Weergegeven</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="53"/>
+        <source>Command</source>
+        <translation>Opdracht</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="68"/>
+        <source>Move Up</source>
+        <translation>Omhoog</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="69"/>
+        <source>Move Down</source>
+        <translation>Omlaag</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="70"/>
+        <source>Move To...</source>
+        <translation>Verplaatsen naar...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="71"/>
+        <source>Rename...</source>
+        <translation>Naam wijzigen...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="72"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="195"/>
+        <source>Hide</source>
+        <translation>Verbergen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="73"/>
+        <source>Add Separator</source>
+        <translation>Scheiding toevoegen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="75"/>
+        <source>Restore This</source>
+        <translation>Dit herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="76"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="199"/>
+        <source>Restore Menus</source>
+        <translation>Menu&apos;s herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="77"/>
+        <source>Restore All...</source>
+        <translation>Alles herstellen...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="79"/>
+        <source>Export...</source>
+        <translation>Exporteren...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="80"/>
+        <source>Import...</source>
+        <translation>Importeren...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="103"/>
+        <source>-- separator --</source>
+        <translation>-- scheiding --</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="106"/>
+        <source>(filled in by HobbyCAD)</source>
+        <translation>(door HobbyCAD gevuld)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="113"/>
+        <source>%1  (hidden)</source>
+        <translation>%1  (verborgen)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="114"/>
+        <source>%1  (renamed)</source>
+        <translation>%1  (naam gewijzigd)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="195"/>
+        <source>Show</source>
+        <translation>Weergeven</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="200"/>
+        <source>Restore Toolbars</source>
+        <translation>Werkbalken herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="253"/>
+        <source>Move To</source>
+        <translation>Verplaatsen naar</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="253"/>
+        <source>Show it in:</source>
+        <translation>Weergeven in:</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="272"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="278"/>
+        <source>Rename</source>
+        <translation>Naam wijzigen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="273"/>
+        <source>Name it as you like; leave it empty for HobbyCAD&apos;s own name.
+Your name is shown exactly as typed, in every language.</source>
+        <translation>Geef het een naam naar keuze; laat leeg voor HobbyCAD&apos;s eigen naam.
+Uw naam wordt precies zo getoond als u hem typt, in elke taal.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="279"/>
+        <source>That name cannot be used: it is too long or holds characters a name cannot have.</source>
+        <translation>Die naam kan niet worden gebruikt: te lang of met tekens die een naam niet mag hebben.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="325"/>
+        <source>menus</source>
+        <translation>menu&apos;s</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="325"/>
+        <source>toolbars</source>
+        <translation>werkbalken</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="326"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="338"/>
+        <source>Restore Defaults</source>
+        <translation>Standaardwaarden herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="327"/>
+        <source>Give the %1 HobbyCAD&apos;s own layout back? Your changes to them are dropped.</source>
+        <translation>%1 HobbyCAD&apos;s eigen indeling teruggeven? Uw wijzigingen daarin gaan verloren.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="339"/>
+        <source>Give HobbyCAD&apos;s own layout back everywhere, keys included? Every change you have made to it is dropped.</source>
+        <translation>Overal HobbyCAD&apos;s eigen indeling teruggeven, toetsen inbegrepen? Elke wijziging die u hebt gemaakt gaat verloren.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="350"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="356"/>
+        <source>Export Arrangement</source>
+        <translation>Indeling exporteren</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="352"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="364"/>
+        <source>Arrangement files (*.json)</source>
+        <translation>Indelingsbestanden (*.json)</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="357"/>
+        <source>It could not be written: %1</source>
+        <translation>Kon niet worden geschreven: %1</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="363"/>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="368"/>
+        <source>Import Arrangement</source>
+        <translation>Indeling importeren</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="370"/>
+        <source>That file is not an arrangement.</source>
+        <translation>Dat bestand is geen indeling.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="371"/>
+        <source>That file is not an arrangement:
+%1</source>
+        <translation>Dat bestand is geen indeling:
+%1</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="382"/>
+        <source>Arrangement</source>
+        <translation>Indeling</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/customizedialog.cpp" line="383"/>
+        <source>Some of the arrangement was skipped:
+%1</source>
+        <translation>Een deel van de indeling is overgeslagen:
+%1</translation>
     </message>
 </context>
 <context>
@@ -2237,218 +4566,218 @@ Wilt u deze van &quot;%2&quot; verwijderen en hier toekennen?</translation>
 <context>
     <name>hobbycad::FullModeWindow</name>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="503"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="504"/>
         <source>Axis: X</source>
         <translation>As: X</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="510"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="624"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="511"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="616"/>
         <source>Axis: %1</source>
         <translation>As: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="757"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="749"/>
         <source>Name</source>
         <translation>Naam</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1465"/>
         <source>Extrude</source>
         <translation>Extruderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1507"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1535"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1499"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1527"/>
         <source>Revolve</source>
         <translation>Wentelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="763"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="755"/>
         <source>Type</source>
         <translation>Type</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="784"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="776"/>
         <source>XY</source>
         <translation>XY</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="785"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="777"/>
         <source>XZ</source>
         <translation>XZ</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="786"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="778"/>
         <source>YZ</source>
         <translation>YZ</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="787"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="779"/>
         <source>Custom</source>
         <translation>Aangepast</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="802"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="794"/>
         <source>Offset</source>
         <translation>Verspringing</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="200"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="201"/>
         <source>Tangent Arc</source>
         <translation>Raakboog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="201"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="202"/>
         <source>There are no lines or rectangles to create a tangent arc from.
 Please draw a line or rectangle first.</source>
         <translation>Er zijn geen lijnen of rechthoeken om een raakboog van te maken.
 Teken eerst een lijn of rechthoek.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="219"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="220"/>
         <source>Tangent Line</source>
         <translation>Raaklijn</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="220"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="221"/>
         <source>There are no circles or arcs to create a tangent line from.
 Please draw a circle or arc first.</source>
         <translation>Er zijn geen cirkels of bogen om een raaklijn van te maken.
 Teken eerst een cirkel of boog.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="710"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="702"/>
         <source>Plane %1</source>
         <translation>Vlak %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="740"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="732"/>
         <source>Construction plane &apos;%1&apos; created</source>
         <translation>Hulpvlak &apos;%1&apos; gemaakt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="767"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="759"/>
         <source>Offset from Origin</source>
         <translation>Verspringing t.o.v. oorsprong</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="770"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="762"/>
         <source>Offset from Plane</source>
         <translation>Verspringing t.o.v. vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="773"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="765"/>
         <source>Angled</source>
         <translation>Schuin</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="781"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="773"/>
         <source>Base Plane</source>
         <translation>Basisvlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="795"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="787"/>
         <source>Reference Plane</source>
         <translation>Referentievlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="797"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="789"/>
         <source>(none)</source>
         <translation>(geen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="803"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="795"/>
         <source>%1 mm</source>
         <translation>%1 mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="809"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="801"/>
         <source>Primary Rotation</source>
         <translation>Primaire rotatie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="812"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="824"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="804"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="816"/>
         <source>X</source>
         <translation>X</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="813"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="825"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="805"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="817"/>
         <source>Y</source>
         <translation>Y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="814"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="826"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="806"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="818"/>
         <source>Z</source>
         <translation>Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="816"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="828"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="808"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="820"/>
         <source>%1° around %2</source>
         <translation>%1° om %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="822"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="814"/>
         <source>Secondary Rotation</source>
         <translation>Secundaire rotatie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="837"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="829"/>
         <source>Roll</source>
         <translation>Rol</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="838"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="830"/>
         <source>%1°</source>
         <translation>%1°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="845"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="837"/>
         <source>Center (Absolute)</source>
         <translation>Middelpunt (absoluut)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="846"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="838"/>
         <source>(%1, %2, %3) mm</source>
         <translation>(%1, %2, %3) mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="863"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="855"/>
         <source>Visible</source>
         <translation>Zichtbaar</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="864"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="856"/>
         <source>Yes</source>
         <translation>Ja</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="864"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="856"/>
         <source>No</source>
         <translation>Nee</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="852"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="844"/>
         <source>Center (Relative)</source>
         <translation>Middelpunt (relatief)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="854"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="846"/>
         <source>Relative To</source>
         <translation>Relatief aan</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="857"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="849"/>
         <source>Base plane</source>
         <translation>Basisvlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1295"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1322"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1287"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1314"/>
         <source>The 3D viewport is unavailable.
 
 Sketching and file operations still work.</source>
@@ -2457,93 +4786,93 @@ Sketching and file operations still work.</source>
 Schetsen en bestandsbewerkingen werken nog steeds.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1305"/>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1329"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1297"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1321"/>
         <source>Reduced Mode: 3D viewport stopped</source>
         <translation>Beperkte modus: 3D-weergave gestopt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1306"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1298"/>
         <source>The 3D viewport failed during this session and was switched off. Sketching and file operations continue; details are in the crash log.</source>
         <translation>De 3D-weergave is tijdens deze sessie uitgevallen en is uitgeschakeld. Schetsen en bestandsbewerkingen gaan door; details staan in het crashlogboek.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1330"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1322"/>
         <source>The 3D viewport failed during this session and was switched off. Details are in the crash log.</source>
         <translation>De 3D-weergave is tijdens deze sessie mislukt en uitgeschakeld. Details staan in het crashlogboek.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1378"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1370"/>
         <source>That reference depends on this plane; a loop is not allowed.</source>
         <translation>Die referentie hangt af van dit vlak; een lus is niet toegestaan.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1402"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1394"/>
         <source>This plane no longer exists.</source>
         <translation>Dit vlak bestaat niet meer.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1407"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1399"/>
         <source>Not applied: that reference already depends on this plane, which would make a loop.</source>
         <translation>Niet toegepast: die referentie hangt al af van dit vlak, wat een lus zou vormen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1421"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1413"/>
         <source>Applied. Undo reverses it.</source>
         <translation>Toegepast. Ongedaan maken draait het terug.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1422"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1414"/>
         <source>Construction plane &apos;%1&apos; updated</source>
         <translation>Constructievlak &apos;%1&apos; bijgewerkt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1494"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1486"/>
         <source>Extrude Failed</source>
         <translation>Extruderen mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1495"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1487"/>
         <source>Extrusion failed: %1</source>
         <translation>Extruderen mislukt: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1492"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1484"/>
         <source>Extrude %1</source>
         <translation>%1 extruderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1502"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1494"/>
         <source>Extrusion completed</source>
         <translation>Extrusie voltooid</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1518"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1510"/>
         <source>Line %1</source>
         <translation>Lijn %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1536"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1528"/>
         <source>Please select a construction line for the axis.</source>
         <translation>Kies een hulplijn voor de as.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1547"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1539"/>
         <source>Revolve Failed</source>
         <translation>Wentelen mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1548"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1540"/>
         <source>Revolution failed: %1</source>
         <translation>Wentelen mislukt: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1545"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1537"/>
         <source>Revolve %1</source>
         <translation>%1 wentelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1555"/>
+        <location filename="../../src/hobbycad/gui/full/fullmodewindow.cpp" line="1547"/>
         <source>Revolution completed</source>
         <translation>Wenteling voltooid</translation>
     </message>
@@ -2551,184 +4880,12 @@ Schetsen en bestandsbewerkingen werken nog steeds.</translation>
 <context>
     <name>hobbycad::MainWindow</name>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1198"/>
-        <source>&amp;File</source>
-        <translation>&amp;Bestand</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1199"/>
-        <source>&amp;New</source>
-        <translation>&amp;Nieuw</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1200"/>
-        <source>&amp;Open...</source>
-        <translation>&amp;Openen...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1201"/>
-        <source>&amp;Save</source>
-        <translation>Op&amp;slaan</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1202"/>
-        <source>Save &amp;As...</source>
-        <translation>Opslaan &amp;als...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1203"/>
-        <source>&amp;Close</source>
-        <translation>Sl&amp;uiten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1204"/>
-        <source>&amp;Import</source>
-        <translation>&amp;Importeren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1205"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1210"/>
-        <source>STEP File...</source>
-        <translation>STEP-bestand...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1206"/>
-        <source>Import geometry from STEP file</source>
-        <translation>Geometrie importeren uit een STEP-bestand</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1209"/>
-        <source>&amp;Export</source>
-        <translation>&amp;Exporteren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1211"/>
-        <source>Export geometry to STEP file</source>
-        <translation>Geometrie exporteren naar een STEP-bestand</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1212"/>
-        <source>STL File...</source>
-        <translation>STL-bestand...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1213"/>
-        <source>Export geometry to STL file for 3D printing</source>
-        <translation>Geometrie exporteren naar een STL-bestand voor 3D-printen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1207"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1214"/>
-        <source>DXF File (Sketch)...</source>
-        <translation>DXF-bestand (schets)...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1215"/>
-        <source>Export sketch to DXF file</source>
-        <translation>Schets exporteren naar een DXF-bestand</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1216"/>
-        <source>SVG File (Sketch)...</source>
-        <translation>SVG-bestand (schets)...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1217"/>
-        <source>Export sketch to SVG file</source>
-        <translation>Schets exporteren naar een SVG-bestand</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1218"/>
-        <source>&amp;Quit</source>
-        <translation>A&amp;fsluiten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1219"/>
-        <source>&amp;Edit</source>
-        <translation>Be&amp;werken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1220"/>
-        <source>&amp;Undo</source>
-        <translation>&amp;Ongedaan maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1221"/>
-        <source>&amp;Redo</source>
-        <translation>Op&amp;nieuw</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1222"/>
-        <source>Cu&amp;t</source>
-        <translation>&amp;Knippen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1223"/>
-        <source>&amp;Copy</source>
-        <translation>Ko&amp;piëren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1224"/>
-        <source>&amp;Paste</source>
-        <translation>Pl&amp;akken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1225"/>
-        <source>&amp;Delete</source>
-        <translation>&amp;Verwijderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1226"/>
-        <source>Select &amp;All</source>
-        <translation>Alles &amp;selecteren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1227"/>
-        <source>&amp;Construct</source>
-        <translation>&amp;Construeren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1228"/>
-        <source>New Construction &amp;Plane...</source>
-        <translation>Nieuw hulp&amp;vlak...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1229"/>
-        <source>Create a new construction plane</source>
-        <translation>Een nieuw hulpvlak maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1232"/>
-        <source>&amp;View</source>
-        <translation>Beel&amp;d</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1233"/>
-        <source>&amp;Terminal</source>
-        <translation>&amp;Terminal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1272"/>
-        <source>Rotate &amp;Left 90°</source>
-        <translation>90° naar &amp;links draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1273"/>
-        <source>Rotate Ri&amp;ght 90°</source>
-        <translation>90° naar rechts &amp;draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1230"/>
-        <source>&amp;Help</source>
-        <translation>&amp;Help</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="248"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="261"/>
         <source>Recover Unsaved Work</source>
         <translation>Niet-opgeslagen werk herstellen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="232"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="245"/>
         <source>HobbyCAD did not exit cleanly last time.
 
 A recovery copy of your project was saved.</source>
@@ -2737,249 +4894,184 @@ A recovery copy of your project was saved.</source>
 Er is een herstelkopie van uw project opgeslagen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="272"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="285"/>
         <source>Open Recovery Copy</source>
         <translation>Herstelkopie openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="274"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="287"/>
         <source>Ignore for Now</source>
         <translation>Voorlopig negeren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="302"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="315"/>
         <source>Recovered project from the last session</source>
         <translation>Project uit de vorige sessie hersteld</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="324"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="337"/>
         <source>Recovery Failed</source>
         <translation>Herstellen mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="325"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="338"/>
         <source>Could not open the recovery copy:
 %1</source>
         <translation>Kan de herstelkopie niet openen:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1231"/>
-        <source>&amp;About HobbyCAD...</source>
-        <translation>&amp;Over HobbyCAD...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1234"/>
-        <source>P&amp;roject</source>
-        <translation>P&amp;roject</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1235"/>
-        <source>&amp;Properties</source>
-        <translation>&amp;Eigenschappen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1236"/>
-        <source>Tool&amp;bar</source>
-        <translation>&amp;Werkbalk</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1237"/>
-        <source>Change &amp;History</source>
-        <translation>Wijzigings&amp;geschiedenis</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1257"/>
-        <source>&amp;Workspace</source>
-        <translation>Werkr&amp;uimte</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1263"/>
-        <source>&amp;Design</source>
-        <translation>&amp;Ontwerp</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1264"/>
-        <source>&amp;Render</source>
-        <translation>&amp;Rendering</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1265"/>
-        <source>&amp;Animation</source>
-        <translation>&amp;Animatie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1266"/>
-        <source>&amp;Simulation</source>
-        <translation>&amp;Simulatie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1275"/>
-        <source>&amp;Snap to Grid</source>
-        <translation>Uitlijnen op ra&amp;ster</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1276"/>
-        <source>&amp;Z-Up Orientation</source>
-        <translation>&amp;Z-omhoog-oriëntatie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1277"/>
-        <source>&amp;Orbit Selected Object</source>
-        <translation>Om geselecteerd o&amp;bject draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1286"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1202"/>
         <source>System Default (English)</source>
         <translation>Systeemstandaard (Engels)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1287"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1203"/>
         <source>System Default (%1)</source>
         <translation>Systeemstandaard (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1295"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1211"/>
         <source>%1 (machine translation)</source>
         <translation>%1 (machinevertaling)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1373"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1289"/>
         <source>Ready</source>
         <translation>Gereed</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1399"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1315"/>
         <source>OpenGL %1.%2: %3</source>
         <translation>OpenGL %1.%2: %3</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1854"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1770"/>
         <source>Terminal</source>
         <translation>Terminal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1992"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1908"/>
         <source>New document created</source>
         <translation>Nieuw document gemaakt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2729"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2645"/>
         <source>Document closed</source>
         <translation>Document gesloten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2181"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2097"/>
         <source>Opened: %1</source>
         <translation>Geopend: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1437"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4597"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1353"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4279"/>
         <source>Project</source>
         <translation>Project</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1582"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1498"/>
         <source>Files</source>
         <translation>Bestanden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1389"/>
         <source>mm</source>
         <translation>mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1389"/>
         <source>cm</source>
         <translation>cm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1389"/>
         <source>m</source>
         <translation>m</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1389"/>
         <source>in</source>
         <translation>in</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1389"/>
         <source>ft</source>
         <translation>ft</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1490"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1406"/>
         <source>Units: %1</source>
         <translation>Eenheden: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4652"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4876"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5275"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4334"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4537"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4936"/>
         <source>Origin</source>
         <translation>Oorsprong</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4953"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4614"/>
         <source>X Axis</source>
         <translation>X-as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4953"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4614"/>
         <source>Y Axis</source>
         <translation>Y-as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4615"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4297"/>
         <source>Bodies</source>
         <translation>Lichamen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4613"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4295"/>
         <source>Sketches</source>
         <translation>Schetsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1581"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1497"/>
         <source>Objects</source>
         <translation>Objecten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1665"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4916"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1581"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4577"/>
         <source>Properties</source>
         <translation>Eigenschappen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1689"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1605"/>
         <source>Property</source>
         <translation>Eigenschap</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1689"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4736"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1605"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4397"/>
         <source>Value</source>
         <translation>Waarde</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1830"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1746"/>
         <source>History</source>
         <translation>Geschiedenis</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2096"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2012"/>
         <source>Open File</source>
         <translation>Bestand openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2153"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2069"/>
         <source>Opened project: %1</source>
         <translation>Project geopend: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2160"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2076"/>
         <source>Could not open project:
 %1
 
@@ -2990,31 +5082,31 @@ Er is een herstelkopie van uw project opgeslagen.</translation>
 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2323"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2239"/>
         <source>Saved project: %1</source>
         <translation>Project opgeslagen: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2315"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2231"/>
         <source>Could not save project:
 %1</source>
         <translation>Kan het project niet opslaan:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2350"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2387"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2266"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2303"/>
         <source>Saved: %1</source>
         <translation>Opgeslagen: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2159"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2185"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2075"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2101"/>
         <source>Open Failed</source>
         <translation>Openen mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="235"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="248"/>
         <source>
 
 Project: %1</source>
@@ -3023,37 +5115,37 @@ Project: %1</source>
 Project: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="238"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="251"/>
         <source>
 Saved: %1</source>
         <translation>
 Opgeslagen: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="268"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="288"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="281"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="301"/>
         <source>Show Details…</source>
         <translation>Details tonen…</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="273"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2036"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5525"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="286"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1952"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5186"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="288"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="301"/>
         <source>Hide Details…</source>
         <translation>Details verbergen…</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="314"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="327"/>
         <source>Recovered With Damage</source>
         <translation>Hersteld met schade</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="315"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="328"/>
         <source>The recovery copy opened, but %n sketch problem(s) were found in it.
 
 This is expected after a crash: the emergency save records whatever was in memory at the moment of the fault.</source>
@@ -3067,12 +5159,12 @@ Dit is te verwachten na een crash: de noodopslag legt vast wat er op het moment 
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="335"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="348"/>
         <source>Delete Recovery Copy</source>
         <translation>Herstelkopie verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="336"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="349"/>
         <source>Permanently delete the recovered unsaved work?
 
 This cannot be undone.</source>
@@ -3081,412 +5173,168 @@ This cannot be undone.</source>
 Dit kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="342"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="355"/>
         <source>Deleted the recovery copy</source>
         <translation>Herstelkopie verwijderd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="871"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="926"/>
         <source>Finish or cancel the current entity before changing how clicks are interpreted.</source>
         <translation>Voltooi of annuleer de huidige entiteit voordat u wijzigt hoe klikken worden geïnterpreteerd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="807"/>
-        <source>Selection &amp;Filter</source>
-        <translation>Selectie&amp;filter</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="819"/>
-        <source>All</source>
-        <translation>Alles</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="820"/>
-        <source>Points only</source>
-        <translation>Alleen punten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="821"/>
-        <source>Curves only</source>
-        <translation>Alleen krommen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1009"/>
-        <source>S&amp;ketch</source>
-        <translation>S&amp;chets</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1019"/>
-        <source>&amp;Line</source>
-        <translation>&amp;Lijn</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1020"/>
-        <source>&amp;Rectangle</source>
-        <translation>&amp;Rechthoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1021"/>
-        <source>&amp;Circle</source>
-        <translation>&amp;Cirkel</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1022"/>
-        <source>&amp;Arc</source>
-        <translation>&amp;Boog</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1023"/>
-        <source>&amp;Ellipse</source>
-        <translation>&amp;Ellips</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1024"/>
-        <source>&amp;Point</source>
-        <translation>&amp;Punt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1026"/>
-        <source>&amp;Cubic Bezier</source>
-        <translation>&amp;Kubische Bézier</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1027"/>
-        <source>&amp;Catmull-Rom Spline</source>
-        <translation>&amp;Catmull-Rom-spline</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1028"/>
-        <source>&amp;Rational Bezier</source>
-        <translation>&amp;Rationele Bézier</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1029"/>
-        <source>Conic Arc (Rh&amp;o)</source>
-        <translation>Kegelsnedeboog (Rh&amp;o)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1031"/>
-        <source>Curvature Comb</source>
-        <translation>Krommingskam</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1041"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4018"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3881"/>
         <source>Finish Sketch</source>
         <translation>Schets voltooien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1054"/>
-        <source>C&amp;onstraints</source>
-        <translation>&amp;Beperkingen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1068"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4720"/>
-        <source>Curvature (G2)</source>
-        <translation>Kromming (G2)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1073"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4721"/>
-        <source>Point on Spline</source>
-        <translation>Punt op spline</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1074"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4723"/>
-        <source>Tangent Angle</source>
-        <translation>Raaklijnhoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1077"/>
-        <source>Angle (2 lines)</source>
-        <translation>Hoek (2 lijnen)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1085"/>
-        <source>Fix / Unfix</source>
-        <translation>Vastzetten / Losmaken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1090"/>
-        <source>Auto Constrain</source>
-        <translation>Automatisch beperken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1208"/>
-        <source>Import DXF geometry into the active sketch</source>
-        <translation>DXF-geometrie in de actieve schets importeren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1238"/>
-        <source>&amp;Draw, then Constrain</source>
-        <translation>&amp;Tekenen, dan beperken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1239"/>
-        <source>Show &amp;Unconstrained Points</source>
-        <translation>&amp;Niet-beperkte punten tonen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1241"/>
-        <source>Mark endpoints that are not constrained to other geometry</source>
-        <translation>Eindpunten markeren die niet aan andere geometrie zijn gebonden</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1242"/>
-        <source>Show &amp;Constraints</source>
-        <translation>&amp;Beperkingen tonen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1244"/>
-        <source>Show the constraint symbols on the canvas; dimensions are unaffected</source>
-        <translation>De beperkingssymbolen op het canvas tonen; maatvoeringen worden niet beïnvloed</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1246"/>
-        <source>Show &amp;Dimensions</source>
-        <translation>&amp;Maatvoeringen tonen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1248"/>
-        <source>Show the dimensional labels on the canvas; constraint symbols are unaffected</source>
-        <translation>De maatlabels op het canvas tonen; beperkingssymbolen worden niet beïnvloed</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1250"/>
-        <source>Show &amp;Profiles</source>
-        <translation>&amp;Profielen tonen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1251"/>
-        <source>Shade closed sketch profiles in blue</source>
-        <translation>Gesloten schetsprofielen blauw arceren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1252"/>
-        <source>&amp;Fit Sketch to View</source>
-        <translation>Schets in beeld &amp;passen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1253"/>
-        <source>Zoom and pan so the whole sketch is visible</source>
-        <translation>In-/uitzoomen en pannen zodat de hele schets zichtbaar is</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1255"/>
-        <source>Place geometry roughly and fix it with constraints afterwards, instead of snapping and typing dimensions as you place it</source>
-        <translation>Plaats geometrie grofweg en zet deze achteraf vast met beperkingen, in plaats van te snappen en maten te typen tijdens het plaatsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1258"/>
-        <source>L&amp;anguage</source>
-        <translation>Ta&amp;al</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1259"/>
-        <source>&amp;Theme</source>
-        <translation>&amp;Thema</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1260"/>
-        <source>&amp;Light</source>
-        <translation>&amp;Licht</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1261"/>
-        <source>&amp;Dark</source>
-        <translation>&amp;Donker</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1262"/>
-        <source>&amp;Edit...</source>
-        <translation>&amp;Bewerken...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1267"/>
-        <source>Reset &amp;View</source>
-        <translation>Weergave &amp;herstellen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1268"/>
-        <source>Look &amp;At Sketch Plane</source>
-        <translation>Naar schetsvlak &amp;kijken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1269"/>
-        <source>Orient the camera square onto the active sketch plane</source>
-        <translation>De camera loodrecht op het actieve schetsvlak richten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1270"/>
-        <source>&amp;Slice at Sketch Plane</source>
-        <translation>&amp;Doorsnede op schetsvlak</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1271"/>
-        <source>Section the model at the active sketch plane to see inside</source>
-        <translation>Het model op het actieve schetsvlak doorsnijden om de binnenkant te zien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1274"/>
-        <source>Show Gri&amp;d</source>
-        <translation>Raster t&amp;onen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1278"/>
-        <source>Pre&amp;ferences...</source>
-        <translation>&amp;Voorkeuren...</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1318"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1234"/>
         <source>Empty sketch</source>
         <translation>Lege schets</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1319"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1235"/>
         <source>No geometry yet.</source>
         <translation>Nog geen geometrie.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1325"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1241"/>
         <source>1 degree of freedom</source>
         <translation>1 vrijheidsgraad</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1326"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1242"/>
         <source>%1 degrees of freedom</source>
         <translation>%1 vrijheidsgraden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1327"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1243"/>
         <source>The sketch can still move. Add constraints or dimensions to pin it down.</source>
         <translation>De schets kan nog bewegen. Voeg beperkingen of maten toe om deze vast te leggen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1331"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1247"/>
         <source>Fully constrained</source>
         <translation>Volledig beperkt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1333"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1249"/>
         <source>Every degree of freedom is pinned; the sketch has exactly one solution.</source>
         <translation>Elke vrijheidsgraad is vastgezet; de schets heeft precies één oplossing.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1337"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1253"/>
         <source>Over-constrained</source>
         <translation>Overbepaald</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1339"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1255"/>
         <source>The sketch still solves, but some constraints are redundant; they repeat what others already say.</source>
         <translation>De schets lost nog steeds op, maar sommige beperkingen zijn overbodig; ze herhalen wat andere al zeggen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1343"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1259"/>
         <source>Conflicting constraints</source>
         <translation>Tegenstrijdige beperkingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1345"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1261"/>
         <source>No solution exists: two or more constraints contradict each other. The conflicting ones are drawn in red.</source>
         <translation>Er bestaat geen oplossing: twee of meer beperkingen spreken elkaar tegen. De tegenstrijdige worden in rood getekend.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1349"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1265"/>
         <source>Solver failed</source>
         <translation>Solver mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1351"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1267"/>
         <source>The solver could not produce an answer. The sketch may still be satisfiable; this is not the same as a conflict.</source>
         <translation>De solver kon geen antwoord produceren. De schets kan nog steeds oplosbaar zijn; dit is niet hetzelfde als een conflict.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1406"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1322"/>
         <source>Reduced Mode</source>
         <translation>Beperkte modus</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1413"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1329"/>
         <source>The 3D viewport is disabled because the OCCT viewer could not start.</source>
         <translation>De 3D-weergave is uitgeschakeld omdat de OCCT-viewer niet kon starten.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1420"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1336"/>
         <source>The 3D viewport is disabled because OpenGL 3.3+ was not detected.</source>
         <translation>De 3D-weergave is uitgeschakeld omdat OpenGL 3.3+ niet is gedetecteerd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1424"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1340"/>
         <source>File operations and geometry operations still work normally.</source>
         <translation>Bestands- en geometriebewerkingen werken nog steeds normaal.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1532"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1448"/>
         <source>Another %1 is already called &apos;%2&apos;.</source>
         <translation>Een andere %1 heet al &apos;%2&apos;.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1542"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1458"/>
         <source>This item cannot be renamed.</source>
         <translation>Dit item kan niet worden hernoemd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1813"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1729"/>
         <source>Options</source>
         <translation>Opties</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2022"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1938"/>
         <source>Open the sketch before calibrating its canvas</source>
         <translation>Open de schets voordat u het canvas kalibreert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2037"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1953"/>
         <source>Export</source>
         <translation>Exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2038"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1954"/>
         <source>Embed a copy</source>
         <translation>Een kopie insluiten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2039"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1955"/>
         <source>Link to a project file</source>
         <translation>Koppelen aan een projectbestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2040"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1956"/>
         <source>Editing this</source>
         <translation>Dit bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2043"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5525"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1959"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5186"/>
         <source>%1 is not implemented yet</source>
         <translation>%1 is nog niet geïmplementeerd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2073"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1989"/>
         <source>Link to Project</source>
         <translation>Aan project koppelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2074"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1990"/>
         <source>Relink &apos;%1&apos;</source>
         <translation>&apos;%1&apos; opnieuw koppelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2087"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2003"/>
         <source>Relinking is not implemented yet (selected: %1)</source>
         <translation>Opnieuw koppelen is nog niet geïmplementeerd (geselecteerd: %1)</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2149"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2065"/>
         <source>Opened project: %1 (%n sketch(es) not finished)</source>
         <translation>
             <numerusform>Project geopend: %1 (%n schets niet voltooid)</numerusform>
@@ -3494,240 +5342,240 @@ Dit kan niet ongedaan worden gemaakt.</translation>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2186"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2102"/>
         <source>Could not open file:
 %1</source>
         <translation>Kan het bestand niet openen:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2286"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2202"/>
         <source>Undo</source>
         <translation>Ongedaan maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2287"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2203"/>
         <source>Undo %1</source>
         <translation>%1 ongedaan maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2292"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2208"/>
         <source>Redo</source>
         <translation>Opnieuw</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2293"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2209"/>
         <source>Redo %1</source>
         <translation>%1 opnieuw</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2314"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2353"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2390"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2862"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2887"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2230"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2269"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2306"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2778"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2803"/>
         <source>Save Failed</source>
         <translation>Opslaan mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2354"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2391"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2863"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2888"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2270"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2307"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2779"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2804"/>
         <source>Could not save file:
 %1</source>
         <translation>Kan het bestand niet opslaan:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2366"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2870"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2282"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2786"/>
         <source>Save As</source>
         <translation>Opslaan als</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2405"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2321"/>
         <source>Import STEP File</source>
         <translation>STEP-bestand importeren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2407"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2323"/>
         <source>STEP Files (*.step *.stp *.STEP *.STP);;All Files (*)</source>
         <translation>STEP-bestanden (*.step *.stp *.STEP *.STP);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2417"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2630"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2333"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2546"/>
         <source>Import Failed</source>
         <translation>Importeren mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2418"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2334"/>
         <source>Failed to import STEP file:
 %1</source>
         <translation>Kan het STEP-bestand niet importeren:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2431"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2347"/>
         <source>Imported %1 shape(s) from STEP file</source>
         <translation>%1 vorm(en) geïmporteerd uit het STEP-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2446"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2362"/>
         <source>Export STEP</source>
         <translation>STEP exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2447"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2494"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2363"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2410"/>
         <source>No geometry to export.
 Create some geometry first using extrude or other operations.</source>
         <translation>Geen geometrie om te exporteren.
 Maak eerst geometrie met extruderen of andere bewerkingen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2454"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2370"/>
         <source>Export STEP File</source>
         <translation>STEP-bestand exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2456"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2372"/>
         <source>STEP Files (*.step);;All Files (*)</source>
         <translation>STEP-bestanden (*.step);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2472"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2518"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2601"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2710"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5605"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5634"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2388"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2434"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2517"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2626"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5266"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5295"/>
         <source>Export Failed</source>
         <translation>Exporteren mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2473"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2389"/>
         <source>Failed to export STEP file:
 %1</source>
         <translation>Kan het STEP-bestand niet exporteren:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2478"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2394"/>
         <source>Exported %1 shape(s) to STEP file</source>
         <translation>%1 vorm(en) geëxporteerd naar het STEP-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2493"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2409"/>
         <source>Export STL</source>
         <translation>STL exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2501"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2417"/>
         <source>Export STL File</source>
         <translation>STL-bestand exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2503"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2419"/>
         <source>STL Files (*.stl);;All Files (*)</source>
         <translation>STL-bestanden (*.stl);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2519"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2435"/>
         <source>Failed to export STL file:
 %1</source>
         <translation>Kan het STL-bestand niet exporteren:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2523"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2439"/>
         <source>Exported geometry to STL file</source>
         <translation>Geometrie geëxporteerd naar het STL-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2559"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2569"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2576"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5594"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2475"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2485"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2492"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5255"/>
         <source>Export DXF</source>
         <translation>DXF exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2560"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2577"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2667"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2688"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2476"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2493"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2583"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2604"/>
         <source>The sketch is empty. Add some geometry first.</source>
         <translation>De schets is leeg. Voeg eerst geometrie toe.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2570"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2681"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2486"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2597"/>
         <source>No sketch available for export.
 Enter sketch mode or select a completed sketch in the timeline.</source>
         <translation>Geen schets beschikbaar om te exporteren.
 Ga naar de schetsmodus of kies een voltooide schets in de tijdlijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2583"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5597"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2499"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5258"/>
         <source>Export DXF File</source>
         <translation>DXF-bestand exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2585"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2621"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5598"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2501"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2537"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5259"/>
         <source>DXF Files (*.dxf);;All Files (*)</source>
         <translation>DXF-bestanden (*.dxf);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2602"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5605"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2518"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5266"/>
         <source>Failed to export DXF file.</source>
         <translation>Kan het DXF-bestand niet exporteren.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2607"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2523"/>
         <source>Exported %1 entities to DXF file</source>
         <translation>%1 entiteiten geëxporteerd naar het DXF-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2614"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2636"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2530"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2552"/>
         <source>Import DXF</source>
         <translation>DXF importeren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2615"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2531"/>
         <source>Enter a sketch first. DXF geometry is imported into the active sketch.</source>
         <translation>Ga eerst een schets binnen. DXF-geometrie wordt in de actieve schets geïmporteerd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2620"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2536"/>
         <source>Import DXF File</source>
         <translation>DXF-bestand importeren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2631"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2547"/>
         <source>Could not import the DXF file:
 %1</source>
         <translation>Kon het DXF-bestand niet importeren:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2637"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2553"/>
         <source>No supported geometry was found in the DXF file.</source>
         <translation>Er is geen ondersteunde geometrie gevonden in het DXF-bestand.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2649"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2565"/>
         <source>DXF Imported with Notes</source>
         <translation>DXF geïmporteerd met opmerkingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2650"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2566"/>
         <source>Imported %1 entities. Notes:
 
 %2</source>
@@ -3736,186 +5584,186 @@ Ga naar de schetsmodus of kies een voltooide schets in de tijdlijn.</translation
 %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2652"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2568"/>
         <source>Imported %1 entities from DXF</source>
         <translation>%1 entiteiten geïmporteerd uit DXF</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2666"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2680"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2687"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5622"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2582"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2596"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2603"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5283"/>
         <source>Export SVG</source>
         <translation>SVG exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2694"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5625"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2610"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5286"/>
         <source>Export SVG File</source>
         <translation>SVG-bestand exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2696"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5626"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2612"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5287"/>
         <source>SVG Files (*.svg);;All Files (*)</source>
         <translation>SVG-bestanden (*.svg);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2711"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5634"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2627"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5295"/>
         <source>Failed to export SVG file.</source>
         <translation>Kan het SVG-bestand niet exporteren.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2716"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2632"/>
         <source>Exported %1 entities to SVG file</source>
         <translation>%1 entiteiten geëxporteerd naar het SVG-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2832"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2748"/>
         <source>Unsaved Changes</source>
         <translation>Niet-opgeslagen wijzigingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2833"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2749"/>
         <source>The document has been modified.</source>
         <translation>Het document is gewijzigd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2834"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2750"/>
         <source>Do you want to save your changes?</source>
         <translation>Wilt u uw wijzigingen opslaan?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2838"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2754"/>
         <source>Close Without Saving</source>
         <translation>Sluiten zonder opslaan</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2840"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2756"/>
         <source>Save and Close</source>
         <translation>Opslaan en sluiten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2842"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="2758"/>
         <source>Cancel</source>
         <translation>Annuleren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3220"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3085"/>
         <source>Base width dimension</source>
         <translation>Basisbreedtemaat</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3229"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3094"/>
         <source>Base height dimension</source>
         <translation>Basishoogtemaat</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3238"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3103"/>
         <source>Base depth dimension</source>
         <translation>Basisdieptemaat</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3247"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3112"/>
         <source>Default fillet radius</source>
         <translation>Standaard afrondingsstraal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3256"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3121"/>
         <source>Default angle</source>
         <translation>Standaardhoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3266"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3131"/>
         <source>Extrude1 distance</source>
         <translation>Afstand van Extrusie1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3275"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3140"/>
         <source>Fillet1 radius (uses &apos;radius&apos; param)</source>
         <translation>Straal van Afronding1 (gebruikt parameter &apos;radius&apos;)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3317"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3182"/>
         <source>Circular parameter definition (%1): not applied</source>
         <translation>Circulaire parameterdefinitie (%1): niet toegepast</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3394"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3259"/>
         <source>Parameters updated</source>
         <translation>Parameters bijgewerkt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3495"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3360"/>
         <source>Click to select entities, drag to move</source>
         <translation>Klik om entiteiten te selecteren, sleep om te verplaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3498"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3363"/>
         <source>Click to start line, click again to end</source>
         <translation>Klik om de lijn te beginnen, klik nogmaals om te eindigen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3501"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3366"/>
         <source>Click and drag to draw rectangle</source>
         <translation>Klik en sleep om een rechthoek te tekenen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3504"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3369"/>
         <source>Click center, drag to set radius</source>
         <translation>Klik op het middelpunt, sleep om de straal in te stellen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3507"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3372"/>
         <source>Click center, drag to set radius and arc</source>
         <translation>Klik op het middelpunt, sleep om straal en boog in te stellen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3510"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3375"/>
         <source>Click to place construction point</source>
         <translation>Klik om een hulppunt te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3513"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3378"/>
         <source>Click two points or an entity to add dimension</source>
         <translation>Klik op twee punten of een entiteit om een maat toe te voegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3516"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3381"/>
         <source>Select entities to add constraints</source>
         <translation>Kies entiteiten om randvoorwaarden toe te voegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3519"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3384"/>
         <source>Select a tool to start drawing</source>
         <translation>Kies een gereedschap om te beginnen met tekenen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3530"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4757"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5009"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5332"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3395"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4418"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4670"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4993"/>
         <source>Entities</source>
         <translation>Entiteiten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3623"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3488"/>
         <source>Sketch %1</source>
         <translation>Schets %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3625"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3490"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3665"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3530"/>
         <source>Sketch Cannot Be Finished</source>
         <translation>Schets kan niet worden voltooid</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3668"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3533"/>
         <source>This sketch has %n problem(s), so it is not finished yet.
 
 Fix them, or discard the sketch. Saving still works in the meantime.</source>
@@ -3929,12 +5777,12 @@ Los ze op, of verwerp de schets. Opslaan werkt ondertussen nog.</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3678"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3543"/>
         <source>Finishing A Damaged Sketch</source>
         <translation>Een beschadigde schets voltooien</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3679"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3544"/>
         <source>HOBBYCAD_DEBUG is set, so this sketch is being kept despite %n problem(s).
 
 %1</source>
@@ -3948,1458 +5796,823 @@ Los ze op, of verwerp de schets. Opslaan werkt ondertussen nog.</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3694"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3559"/>
         <source>Create %1</source>
         <translation>%1 maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3694"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3559"/>
         <source>Edit %1</source>
         <translation>%1 bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3704"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3569"/>
         <source>Sketch &apos;%1&apos; saved with %2 entities</source>
         <translation>Schets &apos;%1&apos; opgeslagen met %2 entiteiten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3721"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3586"/>
         <source>Changes to &apos;%1&apos; discarded</source>
         <translation>Wijzigingen in &apos;%1&apos; verworpen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3723"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3588"/>
         <source>Empty sketch discarded</source>
         <translation>Lege schets verworpen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3725"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3590"/>
         <source>Sketch discarded (%1 entities)</source>
         <translation>Schets verworpen (%1 entiteiten)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3735"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3600"/>
         <source>Calibrate Background</source>
         <translation>Achtergrond kalibreren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3736"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3601"/>
         <source>Load a background image before calibrating it.</source>
         <translation>Laad een achtergrondafbeelding voordat u deze kalibreert.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3766"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3631"/>
         <source>Background image calibrated</source>
         <translation>Achtergrondafbeelding gekalibreerd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3788"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3653"/>
         <source>Background image removed</source>
         <translation>Achtergrondafbeelding verwijderd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3987"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3850"/>
         <source>Sketch mode - Draw entities or press Escape to finish</source>
         <translation>Schetsmodus - teken entiteiten of druk op Esc om te eindigen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4018"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3881"/>
         <source>Save this sketch?</source>
         <translation>Deze schets opslaan?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4074"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3937"/>
         <source>Sketch finished</source>
         <translation>Schets voltooid</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4122"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="3985"/>
         <source>X: %1  Y: %2</source>
         <translation>X: %1  Y: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4188"/>
-        <source>Corner %1</source>
-        <translation>Hoek %1</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4339"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4650"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4688"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4893"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4084"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4332"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4370"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4554"/>
         <source>Type</source>
         <translation>Type</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4342"/>
-        <source>Point</source>
-        <translation>Punt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4343"/>
-        <source>Line</source>
-        <translation>Lijn</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4344"/>
-        <source>Rectangle</source>
-        <translation>Rechthoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4345"/>
-        <source>Parallelogram</source>
-        <translation>Parallellogram</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4346"/>
-        <source>Circle</source>
-        <translation>Cirkel</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4347"/>
-        <source>Arc</source>
-        <translation>Boog</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4348"/>
-        <source>Spline</source>
-        <translation>Spline</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4349"/>
-        <source>Polygon</source>
-        <translation>Veelhoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4350"/>
-        <source>Slot</source>
-        <translation>Sleuf</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4351"/>
-        <source>Ellipse</source>
-        <translation>Ellips</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4943"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4604"/>
         <source>One Side (Reverse)</source>
         <translation>Eén zijde (omgekeerd)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4944"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4605"/>
         <source>Two Sides (Symmetric)</source>
         <translation>Twee zijden (symmetrisch)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4953"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4614"/>
         <source>Sketch Line</source>
         <translation>Schetslijn</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5331"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4992"/>
         <source>%1 mm</source>
         <translation>%1 mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5364"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5025"/>
         <source>Origin cannot be %1</source>
         <translation>De oorsprong kan niet %1 zijn</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5375"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5036"/>
         <source>Please select a sketch in the timeline first.</source>
         <translation>Kies eerst een schets in de tijdlijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5380"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5041"/>
         <source>Please select a sketch to %1.</source>
         <translation>Kies een schets om te %1.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5386"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5047"/>
         <source>Could not find sketch data.</source>
         <translation>Kan de schetsgegevens niet vinden.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5393"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5054"/>
         <source>No closed profiles found in the sketch.
 Make sure the sketch contains a closed loop.</source>
         <translation>Geen gesloten profielen gevonden in de schets.
 Zorg dat de schets een gesloten lus bevat.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5441"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5448"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5512"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5102"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5109"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5173"/>
         <source>Rename to %1</source>
         <translation>Hernoemen naar %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5476"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5137"/>
         <source>edited</source>
         <translation>bewerkt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5479"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5140"/>
         <source>Editing %1 features not yet implemented</source>
         <translation>Het bewerken van %1-kenmerken is nog niet geïmplementeerd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5502"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5163"/>
         <source>renamed</source>
         <translation>hernoemd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5506"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5167"/>
         <source>Rename Feature</source>
         <translation>Kenmerk hernoemen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5506"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5167"/>
         <source>New name:</source>
         <translation>Nieuwe naam:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5515"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5176"/>
         <source>Renamed to &apos;%1&apos;</source>
         <translation>Hernoemd naar &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5520"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5181"/>
         <source>deleted</source>
         <translation>verwijderd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5530"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5191"/>
         <source>Delete Feature</source>
         <translation>Kenmerk verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5531"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5192"/>
         <source>Are you sure you want to delete &apos;%1&apos;?</source>
         <translation>Weet u zeker dat u &apos;%1&apos; wilt verwijderen?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5536"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5197"/>
         <source>Delete %1</source>
         <translation>%1 verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5539"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5200"/>
         <source>Deleted &apos;%1&apos;</source>
         <translation>&apos;%1&apos; verwijderd</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5545"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5206"/>
         <source>suppressed</source>
         <translation>onderdrukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5551"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5212"/>
         <source>Suppress %1</source>
         <translation>%1 onderdrukken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5551"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5212"/>
         <source>Unsuppress %1</source>
         <translation>%1 heractiveren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5555"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5216"/>
         <source>Suppressed &apos;%1&apos;</source>
         <translation>&apos;%1&apos; onderdrukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5555"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5216"/>
         <source>Unsuppressed &apos;%1&apos;</source>
         <translation>Onderdrukking van &apos;%1&apos; opgeheven</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5567"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5568"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5228"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5229"/>
         <source>Moved &apos;%1&apos;</source>
         <translation>&apos;%1&apos; verplaatst</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5578"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5239"/>
         <source>Rollback cleared - all features active</source>
         <translation>Terugrol opgeheven - alle kenmerken actief</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5580"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5241"/>
         <source>Rolled back to &apos;%1&apos;</source>
         <translation>Teruggerold naar &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5594"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5622"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5255"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5283"/>
         <source>The sketch &apos;%1&apos; is empty.</source>
         <translation>De schets &apos;%1&apos; is leeg.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5608"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5269"/>
         <source>Exported &apos;%1&apos; (%2 entities) to DXF file</source>
         <translation>&apos;%1&apos; (%2 entiteiten) geëxporteerd naar DXF-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5637"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5298"/>
         <source>Exported &apos;%1&apos; (%2 entities) to SVG file</source>
         <translation>&apos;%1&apos; (%2 entiteiten) geëxporteerd naar SVG-bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4307"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4352"/>
-        <source>Text</source>
-        <translation>Tekst</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4353"/>
-        <source>Dimension</source>
-        <translation>Maat</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4358"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4728"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4087"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4389"/>
         <source>ID</source>
         <translation>ID</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4362"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4091"/>
         <source>Geometry</source>
         <translation>Geometrie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4305"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4368"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4933"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4594"/>
         <source>Position</source>
         <translation>Positie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4166"/>
-        <source>Start</source>
-        <translation>Begin</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4168"/>
-        <source>End</source>
-        <translation>Einde</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4171"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4265"/>
-        <source>Length</source>
-        <translation>Lengte</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4192"/>
-        <source>Corner 1</source>
-        <translation>Hoek 1</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4194"/>
-        <source>Corner 2</source>
-        <translation>Hoek 2</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4197"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4269"/>
-        <source>Width</source>
-        <translation>Breedte</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4205"/>
-        <source>Height</source>
-        <translation>Hoogte</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4219"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4232"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4247"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4278"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4511"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4193"/>
         <source>Center</source>
         <translation>Middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4221"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4234"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4251"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4693"/>
-        <source>Radius</source>
-        <translation>Straal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4223"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4694"/>
-        <source>Diameter</source>
-        <translation>Diameter</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4236"/>
-        <source>Start Angle</source>
-        <translation>Beginhoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4238"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4703"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4381"/>
         <source>Sweep Angle</source>
         <translation>Veeghoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4249"/>
-        <source>Sides</source>
-        <translation>Zijden</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4260"/>
-        <source>Center 1</source>
-        <translation>Middelpunt 1</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4262"/>
-        <source>Center 2</source>
-        <translation>Middelpunt 2</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4280"/>
-        <source>Major Radius</source>
-        <translation>Grote straal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4282"/>
-        <source>Minor Radius</source>
-        <translation>Kleine straal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4291"/>
-        <source>Control Points</source>
-        <translation>Controlepunten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4295"/>
-        <source>Point %1</source>
-        <translation>Punt %1</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4309"/>
-        <source>Font Size</source>
-        <translation>Tekengrootte</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4311"/>
-        <source>Rotation</source>
-        <translation>Rotatie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4096"/>
         <source>Constrained</source>
         <translation>Vastgelegd</translation>
     </message>
     <message>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4096"/>
         <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
         <source>Yes</source>
         <translation>Ja</translation>
     </message>
     <message>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4096"/>
         <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
         <source>No</source>
         <translation>Nee</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4427"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4109"/>
         <source>Group</source>
         <translation>Groep</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4441"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4123"/>
         <source>Members</source>
         <translation>Leden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1930"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4449"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1846"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4131"/>
         <source>point</source>
         <translation>punt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1929"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4450"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1845"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4132"/>
         <source>line</source>
         <translation>lijn</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4451"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4133"/>
         <source>rectangle</source>
         <translation>rechthoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1933"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4453"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1849"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4135"/>
         <source>circle</source>
         <translation>cirkel</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1934"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4454"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1850"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4136"/>
         <source>arc</source>
         <translation>boog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1931"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4455"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1847"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4137"/>
         <source>spline</source>
         <translation>spline</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1932"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4456"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1848"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4138"/>
         <source>polygon</source>
         <translation>veelhoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4457"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4139"/>
         <source>slot</source>
         <translation>sleuf</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1935"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4458"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1851"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4140"/>
         <source>ellipse</source>
         <translation>ellips</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4452"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4134"/>
         <source>parallelogram</source>
         <translation>parallellogram</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4459"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4141"/>
         <source>text</source>
         <translation>tekst</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4460"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4142"/>
         <source>dimension</source>
         <translation>maatvoering</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4469"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4151"/>
         <source>Click to enter the group and select this member</source>
         <translation>Klik om de groep binnen te gaan en dit lid te selecteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4483"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4165"/>
         <source>Click to select this constraint</source>
         <translation>Klik om deze beperking te selecteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4487"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4169"/>
         <source>Locked</source>
         <translation>Vergrendeld</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4496"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4178"/>
         <source>Geometric center</source>
         <translation>Geometrisch middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4500"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4182"/>
         <source>Pivot</source>
         <translation>Draaipunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4502"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4184"/>
         <source>center</source>
         <translation>middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4506"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4188"/>
         <source>Type &quot;x, y&quot; to store a pivot on the group, or &quot;center&quot; to follow the geometric center</source>
         <translation>Typ &quot;x, y&quot; om een draaipunt op de groep op te slaan, of &quot;center&quot; om het geometrische middelpunt te volgen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4509"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4191"/>
         <source>Reset pivot</source>
         <translation>Draaipunt herstellen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4513"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4195"/>
         <source>Drop the stored pivot; the group rotates about its geometric center again (one undo step)</source>
         <translation>Verwijder het opgeslagen draaipunt; de groep draait weer om zijn geometrische middelpunt (één stap ongedaan maken)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4597"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4279"/>
         <source>Untitled</source>
         <translation>Naamloos</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4598"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4280"/>
         <source>File</source>
         <translation>Bestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4598"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4280"/>
         <source>Not saved yet</source>
         <translation>Nog niet opgeslagen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4599"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4281"/>
         <source>Units</source>
         <translation>Eenheden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4611"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4293"/>
         <source>Contents</source>
         <translation>Inhoud</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4614"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4296"/>
         <source>Features</source>
         <translation>Bewerkingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4616"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4298"/>
         <source>Planes</source>
         <translation>Vlakken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4617"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4299"/>
         <source>Parameters</source>
         <translation>Parameters</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4620"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4302"/>
         <source>Pick a plane, sketch, or feature to see its properties.</source>
         <translation>Kies een vlak, schets of bewerking om de eigenschappen te zien.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4621"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4303"/>
         <source>Select an item in the Project tree or the timeline.</source>
         <translation>Selecteer een item in de projectboom of de tijdlijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4639"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4321"/>
         <source>XY plane</source>
         <translation>XY-vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4639"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4321"/>
         <source>+Z</source>
         <translation>+Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4639"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4321"/>
         <source>Sketch X = global X, sketch Y = global Y</source>
         <translation>Schets-X = globale X, schets-Y = globale Y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4640"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4322"/>
         <source>XZ plane</source>
         <translation>XZ-vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4640"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4322"/>
         <source>+Y</source>
         <translation>+Y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4640"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4322"/>
         <source>Sketch X = global X, sketch Y = global Z</source>
         <translation>Schets-X = globale X, schets-Y = globale Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4641"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4323"/>
         <source>YZ plane</source>
         <translation>YZ-vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4641"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4323"/>
         <source>+X</source>
         <translation>+X</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4641"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4323"/>
         <source>Sketch X = global Y, sketch Y = global Z</source>
         <translation>Schets-X = globale Y, schets-Y = globale Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4642"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4324"/>
         <source>Custom plane</source>
         <translation>Aangepast vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4642"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4324"/>
         <source>(derived)</source>
         <translation>(afgeleid)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4650"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4332"/>
         <source>Origin plane</source>
         <translation>Oorsprongvlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4651"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4333"/>
         <source>Normal</source>
         <translation>Normaal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4653"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4335"/>
         <source>Axes</source>
         <translation>Assen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4654"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5007"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5331"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4336"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4668"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4992"/>
         <source>Offset</source>
         <translation>Verschuiving</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4654"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4336"/>
         <source>0 (fixed)</source>
         <translation>0 (vast)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4656"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4338"/>
         <source>Sketches here</source>
         <translation>Schetsen hier</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4656"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4338"/>
         <source>Completed sketches on this plane</source>
         <translation>Voltooide schetsen op dit vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4661"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5019"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4343"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4680"/>
         <source>Actions</source>
         <translation>Acties</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4662"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4344"/>
         <source>New sketch</source>
         <translation>Nieuwe schets</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4663"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4345"/>
         <source>Starts a sketch on this plane, the same as the Sketch button while it is selected</source>
         <translation>Start een schets op dit vlak, hetzelfde als de Schets-knop terwijl het geselecteerd is</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4667"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4349"/>
         <source>Offset or angled: Construct &gt; New Construction Plane.</source>
         <translation>Verschoven of onder een hoek: Construeren &gt; Nieuw constructievlak.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4692"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4941"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4602"/>
         <source>Distance</source>
         <translation>Afstand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4703"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4951"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4612"/>
         <source>Angle</source>
         <translation>Hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4705"/>
-        <source>Fixed Angle</source>
-        <translation>Vaste hoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4722"/>
-        <source>Radius of Curvature</source>
-        <translation>Kromtestraal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4658"/>
         <source>Custom</source>
         <translation>Aangepast</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5012"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4673"/>
         <source>Groups</source>
         <translation>Groepen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5020"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4681"/>
         <source>Edit sketch</source>
         <translation>Schets bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5021"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4682"/>
         <source>Open this sketch in the sketcher</source>
         <translation>Deze schets in de schetser openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5078"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5165"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4739"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4826"/>
         <source>&apos;%1&apos; is not a number or an expression.</source>
         <translation>&apos;%1&apos; is geen getal of expressie.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5150"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4811"/>
         <source>&apos;%1&apos; is not a point; use &quot;x, y&quot; (a unit may follow).</source>
         <translation>&apos;%1&apos; is geen punt; gebruik &quot;x, y&quot; (een eenheid mag volgen).</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5178"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4839"/>
         <source>&apos;%1&apos; is not a number.</source>
         <translation>&apos;%1&apos; is geen getal.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5082"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4743"/>
         <source>A size must be greater than zero.</source>
         <translation>Een grootte moet groter zijn dan nul.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5103"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4764"/>
         <source>A group needs a name.</source>
         <translation>Een groep heeft een naam nodig.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5117"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4778"/>
         <source>&apos;%1&apos; is not a point; use &quot;x, y&quot; or &quot;center&quot;.</source>
         <translation>&apos;%1&apos; is geen punt; gebruik &quot;x, y&quot; of &quot;center&quot;.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5174"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4835"/>
         <source>A radius must be a positive number.</source>
         <translation>Een straal moet een positief getal zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5176"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4837"/>
         <source>A diameter must be a positive number.</source>
         <translation>Een diameter moet een positief getal zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1063"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4706"/>
-        <source>Horizontal</source>
-        <translation>Horizontaal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1064"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4707"/>
-        <source>Vertical</source>
-        <translation>Verticaal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1065"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4708"/>
-        <source>Parallel</source>
-        <translation>Parallel</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1066"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4709"/>
-        <source>Perpendicular</source>
-        <translation>Loodrecht</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1062"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4710"/>
-        <source>Coincident</source>
-        <translation>Samenvallend</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1067"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4711"/>
-        <source>Tangent</source>
-        <translation>Rakend</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1069"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4712"/>
-        <source>Equal</source>
-        <translation>Gelijk</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1070"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4713"/>
-        <source>Midpoint</source>
-        <translation>Middelpunt van lijn</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1082"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4714"/>
-        <source>Symmetric</source>
-        <translation>Symmetrisch</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1071"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4715"/>
-        <source>Concentric</source>
-        <translation>Concentrisch</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1072"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4716"/>
-        <source>Collinear</source>
-        <translation>Collineair</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4717"/>
-        <source>Point On Line</source>
-        <translation>Punt op lijn</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4718"/>
-        <source>Point On Circle</source>
-        <translation>Punt op cirkel</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4719"/>
-        <source>Fixed Point</source>
-        <translation>Vast punt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4750"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4411"/>
         <source>Mode</source>
         <translation>Modus</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4750"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4411"/>
         <source>Driving</source>
         <translation>Sturend</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4750"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4411"/>
         <source>Reference</source>
         <translation>Referentie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4753"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4414"/>
         <source>Enabled</source>
         <translation>Ingeschakeld</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1955"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4432"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4649"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4870"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1871"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4114"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4331"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4531"/>
         <source>Name</source>
         <translation>Naam</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4877"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4902"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4538"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4563"/>
         <source>Sketch</source>
         <translation>Schets</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4878"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4539"/>
         <source>Extrude</source>
         <translation>Extruderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4879"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4540"/>
         <source>Revolve</source>
         <translation>Wentelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4880"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4541"/>
         <source>Fillet</source>
         <translation>Afronding</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4881"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4542"/>
         <source>Chamfer</source>
         <translation>Afschuining</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4882"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4543"/>
         <source>Hole</source>
         <translation>Gat</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4883"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4544"/>
         <source>Mirror</source>
         <translation>Spiegelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4884"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4545"/>
         <source>Pattern</source>
         <translation>Patroon</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4885"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4546"/>
         <source>Box</source>
         <translation>Balk</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4886"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4547"/>
         <source>Cylinder</source>
         <translation>Cilinder</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4887"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4548"/>
         <source>Sphere</source>
         <translation>Bol</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4888"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4549"/>
         <source>Move</source>
         <translation>Verplaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4889"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4550"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4589"/>
         <source>Join</source>
         <translation>Samenvoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4890"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4551"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4589"/>
         <source>Cut</source>
         <translation>Knippen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4891"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4552"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4589"/>
         <source>Intersect</source>
         <translation>Snijden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4652"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4933"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4334"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4594"/>
         <source>(0, 0, 0)</source>
         <translation>(0, 0, 0)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4903"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4564"/>
         <source>Click to select this sketch</source>
         <translation>Klik om deze schets te selecteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4945"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4606"/>
         <source>Direction</source>
         <translation>Richting</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4943"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4604"/>
         <source>One Side</source>
         <translation>Eén zijde</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4947"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4956"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4608"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4617"/>
         <source>Operation</source>
         <translation>Bewerking</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4928"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4589"/>
         <source>New Body</source>
         <translation>Nieuw lichaam</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4954"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4615"/>
         <source>Axis</source>
         <translation>As</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1961"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1877"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4658"/>
         <source>XY</source>
         <translation>XY</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1961"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1877"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4658"/>
         <source>XZ</source>
         <translation>XZ</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1961"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4997"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1877"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4658"/>
         <source>YZ</source>
         <translation>YZ</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1960"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4998"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5000"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1876"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4659"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4661"/>
         <source>Plane</source>
         <translation>Vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1802"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4473"/>
-        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="5010"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="1718"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4155"/>
+        <location filename="../../src/hobbycad/gui/mainwindow.cpp" line="4671"/>
         <source>Constraints</source>
         <translation>Randvoorwaarden</translation>
-    </message>
-</context>
-<context>
-    <name>hobbycad::ModelToolbar</name>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="68"/>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="563"/>
-        <source>Sketch</source>
-        <translation>Schets</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="581"/>
-        <source>Create a 2D sketch</source>
-        <translation>Een 2D-schets maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="564"/>
-        <source>Plane</source>
-        <translation>Vlak</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="582"/>
-        <source>Create construction plane</source>
-        <translation>Een hulpvlak maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="565"/>
-        <source>Solid</source>
-        <translation>Vast
-lichaam</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="583"/>
-        <source>Create solid geometry</source>
-        <translation>Vaste geometrie maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="88"/>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="566"/>
-        <source>Fillet</source>
-        <translation>Afronding</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="584"/>
-        <source>Round or bevel edges</source>
-        <translation>Randen afronden of afschuinen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="567"/>
-        <source>Simple
-Hole</source>
-        <translation>Eenvoudig
-gat</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="68"/>
-        <source>Create sketch on a plane</source>
-        <translation>Een schets op een vlak maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="69"/>
-        <source>Sketch on
-Face</source>
-        <translation>Schets op
-vlak</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="69"/>
-        <source>Create sketch on existing face</source>
-        <translation>Een schets op een bestaand vlak maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="71"/>
-        <source>Construction
-Plane</source>
-        <translation>Hulp-
-vlak</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="71"/>
-        <source>Create a construction plane</source>
-        <translation>Een hulpvlak maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="73"/>
-        <source>Extrude</source>
-        <translation>Extruderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="73"/>
-        <source>Extrude to add material</source>
-        <translation>Extruderen om materiaal toe te voegen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="74"/>
-        <source>Cut
-Extrude</source>
-        <translation>Snij-
-extrusie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="74"/>
-        <source>Extrude to remove material</source>
-        <translation>Extruderen om materiaal te verwijderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="75"/>
-        <source>Revolve</source>
-        <translation>Wentelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="75"/>
-        <source>Revolve to add material</source>
-        <translation>Wentelen om materiaal toe te voegen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="76"/>
-        <source>Cut
-Revolve</source>
-        <translation>Snij-
-wenteling</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="76"/>
-        <source>Revolve to remove material</source>
-        <translation>Wentelen om materiaal te verwijderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="77"/>
-        <source>Loft</source>
-        <translation>Loft</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="77"/>
-        <source>Loft to add material</source>
-        <translation>Loften om materiaal toe te voegen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="78"/>
-        <source>Cut
-Loft</source>
-        <translation>Snij-
-loft</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="78"/>
-        <source>Loft to remove material</source>
-        <translation>Loften om materiaal te verwijderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="79"/>
-        <source>Sweep</source>
-        <translation>Sweep</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="79"/>
-        <source>Sweep to add material</source>
-        <translation>Sweepen om materiaal toe te voegen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="80"/>
-        <source>Cut
-Sweep</source>
-        <translation>Snij-
-sweep</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="80"/>
-        <source>Sweep to remove material</source>
-        <translation>Sweepen om materiaal te verwijderen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="81"/>
-        <source>Box</source>
-        <translation>Balk</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="81"/>
-        <source>Create a box</source>
-        <translation>Een balk maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="82"/>
-        <source>Cylinder</source>
-        <translation>Cilinder</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="82"/>
-        <source>Create a cylinder</source>
-        <translation>Een cilinder maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="83"/>
-        <source>Sphere</source>
-        <translation>Bol</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="83"/>
-        <source>Create a sphere</source>
-        <translation>Een bol maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="84"/>
-        <source>Torus</source>
-        <translation>Torus</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="84"/>
-        <source>Create a torus</source>
-        <translation>Een torus maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="85"/>
-        <source>Coil</source>
-        <translation>Spiraal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="85"/>
-        <source>Create a coil/helix</source>
-        <translation>Een spiraal/helix maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="86"/>
-        <source>Pipe</source>
-        <translation>Buis</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="86"/>
-        <source>Create a pipe along a path</source>
-        <translation>Een buis langs een pad maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="88"/>
-        <source>Round edges</source>
-        <translation>Randen afronden</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="89"/>
-        <source>Chamfer</source>
-        <translation>Afschuining</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="89"/>
-        <source>Bevel edges</source>
-        <translation>Randen afschuinen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="585"/>
-        <source>Create a simple hole</source>
-        <translation>Een eenvoudig gat maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="92"/>
-        <source>Counter-
-bore</source>
-        <translation>Cilindrische
-verzinking</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="92"/>
-        <source>Create a counterbore hole</source>
-        <translation>Een gat met cilindrische verzinking maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="93"/>
-        <source>Counter-
-sink</source>
-        <translation>Conische
-verzinking</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="93"/>
-        <source>Create a countersink hole</source>
-        <translation>Een gat met conische verzinking maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="94"/>
-        <source>Threaded
-Hole</source>
-        <translation>Draad-
-gat</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="94"/>
-        <source>Create a threaded hole</source>
-        <translation>Een draadgat maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="96"/>
-        <source>Move/
-Copy</source>
-        <translation>Verplaatsen/
-kopiëren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="96"/>
-        <source>Move or copy objects</source>
-        <translation>Objecten verplaatsen of kopiëren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="97"/>
-        <source>Align</source>
-        <translation>Uitlijnen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="97"/>
-        <source>Align objects</source>
-        <translation>Objecten uitlijnen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="99"/>
-        <source>Mirror bodies or features</source>
-        <translation>Lichamen of kenmerken spiegelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="100"/>
-        <source>Pattern</source>
-        <translation>Patroon</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="100"/>
-        <source>Create rectangular or circular pattern</source>
-        <translation>Een rechthoekig of cirkelvormig patroon maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="102"/>
-        <source>Change
-Parameters</source>
-        <translation>Parameters
-wijzigen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="102"/>
-        <source>Edit document parameters</source>
-        <translation>Documentparameters bewerken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="568"/>
-        <source>Move</source>
-        <translation>Verplaatsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="586"/>
-        <source>Transform objects</source>
-        <translation>Objecten transformeren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="99"/>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="569"/>
-        <source>Mirror</source>
-        <translation>Spiegelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="587"/>
-        <source>Mirror or pattern objects</source>
-        <translation>Objecten spiegelen of in een patroon plaatsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="602"/>
-        <source>Params</source>
-        <translation>Param.</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/modeltoolbar.cpp" line="603"/>
-        <source>Manage parameters</source>
-        <translation>Parameters beheren</translation>
     </message>
 </context>
 <context>
@@ -5500,7 +6713,7 @@ wijzigen</translation>
     <message>
         <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="321"/>
         <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="569"/>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="656"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="648"/>
         <source>Error</source>
         <translation>Fout</translation>
     </message>
@@ -5588,37 +6801,37 @@ Verwijderen veroorzaakt fouten. Doorgaan?</translation>
         <translation>Ongeldige expressie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="782"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="746"/>
         <source>%1 user, %2 object parameters</source>
         <translation>%1 gebruikers-, %2 objectparameters</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="809"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="779"/>
         <source>Parameter name cannot be empty.</source>
         <translation>De parameternaam mag niet leeg zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="814"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="782"/>
         <source>Parameter name cannot start with a digit.</source>
         <translation>De parameternaam mag niet met een cijfer beginnen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="819"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="785"/>
         <source>Parameter name must start with a letter or underscore.</source>
         <translation>De parameternaam moet met een letter of onderstrepingsteken beginnen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="827"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="789"/>
         <source>Invalid character &apos;%1&apos; in parameter name.</source>
         <translation>Ongeldig teken &apos;%1&apos; in de parameternaam.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="843"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="793"/>
         <source>&apos;%1&apos; is a reserved word and cannot be used as a parameter name.</source>
         <translation>&apos;%1&apos; is een gereserveerd woord en kan niet als parameternaam worden gebruikt.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="850"/>
+        <location filename="../../src/hobbycad/gui/parametersdialog.cpp" line="801"/>
         <source>Parameter &apos;%1&apos; already exists.</source>
         <translation>Parameter &apos;%1&apos; bestaat al.</translation>
     </message>
@@ -5787,141 +7000,166 @@ Verwijderen veroorzaakt fouten. Doorgaan?</translation>
 <context>
     <name>hobbycad::PreferencesDialog</name>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="27"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="32"/>
         <source>Preferences</source>
         <translation>Voorkeuren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="79"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="84"/>
         <source>General</source>
         <translation>Algemeen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="71"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="76"/>
         <source>Navigation</source>
         <translation>Navigatie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="89"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="94"/>
         <source>Mouse Bindings</source>
         <translation>Muistoewijzingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="101"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="106"/>
         <source>Preset:</source>
         <translation>Voorinstelling:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="93"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="98"/>
         <source>HobbyCAD (RMB rotate, MMB pan)</source>
         <translation>HobbyCAD (rechterknop draait, middelste verschuift)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="99"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="104"/>
         <source>Blender (MMB rotate, Shift+MMB pan)</source>
         <translation>Blender (middelste draait, Shift+middelste verschuift)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="97"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="102"/>
         <source>FreeCAD (MMB rotate, Shift+MMB pan)</source>
         <translation>FreeCAD (middelste draait, Shift+middelste verschuift)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="95"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="100"/>
         <source>Fusion 360 (MMB pan, Shift+MMB rotate)</source>
         <translation>Fusion 360 (middelste verschuift, Shift+middelste draait)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="131"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="136"/>
         <source>Arrow Key Animation</source>
         <translation>Animatie met pijltoetsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="106"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="111"/>
         <source>Rotation</source>
         <translation>Rotatie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="113"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="118"/>
         <source>Default axis:</source>
         <translation>Standaardas:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="110"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="115"/>
         <source>X</source>
         <translation>X</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="75"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="80"/>
         <source>Bindings</source>
         <translation>Toewijzingen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="111"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="116"/>
         <source>Y</source>
         <translation>Y</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="112"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="117"/>
         <source>Z</source>
         <translation>Z</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="150"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="155"/>
         <source>90° duration:</source>
         <translation>Duur van 90°:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="221"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="201"/>
+        <source>Menus and toolbars are rearranged in the Customize dialog: what a menu shows, where a tool sits, what it is called and whether it is shown at all.</source>
+        <translation>Menu&apos;s en werkbalken worden in het venster Aanpassen herschikt: wat een menu toont, waar een gereedschap staat, hoe het heet en of het wordt weergegeven.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="206"/>
+        <source>Open Customize Dialog...</source>
+        <translation>Venster Aanpassen openen...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="214"/>
+        <source>Restore All Defaults...</source>
+        <translation>Alle standaardwaarden herstellen...</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="240"/>
+        <source>Restore All Defaults</source>
+        <translation>Alle standaardwaarden herstellen</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="241"/>
+        <source>Give HobbyCAD&apos;s own menus, toolbars and keys back? Every change you have made to them is dropped.</source>
+        <translation>HobbyCAD&apos;s eigen menu&apos;s, werkbalken en toetsen teruggeven? Elke wijziging daarin gaat verloren.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="267"/>
         <source>Coordinate System</source>
         <translation>Coördinatenstelsel</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="224"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="270"/>
         <source>Z-Up orientation (CAD convention)</source>
         <translation>Z-omhoog-oriëntatie (CAD-conventie)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="226"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="272"/>
         <source>When checked, Z axis points up (CAD/engineering).
 When unchecked, Y axis points up (game engine/3D graphics).</source>
         <translation>Indien aangevinkt wijst de Z-as omhoog (CAD/techniek).
 Anders doet de Y-as dat (game-engine/3D-graphics).</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="233"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="279"/>
         <source>Orbit Behavior</source>
         <translation>Draaigedrag</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="236"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="282"/>
         <source>Orbit around selected object</source>
         <translation>Om het geselecteerde object draaien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="238"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="284"/>
         <source>When checked, ViewCube rotations orbit around the
 center of selected objects instead of the pan position.</source>
         <translation>Indien aangevinkt draaien ViewCube-rotaties om het
 middelpunt van de geselecteerde objecten in plaats van de verschuifpositie.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="245"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="291"/>
         <source>Terminal</source>
         <translation>Terminal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="251"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="297"/>
         <source>Unlimited</source>
         <translation>Onbeperkt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="252"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="298"/>
         <source> lines</source>
         <translation> regels</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="254"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="300"/>
         <source>Lines of output the CLI panel keeps.
 Unlimited grows without bound; it is a deliberate choice,
 not the default.</source>
@@ -5930,106 +7168,106 @@ Onbeperkt groeit zonder grens; het is een bewuste keuze,
 niet de standaard.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="257"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="303"/>
         <source>Scrollback:</source>
         <translation>Terugscroll:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="262"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="308"/>
         <source>Sketch</source>
         <translation>Schets</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="265"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="311"/>
         <source>Show cursor hints</source>
         <translation>Cursorhints tonen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="267"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="313"/>
         <source>Show the short hint that trails the cursor while a
 drawing tool is active (e.g. &quot;Click to place center&quot;).</source>
         <translation>Toon de korte hint die de cursor volgt terwijl een
 tekengereedschap actief is (bijv. &quot;Klik om het middelpunt te plaatsen&quot;).</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="123"/>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="142"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="128"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="147"/>
         <source> ms</source>
         <translation> ms</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="158"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="163"/>
         <source>%1 ms (%2 frames)</source>
         <translation>%1 ms (%2 frames)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="145"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="150"/>
         <source>Frame interval:</source>
         <translation>Frame-interval:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="144"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="149"/>
         <source>Interval between animation frames</source>
         <translation>Interval tussen animatieframes</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="138"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="143"/>
         <source>Step size:</source>
         <translation>Stapgrootte:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="118"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="123"/>
         <source>Degrees per step for PgUp/PgDn rotation</source>
         <translation>Graden per stap voor PgUp/PgDn-rotatie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="119"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="124"/>
         <source>PgUp/PgDn step:</source>
         <translation>PgUp/PgDn-stap:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="137"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="142"/>
         <source>Degrees per frame for Left/Right arrow snap</source>
         <translation>Graden per frame voor uitlijnen met pijl links/rechts</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="126"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="131"/>
         <source>PgUp/PgDn interval:</source>
         <translation>PgUp/PgDn-interval:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="125"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="130"/>
         <source>Interval between PgUp/PgDn steps</source>
         <translation>Interval tussen PgUp/PgDn-stappen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="117"/>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="136"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="122"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="141"/>
         <source>°</source>
         <translation>°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="178"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="183"/>
         <source>Customize keyboard shortcuts and mouse bindings for all actions. Each action can have up to three bindings.</source>
         <translation>Pas de sneltoetsen en muistoewijzingen voor alle acties aan. Elke actie kan maximaal drie toewijzingen hebben.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="185"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="190"/>
         <source>Open Bindings Editor...</source>
         <translation>Toewijzingseditor openen...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="209"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="255"/>
         <source>Startup</source>
         <translation>Opstarten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="215"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="261"/>
         <source>Restore window layout on startup</source>
         <translation>Vensterindeling herstellen bij opstarten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="212"/>
+        <location filename="../../src/hobbycad/gui/preferencesdialog.cpp" line="258"/>
         <source>Show grid on startup</source>
         <translation>Raster tonen bij opstarten</translation>
     </message>
@@ -6037,218 +7275,218 @@ tekengereedschap actief is (bijv. &quot;Klik om het middelpunt te plaatsen&quot;
 <context>
     <name>hobbycad::ProjectBrowserWidget</name>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="306"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="269"/>
         <source>Add File</source>
         <translation>Bestand toevoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="307"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="270"/>
         <source>Add a file to the project</source>
         <translation>Een bestand aan het project toevoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="313"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="276"/>
         <source>Add Folder</source>
         <translation>Map toevoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="314"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="277"/>
         <source>Create a new folder</source>
         <translation>Een nieuwe map maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="322"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="285"/>
         <source>Remove</source>
         <translation>Verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="323"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="286"/>
         <source>Remove selected file or folder</source>
         <translation>Het gekozen bestand of de map verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="331"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="294"/>
         <source>F</source>
         <translation>F</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="332"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="295"/>
         <source>Toggle foreign file status</source>
         <translation>Status van extern bestand omschakelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="340"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="303"/>
         <source>G</source>
         <translation>G</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="341"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="304"/>
         <source>Toggle .gitignore status</source>
         <translation>.gitignore-status omschakelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="352"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="315"/>
         <source>Refresh</source>
         <translation>Vernieuwen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="353"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="316"/>
         <source>Refresh the file tree</source>
         <translation>De bestandsboom vernieuwen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="365"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="328"/>
         <source>Open</source>
         <translation>Openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="375"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="338"/>
         <source>Open in External Editor</source>
         <translation>In externe editor openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="381"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="344"/>
         <source>Reveal in File Manager</source>
         <translation>Tonen in bestandsbeheer</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="389"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="352"/>
         <source>Add to Foreign Files</source>
         <translation>Aan externe bestanden toevoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="400"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="363"/>
         <source>Remove from Foreign Files</source>
         <translation>Uit externe bestanden verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="414"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="377"/>
         <source>Add to .gitignore</source>
         <translation>Aan .gitignore toevoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="425"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="388"/>
         <source>Remove from .gitignore</source>
         <translation>Uit .gitignore verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="439"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="402"/>
         <source>Rename</source>
         <translation>Hernoemen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="445"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="408"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="453"/>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1039"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="416"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="938"/>
         <source>Properties</source>
         <translation>Eigenschappen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="840"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="754"/>
         <source>Add Files to Project</source>
         <translation>Bestanden aan het project toevoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="842"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="756"/>
         <source>All Files (*)</source>
         <translation>Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="853"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="767"/>
         <source>File Exists</source>
         <translation>Bestand bestaat al</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="854"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="768"/>
         <source>&apos;%1&apos; already exists. Overwrite?</source>
         <translation>&apos;%1&apos; bestaat al. Overschrijven?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="864"/>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="897"/>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="995"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="778"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="811"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="909"/>
         <source>Error</source>
         <translation>Fout</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="865"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="779"/>
         <source>Failed to copy &apos;%1&apos;</source>
         <translation>Kan &apos;%1&apos; niet kopiëren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="887"/>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="890"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="801"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="804"/>
         <source>New Folder</source>
         <translation>Nieuwe map</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="888"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="802"/>
         <source>Folder name:</source>
         <translation>Mapnaam:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="898"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="812"/>
         <source>Failed to create folder &apos;%1&apos;</source>
         <translation>Kan de map &apos;%1&apos; niet maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="971"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="885"/>
         <source>Cannot Delete</source>
         <translation>Verwijderen niet mogelijk</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="972"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="886"/>
         <source>CAD files cannot be deleted from the project browser.
 Use the feature tree to remove sketches and geometry.</source>
         <translation>CAD-bestanden kunnen niet vanuit de projectverkenner worden verwijderd.
 Gebruik de kenmerkenboom om schetsen en geometrie te verwijderen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="978"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="892"/>
         <source>Delete folder &apos;%1&apos; and all its contents?</source>
         <translation>Map &apos;%1&apos; en alle inhoud verwijderen?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="979"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="893"/>
         <source>Delete file &apos;%1&apos;?</source>
         <translation>Bestand &apos;%1&apos; verwijderen?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="981"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="895"/>
         <source>Confirm Delete</source>
         <translation>Verwijderen bevestigen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="996"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="910"/>
         <source>Failed to delete &apos;%1&apos;</source>
         <translation>Kan &apos;%1&apos; niet verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1014"/>
+        <location filename="../../src/libhobbycad/project_files.cpp" line="316"/>
         <source>CAD File (in manifest)</source>
         <translation>CAD-bestand (in manifest)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1017"/>
+        <location filename="../../src/libhobbycad/project_files.cpp" line="318"/>
         <source>Foreign File (tracked separately)</source>
         <translation>Extern bestand (apart bijgehouden)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1020"/>
+        <location filename="../../src/libhobbycad/project_files.cpp" line="321"/>
         <source>Git Ignored</source>
         <translation>Genegeerd door Git</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1023"/>
+        <location filename="../../src/libhobbycad/project_files.cpp" line="325"/>
         <source>Untracked (not in manifest)</source>
         <translation>Niet bijgehouden (niet in manifest)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1027"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="926"/>
         <source>Name: %1
 Path: %2
 Size: %3
@@ -6261,12 +7499,12 @@ Gewijzigd: %4
 Status: %5</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1035"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="934"/>
         <source>(directory)</source>
         <translation>(map)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="1035"/>
+        <location filename="../../src/hobbycad/gui/projectbrowserwidget.cpp" line="934"/>
         <source> bytes</source>
         <translation> bytes</translation>
     </message>
@@ -6375,405 +7613,400 @@ Klik hier voor details.</translation>
 <context>
     <name>hobbycad::SketchCanvas</name>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4404"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4006"/>
         <source>Distance</source>
         <translation>Afstand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4407"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6637"/>
-        <location filename="../../src/hobbycad/gui/tools/polygontoolhandler.cpp" line="32"/>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="187"/>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="33"/>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="43"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="312"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="330"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4009"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6093"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="32"/>
         <source>Radius</source>
         <translation>Straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4407"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6644"/>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="37"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4009"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6100"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="34"/>
         <source>Diameter</source>
         <translation>Diameter</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="39"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="30"/>
         <source>Angle</source>
         <translation>Hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7266"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6723"/>
         <source>Rectangle</source>
         <translation>Rechthoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5324"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5330"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5339"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6417"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9989"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10009"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10027"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10061"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4850"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4856"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4865"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5943"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9360"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9380"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9398"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9432"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="155"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="167"/>
         <source>Split</source>
         <translation>Splitsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10432"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9803"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="259"/>
         <source>Fillet</source>
         <translation>Afronding</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10467"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9838"/>
         <location filename="../../src/hobbycad/gui/tools/optoolhandlers.cpp" line="272"/>
         <source>Chamfer</source>
         <translation>Afschuining</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4378"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5217"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="3980"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4743"/>
         <source>Delete Entities</source>
         <translation>Entiteiten verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4379"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5218"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="3981"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4744"/>
         <source>Delete %1 selected entities?</source>
         <translation>%1 gekozen entiteiten verwijderen?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4915"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4441"/>
         <source>Create Slot from Path</source>
         <translation>Sleuf maken van pad</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4937"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4463"/>
         <source>Insert Fit Point</source>
         <translation>Aanpassingspunt invoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4940"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4466"/>
         <source>Open Spline</source>
         <translation>Spline openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4941"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4467"/>
         <source>Close Spline</source>
         <translation>Spline sluiten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4945"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4471"/>
         <source>Delete Fit Point</source>
         <translation>Aanpassingspunt verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4966"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4492"/>
         <source>Unfix Point</source>
         <translation>Punt losmaken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4974"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4500"/>
         <source>Fix This Point Instead</source>
         <translation>In plaats daarvan dit punt vastzetten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4975"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4501"/>
         <source>Fix Point for Resize</source>
         <translation>Punt vastzetten voor formaat wijzigen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5005"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4531"/>
         <source>Make Driven (Reference)</source>
         <translation>Gestuurd maken (referentie)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5010"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4536"/>
         <source>Make Driving</source>
         <translation>Sturend maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5018"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4544"/>
         <source>Edit Value...</source>
         <translation>Waarde bewerken...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5023"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5346"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4549"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4872"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5059"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4585"/>
         <source>Make All Normal Geometry (%1)</source>
         <translation>Alles normale geometrie maken (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5058"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4584"/>
         <source>Make All Construction Geometry (%1)</source>
         <translation>Alles hulpgeometrie maken (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4827"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4353"/>
         <source>Transform</source>
         <translation>Transformeren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="1796"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="1618"/>
         <source>D: %1</source>
         <translation>D: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2214"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2038"/>
         <source>Editing: %1</source>
         <translation>Bewerken: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4773"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4299"/>
         <source>Member of Group(s): (none)</source>
         <translation>Lid van groep(en): (geen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4776"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4302"/>
         <source>Member of Group(s): %1</source>
         <translation>Lid van groep(en): %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4820"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4346"/>
         <source>Unfix</source>
         <translation>Losmaken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4820"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4346"/>
         <source>Fix</source>
         <translation>Vastzetten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4829"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4355"/>
         <source>Move...</source>
         <translation>Verplaatsen...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4834"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4360"/>
         <source>Copy...</source>
         <translation>Kopiëren...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4839"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4365"/>
         <source>Rotate...</source>
         <translation>Draaien...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4844"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4370"/>
         <source>Scale...</source>
         <translation>Schalen...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4849"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4375"/>
         <source>Mirror...</source>
         <translation>Spiegelen...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4856"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4382"/>
         <source>Align</source>
         <translation>Uitlijnen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4858"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4384"/>
         <source>Align Left</source>
         <translation>Links uitlijnen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4863"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4389"/>
         <source>Align Right</source>
         <translation>Rechts uitlijnen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4868"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4394"/>
         <source>Align Top</source>
         <translation>Boven uitlijnen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4873"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4399"/>
         <source>Align Bottom</source>
         <translation>Onder uitlijnen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4880"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4406"/>
         <source>Center Horizontally</source>
         <translation>Horizontaal centreren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4885"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4411"/>
         <source>Center Vertically</source>
         <translation>Verticaal centreren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4892"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4418"/>
         <source>Distribute Horizontally</source>
         <translation>Horizontaal verdelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4897"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4423"/>
         <source>Distribute Vertically</source>
         <translation>Verticaal verdelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5084"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4610"/>
         <source>Set Color... (%1)</source>
         <translation>Kleur instellen... (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5087"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4613"/>
         <source>Entity Color</source>
         <translation>Entiteitkleur</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5096"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4622"/>
         <source>Default (by layer)</source>
         <translation>Standaard (per laag)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5119"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4645"/>
         <source>Clear Color (%1)</source>
         <translation>Kleur wissen (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5139"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4665"/>
         <source>Sweep Along This Path...</source>
         <translation>Langs dit pad vegen...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5141"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4667"/>
         <source>Sweep a width along this line or arc, leaving the path itself as the construction centerline</source>
         <translation>Veeg een breedte langs deze lijn of boog, waarbij het pad zelf de constructiehartlijn blijft</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5158"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4684"/>
         <source>Group (%1 entities)</source>
         <translation>Groep (%1 entiteiten)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5172"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5308"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4698"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4834"/>
         <source>Enter Group &quot;%1&quot;</source>
         <translation>Groep &quot;%1&quot; openen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5178"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5315"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4704"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4841"/>
         <source>Ungroup &quot;%1&quot;</source>
         <translation>Groepering &quot;%1&quot; opheffen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5188"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4714"/>
         <source>Split All at Intersections</source>
         <translation>Alles splitsen op snijpunten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5203"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4729"/>
         <source>Rejoin Segments</source>
         <translation>Segmenten weer samenvoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5213"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4739"/>
         <source>Delete All (%1)</source>
         <translation>Alles verwijderen (%1)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5242"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5258"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4768"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4784"/>
         <source>Make Normal Geometry</source>
         <translation>Normale geometrie maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5242"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4768"/>
         <source>Make Construction Geometry</source>
         <translation>Hulpgeometrie maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5259"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4785"/>
         <source>Make Centerline</source>
         <translation>Hartlijn maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5292"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4818"/>
         <source>Leave Group &quot;%1&quot;</source>
         <translation>Groep &quot;%1&quot; verlaten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5326"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4852"/>
         <source>At Nearest Intersections</source>
         <translation>Bij de dichtstbijzijnde snijpunten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5331"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4857"/>
         <source>No intersections found near the click point.</source>
         <translation>Geen snijpunten gevonden bij het aangeklikte punt.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5335"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4861"/>
         <source>At All Intersections</source>
         <translation>Bij alle snijpunten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5340"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4866"/>
         <source>No intersections found on this entity.</source>
         <translation>Geen snijpunten gevonden op deze entiteit.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5373"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4899"/>
         <source>Export as DXF...</source>
         <translation>Exporteren als DXF...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5376"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4902"/>
         <source>Export DXF File</source>
         <translation>DXF-bestand exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5377"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4903"/>
         <source>DXF Files (*.dxf);;All Files (*)</source>
         <translation>DXF-bestanden (*.dxf);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5392"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5418"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4918"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4944"/>
         <source>Export Failed</source>
         <translation>Exporteren mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5393"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4919"/>
         <source>Failed to export DXF file.</source>
         <translation>Kan het DXF-bestand niet exporteren.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5397"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4923"/>
         <source>Export as SVG...</source>
         <translation>Exporteren als SVG...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5400"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4926"/>
         <source>Export SVG File</source>
         <translation>SVG-bestand exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5401"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4927"/>
         <source>SVG Files (*.svg);;All Files (*)</source>
         <translation>SVG-bestanden (*.svg);;Alle bestanden (*)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5419"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4945"/>
         <source>Failed to export SVG file.</source>
         <translation>Kan het SVG-bestand niet exporteren.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5516"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8051"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5042"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7469"/>
         <source>
 
 Conflicting constraints:
@@ -6784,17 +8017,17 @@ Strijdige randvoorwaarden:
 </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5522"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5048"/>
         <source>Cannot Convert to Driving</source>
         <translation>Kan niet in sturend worden omgezet</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5523"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5049"/>
         <source>Converting this dimension to driving would over-constrain the sketch.</source>
         <translation>Deze maat sturend maken zou de schets overbepalen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5525"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5051"/>
         <source>
 
 Remove or modify the conflicting constraints first.</source>
@@ -6803,75 +8036,75 @@ Remove or modify the conflicting constraints first.</source>
 Verwijder of wijzig eerst de strijdige randvoorwaarden.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6271"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5797"/>
         <source>A width of %1 does not fit on an arc of radius %2: the inner edge would pass through the center. Width can be at most %3.</source>
         <translation>Een breedte van %1 past niet op een boog met straal %2: de binnenrand zou door het middelpunt gaan. De breedte kan hoogstens %3 zijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6322"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5848"/>
         <source>Group %1</source>
         <translation>Groep %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6417"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5943"/>
         <source>No intersections found between selected entities.</source>
         <translation>Geen snijpunten gevonden tussen de gekozen entiteiten.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7264"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6721"/>
         <source>Polygon</source>
         <translation>Veelhoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7268"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6725"/>
         <source>Parallelogram</source>
         <translation>Parallellogram</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8067"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7485"/>
         <source>Over-Constrained</source>
         <translation>Overbepaald</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8063"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7481"/>
         <source>This dimension would over-constrain the sketch.</source>
         <translation>Deze maat zou de schets overbepalen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="339"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="357"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="706"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8618"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="340"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="358"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="671"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8022"/>
         <source>This entity is in a locked group; unlock the group to edit it.</source>
         <translation>Deze entiteit zit in een vergrendelde groep; ontgrendel de groep om deze te bewerken.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="808"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="773"/>
         <source>Select two lines to dimension the angle between them.</source>
         <translation>Selecteer twee lijnen om de hoek ertussen te bematen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="818"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="783"/>
         <source>The angle dimension needs two line segments.</source>
         <translation>De hoekmaat heeft twee lijnsegmenten nodig.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="823"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="788"/>
         <source>These lines are parallel; there is no angle to dimension.</source>
         <translation>Deze lijnen zijn evenwijdig; er is geen hoek om te bematen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2556"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="2407"/>
         <source>Tangent contact selected: Ctrl-click a line endpoint, then Coincident to pin it onto the circle.</source>
         <translation>Raakcontact geselecteerd: Ctrl+klik op een lijneindpunt, dan Samenvallend om het aan de cirkel vast te zetten.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4319"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="3921"/>
         <source>Transform canceled; selection kept</source>
         <translation>Transformatie geannuleerd; selectie behouden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8069"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7487"/>
         <source>
 
 Create a Driven (reference) dimension instead?</source>
@@ -6880,12 +8113,12 @@ Create a Driven (reference) dimension instead?</source>
 In plaats daarvan een gestuurde (referentie)maat maken?</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8707"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8080"/>
         <source>Solver Unavailable</source>
         <translation>Oplosser niet beschikbaar</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8708"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8081"/>
         <source>Constraint solving is not available (libslvs not compiled).
 
 Dimensions will be displayed as reference values only.</source>
@@ -6894,152 +8127,152 @@ Dimensions will be displayed as reference values only.</source>
 Maten worden alleen als referentiewaarden getoond.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9297"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8619"/>
         <source>(none)</source>
         <translation>(geen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4810"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9560"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9585"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="4336"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8882"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8907"/>
         <source>Constrain</source>
         <translation>Vastleggen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5679"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5205"/>
         <source>The selection is in a locked group; unlock it to delete.</source>
         <translation>De selectie zit in een vergrendelde groep; ontgrendel deze om te verwijderen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6053"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5579"/>
         <source>Pivot: click to place the star or drag it (snaps apply, Alt = free); Home = center; Escape cancels</source>
         <translation>Draaipunt: klik om de ster te plaatsen of sleep deze (snaps gelden, Alt = vrij); Home = middelpunt; Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6054"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5580"/>
         <source>Point to point: click the point to move FROM (snaps apply); Escape cancels</source>
         <translation>Punt naar punt: klik op het punt om VANAF te verplaatsen (snaps gelden); Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6055"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5581"/>
         <source>Point to point: click the point to move TO (snaps apply); Escape cancels</source>
         <translation>Punt naar punt: klik op het punt om NAAR te verplaatsen (snaps gelden); Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6056"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5582"/>
         <source>Point to position: click the point on the selection that should land on the target; Escape cancels</source>
         <translation>Punt naar positie: klik op het punt op de selectie dat op het doel moet landen; Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6057"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5583"/>
         <source>Mirror line: click its first point (snaps apply); Escape cancels</source>
         <translation>Spiegellijn: klik op het eerste punt ervan (snaps gelden); Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6058"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5584"/>
         <source>Mirror line: click its second point (snaps apply); Escape cancels</source>
         <translation>Spiegellijn: klik op het tweede punt ervan (snaps gelden); Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6059"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5585"/>
         <source>Relative to: click the reference point the target is measured from (snaps apply); Escape cancels</source>
         <translation>Relatief aan: klik op het referentiepunt waarvandaan het doel wordt gemeten (snaps gelden); Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6060"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5586"/>
         <source>Free move: drag the selection to move it, drag the ring to turn it about the star (Ctrl = axis lock / 15-degree steps); Enter applies, Escape cancels</source>
         <translation>Vrij verplaatsen: sleep de selectie om deze te verplaatsen, sleep de ring om deze om de ster te draaien (Ctrl = as vergrendelen / stappen van 15 graden); Enter past toe, Esc annuleert</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6260"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6270"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6279"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6294"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5786"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5796"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5805"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5820"/>
         <source>Sweep Along Path</source>
         <translation>Langs pad vegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6260"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5786"/>
         <source>Width:</source>
         <translation>Breedte:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6277"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5803"/>
         <source>Round</source>
         <translation>Rond</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6277"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5803"/>
         <source>Flat</source>
         <translation>Vlak</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6279"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5805"/>
         <source>Ends:</source>
         <translation>Uiteinden:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6295"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="5821"/>
         <source>That sweep could not be built.</source>
         <translation>Die veeg kon niet worden gebouwd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6654"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6110"/>
         <source>Driven (Reference)</source>
         <translation>Gestuurd (referentie)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7379"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6829"/>
         <source>Select at least two connected lines or arcs to make a slot from a path.</source>
         <translation>Selecteer minstens twee verbonden lijnen of bogen om een sleuf van een pad te maken.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7391"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6841"/>
         <source>These do not form a slot path: %1</source>
         <translation>Deze vormen geen sleufpad: %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7397"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="6847"/>
         <source>A width of %1 does not fit this path: %2</source>
         <translation>Een breedte van %1 past niet op dit pad: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8061"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="7479"/>
         <source>This dimension is already implied by the existing constraints, so it would add nothing.</source>
         <translation>Deze maat wordt al geïmpliceerd door de bestaande beperkingen, dus zou niets toevoegen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8611"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8017"/>
         <source>This is projected geometry, driven by its source sketch; edit it in the source sketch, not here.</source>
         <translation>Dit is geprojecteerde geometrie, gestuurd door de bronschets; bewerk deze in de bronschets, niet hier.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9361"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8683"/>
         <source>Select one Bezier spline anchor point, then apply Tangent Angle.</source>
         <translation>Selecteer één ankerpunt van een Bézier-spline en pas dan Raaklijnhoek toe.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9367"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8689"/>
         <source>Tangent Angle applies to a Bezier spline anchor.</source>
         <translation>Raaklijnhoek is van toepassing op een Bézier-splineanker.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9373"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8695"/>
         <source>Select an ANCHOR point (every third control point), not a tangent handle.</source>
         <translation>Selecteer een ANKERpunt (elk derde controlepunt), geen raaklijngreep.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9383"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8705"/>
         <source>Tangent Angle</source>
         <translation>Raaklijnhoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9384"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8706"/>
         <source>Directed tangent angle (0-360 deg):</source>
         <translation>Gerichte raaklijnhoek (0-360°):</translation>
     </message>
     <message numerus="yes">
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9514"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8836"/>
         <source>%1 needs %n entity(s); %2 selected. Select them (Ctrl to add), then apply.</source>
         <translation>
             <numerusform>%1 heeft %n entiteit nodig; %2 geselecteerd. Selecteer deze (Ctrl om toe te voegen), pas dan toe.</numerusform>
@@ -7047,100 +8280,130 @@ Maten worden alleen als referentiewaarden getoond.</translation>
         </translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9534"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8856"/>
         <source>%1 does not apply to those two entities. Applicable here: %2</source>
         <translation>%1 is niet van toepassing op die twee entiteiten. Hier van toepassing: %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9561"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8883"/>
         <source>Select one or two entities first, then apply a constraint.</source>
         <translation>Kies eerst één of twee entiteiten en pas dan een randvoorwaarde toe.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9586"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8908"/>
         <source>No geometric constraint applies to that selection.</source>
         <translation>Er is geen geometrische randvoorwaarde van toepassing op die selectie.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9725"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8966"/>
+        <source>%1 was not added: an entity it names is gone.</source>
+        <translation>%1 is niet toegevoegd: een element waarnaar het verwijst bestaat niet meer.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8969"/>
+        <source>%1 was not added: the same point was picked twice.</source>
+        <translation>%1 is niet toegevoegd: hetzelfde punt is twee keer gekozen.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8972"/>
+        <source>%1 does not apply to that selection.</source>
+        <translation>%1 is niet van toepassing op die selectie.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8975"/>
+        <source>%1 must be greater than zero.</source>
+        <translation>%1 moet groter dan nul zijn.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8978"/>
+        <source>%1 is already implied by the constraints in place, so it would add nothing.</source>
+        <translation>%1 volgt al uit de bestaande beperkingen en zou dus niets toevoegen.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="8982"/>
+        <source>%1 would over-constrain the sketch.</source>
+        <translation>%1 zou de schets overbepalen.</translation>
+    </message>
+    <message>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9096"/>
         <source>Auto Constrain: nothing to add.</source>
         <translation>Automatisch beperken: niets toe te voegen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9741"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9112"/>
         <source>Auto Constrain: added %1 constraint(s).</source>
         <translation>Automatisch beperken: %1 beperking(en) toegevoegd.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10076"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10089"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9447"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9460"/>
         <source>Rejoin</source>
         <translation>Weer samenvoegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10077"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9448"/>
         <source>Selected entity not found.</source>
         <translation>Gekozen entiteit niet gevonden.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10494"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10498"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10502"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10506"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9865"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9869"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9873"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9877"/>
         <source>Rectangular Pattern</source>
         <translation>Rechthoekig patroon</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10495"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9866"/>
         <source>Number of copies in X direction:</source>
         <translation>Aantal kopieën in X-richting:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10499"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9870"/>
         <source>Number of copies in Y direction:</source>
         <translation>Aantal kopieën in Y-richting:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10503"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9874"/>
         <source>Spacing in X direction (mm):</source>
         <translation>Afstand in X-richting (mm):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10507"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9878"/>
         <source>Spacing in Y direction (mm):</source>
         <translation>Afstand in Y-richting (mm):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10533"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10584"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9904"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9955"/>
         <source>Pattern Error</source>
         <translation>Patroonfout</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10547"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10551"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10555"/>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10559"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9918"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9922"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9926"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9930"/>
         <source>Circular Pattern</source>
         <translation>Cirkelvormig patroon</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10548"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9919"/>
         <source>Center X coordinate (mm):</source>
         <translation>X-coördinaat van middelpunt (mm):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10552"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9923"/>
         <source>Center Y coordinate (mm):</source>
         <translation>Y-coördinaat van middelpunt (mm):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10556"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9927"/>
         <source>Number of copies (including original):</source>
         <translation>Aantal kopieën (inclusief origineel):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="10560"/>
+        <location filename="../../src/hobbycad/gui/sketchcanvas.cpp" line="9931"/>
         <source>Total angle (degrees, 360 for full circle):</source>
         <translation>Totale hoek (graden, 360 voor volledige cirkel):</translation>
     </message>
@@ -7155,150 +8418,145 @@ Maten worden alleen als referentiewaarden getoond.</translation>
         <translation>Beperking: selecteer entiteiten, kies dan een beperking</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="184"/>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="38"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="28"/>
         <source>Length</source>
         <translation>Lengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="188"/>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="193"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="313"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="321"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="331"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="36"/>
         <source>Sweep Angle</source>
         <translation>Veeghoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="243"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="312"/>
         <source>Slot: click the first center  (scroll = thickness)</source>
         <translation>Sleuf: klik op het eerste middelpunt  (scrollen = dikte)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="244"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="314"/>
         <source>Slot: click the second center, or type a length</source>
         <translation>Sleuf: klik op het tweede middelpunt, of typ een lengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="246"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="286"/>
         <source>Slot: click one end  (scroll = thickness)</source>
         <translation>Sleuf: klik op één uiteinde  (scrollen = dikte)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="247"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="288"/>
         <source>Slot: click the other end, or type an overall length</source>
         <translation>Sleuf: klik op het andere uiteinde, of typ een totale lengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="249"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="293"/>
         <source>Arc slot: click the arc center  (scroll = thickness)</source>
         <translation>Boogsleuf: klik op het middelpunt van de boog  (scrollen = dikte)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="250"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="295"/>
         <source>Arc slot: click the start point, or type a radius</source>
         <translation>Boogsleuf: klik op het beginpunt, of typ een straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="251"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="297"/>
         <source>Arc slot: click the end point, or type a sweep angle  (Shift = long way round)</source>
         <translation>Boogsleuf: klik op het eindpunt, of typ een veeghoek  (Shift = grote boog)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="253"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="303"/>
         <source>Arc slot: click the start point  (scroll = thickness)</source>
         <translation>Boogsleuf: klik op het beginpunt  (scrollen = dikte)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="254"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="305"/>
         <source>Arc slot: click the end point</source>
         <translation>Boogsleuf: klik op het eindpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="255"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="306"/>
         <source>Arc slot: set the bulge, or type a sweep angle  (Shift = long way round)</source>
         <translation>Boogsleuf: stel de bolling in, of typ een veeghoek  (Shift = grote boog)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="267"/>
+        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="86"/>
         <source>(scroll: thickness)</source>
         <translation>(scrollen: dikte)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="429"/>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="498"/>
+        <location filename="../../src/libhobbycad/sketch/placement_slot.cpp" line="219"/>
+        <location filename="../../src/libhobbycad/sketch/placement_slot.cpp" line="270"/>
         <source>Click to place END point</source>
         <translation>Klik om het EINDPUNT te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="430"/>
+        <location filename="../../src/libhobbycad/sketch/placement_slot.cpp" line="271"/>
         <source>Click to place ARC CENTER</source>
         <translation>Klik om het BOOGMIDDELPUNT te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="431"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="542"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="761"/>
+        <location filename="../../src/libhobbycad/sketch/placement_arc.cpp" line="281"/>
+        <location filename="../../src/libhobbycad/sketch/placement_arc.cpp" line="357"/>
+        <location filename="../../src/libhobbycad/sketch/placement_slot.cpp" line="272"/>
         <source>(Shift to flip arc direction)</source>
         <translation>(Shift om de boogrichting om te keren)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/slottoolhandler.cpp" line="497"/>
+        <location filename="../../src/libhobbycad/sketch/placement_slot.cpp" line="218"/>
         <source>Click to place START point</source>
         <translation>Klik om het BEGINPUNT te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="50"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="139"/>
         <source>Tangent line: click the arc or circle to be tangent to</source>
         <translation>Raaklijn: klik op de boog of cirkel om aan te raken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="53"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="144"/>
         <source>Tangent line: click the start point</source>
         <translation>Raaklijn: klik op het beginpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="55"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="147"/>
         <source>Tangent line: click the end point  (snaps to the tangent)</source>
         <translation>Raaklijn: klik op het eindpunt  (snapt naar de raaklijn)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="61"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="152"/>
         <source>Line: click the start point</source>
         <translation>Lijn: klik op het beginpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="65"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="155"/>
         <source>Line: click for the next segment, or drag for a tangent arc</source>
         <translation>Lijn: klik voor het volgende segment, of sleep voor een raakboog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="68"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="159"/>
         <source>Line: click the end point, or type a length</source>
         <translation>Lijn: klik op het eindpunt, of typ een lengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="78"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="446"/>
         <source>(select arc/circle for tangent)</source>
         <translation>(selecteer boog/cirkel voor raaklijn)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="79"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="450"/>
         <source>(click the start point)</source>
         <translation>(klik op het beginpunt)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="80"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="452"/>
         <source>(click the end point)</source>
         <translation>(klik op het eindpunt)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="340"/>
+        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="118"/>
         <source>Tangent target selected; click the start point.</source>
         <translation>Raakdoel geselecteerd; klik op het beginpunt.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="344"/>
+        <location filename="../../src/hobbycad/gui/tools/linetoolhandler.cpp" line="121"/>
         <source>Tangent line needs a circle or arc in the sketch.</source>
         <translation>Raaklijn heeft een cirkel of boog in de schets nodig.</translation>
     </message>
@@ -7313,113 +8571,112 @@ Maten worden alleen als referentiewaarden getoond.</translation>
         <translation>Tekst: klik om een tekstlabel te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/polygontoolhandler.cpp" line="52"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="324"/>
         <source>Polygon: click to add vertices</source>
         <translation>Veelhoek: klik om hoekpunten toe te voegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/polygontoolhandler.cpp" line="53"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="325"/>
         <source>Polygon: click to add vertices, or click the first to close</source>
         <translation>Veelhoek: klik om hoekpunten toe te voegen, of klik op het eerste om te sluiten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/polygontoolhandler.cpp" line="56"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="330"/>
         <source>Polygon: click the center</source>
         <translation>Veelhoek: klik op het middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/polygontoolhandler.cpp" line="58"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="331"/>
         <source>Polygon: click to set the radius, or type one  (scroll = side count)</source>
         <translation>Veelhoek: klik om de straal in te stellen, of typ er een  (scrollen = aantal zijden)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="188"/>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="197"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="42"/>
         <source>Width</source>
         <translation>Breedte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="189"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="44"/>
         <source>Height</source>
         <translation>Hoogte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="194"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="46"/>
         <source>Edge Length</source>
         <translation>Zijdelengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="195"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="48"/>
         <source>Edge Angle</source>
         <translation>Zijdehoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="202"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="50"/>
         <source>Edge1</source>
         <translation>Zijde1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="203"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="52"/>
         <source>Edge1 Angle</source>
         <translation>Zijde1-hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="205"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="54"/>
         <source>Edge2</source>
         <translation>Zijde2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="206"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="56"/>
         <source>Edge2 Angle</source>
         <translation>Zijde2-hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="219"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="192"/>
         <source>Rectangle: click the first corner</source>
         <translation>Rechthoek: klik op de eerste hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="220"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="193"/>
         <source>Rectangle: click the opposite corner, or type a width</source>
         <translation>Rechthoek: klik op de tegenoverliggende hoek, of typ een breedte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="222"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="168"/>
         <source>Rectangle: click the center</source>
         <translation>Rechthoek: klik op het middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="223"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="169"/>
         <source>Rectangle: click a corner, or type a width</source>
         <translation>Rechthoek: klik op een hoek, of typ een breedte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="225"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="174"/>
         <source>Rectangle (3-point): click the first corner</source>
         <translation>Rechthoek (drie punten): klik op de eerste hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="226"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="176"/>
         <source>Rectangle (3-point): click the end of the first edge</source>
         <translation>Rechthoek (drie punten): klik op het einde van de eerste zijde</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="227"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="178"/>
         <source>Rectangle (3-point): click to set the width, or type one</source>
         <translation>Rechthoek (drie punten): klik om de breedte in te stellen, of typ er een</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="229"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="183"/>
         <source>Parallelogram: click the first corner</source>
         <translation>Parallellogram: klik op de eerste hoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="230"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="185"/>
         <source>Parallelogram: click the end of the first edge</source>
         <translation>Parallellogram: klik op het einde van de eerste zijde</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/rectangletoolhandler.cpp" line="231"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="187"/>
         <source>Parallelogram: click the end of the second edge</source>
         <translation>Parallellogram: klik op het einde van de tweede zijde</translation>
     </message>
@@ -7565,352 +8822,415 @@ Projectie haalt geometrie uit een andere schets als referentie naar deze schets 
         <translation>Projecteren: kies geometrie uit een andere schets om als referentie op te nemen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="146"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="462"/>
         <source>(Right-click to finish)</source>
         <translation>(Rechtsklik om te voltooien)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="147"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="466"/>
         <source>(Click to add points, drag for handles)</source>
         <translation>(Klik om punten toe te voegen, sleep voor grepen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="147"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="465"/>
         <source>(Click to add points)</source>
         <translation>(Klik om punten toe te voegen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="60"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="234"/>
         <source>Circle: click the center</source>
         <translation>Cirkel: klik op het middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="61"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="235"/>
         <source>Circle: click to set the radius, or type one</source>
         <translation>Cirkel: klik om de straal in te stellen, of typ er een</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="63"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="204"/>
         <source>Circle (2-point): click one end of the diameter</source>
         <translation>Cirkel (twee punten): klik op één uiteinde van de diameter</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="64"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="206"/>
         <source>Circle (2-point): click the other end, or type a diameter</source>
         <translation>Cirkel (twee punten): klik op het andere uiteinde, of typ een diameter</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="66"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="211"/>
         <source>Circle (3-point): click the first point</source>
         <translation>Cirkel (drie punten): klik op het eerste punt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="67"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="213"/>
         <source>Circle (3-point): click the second point</source>
         <translation>Cirkel (drie punten): klik op het tweede punt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="68"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="215"/>
         <source>Circle (3-point): click the third point, or type a radius</source>
         <translation>Cirkel (drie punten): klik op het derde punt, of typ een straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="71"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="220"/>
         <source>Tangent circle: click 2 curves to be tangent to (%1 of 2)</source>
         <translation>Raakcirkel: klik op 2 krommen om aan te raken (%1 van 2)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="73"/>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="78"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="224"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="231"/>
         <source>Tangent circle: click to place</source>
         <translation>Raakcirkel: klik om te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/circletoolhandler.cpp" line="76"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="227"/>
         <source>Tangent circle: click 3 curves to be tangent to (%1 of 3)</source>
         <translation>Raakcirkel: klik op 3 krommen om aan te raken (%1 van 3)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="152"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="220"/>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="227"/>
+        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="43"/>
+        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="48"/>
+        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="53"/>
         <source>Tangent Arc</source>
         <translation>Raakboog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="153"/>
+        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="44"/>
         <source>There are no entities to create a tangent arc from.
 Please draw a line first.</source>
         <translation>Er zijn geen entiteiten om een raakboog vanaf te maken.
 Teken eerst een lijn.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="221"/>
+        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="54"/>
         <source>Tangent arcs can currently only be created from lines or rectangles.
 Please click on a line or rectangle edge.</source>
         <translation>Raakbogen kunnen momenteel alleen vanaf lijnen of rechthoeken worden gemaakt.
 Klik op een lijn of een zijde van een rechthoek.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="228"/>
+        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="49"/>
         <source>Please click on a line or rectangle edge to create a tangent arc from.</source>
         <translation>Klik op een lijn of een zijde van een rechthoek om er een raakboog vanaf te maken.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="318"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="38"/>
         <source>Chord Length</source>
         <translation>Koordelengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="319"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="40"/>
         <source>Chord Angle</source>
         <translation>Koordehoek</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="350"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="272"/>
         <source>Arc (3-point): click the start point</source>
         <translation>Boog (drie punten): klik op het beginpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="351"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="274"/>
         <source>Arc (3-point): click the end point</source>
         <translation>Boog (drie punten): klik op het eindpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="352"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="275"/>
         <source>Arc (3-point): click a point on the arc</source>
         <translation>Boog (drie punten): klik op een punt op de boog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="355"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="246"/>
         <source>Arc: click the center</source>
         <translation>Boog: klik op het middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="356"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="247"/>
         <source>Arc: click the start point, or type a radius</source>
         <translation>Boog: klik op het beginpunt, of typ een straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="357"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="249"/>
         <source>Arc: click the end point, or type a sweep angle  (Shift = long way round)</source>
         <translation>Boog: klik op het eindpunt, of typ een veeghoek  (Shift = grote boog)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="360"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="255"/>
         <source>Arc: click the start point</source>
         <translation>Boog: klik op het beginpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="361"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="256"/>
         <source>Arc: click the end point, or type a chord length</source>
         <translation>Boog: klik op het eindpunt, of typ een koordelengte</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="362"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="258"/>
         <source>Arc: set the bulge, or type a sweep angle  (Shift = long way round)</source>
         <translation>Boog: stel de bolling in, of typ een veeghoek  (Shift = grote boog)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="366"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="264"/>
         <source>Tangent arc: click the curve to be tangent to</source>
         <translation>Raakboog: klik op de kromme om aan te raken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="367"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="267"/>
         <source>Tangent arc: click the end point  (Shift = long way round)</source>
         <translation>Raakboog: klik op het eindpunt  (Shift = grote boog)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="541"/>
+        <location filename="../../src/libhobbycad/sketch/placement_arc.cpp" line="279"/>
         <source>Arc: Center → Start → End</source>
         <translation>Boog: middelpunt → begin → einde</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="678"/>
+        <location filename="../../src/libhobbycad/sketch/placement_arc.cpp" line="320"/>
         <source>Arc: Start → End → Center</source>
         <translation>Boog: begin → einde → middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/arctoolhandler.cpp" line="679"/>
+        <location filename="../../src/libhobbycad/sketch/placement_arc.cpp" line="322"/>
         <source>(Shift to flip, Ctrl for 180°)</source>
         <translation>(Shift om om te keren, Ctrl voor 180°)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="106"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="401"/>
         <source>Conic arc: click the start</source>
         <translation>Kegelsnedeboog: klik op het begin</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="108"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="402"/>
         <source>Conic arc: click the end</source>
         <translation>Kegelsnedeboog: klik op het einde</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="110"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="403"/>
         <source>Conic arc: click the apex, where the two end tangents meet</source>
         <translation>Kegelsnedeboog: klik op de top, waar de twee eindraaklijnen elkaar snijden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="114"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="405"/>
         <source>Conic arc: slide to set rho (0.5 parabola, less elliptical, more hyperbolic), click to place</source>
         <translation>Kegelsnedeboog: schuif om rho in te stellen (0,5 parabool, minder elliptisch, meer hyperbolisch), klik om te plaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="121"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="418"/>
         <source>Bezier: click for a corner, click-drag to pull tangent handles</source>
         <translation>Bézier: klik voor een hoek, klik en sleep om raaklijngrepen te trekken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="124"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="420"/>
         <source>Bezier: click/drag to add anchors; Enter, Esc, or right-click to finish</source>
         <translation>Bézier: klik/sleep om ankers toe te voegen; Enter, Esc of rechtsklik om te voltooien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="129"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="412"/>
         <source>Spline: click to add fit points</source>
         <translation>Spline: klik om passeerpunten toe te voegen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="130"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="413"/>
         <source>Spline: click to add points; Enter, Esc, or right-click to finish</source>
         <translation>Spline: klik om punten toe te voegen; Enter, Esc of rechtsklik om te voltooien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="140"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="457"/>
         <source>(Slide to set rho, click to place)</source>
         <translation>(Schuif om rho in te stellen, klik om te plaatsen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/splinetoolhandler.cpp" line="141"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="459"/>
         <source>(Click to place)</source>
         <translation>(Klik om te plaatsen)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="156"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="58"/>
         <source>Major Radius</source>
         <translation>Grote straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="157"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="60"/>
         <source>Minor Radius</source>
         <translation>Kleine straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="158"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="62"/>
         <source>Arc Start</source>
         <translation>Begin van de boog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="159"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="64"/>
         <source>Arc Sweep</source>
         <translation>Veeghoek van de boog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="162"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="66"/>
         <source>Span</source>
         <translation>Overspanning</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="163"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="68"/>
         <source>Rise</source>
         <translation>Pijl</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="166"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="70"/>
         <source>First Axis</source>
         <translation>Eerste as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="167"/>
+        <location filename="../../src/libhobbycad/sketch/dimension_field.cpp" line="72"/>
         <source>Second Axis</source>
         <translation>Tweede as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="186"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="343"/>
         <source>Ellipse: click the center</source>
         <translation>Ellips: klik op het middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="187"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="344"/>
         <source>Ellipse: click the major-axis end, or type a radius</source>
         <translation>Ellips: klik op het uiteinde van de lange as, of typ een straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="190"/>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="207"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="346"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="361"/>
         <source>Ellipse: click a point the ellipse passes through, or type the minor radius</source>
         <translation>Ellips: klik op een punt waar de ellips doorheen gaat, of typ de kleine straal</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="193"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="349"/>
         <source>Elliptical arc: click where the arc starts</source>
         <translation>Elliptische boog: klik waar de boog begint</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="196"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="351"/>
         <source>Elliptical arc: click where the arc ends (Shift: the long way around)</source>
         <translation>Elliptische boog: klik waar de boog eindigt (Shift: de lange weg)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="203"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="357"/>
         <source>Ellipse: click one end of the major axis</source>
         <translation>Ellips: klik op één uiteinde van de lange as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="205"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="359"/>
         <source>Ellipse: click the other end of the major axis</source>
         <translation>Ellips: klik op het andere uiteinde van de lange as</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="214"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="367"/>
         <source>Span + Rise arc: click one end of the span</source>
         <translation>Boog overspanning + pijl: klik op één uiteinde van de overspanning</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="216"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="369"/>
         <source>Span + Rise arc: click the other end of the span</source>
         <translation>Boog overspanning + pijl: klik op het andere uiteinde van de overspanning</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="218"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="371"/>
         <source>Span + Rise arc: click the apex (the rise), or type it</source>
         <translation>Boog overspanning + pijl: klik op de top (de pijl), of typ hem</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="224"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="376"/>
         <source>Corner arc: click the corner</source>
         <translation>Hoekboog: klik op het hoekpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="225"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="377"/>
         <source>Corner arc: click where the arc meets the first leg</source>
         <translation>Hoekboog: klik waar de boog het eerste been raakt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="227"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="379"/>
         <source>Corner arc: click where the arc meets the second leg</source>
         <translation>Hoekboog: klik waar de boog het tweede been raakt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="233"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="384"/>
         <source>Endpoints arc: click the first point on the curve</source>
         <translation>Eindpuntboog: klik op het eerste punt op de kromme</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="235"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="386"/>
         <source>Endpoints arc: click the second point on the curve</source>
         <translation>Eindpuntboog: klik op het tweede punt op de kromme</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="237"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="388"/>
         <source>Endpoints arc: click the center</source>
         <translation>Eindpuntboog: klik op het middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/tools/ellipsetoolhandler.cpp" line="238"/>
+        <location filename="../../src/libhobbycad/sketch/placement.cpp" line="389"/>
         <source>Endpoints arc: click to set the axis direction (Shift: the long way around)</source>
         <translation>Eindpuntboog: klik om de asrichting in te stellen (Shift: de lange weg)</translation>
+    </message>
+</context>
+<context>
+    <name>hobbycad::SketchEntity</name>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="297"/>
+        <source>Point</source>
+        <translation>Punt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="299"/>
+        <source>Line</source>
+        <translation>Lijn</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="301"/>
+        <source>Rectangle</source>
+        <translation>Rechthoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="303"/>
+        <source>Parallelogram</source>
+        <translation>Parallellogram</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="305"/>
+        <source>Circle</source>
+        <translation>Cirkel</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="307"/>
+        <source>Arc</source>
+        <translation>Boog</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="309"/>
+        <source>Spline</source>
+        <translation>Spline</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="311"/>
+        <source>Polygon</source>
+        <translation>Veelhoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="313"/>
+        <source>Slot</source>
+        <translation>Sleuf</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="315"/>
+        <source>Ellipse</source>
+        <translation>Ellips</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="317"/>
+        <source>Text</source>
+        <translation>Tekst</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/undo.cpp" line="319"/>
+        <source>Dimension</source>
+        <translation>Maat</translation>
     </message>
 </context>
 <context>
@@ -8165,880 +9485,948 @@ Klik op een lijn of een zijde van een rechthoek.</translation>
         <translation>Geen hulpvlak gekozen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="201"/>
-        <source>Sketch on XY plane at Z = 0</source>
-        <translation>Schets op XY-vlak bij Z = 0</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="203"/>
-        <source>Sketch on XY plane at Z = %1</source>
-        <translation>Schets op XY-vlak bij Z = %1</translation>
-    </message>
-    <message>
         <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="208"/>
-        <source>Sketch on XZ plane at Y = 0</source>
-        <translation>Schets op XZ-vlak bij Y = 0</translation>
+        <source>Sketch on %1 plane at %2 = 0</source>
+        <extracomment>%1 is a plane (&quot;XY&quot;), %2 the axis across it (&quot;Z&quot;).</extracomment>
+        <translation>Schets op %1-vlak bij %2 = 0</translation>
     </message>
     <message>
         <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="210"/>
-        <source>Sketch on XZ plane at Y = %1</source>
-        <translation>Schets op XZ-vlak bij Y = %1</translation>
+        <source>Sketch on %1 plane at %2 = %3</source>
+        <extracomment>%1 is a plane (&quot;XY&quot;), %2 the axis across it (&quot;Z&quot;), %3 the offset.</extracomment>
+        <translation>Schets op %1-vlak bij %2 = %3</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="215"/>
-        <source>Sketch on YZ plane at X = 0</source>
-        <translation>Schets op YZ-vlak bij X = 0</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="217"/>
-        <source>Sketch on YZ plane at X = %1</source>
-        <translation>Schets op YZ-vlak bij X = %1</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="229"/>
+        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="224"/>
         <source>Sketch on plane rotated %1° around %2 axis</source>
         <translation>Schets op een vlak dat %1° om de %2-as is gedraaid</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="233"/>
+        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="228"/>
         <source>Sketch on plane rotated %1° around %2 axis, offset %3 mm</source>
         <translation>Schets op een vlak dat %1° om de %2-as is gedraaid, %3 mm verspringend</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="241"/>
+        <location filename="../../src/hobbycad/gui/sketchplanedialog.cpp" line="236"/>
         <source>Custom plane</source>
         <translation>Aangepast vlak</translation>
     </message>
 </context>
 <context>
+    <name>hobbycad::SketchProperties</name>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="32"/>
+        <source>Position</source>
+        <translation>Positie</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="33"/>
+        <source>Start</source>
+        <translation>Begin</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="34"/>
+        <source>End</source>
+        <translation>Einde</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="35"/>
+        <source>Corner %1</source>
+        <translation>Hoek %1</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="36"/>
+        <source>Center</source>
+        <translation>Middelpunt</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="37"/>
+        <source>Center %1</source>
+        <translation>Middelpunt %1</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="38"/>
+        <source>Major axis</source>
+        <translation>Lange as</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="39"/>
+        <source>Minor axis</source>
+        <translation>Korte as</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="40"/>
+        <source>Handle (derived)</source>
+        <translation>Greep (afgeleid)</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="41"/>
+        <source>Point %1</source>
+        <translation>Punt %1</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="42"/>
+        <source>Length</source>
+        <translation>Lengte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="43"/>
+        <source>Width</source>
+        <translation>Breedte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="44"/>
+        <source>Height</source>
+        <translation>Hoogte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="45"/>
+        <source>Radius</source>
+        <translation>Straal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="46"/>
+        <source>Diameter</source>
+        <translation>Diameter</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="47"/>
+        <source>Start Angle</source>
+        <translation>Beginhoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="48"/>
+        <source>Sweep Angle</source>
+        <translation>Veeghoek</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="49"/>
+        <source>Sides</source>
+        <translation>Zijden</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="50"/>
+        <source>Major Radius</source>
+        <translation>Grote straal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="51"/>
+        <source>Minor Radius</source>
+        <translation>Kleine straal</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="52"/>
+        <source>Control Points</source>
+        <translation>Controlepunten</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="53"/>
+        <source>Text</source>
+        <translation>Tekst</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="54"/>
+        <source>Font Size</source>
+        <translation>Tekengrootte</translation>
+    </message>
+    <message>
+        <location filename="../../src/libhobbycad/sketch/property_schema.cpp" line="55"/>
+        <source>Rotation</source>
+        <translation>Rotatie</translation>
+    </message>
+</context>
+<context>
     <name>hobbycad::SketchPropertiesWidget</name>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="123"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="125"/>
         <source>Background Image</source>
         <translation>Achtergrondafbeelding</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="127"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="504"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="511"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="129"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="506"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="513"/>
         <source>File:</source>
         <translation>Bestand:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="133"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="135"/>
         <source>No image selected</source>
         <translation>Geen afbeelding gekozen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="136"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="138"/>
         <source>...</source>
         <translation>...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="138"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="140"/>
         <source>Browse for a different image file</source>
         <translation>Bladeren naar een ander afbeeldingsbestand</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="147"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="149"/>
         <source>Edit Position</source>
         <translation>Positie bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="149"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="151"/>
         <source>Enable interactive repositioning and resizing of the background image</source>
         <translation>Interactief verplaatsen en van formaat wijzigen van de achtergrondafbeelding inschakelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="153"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="155"/>
         <source>Remove</source>
         <translation>Verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="154"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="156"/>
         <source>Remove the background image</source>
         <translation>De achtergrondafbeelding verwijderen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="159"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="161"/>
         <source>Calibrate Scale</source>
         <translation>Schaal kalibreren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="160"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="162"/>
         <source>Set the scale by picking two points with a known distance</source>
         <translation>De schaal instellen door twee punten met bekende afstand te kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="164"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="166"/>
         <source>Export to Project</source>
         <translation>Naar project exporteren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="165"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="167"/>
         <source>Save the image file to the project directory</source>
         <translation>Het afbeeldingsbestand in de projectmap opslaan</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="171"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="173"/>
         <source>Opacity:</source>
         <translation>Dekking:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="181"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="183"/>
         <source>%</source>
         <translation>%</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="212"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="221"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="230"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="239"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="214"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="223"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="232"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="241"/>
         <source> mm</source>
         <translation> mm</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="215"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="217"/>
         <source>Position X:</source>
         <translation>Positie X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="224"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="226"/>
         <source>Position Y:</source>
         <translation>Positie Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="233"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="235"/>
         <source>Size W:</source>
         <translation>Grootte B:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="242"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="244"/>
         <source>Size H:</source>
         <translation>Grootte H:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="248"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="250"/>
         <source>°</source>
         <translation>°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="249"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="251"/>
         <source>Rotation angle (will be normalized to 0-360°)</source>
         <translation>Rotatiehoek (wordt genormaliseerd naar 0-360°)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="252"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1261"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="254"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1238"/>
         <source>Rotation:</source>
         <translation>Rotatie:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="270"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="272"/>
         <source>Scale:</source>
         <translation>Schaal:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="274"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="276"/>
         <source>The image&apos;s pixel size and its scale. Two scales appear when the
 aspect lock is off and the picture has been stretched.</source>
         <translation>De pixelgrootte van de afbeelding en haar schaal. Er verschijnen twee schalen
 wanneer de beeldverhouding niet vergrendeld is en de afbeelding is uitgerekt.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="281"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="283"/>
         <source>Lock aspect ratio</source>
         <translation>Beeldverhouding vergrendelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="283"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="285"/>
         <source>Keep the picture&apos;s own proportions (one scale for both axes).
 Off, width and height move independently and the scale splits into X and Y.</source>
         <translation>De eigen verhoudingen van de afbeelding behouden (één schaal voor beide assen).
 Uit: breedte en hoogte veranderen onafhankelijk en de schaal splitst zich in X en Y.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="293"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="295"/>
         <source>Grayscale</source>
         <translation>Grijswaarden</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="294"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="296"/>
         <source>Convert image to grayscale for easier tracing</source>
         <translation>De afbeelding naar grijswaarden omzetten om makkelijker over te trekken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="306"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="308"/>
         <source>Contrast:</source>
         <translation>Contrast:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="316"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="318"/>
         <source>Brightness:</source>
         <translation>Helderheid:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="323"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="325"/>
         <source>↔</source>
         <translation>↔</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="325"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="327"/>
         <source>Flip horizontally (mirror)</source>
         <translation>Horizontaal spiegelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="329"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="331"/>
         <source>↕</source>
         <translation>↕</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="331"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="333"/>
         <source>Flip vertically</source>
         <translation>Verticaal spiegelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="337"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="339"/>
         <source>↺</source>
         <translation>↺</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="339"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="341"/>
         <source>Rotate 90° counter-clockwise</source>
         <translation>90° linksom draaien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="343"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="345"/>
         <source>↻</source>
         <translation>↻</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="345"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="347"/>
         <source>Rotate 90° clockwise</source>
         <translation>90° rechtsom draaien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="349"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="351"/>
         <source>180°</source>
         <translation>180°</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="351"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="353"/>
         <source>Rotate 180°</source>
         <translation>180° draaien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="362"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="364"/>
         <source>Selected Entity</source>
         <translation>Gekozen entiteit</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="368"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="370"/>
         <source>No entity selected</source>
         <translation>Geen entiteit gekozen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="380"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="429"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="382"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="431"/>
         <source>Type:</source>
         <translation>Type:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="383"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="385"/>
         <source>ID:</source>
         <translation>ID:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="386"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="388"/>
         <source>Construction:</source>
         <translation>Hulpgeometrie:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="402"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1511"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="404"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
         <source>Point:</source>
         <translation>Punt:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="416"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="418"/>
         <source>Projection:</source>
         <translation>Projectie:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="432"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="434"/>
         <source>Value:</source>
         <translation>Waarde:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="435"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="437"/>
         <source>Constrained:</source>
         <translation>Vastgelegd:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="442"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="444"/>
         <source>Label Angle:</source>
         <translation>Labelhoek:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="502"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="508"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="504"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="510"/>
         <source>File (embedded):</source>
         <translation>Bestand (ingesloten):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="507"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="509"/>
         <source>(embedded image)</source>
         <translation>(ingesloten afbeelding)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="611"/>
         <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="613"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="615"/>
         <source>Driven by a dimension; edit the dimension instead.</source>
         <translation>Aangestuurd door een maat; bewerk in plaats daarvan de maat.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="706"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="744"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="701"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="739"/>
         <source>Yes</source>
         <translation>Ja</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="706"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="744"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="701"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="739"/>
         <source>No</source>
         <translation>Nee</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="740"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="735"/>
         <source>Conic arc, %1</source>
         <translation>Kegelsnedeboog, %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="763"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="764"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="775"/>
-        <source>Start</source>
-        <translation>Begin</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="763"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="764"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="776"/>
-        <source>End</source>
-        <translation>Eind</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="764"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="765"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="769"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1545"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1522"/>
         <source>Center</source>
         <translation>Middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="769"/>
-        <source>Major axis</source>
-        <translation>Lange as</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="769"/>
-        <source>Minor axis</source>
-        <translation>Korte as</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="775"/>
-        <source>Handle (derived)</source>
-        <translation>Greep (afgeleid)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="785"/>
-        <source>Point %1</source>
-        <translation>Punt %1</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="807"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="784"/>
         <source>sketch %1, entity %2</source>
         <translation>schets %1, entiteit %2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="810"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="787"/>
         <source>%1
 (reference: edit it in the source sketch)</source>
         <translation>%1
 (referentie: bewerk deze in de bronschets)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="859"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="836"/>
         <source>Set by rho and the apex. Edit rho in the Conic section; a handle edit in the Bezier anchor section makes this a plain Bezier.</source>
         <translation>Bepaald door rho en de top. Bewerk rho in de sectie Kegelsnede; een greep bewerken in de sectie Bézier-anker maakt er een gewone Bézier van.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="997"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="974"/>
         <source>Pixel size unknown until the image loads.</source>
         <translation>Pixelgrootte onbekend totdat de afbeelding is geladen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1000"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="977"/>
         <source>%1 x %2 px; 1 mm = %3 px%4</source>
         <translation>%1 x %2 px; 1 mm = %3 px%4</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1002"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="979"/>
         <source> (calibrated)</source>
         <translation> (gekalibreerd)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1005"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="982"/>
         <source>%1 x %2 px; stretched: X %3 mm/px, Y %4 mm/px</source>
         <translation>%1 x %2 px; uitgerekt: X %3 mm/px, Y %4 mm/px</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1193"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1170"/>
         <source>Bezier Anchor</source>
         <translation>Bézier-anker</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1202"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1179"/>
         <source>Tangent angle:</source>
         <translation>Raaklijnhoek:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1208"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1185"/>
         <source>In handle length:</source>
         <translation>Lengte ingaande greep:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1214"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1191"/>
         <source>Out handle length:</source>
         <translation>Lengte uitgaande greep:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1220"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1197"/>
         <source>Weight (rational):</source>
         <translation>Gewicht (rationeel):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1224"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1201"/>
         <source>Bezier Leg</source>
         <translation>Bézier-been</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1230"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1207"/>
         <source>Leg length:</source>
         <translation>Beenlengte:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1236"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1213"/>
         <source>Ellipse</source>
         <translation>Ellips</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1245"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1222"/>
         <source>Major radius:</source>
         <translation>Grote straal:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1252"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1229"/>
         <source>Minor radius:</source>
         <translation>Kleine straal:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1265"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1242"/>
         <source>Elliptical arc</source>
         <translation>Elliptische boog</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1276"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1253"/>
         <source>Arc start:</source>
         <translation>Begin van de boog:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1284"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1261"/>
         <source>Arc sweep:</source>
         <translation>Boogbereik:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1289"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1266"/>
         <source>Show axes</source>
         <translation>Assen tonen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1290"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1267"/>
         <source>Draw this ellipse&apos;s major and minor axis points and lines so they can be dragged and dimensioned. Overrides the Sketch Options default for this ellipse.</source>
         <translation>De punten en lijnen van de lange en korte as van deze ellips tekenen zodat ze versleept en gemaatvoerd kunnen worden. Gaat voor de standaardinstelling van de schetsopties voor deze ellips.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1353"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1330"/>
         <source>Conic</source>
         <translation>Kegelsnede</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1364"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1341"/>
         <source>0.5 is a parabola; less is an elliptical arc, more a hyperbola. The ends, their tangents and the apex stay.</source>
         <translation>0,5 is een parabool; minder is een elliptische boog, meer een hyperbool. De uiteinden, hun raaklijnen en de top blijven behouden.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1368"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1345"/>
         <source>Rho:</source>
         <translation>Rho:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1371"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1348"/>
         <source>Kind:</source>
         <translation>Soort:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1377"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1354"/>
         <source>Where the end tangents meet. Not a stored point: drag an end or a handle on the canvas to move it.</source>
         <translation>Snijpunt van de eindraaklijnen. Geen opgeslagen punt: sleep een uiteinde of een greep op het canvas om het te verplaatsen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1379"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1356"/>
         <source>Apex:</source>
         <translation>Top:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1389"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1366"/>
         <source>parabolic</source>
         <translation>parabolisch</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1390"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1367"/>
         <source>hyperbolic</source>
         <translation>hyperbolisch</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1391"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1368"/>
         <source>elliptical</source>
         <translation>elliptisch</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1399"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1376"/>
         <source>(none: the end tangents are parallel)</source>
         <translation>(geen: de eindraaklijnen zijn evenwijdig)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1442"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1419"/>
         <source>Transform</source>
         <translation>Transformeren</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1449"/>
         <source>Translate</source>
         <translation>Verplaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1449"/>
         <source>Rotate</source>
         <translation>Draaien</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1449"/>
         <source>Scale</source>
         <translation>Schalen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1449"/>
         <source>Mirror</source>
         <translation>Spiegelen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1450"/>
         <source>Point to point</source>
         <translation>Punt naar punt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1450"/>
         <source>Point to position</source>
         <translation>Punt naar positie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1473"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1450"/>
         <source>Free move</source>
         <translation>Vrij verplaatsen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1474"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1451"/>
         <source>Move type:</source>
         <translation>Verplaatsingstype:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1479"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1456"/>
         <source>X distance:</source>
         <translation>X-afstand:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1479"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1456"/>
         <source>Y distance:</source>
         <translation>Y-afstand:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1482"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1531"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1459"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1508"/>
         <source>Angle:</source>
         <translation>Hoek:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1485"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1462"/>
         <source>Factor:</source>
         <translation>Factor:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1465"/>
         <source>Horizontal axis through pivot</source>
         <translation>Horizontale as door draaipunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1465"/>
         <source>Vertical axis through pivot</source>
         <translation>Verticale as door draaipunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1488"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1465"/>
         <source>Picked line</source>
         <translation>Gekozen lijn</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1490"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1467"/>
         <source>Axis:</source>
         <translation>As:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1491"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1468"/>
         <source>Pick line point A</source>
         <translation>Lijnpunt A kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1492"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1469"/>
         <source>Pick line point B</source>
         <translation>Lijnpunt B kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1494"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1471"/>
         <source>Line A:</source>
         <translation>Lijn A:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1495"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1472"/>
         <source>Line B:</source>
         <translation>Lijn B:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1499"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1476"/>
         <source>Pick from point</source>
         <translation>Vanaf-punt kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1500"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1477"/>
         <source>Pick to point</source>
         <translation>Naar-punt kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1502"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1479"/>
         <source>From:</source>
         <translation>Van:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1503"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1480"/>
         <source>To:</source>
         <translation>Naar:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1504"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1481"/>
         <source>Δ (x, y):</source>
         <translation>Δ (x, y):</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1508"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1485"/>
         <source>Pick point on selection</source>
         <translation>Punt op selectie kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1515"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1492"/>
         <source>Absolute</source>
         <translation>Absoluut</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1515"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1492"/>
         <source>Relative to reference</source>
         <translation>Relatief aan referentie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1517"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1494"/>
         <source>Target is:</source>
         <translation>Doel is:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1518"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1495"/>
         <source>Pick reference</source>
         <translation>Referentie kiezen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1520"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1497"/>
         <source>Reference:</source>
         <translation>Referentie:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1522"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1588"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1499"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1569"/>
         <source>Target X:</source>
         <translation>Doel X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1522"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1589"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1499"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1570"/>
         <source>Target Y:</source>
         <translation>Doel Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1529"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1506"/>
         <source>Drag the selection to move it; drag the ring to turn it about the star. Ctrl = axis lock / 15° steps.</source>
         <translation>Sleep de selectie om deze te verplaatsen; sleep de ring om deze om de ster te draaien. Ctrl = as vergrendelen / stappen van 15°.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1531"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1508"/>
         <source>dx:</source>
         <translation>dx:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1531"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1508"/>
         <source>dy:</source>
         <translation>dy:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1544"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1521"/>
         <source>Set pivot</source>
         <translation>Draaipunt instellen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1547"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1524"/>
         <source>Pivot X:</source>
         <translation>Draaipunt X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1547"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1524"/>
         <source>Pivot Y:</source>
         <translation>Draaipunt Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1549"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1526"/>
         <source>Pivot is:</source>
         <translation>Draaipunt is:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1553"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1530"/>
         <source>Create copy</source>
         <translation>Kopie maken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1555"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1532"/>
         <source>Apply</source>
         <translation>Toepassen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1588"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1569"/>
         <source>Offset X:</source>
         <translation>Verschuiving X:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1589"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1570"/>
         <source>Offset Y:</source>
         <translation>Verschuiving Y:</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1606"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1601"/>
         <source>Not set</source>
         <translation>Niet ingesteld</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1613"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1609"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1708"/>
         <source>transient (no group)</source>
         <translation>tijdelijk (geen groep)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1614"/>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1610"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1708"/>
         <source>stored on the group</source>
         <translation>opgeslagen op de groep</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1614"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1610"/>
         <source>geometric center</source>
         <translation>geometrisch middelpunt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1651"/>
+        <location filename="../../src/libhobbycad/sketch/transform_form.cpp" line="184"/>
         <source>pick both points of the mirror line</source>
         <translation>kies beide punten van de spiegellijn</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1658"/>
+        <location filename="../../src/libhobbycad/sketch/transform_form.cpp" line="187"/>
         <source>pick the from-point and the to-point</source>
         <translation>kies het vanaf-punt en het naar-punt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1661"/>
+        <location filename="../../src/libhobbycad/sketch/transform_form.cpp" line="190"/>
         <source>pick the point on the selection that should land on the target</source>
         <translation>kies het punt op de selectie dat op het doel moet landen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1664"/>
+        <location filename="../../src/libhobbycad/sketch/transform_form.cpp" line="194"/>
         <source>pick the reference point the offset is measured from</source>
         <translation>kies het referentiepunt waarvandaan de verschuiving wordt gemeten</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1688"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1655"/>
         <source>Not possible: %1.</source>
         <translation>Niet mogelijk: %1.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1690"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1657"/>
         <source>Preview shown; Apply to commit.</source>
         <translation>Voorbeeld getoond; Toepassen om vast te leggen.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1708"/>
         <source>geometric center (stored at Apply if you move it)</source>
         <translation>geometrisch middelpunt (opgeslagen bij Toepassen als u het verplaatst)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1761"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1741"/>
         <source> (not on selection)</source>
         <translation> (niet op selectie)</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1799"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1774"/>
         <source>Canceled; selection kept.</source>
         <translation>Geannuleerd; selectie behouden.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1851"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1826"/>
         <source>Not applied: %1.</source>
         <translation>Niet toegepast: %1.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1855"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1830"/>
         <source>Applied%1%2</source>
         <translation>Toegepast%1%2</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1855"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1830"/>
         <source> to a copy</source>
         <translation> op een kopie</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1120"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1097"/>
         <source>Load Failed</source>
         <translation>Laden mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="264"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="266"/>
         <source> mm/px</source>
         <translation> mm/px</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="265"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="267"/>
         <source>Millimeters of sketch per image pixel: the picture&apos;s scale.
 Type it when you know it (a 300 DPI scan is 25.4/300 = 0.0847),
 or use Calibrate Scale to measure it from two known points.</source>
@@ -9047,586 +10435,31 @@ Typ die als u haar kent (een scan van 300 DPI is 25,4/300 = 0,0847),
 of gebruik Schaal kalibreren om haar uit twee bekende punten te meten.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1121"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1098"/>
         <source>Failed to load the image file.</source>
         <translation>Kan het afbeeldingsbestand niet laden.</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1173"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1150"/>
         <source>Export Complete</source>
         <translation>Exporteren voltooid</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1174"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1151"/>
         <source>Background image exported to:
 %1</source>
         <translation>Achtergrondafbeelding geëxporteerd naar:
 %1</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1176"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1153"/>
         <source>Export Failed</source>
         <translation>Exporteren mislukt</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1177"/>
+        <location filename="../../src/hobbycad/gui/sketchpropertieswidget.cpp" line="1154"/>
         <source>Failed to export the background image to the project directory.</source>
         <translation>Kan de achtergrondafbeelding niet naar de projectmap exporteren.</translation>
-    </message>
-</context>
-<context>
-    <name>hobbycad::SketchToolbar</name>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="245"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="680"/>
-        <source>Create</source>
-        <translation>Maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="249"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="694"/>
-        <source>Create geometry</source>
-        <translation>Geometrie maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="84"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="260"/>
-        <source>Line</source>
-        <translation>Lijn</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="84"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="260"/>
-        <source>Draw line (L)</source>
-        <translation>Lijn tekenen (L)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="111"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="261"/>
-        <source>Two Point</source>
-        <translation>Twee punten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="112"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="128"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="262"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="293"/>
-        <source>Tangent</source>
-        <translation>Rakend</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="113"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="263"/>
-        <source>Construction</source>
-        <translation>Hulpgeometrie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="85"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="269"/>
-        <source>Rectangle</source>
-        <translation>Rechthoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="85"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="269"/>
-        <source>Draw rectangle (R)</source>
-        <translation>Rechthoek tekenen (R)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="115"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="270"/>
-        <source>Corner to Corner</source>
-        <translation>Hoek tot hoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="116"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="271"/>
-        <source>Center</source>
-        <translation>Middelpunt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="117"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="272"/>
-        <source>3-Point (Angled)</source>
-        <translation>Drie punten (schuin)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="118"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="273"/>
-        <source>Parallelogram</source>
-        <translation>Parallellogram</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="86"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="279"/>
-        <source>Circle</source>
-        <translation>Cirkel</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="86"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="279"/>
-        <source>Draw circle (C)</source>
-        <translation>Cirkel tekenen (C)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="120"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="280"/>
-        <source>Center + Radius</source>
-        <translation>Middelpunt + straal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="121"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="281"/>
-        <source>2-Point (Diameter)</source>
-        <translation>Twee punten (diameter)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="122"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="129"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="147"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="282"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="294"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="331"/>
-        <source>3-Point</source>
-        <translation>Drie punten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="87"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="290"/>
-        <source>Arc</source>
-        <translation>Boog</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="87"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="290"/>
-        <source>Draw arc (A)</source>
-        <translation>Boog tekenen (A)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="126"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="291"/>
-        <source>Center + Start + End</source>
-        <translation>Middelpunt + begin + einde</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="127"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="292"/>
-        <source>Start + End + Radius</source>
-        <translation>Begin + einde + straal</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="88"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="300"/>
-        <source>Spline</source>
-        <translation>Spline</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="89"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="310"/>
-        <source>Polygon</source>
-        <translation>Veelhoek</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="89"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="310"/>
-        <source>Draw polygon</source>
-        <translation>Veelhoek tekenen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="137"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="311"/>
-        <source>Inscribed</source>
-        <translation>Ingeschreven</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="138"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="312"/>
-        <source>Circumscribed</source>
-        <translation>Omgeschreven</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="139"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="313"/>
-        <source>Freeform</source>
-        <translation>Vrije vorm</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="90"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="319"/>
-        <source>Slot</source>
-        <translation>Sleuf</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="90"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="319"/>
-        <source>Draw slot</source>
-        <translation>Sleuf tekenen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="141"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="320"/>
-        <source>Center to Center</source>
-        <translation>Middelpunt tot middelpunt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="142"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="321"/>
-        <source>Overall Length</source>
-        <translation>Totale lengte</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="143"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="322"/>
-        <source>Arc Slot (Radius)</source>
-        <translation>Boogsleuf (straal)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="144"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="323"/>
-        <source>Arc Slot (Ends)</source>
-        <translation>Boogsleuf (uiteinden)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="329"/>
-        <source>Ellipse</source>
-        <translation>Ellips</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="91"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="329"/>
-        <source>Draw ellipse</source>
-        <translation>Ellips tekenen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="146"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="330"/>
-        <source>Center + Axes</source>
-        <translation>Middelpunt + assen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="92"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="344"/>
-        <source>Point</source>
-        <translation>Punt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="92"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="344"/>
-        <source>Place point (P)</source>
-        <translation>Punt plaatsen (P)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="94"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="360"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="372"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="681"/>
-        <source>Dimension</source>
-        <translation>Maat</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="364"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="696"/>
-        <source>Add dimension</source>
-        <translation>Maat toevoegen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="94"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="372"/>
-        <source>Add dimension (D)</source>
-        <translation>Maat toevoegen (D)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="88"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="300"/>
-        <source>Draw a Bezier or Catmull-Rom spline</source>
-        <translation>Een Bézier- of Catmull-Rom-spline tekenen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="95"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="377"/>
-        <source>Constraint</source>
-        <translation>Randvoorwaarde</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="95"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="377"/>
-        <source>Add constraint (X)</source>
-        <translation>Randvoorwaarde toevoegen (X)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="96"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="382"/>
-        <source>Text</source>
-        <translation>Tekst</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="96"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="382"/>
-        <source>Add text (T)</source>
-        <translation>Tekst toevoegen (T)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="98"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="393"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="405"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="682"/>
-        <source>Trim</source>
-        <translation>Trimmen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="98"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="397"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="405"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="698"/>
-        <source>Trim entity at intersections</source>
-        <translation>Entiteit trimmen op snijpunten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="99"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="410"/>
-        <source>Extend</source>
-        <translation>Verlengen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="99"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="410"/>
-        <source>Extend entity to nearest intersection</source>
-        <translation>Entiteit verlengen tot het dichtstbijzijnde snijpunt</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="100"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="415"/>
-        <source>Split</source>
-        <translation>Splitsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="100"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="415"/>
-        <source>Split entity at intersections</source>
-        <translation>Entiteit splitsen op snijpunten</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="101"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="420"/>
-        <source>Offset</source>
-        <translation>Verspringing</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="101"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="420"/>
-        <source>Offset geometry (O)</source>
-        <translation>Geometrie verspringen (O)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="102"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="425"/>
-        <source>Fillet</source>
-        <translation>Afronding</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="102"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="425"/>
-        <source>Fillet corners (F)</source>
-        <translation>Hoeken afronden (F)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="103"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="430"/>
-        <source>Chamfer</source>
-        <translation>Afschuining</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="103"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="430"/>
-        <source>Chamfer corners</source>
-        <translation>Hoeken afschuinen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="107"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="487"/>
-        <source>Projection</source>
-        <translation>Projectie</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="123"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="283"/>
-        <source>Tangent to 2</source>
-        <translation>Rakend aan 2</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="124"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="284"/>
-        <source>Tangent to 3</source>
-        <translation>Rakend aan 3</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="131"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="301"/>
-        <source>Cubic Bezier</source>
-        <translation>Kubische Bézier</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="132"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="302"/>
-        <source>Catmull-Rom</source>
-        <translation>Catmull-Rom</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="133"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="303"/>
-        <source>Rational Bezier</source>
-        <translation>Rationele Bézier</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="149"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="332"/>
-        <source>Elliptical Arc</source>
-        <translation>Elliptische boog</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="151"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="333"/>
-        <source>Span + Rise Elliptical Arc</source>
-        <translation>Elliptische boog overspanning + pijl</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="153"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="335"/>
-        <source>Corner Elliptical Arc</source>
-        <translation>Elliptische hoekboog</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="155"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="337"/>
-        <source>Endpoints Elliptical Arc</source>
-        <translation>Elliptische eindpuntboog</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="135"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="304"/>
-        <source>Conic Arc (Rho)</source>
-        <translation>Kegelsnedeboog (rho)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="438"/>
-        <source>Move</source>
-        <translation>Verplaatsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="438"/>
-        <source>Move the selected geometry</source>
-        <translation>De geselecteerde geometrie verplaatsen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="442"/>
-        <source>Rotate</source>
-        <translation>Draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="442"/>
-        <source>Rotate the selected geometry</source>
-        <translation>De geselecteerde geometrie draaien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="446"/>
-        <source>Scale</source>
-        <translation>Schalen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="446"/>
-        <source>Scale the selected geometry</source>
-        <translation>De geselecteerde geometrie schalen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="450"/>
-        <source>Mirror</source>
-        <translation>Spiegelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="450"/>
-        <source>Mirror the selected geometry</source>
-        <translation>De geselecteerde geometrie spiegelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="454"/>
-        <source>Copy</source>
-        <translation>Kopiëren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="454"/>
-        <source>Copy the selected geometry</source>
-        <translation>De geselecteerde geometrie kopiëren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="465"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="683"/>
-        <source>Rect
-Pattern</source>
-        <translation>Rechthoekig
-patroon</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="498"/>
-        <source>3D</source>
-        <translation>3D</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="498"/>
-        <source>Toggle 3D sketch mode</source>
-        <translation>3D-schetsmodus in-/uitschakelen</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="509"/>
-        <source>Flip</source>
-        <translation>Omkeren</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="509"/>
-        <source>Draw from the far side of the plane (heads/tails)</source>
-        <translation>Vanaf de andere zijde van het vlak tekenen (kop/munt)</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="521"/>
-        <source>Finish Sketch</source>
-        <translation>Schets voltooien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="521"/>
-        <source>Finish editing the sketch</source>
-        <translation>Het bewerken van de schets voltooien</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="105"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="469"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="477"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="700"/>
-        <source>Create rectangular pattern</source>
-        <translation>Een rechthoekig patroon maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="105"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="477"/>
-        <source>Rect Pattern</source>
-        <translation>Rechthoekig patroon</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="106"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="482"/>
-        <source>Circ Pattern</source>
-        <translation>Cirkelvormig patroon</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="106"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="482"/>
-        <source>Create circular pattern</source>
-        <translation>Een cirkelvormig patroon maken</translation>
-    </message>
-    <message>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="107"/>
-        <location filename="../../src/hobbycad/gui/sketchtoolbar.cpp" line="487"/>
-        <source>Project geometry from other sketches</source>
-        <translation>Geometrie uit andere schetsen projecteren</translation>
     </message>
 </context>
 <context>
@@ -9710,42 +10543,42 @@ Fout: %1</translation>
 <context>
     <name>hobbycad::TimelineWidget</name>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="708"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="711"/>
         <source>Edit &quot;%1&quot;</source>
         <translation>&quot;%1&quot; bewerken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="717"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="720"/>
         <source>Rename...</source>
         <translation>Hernoemen...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="727"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="730"/>
         <source>Unsuppress</source>
         <translation>Onderdrukking opheffen</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="732"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="735"/>
         <source>Suppress</source>
         <translation>Onderdrukken</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="740"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="743"/>
         <source>Rollback to Here</source>
         <translation>Terugrollen tot hier</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="751"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="754"/>
         <source>Export as DXF...</source>
         <translation>Exporteren als DXF...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="756"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="759"/>
         <source>Export as SVG...</source>
         <translation>Exporteren als SVG...</translation>
     </message>
     <message>
-        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="765"/>
+        <location filename="../../src/hobbycad/gui/timelinewidget.cpp" line="768"/>
         <source>Delete</source>
         <translation>Verwijderen</translation>
     </message>

@@ -21,6 +21,7 @@ class QFormLayout;
 #include <QList>
 #include <QPointF>
 #include <hobbycad/sketch/transform.h>
+#include <hobbycad/sketch/transform_form.h>
 
 class QLabel;
 class QComboBox;
@@ -153,6 +154,8 @@ private:
     void refreshConicReadout(const SketchEntity& conic);   // kind + apex labels
     void updateTransformRows();
     void resetTransformForm();
+    /// The form as filled in: the fields' values and the points picked so far.
+    sketch::TransformForm transformForm() const;
     bool currentTransformParams(sketch::GroupTransformParams& out, QString* whyNot = nullptr) const;
     void refreshTransformPreview();
     void showTransformStatus(const QString& text, bool isError);
@@ -169,7 +172,6 @@ private:
     bool m_updatingUi = false;  // Prevent feedback loops
 
     // Transform section
-    enum class MoveType { Translate, Rotate, Scale, Mirror, PointToPoint, PointToPosition, FreeMove };
     QGroupBox* m_transformGroup = nullptr;
     // ---- Bezier anchor editor ----
     QGroupBox* m_bezierAnchorGroup = nullptr;
@@ -214,7 +216,6 @@ private:
     QPushButton* m_pickRef = nullptr; QLabel* m_refLabel = nullptr;
     QLabel* m_targetXLabel = nullptr; QLabel* m_targetYLabel = nullptr;
     QList<QWidget*> m_rowsP2PosRef;
-    bool m_haveRef = false; QPointF m_refPt;
     QDoubleSpinBox* m_fmDx = nullptr; QDoubleSpinBox* m_fmDy = nullptr; QDoubleSpinBox* m_fmAngle = nullptr;
     QLabel* m_fmHint = nullptr;
     QDoubleSpinBox* m_pivotX = nullptr; QDoubleSpinBox* m_pivotY = nullptr;
@@ -225,8 +226,7 @@ private:
     QLabel* m_transformStatus = nullptr;
     QList<QWidget*> m_rowsTranslate, m_rowsRotate, m_rowsScale, m_rowsMirror, m_rowsMirrorLine,
                     m_rowsP2P, m_rowsP2Pos, m_rowsFreeMove, m_rowsPivot;
-    bool m_haveFrom = false, m_haveTo = false, m_havePicked = false, m_haveMirrorA = false, m_haveMirrorB = false;
-    QPointF m_fromPt, m_toPt, m_pickedPt, m_mirrorAPt, m_mirrorBPt;
+    sketch::TransformForm m_form;   ///< the picked points; the fields hold the rest
     bool m_entityModifiedQueued = false;
 
     // UI elements - Background section

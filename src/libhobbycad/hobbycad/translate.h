@@ -26,11 +26,25 @@
 
 #include <string>
 
+/// Marks a literal for extraction into the translation catalogs without
+/// translating it where it stands; the front end translates it at display
+/// time with the same context. The library does not depend on Qt, so it
+/// cannot use QT_TRANSLATE_NOOP; the lupdate target is told to read this
+/// name as that one (src/hobbycad/CMakeLists.txt, -tr-function-alias).
+/// A macro, not a function, because the extraction tool matches names.
+#define HOBBYCAD_TRANSLATE_NOOP(context, text) text
+
+/// The same with a disambiguation, for text that needs one; it expands to a
+/// braced {text, disambiguation} pair. Read by lupdate as QT_TRANSLATE_NOOP3.
+#define HOBBYCAD_TRANSLATE_NOOP3(context, text, disambiguation) {text, disambiguation}
+
 namespace hobbycad {
 
 /// Signature a front end installs. Returns the translated text, or the
-/// source when it has no translation for it.
-using TranslatorFn = std::string (*)(const char* context, const char* source);
+/// source when it has no translation for it. `disambiguation` is null for
+/// text extracted without one.
+using TranslatorFn =
+    std::string (*)(const char* context, const char* source, const char* disambiguation);
 
 /// The installed translator, or nullptr when nothing installed one.
 /// A reference so both accessors below share one object without needing
@@ -49,10 +63,11 @@ inline void setTranslator(TranslatorFn fn) { translatorHook() = fn; }
 /// front end that answers with nothing is treated as having no
 /// translation, because a blank command result is worse than an
 /// untranslated one.
-inline std::string translate(const char* context, const char* source)
+inline std::string translate(const char* context, const char* source,
+                             const char* disambiguation = nullptr)
 {
     if (TranslatorFn hook = translatorHook()) {
-        std::string out = hook(context, source);
+        std::string out = hook(context, source, disambiguation);
         if (!out.empty()) return out;
     }
     return source ? std::string(source) : std::string();

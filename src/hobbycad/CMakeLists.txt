@@ -76,11 +76,16 @@ set(APP_SOURCES
     gui/formuladialog.cpp
     gui/formulafield.cpp
     gui/parametersdialog.cpp
+    gui/arrangedtoolbar.cpp
+    gui/arrangementstore.cpp
+    gui/customizedialog.cpp
+    gui/commandtext.cpp
     gui/sketchtoolbar.cpp
     gui/modeltoolbar.cpp
     gui/changelogpanel.cpp
     gui/constraintrenderer.cpp
     gui/dimensioninput.cpp
+    gui/placementpainter.cpp
     gui/entityrenderer.cpp
     gui/colorpicker.cpp
     gui/sketchtheme.cpp
@@ -106,6 +111,7 @@ set(APP_SOURCES
     gui/tools/splinetoolhandler.cpp
     gui/tools/circletoolhandler.cpp
     gui/tools/ellipsetoolhandler.cpp
+    gui/tools/placementtoolhandler.cpp
     gui/tools/pointtoolhandler.cpp
     gui/tools/arctoolhandler.cpp
     gui/tools/linetoolhandler.cpp
@@ -159,9 +165,15 @@ set(APP_HEADERS
     gui/formuladialog.h
     gui/formulafield.h
     gui/parametersdialog.h
+    gui/arrangedtoolbar.h
+    gui/arrangementstore.h
+    gui/customizedialog.h
+    gui/commandtext.h
+    gui/settingvalue.h
     gui/sketchtoolbar.h
     gui/modeltoolbar.h
     gui/changelogpanel.h
+    gui/placementpainter.h
     gui/sketchcanvas.h
     gui/sketchsolver.h
 
@@ -180,6 +192,7 @@ set(APP_HEADERS
     gui/tools/splinetoolhandler.h
     gui/tools/circletoolhandler.h
     gui/tools/ellipsetoolhandler.h
+    gui/tools/placementtoolhandler.h
     gui/tools/pointtoolhandler.h
     gui/tools/arctoolhandler.h
     gui/tools/linetoolhandler.h
@@ -345,9 +358,30 @@ set(TS_FILES
 
 find_package(Qt6 COMPONENTS LinguistTools QUIET)
 if(Qt6LinguistTools_FOUND)
+    # The library marks its display strings (command labels, constraint
+    # names, dimension fields) with HOBBYCAD_TRANSLATE_NOOP, which is
+    # QT_TRANSLATE_NOOP under another name because the library does not
+    # depend on Qt. Scan its sources too, and tell lupdate the alias.
+    set(_hc_lupdate_sources "")
+    foreach(_hc_target hobbycad hobbycad-lib)
+        get_target_property(_hc_srcs ${_hc_target} SOURCES)
+        get_target_property(_hc_dir ${_hc_target} SOURCE_DIR)
+        foreach(_hc_src IN LISTS _hc_srcs)
+            if(_hc_src MATCHES "^\\$<")
+                continue()
+            endif()
+            if(NOT IS_ABSOLUTE "${_hc_src}")
+                set(_hc_src "${_hc_dir}/${_hc_src}")
+            endif()
+            list(APPEND _hc_lupdate_sources "${_hc_src}")
+        endforeach()
+    endforeach()
     qt_add_lupdate(hobbycad
         TS_FILES ${TS_FILES}
+        SOURCES ${_hc_lupdate_sources}
         OPTIONS -no-obsolete
+                -tr-function-alias QT_TRANSLATE_NOOP+=HOBBYCAD_TRANSLATE_NOOP
+                -tr-function-alias QT_TRANSLATE_NOOP3+=HOBBYCAD_TRANSLATE_NOOP3
     )
 endif()
 
@@ -564,4 +598,57 @@ if(HOBBYCAD_BUILD_CLI)
     endif()
 
     target_link_libraries(hobbycad-cli PRIVATE hobbycad-lib)
+
+    # ---- Translations for the command line ---------------------------
+    #
+    #  The .ts catalogs the application loads through QTranslator are no
+    #  use here: this binary has no Qt. scripts/ts2cpp.py turns them into
+    #  one C++ translation unit compiled straight in, so the command line
+    #  speaks the same fourteen languages with nothing to install and no
+    #  catalog read at run time.
+    #
+    #  Generated ONLY for the command line alone with no Qt, which is the
+    #  configuration that has no other way to translate. A build with the
+    #  application present ships the application, and hobbycad-cli is a
+    #  layering test there: CLI_SOURCES leaves out cli_translator.cpp, so
+    #  it would be English either way unless HOBBYCAD_CLI_CATALOGS says
+    #  otherwise.
+    set(HOBBYCAD_CLI_CATALOGS "AUTO" CACHE STRING
+        "Compile the .ts catalogs into hobbycad-cli (AUTO, ON, OFF)")
+    set_property(CACHE HOBBYCAD_CLI_CATALOGS PROPERTY STRINGS AUTO ON OFF)
+
+    set(_want_cli_catalogs FALSE)
+    if(HOBBYCAD_CLI_CATALOGS STREQUAL "ON")
+        set(_want_cli_catalogs TRUE)
+    elseif(HOBBYCAD_CLI_CATALOGS STREQUAL "AUTO"
+           AND NOT HOBBYCAD_BUILD_APP AND NOT HOBBYCAD_LIB_HAS_QT)
+        set(_want_cli_catalogs TRUE)
+    endif()
+
+    if(_want_cli_catalogs)
+        # python3 only, and only at build time. Missing it is a status
+        # message and an English command line, never a failed build, the
+        # same way a missing lrelease is handled above.
+        find_program(HOBBYCAD_PYTHON3 NAMES python3 python)
+        if(HOBBYCAD_PYTHON3)
+            set(_cli_catalogs ${CMAKE_CURRENT_BINARY_DIR}/cli_catalogs.cpp)
+            set(_ts2cpp ${CMAKE_SOURCE_DIR}/scripts/ts2cpp.py)
+            # Only the contexts this front end shows: its own messages,
+            # and the command registry that "help <command>" reads.
+            add_custom_command(
+                OUTPUT ${_cli_catalogs}
+                COMMAND ${HOBBYCAD_PYTHON3} ${_ts2cpp}
+                        --contexts QObject,hobbycad::Commands
+                        --out ${_cli_catalogs} ${TS_FILES}
+                DEPENDS ${TS_FILES} ${_ts2cpp}
+                COMMENT "Generating translation tables for hobbycad-cli"
+                VERBATIM COMMAND_EXPAND_LISTS
+            )
+            target_sources(hobbycad-cli PRIVATE ${_cli_catalogs})
+            target_compile_definitions(hobbycad-cli PRIVATE HOBBYCAD_CLI_CATALOGS=1)
+            message(STATUS "Command line translations: compiled in")
+        else()
+            message(STATUS "Command line translations: python3 not found, English only")
+        endif()
+    endif()
 endif()

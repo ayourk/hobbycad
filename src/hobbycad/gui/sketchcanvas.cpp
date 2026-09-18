@@ -27,6 +27,7 @@
 #include "tools/drawconstrainhandlers.h"
 #include "tools/sketchtoolhandler.h"
 #include "bindingsdialog.h"
+#include "settingvalue.h"
 #include "sketchsolver.h"
 #include "sketchutils.h"
 
@@ -39,6 +40,7 @@
 #include <hobbycad/sketch/handles.h>
 #include <hobbycad/sketch/patterns.h>
 #include <hobbycad/sketch/operations.h>
+#include <hobbycad/sketch/properties.h>
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/sketch/bezier.h>
 #include <hobbycad/sketch/align.h>
@@ -173,8 +175,7 @@ SketchCanvas::SketchCanvas(QWidget* parent)
 
     // Cursor-trailing tool hints: on unless the user turned them off. Read once
     // here; MainWindow::applyPreferences pushes live changes via the setter.
-    m_showCursorHints = QSettings()
-        .value(QStringLiteral("preferences/showCursorHints"), true).toBool();
+    m_showCursorHints = settingBool(settings::keys::ShowCursorHints);
 
     // Load key bindings from settings
     loadKeyBindings();
@@ -358,38 +359,25 @@ bool SketchCanvas::applyEllipseAxisEdit(int entityId, EllipseField field, double
         return false;
     }
 
-    const SketchEntity oldEntity = *entity;
-    // Which axis point the edit moves, so the re-solve pins the right one.
-    int movedPoint = 0;
+    const char* property = "majorRadius";
     switch (field) {
-    case EllipseField::Major:
-        if (!geometry::isPositiveLength(value)) return false;
-        entity->majorRadius = value;
-        movedPoint = 1;
-        break;
-    case EllipseField::Minor:
-        if (!geometry::isPositiveLength(value)) return false;
-        entity->minorRadius = value;
-        movedPoint = 2;
-        break;
-    case EllipseField::Rotation:
-        entity->ellipseRotation = value;
-        movedPoint = 1;
-        break;
-    case EllipseField::ArcStart:
-        entity->ellipseStart = value;
-        break;
-    case EllipseField::ArcSweep:
-        entity->ellipseSweep = value;
-        break;
+    case EllipseField::Major:    property = "majorRadius"; break;
+    case EllipseField::Minor:    property = "minorRadius"; break;
+    case EllipseField::Rotation: property = "ellipseRotation"; break;
+    case EllipseField::ArcStart: property = "ellipseStart"; break;
+    case EllipseField::ArcSweep: property = "ellipseSweep"; break;
     }
 
-    // The axis points are the geometry the solver sees, so they follow the
-    // numbers immediately rather than waiting for a solve.
-    sketch::syncEllipseAxisPoints(*entity);
+    // The library moves the axis points with the numbers (they are the
+    // geometry the solver sees) and says which one moved.
+    const SketchEntity oldEntity = *entity;
+    const sketch::PropertyEdit edit = sketch::setEntityNumber(*entity, property, value);
+    if (edit.problem != sketch::PropertyProblem::None) return false;
     pushUndoCommand(sketch::UndoCommand::modifyEntity(
         oldEntity, *entity, "Edit ellipse"));
-    notifyEntityPointChanged(entityId, movedPoint);
+    // Pin the moved axis point during the re-solve; the arc range moves
+    // none, so the center is held.
+    notifyEntityPointChanged(entityId, edit.editedPointIndex >= 0 ? edit.editedPointIndex : 0);
     return true;
 }
 
@@ -473,23 +461,11 @@ QVector<const SketchEntity*> SketchCanvas::selectedEntities() const
 
 void SketchCanvas::clearSelection()
 {
-    ++m_selectionRevision;
-    for (auto& e : m_entities) {
-        e.selected = false;
-    }
-    m_selectedId = -1;
-    m_selectedPoints.clear();
-    m_selectedMidpointEntity = -1;
+    sketch::SelectionState state = selectionState();
+    sketch::clearSelection(state);
+    applySelectionState(state);
     m_hoverMidpointEntity = -1;
     m_hoverSlotEntity = -1;
-    m_selectedSlotAnchor = { -1, -1 };
-    selectClear();
-
-    // Also clear constraint selection
-    for (auto& c : m_constraints) {
-        c.selected = false;
-    }
-    m_selectedConstraintId = -1;
 
     // Clear fixed handle
     m_fixedHandleIndex = -1;
@@ -511,33 +487,11 @@ void SketchCanvas::clearSelection()
 // cohesive unit.
 void SketchCanvas::expandSelectionToGroups()
 {
-    // When inside a group, don't expand: we want individual selection
-    if (m_enteredGroupId >= 0)
-        return;
-
-    // Collect group IDs that contain at least one selected entity
-    QSet<int> touchedGroups;
-    for (const auto& entity : m_entities) {
-        if (entity.selected && entity.groupId >= 0) {
-            touchedGroups.insert(entity.groupId);
-        }
-    }
-
-    if (touchedGroups.isEmpty())
-        return;
-
-    // Select every entity that belongs to one of those groups
-    for (auto& entity : m_entities) {
-        if (!entity.selected && entity.groupId >= 0 &&
-            touchedGroups.contains(entity.groupId)) {
-            entity.selected = true;
-            selectAdd(entity.id);
-            // Keep the clicked entity as the primary selection (the panel shows
-            // the primary's properties); adopt a sibling only when there is no
-            // primary yet.
-            if (m_selectedId < 0) m_selectedId = entity.id;
-        }
-    }
+    // A decomposed shape (rectangle, polygon) is selected whole, unless the
+    // user is editing inside its group.
+    sketch::SelectionState state = selectionState();
+    sketch::expandToGroups(state, m_entities);
+    applySelectionState(state);
 }
 
 // -----------------------------------------------------------------------
@@ -562,21 +516,11 @@ void SketchCanvas::enterGroup(int groupId)
 
 void SketchCanvas::leaveGroup()
 {
-    ++m_selectionRevision;
     if (m_enteredGroupId < 0) return;
-
-    int prevGroup = m_enteredGroupId;
-    m_enteredGroupId = -1;
-
-    // Select the whole group again so the user sees what they were in
-    for (auto& entity : m_entities) {
-        if (entity.groupId == prevGroup) {
-            entity.selected = true;
-            selectAdd(entity.id);
-            m_selectedId = entity.id;
-        }
-    }
-
+    // Select the whole group again so the user sees what they were in.
+    sketch::SelectionState state = selectionState();
+    sketch::leaveGroup(state, m_entities);
+    applySelectionState(state);
     emit selectionChanged(m_selectedId);
     update();
 }
@@ -589,65 +533,86 @@ void SketchCanvas::setConstraintToolType(int type)
     update();
 }
 
+namespace {
+/// The canvas's pick distances, in sketch units at `zoom`.
+sketch::PickTolerances pickTolerancesAt(double zoom)
+{
+    sketch::PickTolerances t;
+    t.entity = kEntityPickTolPx;
+    t.point = kPointPickTolPx;
+    t.handle = kHandlePickTolPx;
+    t.bezierLeg = kBezierLegPickTolPx;
+    t.grip = kMidpointHitTolPx;
+    return t.inSketchUnits(zoom);
+}
+}  // namespace
+
 bool SketchCanvas::hitTestAnyPoint(const QPointF& worldPos, int& entityId, int& pointIndex) const
 {
-    const double tol = kPointPickTolPx / m_zoom;
-    double best = tol;
-    bool found = false;
-    for (const auto& e : m_entities) {
-        // Only points that are meaningful constraint targets: real endpoints /
-        // centers. Text and dimension entities are skipped.
-        if (e.type == SketchEntityType::Text || e.type == SketchEntityType::Dimension) continue;
-        for (int i = 0; i < e.points.size(); ++i) {
-            const double d = QLineF(QPointF(e.points[i]), worldPos).length();
-            if (d < best) { best = d; entityId = e.id; pointIndex = i; found = true; }
-        }
-    }
-    return found;
+    const sketch::PickResult r =
+        sketch::pickPoint(m_entities, worldPos, pickTolerancesAt(m_zoom).point);
+    if (!r.hit()) return false;
+    entityId = r.id;
+    pointIndex = r.index;
+    return true;
 }
 
 bool SketchCanvas::hitTestBezierLeg(const QPointF& worldPos, int& entityId,
                                     int& i0, int& i1) const
 {
-    const double tol = kBezierLegPickTolPx / m_zoom;
-    double best = tol;
-    bool found = false;
-    const SketchEntity* primary = selectedEntity();
-    for (const auto& e : m_entities) {
-        if (e.type != SketchEntityType::Spline || !e.splineBezier) continue;
-        bool showing = (primary && primary->id == e.id);
-        if (!showing)
-            for (const auto& pr : m_selectedPoints) if (pr.first == e.id) { showing = true; break; }
-        if (!showing) continue;
-        const int n = static_cast<int>(e.points.size());
-        for (int i = 0; i + 1 < n; ++i) {
-            const QPointF a(e.points[i]), b(e.points[i + 1]);
-            const QPointF proj = geometry::closestPointOnSegment(worldPos, a, b);
-            const double d = QLineF(proj, worldPos).length();
-            if (d < best) { best = d; entityId = e.id; i0 = i; i1 = i + 1; found = true; }
-        }
-    }
-    return found;
+    std::vector<int> owners;
+    for (const auto& pr : m_selectedPoints) owners.push_back(pr.first);
+    const sketch::PickResult r = sketch::pickBezierLeg(
+        m_entities, m_selectedId, owners, worldPos, pickTolerancesAt(m_zoom).bezierLeg);
+    if (!r.hit()) return false;
+    entityId = r.id;
+    i0 = r.index;
+    i1 = r.index2;
+    return true;
 }
 
 void SketchCanvas::selectPoint(int entityId, int pointIndex, bool addToSelection, bool toggle)
 {
-    ++m_selectionRevision;
-    const QPair<int,int> pt(entityId, pointIndex);
-    if (!addToSelection && !toggle) {
-        // Plain click: replace everything with just this point.
-        clearSelection();
-        m_selectedPoints.clear();
-        m_selectedPoints.append(pt);
-    } else if (toggle) {
-        const int idx = m_selectedPoints.indexOf(pt);
-        if (idx >= 0) m_selectedPoints.remove(idx);
-        else          m_selectedPoints.append(pt);
-    } else {  // add-only (Shift)
-        if (!m_selectedPoints.contains(pt)) m_selectedPoints.append(pt);
-    }
+    // A plain click replaces everything, the canvas's own state included.
+    if (!addToSelection && !toggle) clearSelection();
+    sketch::SelectionState state = selectionState();
+    sketch::selectPoint(state, entityId, pointIndex,
+                        toggle ? sketch::ClickSelect::Toggle
+                               : (addToSelection ? sketch::ClickSelect::Add
+                                                 : sketch::ClickSelect::Replace));
+    applySelectionState(state);
     emit selectionChanged(m_selectedId);
     update();
+}
+
+sketch::SelectionState SketchCanvas::selectionState() const
+{
+    sketch::SelectionState state;
+    state.entities.assign(m_selectionOrder.begin(), m_selectionOrder.end());
+    state.primary = m_selectedId;
+    for (const auto& pr : m_selectedPoints) state.points.emplace_back(pr.first, pr.second);
+    state.constraint = m_selectedConstraintId;
+    state.enteredGroup = m_enteredGroupId;
+    state.midpoint = m_selectedMidpointEntity;
+    state.slotAnchor = {m_selectedSlotAnchor.first, m_selectedSlotAnchor.second};
+    return state;
+}
+
+void SketchCanvas::applySelectionState(const sketch::SelectionState& state)
+{
+    ++m_selectionRevision;
+    selectClear();
+    for (int id : state.entities) selectAdd(id);
+    m_selectedId = state.primary;
+    m_selectedPoints.clear();
+    for (const auto& pr : state.points) m_selectedPoints.append({pr.first, pr.second});
+    m_selectedConstraintId = state.constraint;
+    m_enteredGroupId = state.enteredGroup;
+    m_selectedMidpointEntity = state.midpoint;
+    m_selectedSlotAnchor = {state.slotAnchor.first, state.slotAnchor.second};
+    // The drawn state follows.
+    for (auto& e : m_entities) e.selected = m_selectedIds.contains(e.id);
+    for (auto& c : m_constraints) c.selected = (c.id == m_selectedConstraintId);
 }
 
 bool SketchCanvas::selectedBezierAnchor(int& splineId, int& anchorIdx) const
@@ -909,59 +874,25 @@ int SketchCanvas::nearestCircleOrArc(const QPointF& worldPos) const
 
 int SketchCanvas::hitTestTangentContact(const QPointF& worldPos) const
 {
-    // The red dot drawn by drawOffSegmentTangents() sits on a circle's
-    // perimeter where a line ALREADY tangent to it (a Tangent constraint)
-    // would touch if the too-short segment were extended. It is a live paint
-    // marker, not an entity, so a plain hitTest never returns it. Clicking it
-    // selects the underlying circle, so the user can then pick a line endpoint
-    // and apply Coincident to pin the endpoint onto the circle (Aaron).
-    const QPointF clickScr(worldToScreen(worldPos));
-    const double tolPx = 8.0;
-    for (const SketchConstraint& c : m_constraints) {
-        if (!c.enabled || c.type != ConstraintType::Tangent
-            || c.entityIds.size() < 2) continue;
-        const SketchEntity* e1 = entityById(c.entityIds[0]);
-        const SketchEntity* e2 = entityById(c.entityIds[1]);
-        if (!e1 || !e2) continue;
-        const SketchEntity* line =
-            (e1->type == SketchEntityType::Line) ? e1
-          : (e2->type == SketchEntityType::Line) ? e2 : nullptr;
-        const SketchEntity* circle =
-            (e1->type == SketchEntityType::Circle) ? e1
-          : (e2->type == SketchEntityType::Circle) ? e2 : nullptr;
-        if (!line || !circle) continue;
-        auto pt = sketch::offSegmentTangentPoint(*line, *circle);
-        if (!pt) continue;
-        const QPointF scr(worldToScreen(QPointF(pt->x, pt->y)));
-        if (QLineF(clickScr, scr).length() <= tolPx)
-            return circle->id;
-    }
-    return -1;
+    // The red dot drawOffSegmentTangents() paints where a line held
+    // tangent to a circle would touch it past its ends. It is not an entity,
+    // so a plain hit test never finds it; clicking it selects the circle, so
+    // a line endpoint can then be Coincident-pinned onto it (Aaron).
+    return sketch::pickTangentContact(m_entities, m_constraints, worldPos,
+                                      pickTolerancesAt(m_zoom).grip).id;
 }
 
 bool SketchCanvas::entityMidpoint(const SketchEntity& e, QPointF& out) const
 {
-    if ((e.type == SketchEntityType::Line && e.points.size() >= 2) ||
-        (e.type == SketchEntityType::Arc && e.points.size() >= 3)) {
-        out = sketch::pointAtParameter(e, 0.5);
-        return true;
-    }
-    return false;
+    Point2D mid;
+    if (!sketch::midpointGrip(e, mid)) return false;
+    out = QPointF(mid);
+    return true;
 }
 
 int SketchCanvas::hitTestMidpoint(const QPointF& worldPos) const
 {
-    const QPointF clickScr(worldToScreen(worldPos));
-    const double tolPx = kMidpointHitTolPx;
-    int best = -1; double bestD = tolPx;
-    for (const SketchEntity& e : m_entities) {
-        QPointF mid;
-        if (!entityMidpoint(e, mid)) continue;
-        const QPointF scr(worldToScreen(mid));
-        const double d = QLineF(clickScr, scr).length();
-        if (d <= bestD) { bestD = d; best = e.id; }
-    }
-    return best;
+    return sketch::pickMidpoint(m_entities, worldPos, pickTolerancesAt(m_zoom).grip).id;
 }
 
 void SketchCanvas::solveHandleDragStabilized(int dragEntityId, int dragPointIndex,
@@ -1011,8 +942,8 @@ void SketchCanvas::solveHandleDragStabilized(int dragEntityId, int dragPointInde
     }
     // Opening a full circle: also weight the arc's OWN end left at the cut
     // (normally skipped as the dragged entity) so it resists drifting.
-    if (m_openingFullArc && dragEnt && dragEnt->type == SketchEntityType::Arc) {
-        farPts.push_back({ dragEntityId, (m_openArcDraggedIndex == 1) ? 2 : 1 });
+    if (m_handleDrag.opensFullArc() && dragEnt && dragEnt->type == SketchEntityType::Arc) {
+        farPts.push_back({dragEntityId, (m_handleDrag.openArcDraggedIndex() == 1) ? 2 : 1});
     }
     m_dragWeightPoints = farPts;
     m_dragWeightStiffness = 400.0;
@@ -1157,75 +1088,13 @@ void SketchCanvas::dbgLog(const char* where)
 void SketchCanvas::selectEntity(int entityId, bool addToSelection,
                                 bool individualOnly)
 {
-    ++m_selectionRevision;
-    if (!addToSelection) {
-        // Clear existing selection
-        for (auto& e : m_entities) {
-            e.selected = false;
-        }
-        selectClear();
-
-        // Clear constraint selection
-        for (auto& c : m_constraints) {
-            c.selected = false;
-        }
-        m_selectedConstraintId = -1;
-
-        // Clear fixed handle when selection changes
-        m_fixedHandleIndex = -1;
-    }
-
-    // Add/toggle entity selection.
-    //
-    // When inside a group (m_enteredGroupId >= 0):
-    //   - clicking a member of the entered group selects it individually
-    //   - clicking something outside the group leaves the group first
-    //
-    // When NOT inside a group:
-    //   - normal click selects the entity + its group siblings
-    //   - individualOnly (Alt+click) selects only the single entity
-    SketchEntity* entity = entityById(entityId);
-    if (entity) {
-        // If inside a group and clicking outside it, leave the group first
-        if (m_enteredGroupId >= 0 && entity->groupId != m_enteredGroupId) {
-            leaveGroup();
-            // leaveGroup() selects the whole group and emits; clear that
-            // so we can do a fresh selection of the clicked entity below
-            for (auto& e : m_entities) e.selected = false;
-            selectClear();
-            m_selectedId = -1;
-        }
-
-        // Determine whether this click should be individual
-        bool isIndividual = individualOnly || (m_enteredGroupId >= 0);
-
-        if (addToSelection && entity->selected) {
-            // Ctrl+click on already selected entity: deselect it and
-            // its group siblings (unless individual mode).
-            entity->selected = false;
-            selectRemove(entityId);
-            if (!isIndividual && entity->groupId >= 0) {
-                for (auto& e : m_entities) {
-                    if (e.groupId == entity->groupId) {
-                        e.selected = false;
-                        selectRemove(e.id);
-                    }
-                }
-            }
-            // Update primary selection
-            if (m_selectedId == entityId) {
-                m_selectedId = m_selectedIds.isEmpty() ? -1 : *m_selectedIds.begin();
-            }
-        } else {
-            entity->selected = true;
-            selectAdd(entityId);
-            m_selectedId = entityId;  // Primary selection is the last clicked
-            // Expand to group siblings unless in individual mode
-            if (!isIndividual) {
-                expandSelectionToGroups();
-            }
-        }
-    }
+    // The library's rule: a plain click replaces, an extending one adds or
+    // removes; the group comes along unless the click is individual (Alt)
+    // or the user is inside a group, and a click outside that group leaves it.
+    sketch::SelectionState state = selectionState();
+    sketch::selectEntity(state, m_entities, entityId, addToSelection, individualOnly);
+    applySelectionState(state);
+    if (!addToSelection) m_fixedHandleIndex = -1;   // a new selection frees the handle
 
     // Reset D-key constraint type cycling on selection change
     m_dKeyTypeIndex = 0;
@@ -1235,48 +1104,18 @@ void SketchCanvas::selectEntity(int entityId, bool addToSelection,
     update();
 }
 
-void SketchCanvas::selectEntitiesInRect(const QRectF& rect, bool crossing, bool addToSelection)
+void SketchCanvas::selectInWindow(const QPointF& screenStart, const QPointF& screenEnd,
+                                  bool addToSelection)
 {
-    ++m_selectionRevision;
-    if (!addToSelection) {
-        // Clear existing selection
-        for (auto& e : m_entities) {
-            e.selected = false;
-        }
-        selectClear();
-        m_selectedId = -1;
-
-        // Clear constraint selection
-        for (auto& c : m_constraints) {
-            c.selected = false;
-        }
-        m_selectedConstraintId = -1;
-    }
-
-    // Check each entity
-    for (auto& entity : m_entities) {
-        bool shouldSelect = false;
-
-        if (crossing) {
-            // Crossing mode: select if entity intersects the rectangle
-            shouldSelect = entityIntersectsRect(entity, rect);
-        } else {
-            // Window mode: select only if entity is fully enclosed
-            shouldSelect = entityEnclosedByRect(entity, rect);
-        }
-
-        if (shouldSelect) {
-            entity.selected = true;
-            selectAdd(entity.id);
-            m_selectedId = entity.id;
-        }
-    }
-
-    // Group-aware expansion: if any entity in a decomposition group was
-    // selected, select all siblings in that group so the user doesn't have
-    // to precisely enclose every segment of a decomposed rectangle/polygon.
-    expandSelectionToGroups();
-
+    // The window is a screen rectangle; in a turned view it is a turned one
+    // in the sketch.
+    const sketch::SketchView v = view();
+    const bool crossing = sketch::windowIsCrossing(screenStart, screenEnd);
+    const std::vector<int> caught = sketch::entitiesInWindow(
+        m_entities, v.sketchCorners(screenStart, screenEnd), v.axisAligned(), crossing);
+    sketch::SelectionState state = selectionState();
+    sketch::selectWindow(state, m_entities, caught, addToSelection);
+    applySelectionState(state);
     emit selectionChanged(m_selectedId);
     update();
 }
@@ -1386,6 +1225,9 @@ void SketchCanvas::clear()
     m_nextConstraintId = 1;
     m_profilesCacheDirty = true;
     cancelEntity();
+    // The history belongs to the sketch that was here.
+    m_edits.clear();
+    updateUndoRedoState();
     emit selectionChanged(-1);
     update();
 }
@@ -1406,6 +1248,8 @@ void SketchCanvas::setEntities(const QVector<SketchEntity>& entities)
     }
     m_nextId = maxId + 1;
     m_nextConstraintId = 1;  // Reset constraints
+    m_edits.clear();
+    updateUndoRedoState();
 
     m_profilesCacheDirty = true;
     emit selectionChanged(-1);
@@ -1439,6 +1283,11 @@ void SketchCanvas::setSketchContents(const QVector<SketchEntity>& entities,
     for (const SketchGroup& g : groups)
         if (g.id > maxGroupId) maxGroupId = g.id;
     m_nextGroupId = maxGroupId + 1;
+
+    // Another sketch's history does not apply to this one: its commands
+    // name entities by id, and the ids repeat between sketches.
+    m_edits.clear();
+    updateUndoRedoState();
 
     m_profilesCacheDirty = true;
     solveConstraints();
@@ -1510,60 +1359,33 @@ void SketchCanvas::setPlaneOrigin(double x, double y, double z)
     m_planeOrigin = QVector3D(x, y, z);
 }
 
+sketch::SketchView SketchCanvas::view() const
+{
+    sketch::SketchView v;
+    v.center = m_viewCenter;
+    v.zoom = m_zoom;
+    v.rotationDeg = m_viewRotation;
+    v.flipped = m_flipView;
+    v.width = width();
+    v.height = height();
+    return v;
+}
+
 QPointF SketchCanvas::screenToWorld(const QPoint& screen) const
 {
-    // Translate to center of widget
-    double sx = screen.x() - width() / 2.0;
-    double sy = -(screen.y() - height() / 2.0);
-
-    // Apply inverse rotation (rotate in opposite direction)
-    double rad = qDegreesToRadians(-m_viewRotation);
-    double cosR = qCos(rad);
-    double sinR = qSin(rad);
-    double rx = sx * cosR - sy * sinR;
-    double ry = sx * sinR + sy * cosR;
-    if (m_flipView) rx = -rx;  // invert the heads/tails u mirror
-
-    // Scale and translate to world
-    double x = rx / m_zoom + m_viewCenter.x();
-    double y = ry / m_zoom + m_viewCenter.y();
-    return {x, y};
+    return QPointF(view().toSketch(Point2D(screen.x(), screen.y())));
 }
 
 QPoint SketchCanvas::worldToScreen(const QPointF& world) const
 {
-    // Translate to view center and scale
-    double wx = (world.x() - m_viewCenter.x()) * m_zoom;
-    double wy = (world.y() - m_viewCenter.y()) * m_zoom;
-    if (m_flipView) wx = -wx;  // heads/tails: mirror u left<->right
-
-    // Apply rotation
-    double rad = qDegreesToRadians(m_viewRotation);
-    double cosR = qCos(rad);
-    double sinR = qSin(rad);
-    double rx = wx * cosR - wy * sinR;
-    double ry = wx * sinR + wy * cosR;
-
-    // Translate to screen center (flip Y for screen coords)
-    int x = static_cast<int>(rx + width() / 2.0);
-    int y = static_cast<int>(-ry + height() / 2.0);
-    return {x, y};
+    // Whole pixels by truncation, as every caller has always had them.
+    const Point2D p = view().toScreen(world);
+    return {static_cast<int>(p.x), static_cast<int>(p.y)};
 }
 
 QPointF SketchCanvas::worldToScreenF(const QPointF& world) const
 {
-    // Same as worldToScreen but returns floating-point for sub-pixel precision
-    double wx = (world.x() - m_viewCenter.x()) * m_zoom;
-    double wy = (world.y() - m_viewCenter.y()) * m_zoom;
-    if (m_flipView) wx = -wx;  // heads/tails: mirror u left<->right
-
-    double rad = qDegreesToRadians(m_viewRotation);
-    double cosR = qCos(rad);
-    double sinR = qSin(rad);
-    double rx = wx * cosR - wy * sinR;
-    double ry = wx * sinR + wy * cosR;
-
-    return {rx + width() / 2.0, -ry + height() / 2.0};
+    return QPointF(view().toScreen(world));
 }
 
 // Snap weight by type.  Higher weight = stronger pull (more gravity).
@@ -1812,10 +1634,10 @@ void SketchCanvas::drawDKeyHint(QPainter& painter)
 // Window selection rectangle: blue solid (window), green dashed (crossing).
 void SketchCanvas::drawWindowSelectionRect(QPainter& painter)
 {
-    QRectF selRect = QRectF(m_windowSelectStart, m_windowSelectEnd).normalized();
-    QPointF screenTopLeft = worldToScreen(selRect.topLeft());
-    QPointF screenBottomRight = worldToScreen(selRect.bottomRight());
-    QRectF screenRect = QRectF(screenTopLeft, screenBottomRight).normalized();
+    // The window is the screen rectangle between the two corners.
+    const QRectF screenRect =
+        QRectF(worldToScreenF(m_windowSelectStart), worldToScreenF(m_windowSelectEnd))
+            .normalized();
 
     // Different colors for window vs crossing selection
     if (m_windowSelectCrossing) {
@@ -1952,7 +1774,9 @@ void SketchCanvas::paintEvent(QPaintEvent* /*event*/)
 
     // Draw snap constraint guides during modifier+drag
     // Show when: Shift held for snap, or Ctrl held with axis constraint
-    if (m_isDraggingHandle && (m_shiftWasPressed || (m_ctrlWasPressed && m_snapAxis != SnapAxis::None))) {
+    if (m_isDraggingHandle
+        && (m_shiftWasPressed
+            || (m_ctrlWasPressed && m_handleDrag.axis() != sketch::DragAxis::None))) {
         m_snapEngine.drawSnapGuides(painter);
     }
 
@@ -2427,223 +2251,76 @@ bool SketchCanvas::handleBackgroundEditPress(const QPointF& worldPos)
     return false;
 }
 
-// Select tool press on a handle (group-aware, so any corner of a decomposed
-// rectangle is draggable): arms a point-press. Returns true when it did.
-bool SketchCanvas::pressSelectsHandle(QMouseEvent* event, const QPointF& worldPos)
+// A press on a point or a handle: a click without movement selects the
+// point (on release); a drag turns it into a handle drag (in the move path).
+void SketchCanvas::armPointPress(QMouseEvent* event, int entityId, int pointIndex)
 {
-    int handleEntityId = -1, handleIdx = -1;
-    bool handleHit = hitTestGroupHandle(worldPos, handleEntityId, handleIdx);
-    // Don't allow handle dragging on sweep-angle construction lines
-    // (but allow it for the arc entity itself, which is also in the group)
-    if (handleHit && handleEntityId >= 0) {
-        const SketchEntity* he = entityById(handleEntityId);
-        if (he && he->type == SketchEntityType::Line) {
-            for (const auto& g : m_groups) {
-                if (isSweepAngleGroup(g.id) && g.containsEntity(handleEntityId)) {
-                    handleHit = false;
-                    break;
-                }
-            }
-        }
-    }
-    if (handleHit && handleIdx >= 0) {
-        if (handleEntityId != m_selectedId) {
-            m_selectedId = handleEntityId;
-        }
-        // Arm a point-press: a no-move click SELECTS this control point
-        // (needed to pick a Bezier anchor when its spline is selected);
-        // a drag converts to a handle drag in mouseMoveEvent.
-        m_pointPressArmed  = true;
-        m_pointPressEntity = handleEntityId;
-        m_pointPressIndex  = handleIdx;
-        m_pointPressScreen = event->pos();
-        m_pointPressMods   = event->modifiers();
-        beginDragDetection(event->pos());
-        return true;
-    }
-    return false;
+    m_pointPressArmed  = true;
+    m_pointPressEntity = entityId;
+    m_pointPressIndex  = pointIndex;
+    m_pointPressScreen = event->pos();
+    m_pointPressMods   = event->modifiers();
+    beginDragDetection(event->pos());
 }
 
-// Select tool press on a constraint label or glyph chip: selects it, or
-// starts a label drag when it was already selected. Returns true when hit.
-bool SketchCanvas::pressSelectsConstraint(QMouseEvent* event, const QPointF& worldPos)
+// A press on a constraint label or glyph chip: selects it, or starts a label
+// drag when it was already selected (glyph chips do not drag).
+void SketchCanvas::pressOnConstraint(const QPointF& worldPos, int constraintId, bool glyph)
 {
-    int constraintId = hitTestConstraintLabel(worldPos);
-    bool glyphHit = false;
-    if (constraintId < 0) {
-        constraintId = m_constraintRenderer.hitTestConstraintGlyph(event->pos());
-        glyphHit = (constraintId >= 0);
-    }
-    if (constraintId >= 0) {
-        // If already selected, start dragging the label
-        // (glyph chips are not draggable)
-        if (!glyphHit && constraintId == m_selectedConstraintId) {
-            SketchConstraint* constraint = constraintById(constraintId);
-            if (constraint) {
-                m_isDraggingConstraintLabel = true;
-                m_constraintLabelOriginal = constraint->labelPosition;
-                m_dragStartWorld = worldPos;
-                setCursor(Qt::SizeAllCursor);
-            }
-        } else {
-            // Select constraint
-            // Deselect all entities
-            for (auto& e : m_entities) {
-                e.selected = false;
-            }
-            m_selectedId = -1;
-            selectClear();
-
-            // Deselect old constraint
-            for (auto& c : m_constraints) {
-                c.selected = (c.id == constraintId);
-            }
-            m_selectedConstraintId = constraintId;
-            emit selectionChanged(-1);  // Deselect entity
-            emit constraintSelectionChanged(constraintId);
-            update();
+    if (!glyph && constraintId == m_selectedConstraintId) {
+        if (SketchConstraint* constraint = constraintById(constraintId)) {
+            m_isDraggingConstraintLabel = true;
+            m_constraintLabelOriginal = constraint->labelPosition;
+            m_dragStartWorld = worldPos;
+            setCursor(Qt::SizeAllCursor);
         }
-        return true;
+        return;
     }
-    return false;
+    sketch::SelectionState state = selectionState();
+    sketch::selectConstraint(state, constraintId);
+    applySelectionState(state);
+    emit selectionChanged(-1);  // Deselect entity
+    emit constraintSelectionChanged(constraintId);
+    update();
 }
 
-// Select tool press on a point-level target (endpoint, Bezier leg, tangent
-// contact dot, slot anchor, midpoint grip), which take precedence over the
-// entity pick. Returns true when one was hit.
-bool SketchCanvas::pressSelectsPoint(QMouseEvent* event, const QPointF& worldPos)
+// A press on an entity (hitId), or on empty space (-1): select it, and ready
+// a direct drag of it; empty space starts a window.
+void SketchCanvas::pressOnEntityOrEmpty(QMouseEvent* event, const QPointF& worldPos, int hitId)
 {
-    // Point pick takes precedence over entity pick (unless the filter
-    // is Curves-only): a press on an endpoint arms a point selection
-    // (committed on release) or, if the cursor moves first, a handle
-    // drag of that point.
-    if (m_selectFilter != SelectFilter::CurvesOnly) {
-        int pe = -1, pi = -1;
-        if (hitTestAnyPoint(worldPos, pe, pi)) {
-            m_pointPressArmed  = true;
-            m_pointPressEntity = pe;
-            m_pointPressIndex  = pi;
-            m_pointPressScreen = event->pos();
-            m_pointPressMods   = event->modifiers();
-            beginDragDetection(event->pos());
-            return true;
-        }
-    }
-
-    // A click on a Bezier control-polygon leg selects its two endpoints,
-    // so a Distance dimension on them constrains that handle's length.
-    if (m_selectFilter != SelectFilter::CurvesOnly) {
-        int le = -1, a = -1, b = -1;
-        if (hitTestBezierLeg(worldPos, le, a, b)) {
-            selectPoint(le, a, false, false);
-            selectPoint(le, b, true,  false);
-            update();
-            return true;
-        }
-    }
-
-    // The red tangent-contact dot selects its circle, so the user can
-    // then pick a line endpoint and Coincident-pin it onto the circle
-    // (see hitTestTangentContact). Curves are selectable here; only a
-    // points-only filter suppresses it.
-    if (m_selectFilter != SelectFilter::PointsOnly) {
-        const int tcCircle = hitTestTangentContact(worldPos);
-        if (tcCircle >= 0) {
-            const bool extend =
-                event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
-            if (!extend) m_selectedPoints.clear();
-            selectEntity(tcCircle, extend);
-            showStatus(tr("Tangent contact selected: Ctrl-click a line "
-                          "endpoint, then Coincident to pin it onto the circle."));
-            update();
-            return true;
-        }
-    }
-
-    // A midpoint grip (line or arc), shown only on hover, selects the
-    // derived midpoint as a point, drawn white like an unconstrained
-    // end. Ctrl/Shift extend so it can pair with a target for a Midpoint
-    // constraint. (Aaron)
-    // Slot anchor point: click one to persist it as a white dot (a snap
-    // anchor, not a constraint). (Aaron)
-    {
-        const int hitId = pick(worldPos);
-        const SketchEntity* e = (hitId >= 0) ? entityById(hitId) : nullptr;
-        if (e && e->type == SketchEntityType::Slot) {
-            const auto anchors = sketch::slotAnchorPoints(*e);
-            const QPointF clickScr = worldToScreen(worldPos);
-            int best = -1; double bestD = kMidpointHitTolPx;
-            for (int i = 0; i < static_cast<int>(anchors.size()); ++i) {
-                const QPointF scr = worldToScreen(QPointF(anchors[i].position));
-                const double d = QLineF(clickScr, scr).length();
-                if (d <= bestD) { bestD = d; best = i; }
-            }
-            if (best >= 0) {
-                m_selectedSlotAnchor = { e->id, best };
-                update();
-                return true;
-            }
-        }
-    }
-    if (m_selectFilter != SelectFilter::CurvesOnly) {
-        const int midId = hitTestMidpoint(worldPos);
-        if (midId >= 0) {
-            const bool ctrl  = event->modifiers() & Qt::ControlModifier;
-            const bool shift = event->modifiers() & Qt::ShiftModifier;
-            if (!ctrl && !shift) clearSelection();
-            m_selectedMidpointEntity =
-                (ctrl && m_selectedMidpointEntity == midId) ? -1 : midId;
-            emit selectionChanged(m_selectedId);
-            update();
-            return true;
-        }
-    }
-    return false;
-}
-
-// Select tool press with no point-level hit: select/drag the entity under
-// the cursor, or start a window selection on empty space.
-void SketchCanvas::pressSelectsEntityOrWindow(QMouseEvent* event, const QPointF& worldPos)
-{
-    // Hit test for entity selection
-    int hitId = hitTest(worldPos);
-    // Points-only: curves are not selectable, so a non-point click is
-    // treated as empty (starts a rubber band / clears).
-    if (m_selectFilter == SelectFilter::PointsOnly) hitId = -1;
-    // Selection modifiers: Ctrl = toggle (add if new, remove if already
-    // selected); Shift = add-only (never deselect). Plain click replaces.
-    // Shift is otherwise free in the Select tool; its snap role only
-    // applies while drawing or dragging.
+    // Ctrl toggles, Shift adds and never removes, a plain click replaces.
+    // Shift is otherwise free in the Select tool; its snap role applies only
+    // while drawing or dragging.
     const bool ctrlHeld  = event->modifiers() & Qt::ControlModifier;
     const bool shiftHeld = event->modifiers() & Qt::ShiftModifier;
     const bool extendSel = ctrlHeld || shiftHeld;
 
     if (hitId >= 0) {
-        // Clicked on an entity
-        // Deselect constraints
-        for (auto& c : m_constraints) {
-            c.selected = false;
+        // Group expansion is enter-group mode's: a click takes the whole
+        // group, a double-click enters it.
+        sketch::SelectionState state = selectionState();
+        state.constraint = -1;
+        const bool left = sketch::clickEntity(state, m_entities, hitId,
+                                              sketch::clickSelectFor(ctrlHeld, shiftHeld));
+        applySelectionState(state);
+        if (!(shiftHeld && !ctrlHeld) || left) {
+            if (!extendSel) m_fixedHandleIndex = -1;
+            m_dKeyTypeIndex = 0;
+            m_dKeyTypeHint.clear();
         }
-        m_selectedConstraintId = -1;
+        emit selectionChanged(m_selectedId);
+        update();
 
-        // Group expansion is handled by enter-group mode now:
-        //   normal click = whole group; double-click = enter group
-        const SketchEntity* hit = entityById(hitId);
-        if (shiftHeld && !ctrlHeld && hit && hit->selected) {
-            // Add-only on an already-selected entity: keep it, do nothing.
-        } else {
-            // Ctrl toggles; Shift (new) and plain click add/replace.
-            selectEntity(hitId, extendSel);
-        }
-
-        // Direct drag (Fusion/Onshape): the same press that selected
-        // the entity can drag it. Near a handle of what is now
-        // selected, drag that handle; otherwise arm a body drag that
-        // starts once the cursor moves past the drag threshold.
+        // Direct drag (Fusion/Onshape): the press that selected the entity
+        // can drag it. Near a handle of what is now selected, drag that
+        // handle; otherwise arm a body drag that starts once the cursor
+        // passes the drag threshold.
         if (!extendSel) {
-            int dhEnt = -1, dhIdx = -1;
-            if (hitTestGroupHandle(worldPos, dhEnt, dhIdx) && dhEnt == hitId && dhIdx >= 0) {
-                beginHandleDrag(dhEnt, dhIdx, worldPos, event->modifiers());
+            const sketch::PickResult handle =
+                sketch::pickHandle(m_entities, m_groups, m_selectedId, m_enteredGroupId,
+                                   worldPos, pickTolerancesAt(m_zoom).handle);
+            if (handle.hit() && handle.id == hitId) {
+                beginHandleDrag(handle.id, handle.index, worldPos, event->modifiers());
             } else {
                 m_bodyDragArmed = true;
                 m_bodyDragEntityId = hitId;
@@ -2652,57 +2329,105 @@ void SketchCanvas::pressSelectsEntityOrWindow(QMouseEvent* event, const QPointF&
                 m_bodyDragPressScreen = event->pos();
             }
         }
-    } else {
-        // Clicked on empty space
-
-        // If inside a group, leave it first
-        if (m_enteredGroupId >= 0) {
-            leaveGroup();
-            // Don't start window selection; just leave the group
-            return;
-        }
-
-        // Start window selection
-        m_isWindowSelecting = true;
-        m_windowSelectStart = worldPos;
-        m_windowSelectEnd = worldPos;
-        m_windowSelectCrossing = false;  // Will be determined by drag direction
-
-        // Clear selection unless Ctrl or Shift held (both keep it)
-        if (!extendSel) {
-            clearSelection();
-        }
+        return;
     }
+
+    // Empty space inside a group leaves the group, and that is all.
+    if (m_enteredGroupId >= 0) {
+        leaveGroup();
+        return;
+    }
+    m_isWindowSelecting = true;
+    m_windowSelectStart = worldPos;
+    m_windowSelectEnd = worldPos;
+    m_windowSelectCrossing = false;   // decided by the drag's direction
+    // Ctrl or Shift keep the selection; a plain press clears it.
+    if (!extendSel) clearSelection();
 }
 
-// Left press with the Select tool.
+// Left press with the Select tool: the library decides what was hit, in the
+// Select tool's order; this carries it out.
 void SketchCanvas::handleSelectToolPress(QMouseEvent* event, const QPointF& worldPos)
 {
-    // First check if clicking on a handle; use group-aware test
-    // so any corner of a decomposed rectangle is draggable.
-    if (pressSelectsHandle(event, worldPos)) return;
+    sketch::SelectPick in;
+    in.at = worldPos;
+    in.tolerances = pickTolerancesAt(m_zoom);
+    in.filter = m_selectFilter;
+    in.primaryId = m_selectedId;
+    in.enteredGroupId = m_enteredGroupId;
+    for (const auto& pr : m_selectedPoints) in.pointOwners.push_back(pr.first);
+    in.frontEnd.groupGlyph = hitTestGroupGlyph(event->pos());
+    in.frontEnd.constraintLabel = hitTestConstraintLabel(worldPos);
+    if (in.frontEnd.constraintLabel < 0) {
+        in.frontEnd.constraintGlyph = m_constraintRenderer.hitTestConstraintGlyph(event->pos());
+    }
+    in.textHit = textHitTest();
+    const sketch::PickResult hit =
+        sketch::pickForSelect(m_entities, m_groups, m_constraints, in);
 
-    // Clicking the group indicator glyph selects the whole group.
-    {
-        int ggid = hitTestGroupGlyph(event->pos());
-        if (ggid >= 0) { selectGroup(ggid); return; }
+    switch (hit.kind) {
+    case sketch::PickKind::Handle:
+        // Any corner of a decomposed shape can be grabbed.
+        m_selectedId = hit.id;
+        armPointPress(event, hit.id, hit.index);
+        return;
+    case sketch::PickKind::GroupGlyph:
+        selectGroup(hit.id);
+        return;
+    case sketch::PickKind::ConstraintLabel:
+    case sketch::PickKind::ConstraintGlyph:
+        pressOnConstraint(worldPos, hit.id, hit.kind == sketch::PickKind::ConstraintGlyph);
+        return;
+    default:
+        break;
     }
 
-    // Check if clicking on a constraint label or glyph chip first
-    if (pressSelectsConstraint(event, worldPos)) return;
-
-    // If the sketch was deselected (Save/Discard bar visible),
-    // any click on the canvas re-engages the sketch.
+    // If the sketch was deselected (Save/Discard bar visible), any click on
+    // the canvas re-engages it.
     if (!m_sketchSelected) {
         m_sketchSelected = true;
-        emit selectionChanged(-1);  // re-engage sketch
-        // Fall through to normal selection handling below
+        emit selectionChanged(-1);
     }
 
-    // Point-level picks take precedence over the entity pick.
-    if (pressSelectsPoint(event, worldPos)) return;
-
-    pressSelectsEntityOrWindow(event, worldPos);
+    const bool ctrl = event->modifiers() & Qt::ControlModifier;
+    const bool shift = event->modifiers() & Qt::ShiftModifier;
+    switch (hit.kind) {
+    case sketch::PickKind::Point:
+        armPointPress(event, hit.id, hit.index);
+        return;
+    case sketch::PickKind::BezierLeg:
+        // A leg selects its two ends, so a Distance on them sizes the handle.
+        selectPoint(hit.id, hit.index, false, false);
+        selectPoint(hit.id, hit.index2, true, false);
+        update();
+        return;
+    case sketch::PickKind::TangentContact:
+        if (!(ctrl || shift)) m_selectedPoints.clear();
+        selectEntity(hit.id, ctrl || shift);
+        showStatus(tr("Tangent contact selected: Ctrl-click a line "
+                      "endpoint, then Coincident to pin it onto the circle."));
+        update();
+        return;
+    case sketch::PickKind::SlotAnchor:
+        // Persisted as a white dot: a snap anchor, not a constraint (Aaron).
+        m_selectedSlotAnchor = {hit.id, hit.index};
+        update();
+        return;
+    case sketch::PickKind::Midpoint: {
+        // The derived midpoint, selected as a point; Ctrl or Shift extend so
+        // it can pair with a target for a Midpoint constraint (Aaron).
+        if (!ctrl && !shift) clearSelection();
+        sketch::SelectionState state = selectionState();
+        state.midpoint = (ctrl && state.midpoint == hit.id) ? -1 : hit.id;
+        applySelectionState(state);
+        emit selectionChanged(m_selectedId);
+        update();
+        return;
+    }
+    default:
+        pressOnEntityOrEmpty(event, worldPos, hit.kind == sketch::PickKind::Entity ? hit.id : -1);
+        return;
+    }
 }
 
 // Left press with a drawing or editing tool active.
@@ -3025,8 +2750,9 @@ bool SketchCanvas::handleWindowSelectMove(const QPointF& worldPos)
     if (m_isWindowSelecting) {
         // Update window selection rectangle
         m_windowSelectEnd = worldPos;
-        // Determine if crossing mode (right-to-left drag)
-        m_windowSelectCrossing = (m_windowSelectEnd.x() < m_windowSelectStart.x());
+        // Crossing when dragged right to left on screen, whatever the view's turn.
+        m_windowSelectCrossing = sketch::windowIsCrossing(worldToScreenF(m_windowSelectStart),
+                                                          worldToScreenF(m_windowSelectEnd));
         update();
         return true;
     }
@@ -3329,7 +3055,8 @@ bool SketchCanvas::handleBodyDragMove(const QPointF& worldPos)
                 for (int i = 0; i < static_cast<int>(cl->points.size()); ++i)
                     dragged.push_back({cl->id, i});
                 solveConstraintsDragging(dragged);
-                updateSlotsFromPaths();   // re-derive live so the slot follows during the drag (the phantom)
+                // Re-derive live so the slot follows during the drag (the phantom).
+            updateSlotsFromPaths();
                 update();
                 return true;
             }
@@ -3412,73 +3139,18 @@ bool SketchCanvas::handleBodyDragMove(const QPointF& worldPos)
 
 // Handle drag, shared first step: the snapped/axis-locked target for the
 // grabbed point, floored by keepHandleApart so no drag collapses an edge.
-QPointF SketchCanvas::computeHandleFinalPos(const SketchEntity* sel, const QPointF& worldPos,
-                                            bool shiftPressed, bool ctrlPressed)
+QPointF SketchCanvas::handleTarget(const QPointF& raw, bool shift, bool ctrl) const
 {
-        // Determine the final position based on modifiers:
-        // - Shift: snap to grid
-        // - Ctrl: constrain to axis (X or Y key selects which)
-        // - Shift+Ctrl: snap to grid AND constrain to axis
-        // Entity/origin snapping is always active (matches entity creation behavior)
-        QPointF finalPos;
-        if (ctrlPressed && m_snapAxis != SnapAxis::None) {
-            if (m_snapToGrid || shiftPressed) {
-                // Snap to grid/entities AND constrain to axis
-                finalPos = axisLockedSnapPoint(worldPos);
-            } else {
-                // Ctrl held with axis constraint - constrain without grid snap
-                QPointF raw = worldPos;
-                if (m_snapAxis == SnapAxis::X) {
-                    finalPos = QPointF(raw.x(), m_dragHandleOriginal.y());
-                } else {
-                    finalPos = QPointF(m_dragHandleOriginal.x(), raw.y());
-                }
-            }
-        } else {
-            // Always snap to entities/origin; grid snap when enabled or Shift held
-            finalPos = m_snapEngine.snapPoint(worldPos);
-        }
-
-        // Do not let a drag drive an edge to zero. Applied here, after
-        // snapping and before any entity-specific branch below, because
-        // this is the one place every handle drag passes through.
-        //
-        // A collapsed edge cannot be undone by dragging back out: a
-        // zero-length line has no direction, so its horizontal/vertical
-        // constraints go slack and the coincidents hold the corners
-        // together. The rectangle becomes a point that can only be
-        // translated, and the solver reports success the whole time.
-        //
-        // The floor follows the zoom rather than being a fixed world
-        // distance, so the smallest edge you can make is always still
-        // visible and grabbable at the zoom you are working at.
-        {
-            QVector<QPointF> obstacles;
-            auto addPoints = [&](const SketchEntity& e, bool skipDragged) {
-                for (int i = 0; i < e.points.size(); ++i) {
-                    if (skipDragged && i == m_dragHandleIndex) continue;
-                    obstacles.append(QPointF(e.points[i]));
-                }
-            };
-            addPoints(*sel, /*skipDragged=*/true);
-            if (sel->groupId >= 0) {
-                for (const auto& e : m_entities)
-                    if (e.groupId == sel->groupId && e.id != sel->id)
-                        addPoints(e, /*skipDragged=*/false);
-            }
-            std::vector<hobbycad::Point2D> others;
-            others.reserve(obstacles.size());
-            for (const QPointF& p : obstacles)
-                others.push_back(hobbycad::Point2D{p.x(), p.y()});
-
-            const hobbycad::Point2D guarded = sketch::keepHandleApart(
-                hobbycad::Point2D{finalPos.x(), finalPos.y()}, others,
-                hobbycad::Point2D{m_dragHandleOriginal.x(),
-                                  m_dragHandleOriginal.y()},
-                sketch::minHandleSeparation(m_zoom));
-            finalPos = QPointF(guarded.x, guarded.y);
-        }
-    return finalPos;
+    // Entity and origin snaps always apply (grid too when it is on); Ctrl
+    // with an axis key holds the handle to that axis, from the snapped
+    // cursor when Shift or the grid snaps, else from the raw one. The
+    // library then keeps the handle clear of the entity's other points (and
+    // its group's): a collapsed edge cannot be dragged back out, and the
+    // floor follows the zoom so the smallest edge stays grabbable.
+    const sketch::DragAxis axis = ctrl ? m_handleDrag.axis() : sketch::DragAxis::None;
+    return QPointF(m_handleDrag.target(m_entities, raw, m_snapEngine.snapPoint(raw), axis,
+                                       m_snapToGrid || shift,
+                                       sketch::minHandleSeparation(m_zoom)));
 }
 
 // Handle drag: circle (shared geometry via sketch::dragEntityHandle; the
@@ -3536,6 +3208,105 @@ void SketchCanvas::dragLineHandle(SketchEntity* sel, const QPointF& finalPos)
 }
 
 
+// The dragged handle, moved for the cursor at `raw`: the library's target,
+// then the entity's own drag (a line's dragged-point solve, an opening
+// circle, or the library's handle drag), then the solve.
+void SketchCanvas::moveDraggedHandle(const QPointF& raw, bool shift, bool ctrl, bool alt)
+{
+    SketchEntity* sel = selectedEntity();
+    // A path-following slot is DERIVED from its centerline, so dragging one
+    // of its handles must move the CENTERLINE (whose point i the slot's
+    // point i mirrors); the slot then re-derives to follow. Without this the
+    // slot's own points move while the centerline stays put and the two
+    // detach (Aaron: "move the slot, centerline stays in place").
+    if (sel && sel->type == SketchEntityType::Slot && sel->pathEntityIds.size() == 1
+            && m_dragHandleIndex >= 0) {
+        SketchEntity* cl = entityById(sel->pathEntityIds[0]);
+        if (cl && m_dragHandleIndex < static_cast<int>(cl->points.size())) {
+            const QPointF finalPos = m_snapEngine.snapPoint(raw);
+            solveHandleDragStabilized(cl->id, m_dragHandleIndex, finalPos);
+            // Re-derive live so the slot follows during the drag (the phantom).
+            updateSlotsFromPaths();
+            m_lastRawMouseWorld = raw;
+            update();
+            return;
+        }
+    }
+    if (sel && m_dragHandleIndex >= 0 && m_dragHandleIndex < sel->points.size()) {
+        m_lastRawMouseWorld = raw;
+        const bool shiftPressed = shift;
+        const bool ctrlPressed = ctrl;
+        const bool altHeld = alt;
+
+        // Snapped / axis-locked target for the grabbed point, floored so the
+        // drag cannot collapse an edge (see handleTarget).
+        QPointF finalPos = handleTarget(raw, shiftPressed, ctrlPressed);
+
+        // A line is a dragged-point SOLVE (its own path); opening a full
+        // arc is a stateful gesture kept here; everything else is the
+        // library's handle drag, with the locks and modes resolved in
+        // applyHandleDrag (the same call the Ctrl-snap path makes).
+        if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
+            dragLineHandle(sel, finalPos);
+        } else if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3
+                   && m_handleDrag.opensFullArc() && m_dragHandleIndex != 0
+                   && sel->tangentEntityId < 0) {
+            // Opening the full circle: shrink from 360, keep the sign,
+            // stay under 360, swapping the dragged end at the inflection.
+            const QPointF center = sel->points[0];
+            const sketch::ArcOpenResult res = sketch::openFullArcByDrag(
+                center, sel->radius, finalPos, m_handleDrag.openArcFixedAngle(),
+                m_handleDrag.openArcDraggedIndex(), m_handleDrag.openArcSweep());
+            sel->startAngle = res.startAngle;
+            sel->sweepAngle = res.sweepAngle;
+            sketch::resyncArcEndpoints(*sel);
+            m_handleDrag.setOpenArc(res.draggedIndex, res.sweepAngle);
+            syncSweepAngleConstructionLines(*sel);
+        } else {
+            applyHandleDrag(*sel, m_dragHandleIndex, finalPos, ctrlPressed,
+                            shiftPressed, altHeld);
+        }
+
+        // Non-line entities: run solver normally
+        // (Lines use temporary FixedPoint pins above.)
+        // Skip solver for tangent arcs during handle drag: the solver
+        // doesn't know about the tangency relationship and would move
+        // the center/tangent-point off the entity.  The solver still
+        // runs on mouse-release (after the drag ends).
+        if (sel && sel->type != SketchEntityType::Line
+                && !m_constraints.isEmpty()
+                && !(sel->type == SketchEntityType::Arc
+                     && sel->tangentEntityId >= 0)) {
+            // Anchor the dragged handle (like the line handle-drag path) so
+            // the solver makes a MINIMAL move from the current geometry
+            // rather than an unanchored re-solve. Unanchored, an
+            // under-constrained tangent arc had nothing holding its size, so
+            // the solver could collapse the radius toward zero (arc
+            // "disappears") or shrink the partner line. (Aaron)
+            if (m_dragHandleIndex >= 0
+                    && m_dragHandleIndex < static_cast<int>(sel->points.size())) {
+                solveHandleDragStabilized(sel->id, m_dragHandleIndex,
+                                          QPointF(sel->points[m_dragHandleIndex]));
+            } else {
+                solveConstraints();
+            }
+        }
+
+        // Emit real-time property update
+        if (m_selectedId >= 0) {
+            emit entityDragging(m_selectedId);
+        }
+
+        // If the dragged entity is a slot's centerline (dragged directly,
+        // not via the slot's own grip), the slot must re-derive live too;
+        // otherwise its phantom lags the centerline until release (Aaron).
+        // Dirty-checked, so a drag that touches no path pays nothing.
+        updateSlotsFromPaths();
+
+        update();
+    }
+}
+
 void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
 {
     QPointF worldPos = screenToWorld(event->pos());
@@ -3568,98 +3339,8 @@ void SketchCanvas::mouseMoveEvent(QMouseEvent* event)
     if (handleBodyDragMove(worldPos)) return;
 
     if (m_isDraggingHandle) {
-        // Move the handle point of the selected entity
-        SketchEntity* sel = selectedEntity();
-        // A path-following slot is DERIVED from its centerline, so dragging one
-        // of its handles must move the CENTERLINE (whose point i the slot's
-        // point i mirrors); the slot then re-derives to follow. Without this the
-        // slot's own points move while the centerline stays put and the two
-        // detach (Aaron: "move the slot, centerline stays in place").
-        if (sel && sel->type == SketchEntityType::Slot && sel->pathEntityIds.size() == 1
-                && m_dragHandleIndex >= 0) {
-            SketchEntity* cl = entityById(sel->pathEntityIds[0]);
-            if (cl && m_dragHandleIndex < static_cast<int>(cl->points.size())) {
-                const QPointF finalPos = m_snapEngine.snapPoint(worldPos);
-                solveHandleDragStabilized(cl->id, m_dragHandleIndex, finalPos);
-                updateSlotsFromPaths();   // re-derive live so the slot follows during the drag (the phantom)
-                m_lastRawMouseWorld = worldPos;
-                update();
-                return;
-            }
-        }
-        if (sel && m_dragHandleIndex >= 0 && m_dragHandleIndex < sel->points.size()) {
-            m_lastRawMouseWorld = worldPos;
-            bool shiftPressed = (event->modifiers() & Qt::ShiftModifier);
-            bool ctrlPressed = (event->modifiers() & Qt::ControlModifier);
-
-            // Snapped / axis-locked target for the grabbed point, floored so the
-            // drag cannot collapse an edge (see computeHandleFinalPos).
-            QPointF finalPos = computeHandleFinalPos(sel, worldPos, shiftPressed, ctrlPressed);
-
-            // A line is a dragged-point SOLVE (its own path); opening a full
-            // arc is a stateful gesture kept here; everything else is the
-            // library's handle drag, with the locks and modes resolved in
-            // applyHandleDrag (the same call the Ctrl-snap path makes).
-            if (sel->type == SketchEntityType::Line && sel->points.size() == 2) {
-                dragLineHandle(sel, finalPos);
-            } else if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3
-                       && m_openingFullArc && m_dragHandleIndex != 0
-                       && sel->tangentEntityId < 0) {
-                // Opening the full circle: shrink from 360, keep the sign,
-                // stay under 360, swapping the dragged end at the inflection.
-                const QPointF center = sel->points[0];
-                const sketch::ArcOpenResult res = sketch::openFullArcByDrag(
-                    center, sel->radius, finalPos,
-                    m_openArcFixedAngle, m_openArcDraggedIndex, m_openArcPrevSweep);
-                sel->startAngle = res.startAngle;
-                sel->sweepAngle = res.sweepAngle;
-                sketch::resyncArcEndpoints(*sel);
-                m_openArcPrevSweep = res.sweepAngle;
-                m_openArcDraggedIndex = res.draggedIndex;
-                syncSweepAngleConstructionLines(*sel);
-            } else {
-                applyHandleDrag(*sel, m_dragHandleIndex, finalPos, ctrlPressed,
-                                shiftPressed, altHeld);
-            }
-
-            // Non-line entities: run solver normally
-            // (Lines use temporary FixedPoint pins above.)
-            // Skip solver for tangent arcs during handle drag: the solver
-            // doesn't know about the tangency relationship and would move
-            // the center/tangent-point off the entity.  The solver still
-            // runs on mouse-release (after the drag ends).
-            if (sel && sel->type != SketchEntityType::Line
-                    && !m_constraints.isEmpty()
-                    && !(sel->type == SketchEntityType::Arc
-                         && sel->tangentEntityId >= 0)) {
-                // Anchor the dragged handle (like the line handle-drag path) so
-                // the solver makes a MINIMAL move from the current geometry
-                // rather than an unanchored re-solve. Unanchored, an
-                // under-constrained tangent arc had nothing holding its size, so
-                // the solver could collapse the radius toward zero (arc
-                // "disappears") or shrink the partner line. (Aaron)
-                if (m_dragHandleIndex >= 0
-                        && m_dragHandleIndex < static_cast<int>(sel->points.size())) {
-                    solveHandleDragStabilized(sel->id, m_dragHandleIndex,
-                                              QPointF(sel->points[m_dragHandleIndex]));
-                } else {
-                    solveConstraints();
-                }
-            }
-
-            // Emit real-time property update
-            if (m_selectedId >= 0) {
-                emit entityDragging(m_selectedId);
-            }
-
-            // If the dragged entity is a slot's centerline (dragged directly,
-            // not via the slot's own grip), the slot must re-derive live too;
-            // otherwise its phantom lags the centerline until release (Aaron).
-            // Dirty-checked, so a drag that touches no path pays nothing.
-            updateSlotsFromPaths();
-
-            update();
-        }
+        moveDraggedHandle(worldPos, event->modifiers() & Qt::ShiftModifier,
+                          event->modifiers() & Qt::ControlModifier, altHeld);
         return;
     }
 
@@ -3754,16 +3435,17 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
             // Finish window selection
             m_isWindowSelecting = false;
 
-            // Build selection rectangle
-            QRectF selRect = QRectF(m_windowSelectStart, m_windowSelectEnd).normalized();
+            const QPointF from = worldToScreenF(m_windowSelectStart);
+            const QPointF to = worldToScreenF(m_windowSelectEnd);
+            const QRectF band = QRectF(from, to).normalized();
 
             // Only select if the rectangle has some size (not just a click)
-            if (selRect.width() > kMinRubberBandPx / m_zoom && selRect.height() > kMinRubberBandPx / m_zoom) {
+            if (band.width() > kMinRubberBandPx && band.height() > kMinRubberBandPx) {
                 // Ctrl or Shift both keep the existing selection (rubber-band
                 // adds); plain drag replaces.
                 bool keepSelection = (event->modifiers() & Qt::ControlModifier)
                                    || (event->modifiers() & Qt::ShiftModifier);
-                selectEntitiesInRect(selRect, m_windowSelectCrossing, keepSelection);
+                selectInWindow(from, to, keepSelection);
             }
 
             update();
@@ -3811,59 +3493,29 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
             const int draggedHandle = m_dragHandleIndex;   // before the reset below
             m_isDraggingHandle = false;
             m_dragHandleIndex = -1;
-            m_snapAxis = SnapAxis::None;  // Reset axis lock
+            m_handleDrag.setAxis(sketch::DragAxis::None);  // Reset axis lock
             m_shiftWasPressed = false;
             m_ctrlWasPressed = false;
             setCursor(Qt::ArrowCursor);
 
-            // Record undo command for the drag if geometry changed.
-            // A group drag changed every member: record them all in one
-            // compound so a single Ctrl+Z restores the whole group.
-            if (!m_dragOriginalGroupEntities.isEmpty()) {
-                std::vector<sketch::UndoCommand> subs;
-                for (const SketchEntity& before : m_dragOriginalGroupEntities) {
-                    const SketchEntity* now = entityById(before.id);
-                    if (!now) continue;
-                    if (now->points != before.points || now->radius != before.radius ||
-                        now->startAngle != before.startAngle || now->sweepAngle != before.sweepAngle)
-                        subs.push_back(sketch::UndoCommand::modifyEntity(before, *now, "Move group member"));
-                }
-                for (const SketchConstraint& before : m_dragOriginalGroupConstraints) {
-                    const SketchConstraint* now = constraintById(before.id);
-                    if (now && now->labelPosition != before.labelPosition)
-                        subs.push_back(sketch::UndoCommand::modifyConstraint(before, *now, "Move group label"));
-                }
-                if (!subs.empty())
-                    pushUndoCommand(sketch::UndoCommand::compound(subs, "Move group"));
-                m_dragOriginalGroupEntities.clear();
-                m_dragOriginalGroupConstraints.clear();
-                if (m_selectedId >= 0) emit entityModified(m_selectedId);
-            } else if (m_selectedId >= 0) {
-                SketchEntity* entity = entityById(m_selectedId);
-                if (entity) {
-                    sketch::Entity current = *entity;
-                    if (current.points != m_dragOriginalEntity.points ||
-                        current.radius != m_dragOriginalEntity.radius ||
-                        current.startAngle != m_dragOriginalEntity.startAngle ||
-                        current.sweepAngle != m_dragOriginalEntity.sweepAngle) {
-                        pushUndoCommand(sketch::UndoCommand::modifyEntity(
-                            m_dragOriginalEntity, current, "Resize"));
-                    }
-                    // If the dragged point landed on another point (via snap),
-                    // join them with a Coincident, the constraint the join
-                    // implies. Added before the solve below so it is enforced.
-                    createCoincidenceOnDrag(m_selectedId, draggedHandle);
-                    // Opening a circle (one 360-degree arc with both ends at the
-                    // cut) by dragging one end away: the end left in place ties
-                    // to whatever entity sits at the cut. The moving end may have
-                    // swapped during the drag, so use the current dragged index
-                    // (its twin is the end that stayed at the cut).
-                    if (m_openingFullArc)
-                        tieOpenedArcEndOnDrag(m_selectedId, m_openArcDraggedIndex);
-                    m_openingFullArc = false;
-                }
-                emit entityModified(m_selectedId);
+            // One undo step for the drag: the entity, or every member of its
+            // group (and the group's labels) the drag moved.
+            if (const auto step = m_handleDrag.record(m_entities, m_constraints)) {
+                pushUndoCommand(*step);
             }
+            if (m_selectedId >= 0 && !m_handleDrag.coversGroup() && entityById(m_selectedId)) {
+                // If the dragged point landed on another point (via snap),
+                // join them with a Coincident, the constraint the join
+                // implies. Added before the solve below so it is enforced.
+                createCoincidenceOnDrag(m_selectedId, draggedHandle);
+                // Opening a circle by dragging one end away: the end left at
+                // the cut ties to whatever sits there. The moving end may have
+                // swapped during the drag, so the drag's current end is used.
+                if (m_handleDrag.opensFullArc()) {
+                    tieOpenedArcEndOnDrag(m_selectedId, m_handleDrag.openArcDraggedIndex());
+                }
+            }
+            if (m_selectedId >= 0) emit entityModified(m_selectedId);
             // Re-solve constraints so dimensions are enforced after resize
             solveConstraints();
 
@@ -3881,7 +3533,7 @@ void SketchCanvas::mouseReleaseEvent(QMouseEvent* event)
                     reestablishTangency(*arc);
                 }
             }
-
+            m_handleDrag.end();
             return;
         }
 
@@ -3937,18 +3589,6 @@ void SketchCanvas::wheelEvent(QWheelEvent* event)
 
     update();
 }
-
-QPointF SketchCanvas::axisLockedSnapPoint(const QPointF& worldPos) const
-{
-    QPointF snapped = m_snapEngine.snapPoint(worldPos);
-
-    if (m_snapAxis == SnapAxis::None)
-        return snapped;
-
-    geometry::Axis axis = (m_snapAxis == SnapAxis::X) ? geometry::Axis::X : geometry::Axis::Y;
-    return geometry::constrainToAxis(snapped, m_dragHandleOriginal, axis);
-}
-
 
 // =====================================================================
 //  Handle drag glue
@@ -4098,49 +3738,11 @@ void SketchCanvas::applyHandleDrag(SketchEntity& sel, int handleIndex,
 
 void SketchCanvas::applyCtrlSnapToHandle()
 {
-    // Recompute handle position based on current modifier state
-    SketchEntity* sel = selectedEntity();
-    if (!sel || m_dragHandleIndex < 0 || m_dragHandleIndex >= sel->points.size()) {
-        return;
-    }
-
-    // Determine final position based on current state
-    QPointF finalPos;
-    if (m_shiftWasPressed || m_snapToGrid) {
-        // Snap enabled
-        if (m_ctrlWasPressed && m_snapAxis != SnapAxis::None) {
-            finalPos = axisLockedSnapPoint(m_lastRawMouseWorld);
-        } else {
-            finalPos = m_snapEngine.snapPoint(m_lastRawMouseWorld);
-        }
-    } else if (m_ctrlWasPressed && m_snapAxis != SnapAxis::None) {
-        // Axis constraint without snap
-        if (m_snapAxis == SnapAxis::X) {
-            finalPos = QPointF(m_lastRawMouseWorld.x(), m_dragHandleOriginal.y());
-        } else {
-            finalPos = QPointF(m_dragHandleOriginal.x(), m_lastRawMouseWorld.y());
-        }
-    } else {
-        // No modifiers - raw position
-        finalPos = m_lastRawMouseWorld;
-    }
-
-    // Geometry now lives in libhobbycad; this layer owns snapping,
-    // constraint lookup, label placement and group propagation.
-    applyHandleDrag(*sel, m_dragHandleIndex, finalPos, m_ctrlWasPressed);
-
-    // If the entity is part of a group, run the constraint solver so that
-    // coincident / perpendicular / distance constraints propagate the drag
-    // to sibling entities in real time (e.g. dragging one corner of a
-    // decomposed rectangle moves the connected sides).
-    if (sel->groupId >= 0) {
-        solveConstraints();
-    }
-
-    if (m_selectedId >= 0) {
-        emit entityDragging(m_selectedId);
-    }
-    update();
+    // Shift, Ctrl or an axis key changed mid-drag: the handle goes where the
+    // next mouse move would put it, by the same path.
+    if (!m_isDraggingHandle) return;
+    moveDraggedHandle(m_lastRawMouseWorld, m_shiftWasPressed, m_ctrlWasPressed,
+                      QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier);
 }
 
 void SketchCanvas::mouseDoubleClickEvent(QMouseEvent* event)
@@ -4538,30 +4140,9 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // Check configurable bindings first (for view rotation)
-    if (matchesBinding(QStringLiteral("sketch.rotateCCW"), event)) {
-        rotateViewCCW();
-        return;
-    }
-    if (matchesBinding(QStringLiteral("sketch.rotateCW"), event)) {
-        rotateViewCW();
-        return;
-    }
-    if (matchesBinding(QStringLiteral("sketch.rotateReset"), event)) {
-        setViewRotation(0.0);
-        return;
-    }
-    if (matchesBinding(QStringLiteral("sketch.trim"), event)) {
-        setActiveTool(SketchTool::Trim); return;
-    }
-    if (matchesBinding(QStringLiteral("sketch.offset"), event)) {
-        setActiveTool(SketchTool::Offset); return;
-    }
-    if (matchesBinding(QStringLiteral("sketch.fillet"), event)) {
-        setActiveTool(SketchTool::Fillet); return;
-    }
-    if (matchesBinding(QStringLiteral("sketch.construction"), event)) {
-        toggleSelectedConstruction();
+    // Keys bound to sketch commands (tools, view rotation, grid, ...). Read
+    // from the bindings, so a key the user moves moves here too.
+    if (runBoundCommand(boundCommand(event))) {
         return;
     }
 
@@ -4597,39 +4178,9 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
         deleteSelectionKey();
         break;
 
-    case Qt::Key_S:
-        setActiveTool(SketchTool::Select);
-        break;
-    case Qt::Key_L:
-        setActiveTool(SketchTool::Line);
-        break;
-
-    // Note: Q, E, and Ctrl+0 for view rotation are handled via configurable
-    // bindings at the top of this function (sketch.rotateCCW, sketch.rotateCW,
-    // sketch.rotateReset)
-
-    case Qt::Key_R:
-        setActiveTool(SketchTool::Rectangle);
-        break;
-    case Qt::Key_C:
-        setActiveTool(SketchTool::Circle);
-        break;
-    case Qt::Key_A:
-        setActiveTool(SketchTool::Arc);
-        break;
-    case Qt::Key_P:
-        setActiveTool(SketchTool::Point);
-        break;
     case Qt::Key_Tab:
-        // Cycle constraint type for D-key quick-add
+        // Cycle constraint type for the quick-dimension key
         cycleDimensionTypeHint(event);
-        break;
-
-    case Qt::Key_D:
-        quickDimensionKey();
-        break;
-    case Qt::Key_G:
-        setGridVisible(!m_showGrid);
         break;
 
     case Qt::Key_Shift:
@@ -4649,45 +4200,20 @@ void SketchCanvas::keyPressEvent(QKeyEvent* event)
         break;
 
     case Qt::Key_X:
-        // X key during Ctrl+drag - lock to X axis
-        // X is the horizontal axis on XY and XZ planes, ignored on YZ plane
-        if (m_isDraggingHandle && m_ctrlWasPressed) {
-            if (m_plane == SketchPlane::XY || m_plane == SketchPlane::XZ) {
-                m_snapAxis = SnapAxis::X;  // X is horizontal
-                applyCtrlSnapToHandle();
-            }
-            // Ignored on YZ plane (X is perpendicular to the sketch)
-        }
-        break;
-
     case Qt::Key_Y:
-        // Y key during Ctrl+drag - lock to Y axis
-        // Y is vertical on XY, horizontal on YZ, ignored on XZ plane
-        if (m_isDraggingHandle && m_ctrlWasPressed) {
-            if (m_plane == SketchPlane::XY) {
-                m_snapAxis = SnapAxis::Y;  // Y is vertical
-                applyCtrlSnapToHandle();
-            } else if (m_plane == SketchPlane::YZ) {
-                m_snapAxis = SnapAxis::X;  // Y maps to horizontal in 2D canvas
-                applyCtrlSnapToHandle();
-            }
-            // Ignored on XZ plane (Y is perpendicular to the sketch)
-        } else {
-            QWidget::keyPressEvent(event);  // Let Ctrl+Y (Redo) propagate
-        }
-        break;
-
     case Qt::Key_Z:
-        // Z key during Ctrl+drag - lock to Z axis
-        // Z is vertical on XZ and YZ, ignored on XY plane
+        // X, Y or Z during Ctrl+drag holds the handle to that model axis when
+        // it lies in the sketch plane; the plane's normal is ignored.
         if (m_isDraggingHandle && m_ctrlWasPressed) {
-            if (m_plane == SketchPlane::XZ || m_plane == SketchPlane::YZ) {
-                m_snapAxis = SnapAxis::Y;  // Z maps to vertical in 2D canvas
+            const char key = event->key() == Qt::Key_X ? 'X'
+                           : event->key() == Qt::Key_Y ? 'Y' : 'Z';
+            const sketch::DragAxis axis = sketch::dragAxisForKey(m_plane, key);
+            if (axis != sketch::DragAxis::None) {
+                m_handleDrag.setAxis(axis);
                 applyCtrlSnapToHandle();
             }
-            // Ignored on XY plane (Z is perpendicular to the sketch)
-        } else {
-            QWidget::keyPressEvent(event);  // Let Ctrl+Z (Undo) / Ctrl+Shift+Z (Redo) propagate
+        } else if (event->key() != Qt::Key_X) {
+            QWidget::keyPressEvent(event);  // Ctrl+Y (Redo), Ctrl+Z (Undo) propagate
         }
         break;
 
@@ -4710,7 +4236,7 @@ void SketchCanvas::keyReleaseEvent(QKeyEvent* event)
         // Ctrl released during handle drag - reset axis constraint
         if (m_isDraggingHandle && m_ctrlWasPressed) {
             m_ctrlWasPressed = false;
-            m_snapAxis = SnapAxis::None;  // Reset axis lock
+            m_handleDrag.setAxis(sketch::DragAxis::None);  // Reset axis lock
             // Recompute position without axis constraint (but keep snap if Shift still held)
             applyCtrlSnapToHandle();
         }
@@ -6441,46 +5967,20 @@ void SketchCanvas::splitSelectedAtIntersections()
 
 int SketchCanvas::hitTest(const QPointF& worldPos) const
 {
-    // Build a set of entity IDs that belong to sweep-angle groups.
-    // These construction lines are implementation details and should
-    // not be directly selectable; clicks on them are handled by the
-    // constraint hit-test path instead.  Only skip Line entities (the
-    // construction lines), NOT the arc entity that is also in the group.
-    std::unordered_set<int> sweepAngleEntityIds;
-    for (const auto& g : m_groups) {
-        if (isSweepAngleGroup(g.id)) {
-            for (int eid : g.entityIds) {
-                const SketchEntity* e = entityById(eid);
-                if (e && e->type == SketchEntityType::Line)
-                    sweepAngleEntityIds.insert(eid);
-            }
-        }
-    }
-
-    // Test in reverse order (top-most first)
-    for (int i = m_entities.size() - 1; i >= 0; --i) {
-        if (sweepAngleEntityIds.count(m_entities[i].id))
-            continue;  // skip sweep-angle construction lines
-        if (hitTestEntity(m_entities[i], worldPos)) {
-            return m_entities[i].id;
-        }
-    }
-    return -1;
+    // The top-most entity; a sweep-angle rig's construction lines are
+    // reached through their constraint instead.
+    return sketch::pickEntity(m_entities, m_groups, worldPos, pickTolerancesAt(m_zoom).entity,
+                              textHitTest());
 }
 
-bool SketchCanvas::hitTestEntity(const SketchEntity& entity, const QPointF& worldPos) const
+sketch::TextHitTest SketchCanvas::textHitTest() const
 {
-    const double tolerance = kEntityPickTolPx / m_zoom;  // 5 pixels in world units
-
-    // Text needs QFont/QFontMetrics and zoom (genuinely GUI-specific)
-    if (entity.type == SketchEntityType::Text)
-        return hitTestTextEntity(entity, worldPos, tolerance);
-
-    // All other entity types delegate to the library's containsPoint()
-    return entity.containsPoint(worldPos, tolerance);
+    return [this](const sketch::Entity& e, const Point2D& at) {
+        return hitTestTextEntity(e, QPointF(at));
+    };
 }
 
-bool SketchCanvas::hitTestTextEntity(const SketchEntity& entity, const QPointF& worldPos, double /*tolerance*/) const
+bool SketchCanvas::hitTestTextEntity(const sketch::Entity& entity, const QPointF& worldPos) const
 {
     if (entity.points.empty()) return false;
 
@@ -6517,75 +6017,31 @@ bool SketchCanvas::hitTestTextEntity(const SketchEntity& entity, const QPointF& 
         QPointF localPos(dx * cosR + dy * sinR, -dx * sinR + dy * cosR);
         QRectF localRect(0, 0, worldWidth, worldHeight);
         return localRect.contains(localPos);
-    } else {
-        return worldRect.contains(worldPos);
     }
-}
-
-bool SketchCanvas::entityIntersectsRect(const SketchEntity& entity, const QRectF& rect) const
-{
-    return sketch::entityIntersectsRect(entity, rect);
-}
-
-bool SketchCanvas::entityEnclosedByRect(const SketchEntity& entity, const QRectF& rect) const
-{
-    return sketch::entityEnclosedByRect(entity, rect);
+    return worldRect.contains(worldPos);
 }
 
 int SketchCanvas::hitTestHandle(const QPointF& worldPos) const
 {
-    // Only test handles on selected entity
+    // A handle of the primary entity alone, not its group's.
     const SketchEntity* sel = selectedEntity();
     if (!sel) return -1;
-
-    const double tolerance = kHandlePickTolPx / m_zoom;  // 6 pixels in world units
-
-    for (int i = 0; i < sel->points.size(); ++i) {
-        if (QLineF(sel->points[i], worldPos).length() < tolerance) {
-            return i;
-        }
-    }
-
-    return -1;
+    const std::vector<sketch::Entity> only{*sel};
+    const std::vector<sketch::Group> noGroups;
+    return sketch::pickHandle(only, noGroups, sel->id, -1, worldPos,
+                              pickTolerancesAt(m_zoom).handle).index;
 }
 
 bool SketchCanvas::hitTestGroupHandle(const QPointF& worldPos,
                                        int& outEntityId, int& outHandleIdx) const
 {
-    const SketchEntity* sel = selectedEntity();
-    if (!sel) return false;
-
-    const double tolerance = kGroupHandlePickTolPx / m_zoom;
-
-    // If the primary entity is in a group (and we're not inside the group),
-    // test handles across every entity in the group.
-    if (sel->groupId >= 0 && m_enteredGroupId < 0) {
-        double bestDist = tolerance;
-        bool found = false;
-        for (const auto& e : m_entities) {
-            if (e.groupId != sel->groupId) continue;
-            for (int i = 0; i < e.points.size(); ++i) {
-                double d = QLineF(e.points[i], worldPos).length();
-                if (d < bestDist) {
-                    bestDist = d;
-                    outEntityId = e.id;
-                    outHandleIdx = i;
-                    found = true;
-                }
-            }
-        }
-        return found;
-    }
-
-    // Fall back to primary entity only
-    for (int i = 0; i < sel->points.size(); ++i) {
-        if (QLineF(sel->points[i], worldPos).length() < tolerance) {
-            outEntityId = sel->id;
-            outHandleIdx = i;
-            return true;
-        }
-    }
-    return false;
+    const sketch::PickResult r = sketch::pickHandle(
+        m_entities, m_groups, m_selectedId, m_enteredGroupId, worldPos,
+        pickTolerancesAt(m_zoom).handle);
+    if (!r.hit()) return false;
+    outEntityId = r.id;
+    outHandleIdx = r.index;
+    return true;
 }
 
 void SketchCanvas::startEntity(const QPointF& pos)
@@ -6731,12 +6187,13 @@ bool SketchCanvas::tieOpenedArcEndOnDrag(int entityId, int draggedHandle)
         return false;
     if (draggedHandle != 1 && draggedHandle != 2) return false;   // endpoints only
     const int twin = (draggedHandle == 1) ? 2 : 1;
-    if (static_cast<int>(m_dragOriginalEntity.points.size()) < 3) return false;
+    const sketch::Entity& before = m_handleDrag.before();
+    if (static_cast<int>(before.points.size()) < 3) return false;
 
     // Fire only when this drag OPENED a coincident pair: the two ends started
     // together and the grabbed one has now been pulled off the twin.
-    const QPointF beforeDragged(m_dragOriginalEntity.points[draggedHandle]);
-    const QPointF beforeTwin(m_dragOriginalEntity.points[twin]);
+    const QPointF beforeDragged(before.points[draggedHandle]);
+    const QPointF beforeTwin(before.points[twin]);
     if (QLineF(beforeDragged, beforeTwin).length() > kSnapWeldEps) return false;
     const QPointF twinPos(arc->points[twin]);
     if (QLineF(QPointF(arc->points[draggedHandle]), twinPos).length() <= kSnapWeldEps)
@@ -7009,7 +6466,7 @@ void SketchCanvas::finishEntity()
             emit entityCreated(m_pendingEntity.id);
 
             // Auto-create constraints from locked dimension values
-            if (!m_dimInput.lockedForConstraints().isEmpty()) {
+            if (!m_dimInput.lockedForConstraints().empty()) {
                 createLockedConstraints(m_pendingEntity.id);
             }
 
@@ -7250,7 +6707,7 @@ void SketchCanvas::cancelEntity()
 
 bool SketchCanvas::decomposeCompoundEntity(
         const SketchEntity& pendingEntity,
-        const QVector<QPair<QString, double>>& lockedDims,
+        const sketch::LockedDims& lockedDims,
         sketch::UndoCommand& compoundCmd)
 {
     const auto type = pendingEntity.type;
@@ -7271,19 +6728,12 @@ bool SketchCanvas::decomposeCompoundEntity(
     bool isFreeform = (type == SketchEntityType::Polygon)
                       && (m_polygonMode == PolygonMode::Freeform || pendingEntity.radius < 0.001);
 
-    // Convert locked dims to library types
-    std::vector<std::pair<std::string, double>> libLockedDims;
-    libLockedDims.reserve(static_cast<size_t>(lockedDims.size()));
-    for (const auto& [label, value] : lockedDims) {
-        libLockedDims.emplace_back(label.toStdString(), value);
-    }
-
     // Convert groups to library types
     std::vector<sketch::Group> libGroups(m_groups.begin(), m_groups.end());
 
     // Call library decomposition
     auto result = sketch::decomposeEntity(
-        pendingEntity, libLockedDims,
+        pendingEntity, lockedDims,
         [this]() { return nextEntityId(); },
         [this]() { return m_nextConstraintId++; },
         m_nextGroupId++, libGroups, typeName.toStdString(), isFreeform);
@@ -7539,18 +6989,37 @@ void SketchCanvas::createLockedConstraints(int entityId)
     const SketchEntity* entity = entityById(entityId);
     if (!entity) return;
 
-    for (const auto& [label, value] : m_dimInput.lockedForConstraints()) {
+    for (const auto& [field, value] : m_dimInput.lockedForConstraints()) {
         m_constraintTargetEntities.clear();
         m_constraintTargetPoints.clear();
 
         ConstraintType ctype;
-        if (label == QStringLiteral("Radius") || label == QStringLiteral("Major Radius")) {
+        // What each locked field becomes is decided by the field, never by
+        // its (translated) label. Fields not listed make no constraint here:
+        // Width, Height and the Edge fields are consumed by decomposition,
+        // and no single constraint expresses an arc's start or sweep on an
+        // ellipse, a span, a rise or a corner arc's axes yet.
+        using sketch::DimField;
+        const bool ellipseAxes =
+            entity->type == SketchEntityType::Ellipse && entity->points.size() >= 3;
+        if (field == DimField::Radius) {
             ctype = ConstraintType::Radius;
             m_constraintTargetEntities.append(entityId);
-        } else if (label == QStringLiteral("Diameter")) {
+        } else if ((field == DimField::MajorRadius || field == DimField::MinorRadius)
+                   && ellipseAxes) {
+            // An ellipse's axis is the distance from its center to that axis
+            // point (1 major, 2 minor): the dimension the properties panel
+            // treats as driving the axis (sketch::dimensionDrivesPoint).
+            ctype = ConstraintType::Distance;
+            const int axisPoint = field == DimField::MajorRadius ? 1 : 2;
+            m_constraintTargetEntities.append(entityId);
+            m_constraintTargetEntities.append(entityId);
+            m_constraintTargetPoints.append(entity->points[0]);
+            m_constraintTargetPoints.append(entity->points[axisPoint]);
+        } else if (field == DimField::Diameter) {
             ctype = ConstraintType::Diameter;
             m_constraintTargetEntities.append(entityId);
-        } else if (label == QStringLiteral("Sweep Angle")) {
+        } else if (field == DimField::SweepAngle) {
             // Create 2 construction lines (center→start, center→end) + Angle constraint + group
             if (entity->type == SketchEntityType::Arc && entity->points.size() >= 3) {
                 const QPointF center(entity->points[0]);
@@ -7624,7 +7093,7 @@ void SketchCanvas::createLockedConstraints(int entityId)
                 pushUndoCommand(sketch::UndoCommand::compound(subs, "Sweep Angle"));
             }
             continue;  // Skip the generic createConstraint call
-        } else if (label.contains(QStringLiteral("Angle"))) {
+        } else if (field == DimField::Angle || field == DimField::ChordAngle) {
             // A locked Angle field on a single line fixes that line's angle
             // from horizontal. FixedAngle is a one-entity constraint that the
             // solver realizes against an internal horizontal reference line.
@@ -7635,7 +7104,7 @@ void SketchCanvas::createLockedConstraints(int entityId)
             } else {
                 continue;  // Non-line entity: no single-entity angle lock
             }
-        } else {
+        } else if (field == DimField::Length || field == DimField::ChordLength) {
             ctype = ConstraintType::Distance;
 
             // Distance: use start/end points
@@ -7647,6 +7116,8 @@ void SketchCanvas::createLockedConstraints(int entityId)
             } else {
                 continue;  // Cannot form a valid Distance constraint
             }
+        } else {
+            continue;
         }
 
         // Position label near entity
@@ -7687,42 +7158,7 @@ int SketchCanvas::nextEntityId()
 
 void SketchCanvas::loadKeyBindings()
 {
-    m_keyBindings.clear();
-
-    auto bindings = BindingsDialog::loadBindings();
-
-    // Helper to extract keyboard shortcuts from an action binding
-    auto extractKeyboardBindings = [](const ActionBinding& ab) {
-        QList<QKeySequence> shortcuts;
-
-        auto addIfKeyboard = [&shortcuts](const QString& binding) {
-            if (binding.isEmpty()) return;
-            // Skip mouse bindings
-            if (binding.contains(QStringLiteral("Button"), Qt::CaseInsensitive) ||
-                binding.contains(QStringLiteral("Wheel"), Qt::CaseInsensitive) ||
-                binding.contains(QStringLiteral("Drag"), Qt::CaseInsensitive) ||
-                binding.contains(QStringLiteral("Click"), Qt::CaseInsensitive)) {
-                return;
-            }
-            QKeySequence seq(binding);
-            if (!seq.isEmpty()) {
-                shortcuts.append(seq);
-            }
-        };
-
-        addIfKeyboard(ab.binding1);
-        addIfKeyboard(ab.binding2);
-        addIfKeyboard(ab.binding3);
-
-        return shortcuts;
-    };
-
-    // Load sketch-specific bindings
-    for (auto it = bindings.constBegin(); it != bindings.constEnd(); ++it) {
-        if (it.key().startsWith(QStringLiteral("sketch."))) {
-            m_keyBindings.insert(it.key(), extractKeyboardBindings(it.value()));
-        }
-    }
+    m_keyBindings = BindingsDialog::loadTable();
 }
 
 void SketchCanvas::reloadBindings()
@@ -7919,72 +7355,48 @@ void SketchCanvas::recomputeTextRotationHandle(SketchEntity& entity)
     sketch::resyncTextHandle(entity);
 }
 
-bool SketchCanvas::matchesBinding(const QString& actionId, QKeyEvent* event) const
+std::string SketchCanvas::boundCommand(QKeyEvent* event) const
 {
-    if (!m_keyBindings.contains(actionId)) return false;
-
-    // Build QKeySequence from the current key event
-    int key = event->key();
-    Qt::KeyboardModifiers mods = event->modifiers();
-
-    // Ignore standalone modifier keys
+    // A modifier on its own is never a binding.
+    const int key = event->key();
     if (key == Qt::Key_Shift || key == Qt::Key_Control ||
         key == Qt::Key_Alt || key == Qt::Key_Meta) {
-        return false;
+        return std::string();
     }
+    // Keypad and group-switch modifiers are not part of a binding.
+    const Qt::KeyboardModifiers mods = event->modifiers()
+        & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+    const QKeySequence pressed(QKeyCombination(mods, static_cast<Qt::Key>(key)));
+    return m_keyBindings.commandForKey("sketch", pressed.toString().toStdString());
+}
 
-    int combined = key;
-    if (mods & Qt::ControlModifier) combined |= Qt::CTRL;
-    if (mods & Qt::ShiftModifier) combined |= Qt::SHIFT;
-    if (mods & Qt::AltModifier) combined |= Qt::ALT;
-    if (mods & Qt::MetaModifier) combined |= Qt::META;
-
-    QKeySequence eventSeq(combined);
-
-    const QList<QKeySequence>& bindings = m_keyBindings.value(actionId);
-    for (const QKeySequence& seq : bindings) {
-        if (seq == eventSeq) {
-            return true;
+bool SketchCanvas::runBoundCommand(const std::string& commandId)
+{
+    if (commandId.empty()) return false;
+    if (commandId == "sketch.rotateCCW") {
+        rotateViewCCW();
+    } else if (commandId == "sketch.rotateCW") {
+        rotateViewCW();
+    } else if (commandId == "sketch.rotateReset") {
+        setViewRotation(0.0);
+    } else if (commandId == "sketch.construction") {
+        toggleSelectedConstruction();
+    } else if (commandId == "sketch.toggleGrid") {
+        setGridVisible(!m_showGrid);
+    } else if (commandId == "sketch.dimension") {
+        // The dimension key adds a dimension to the selection when it can,
+        // and only otherwise switches to the Dimension tool.
+        quickDimensionKey();
+    } else {
+        const commands::Command* cmd = commands::findCommand(commandId);
+        if (!cmd || cmd->kind != commands::Kind::Tool
+            || cmd->modelTool != ModelTool::None) {
+            return false;
         }
+        setActiveTool(cmd->sketchTool);
+        if (cmd->hasMode) setCreationMode(cmd->mode);
     }
-
-    return false;
-}
-
-// ---- Tangent Circle Calculations -----------------------------------
-
-SketchCanvas::TangentCircle SketchCanvas::calculate2TangentCircle(
-    const SketchEntity& e1, const SketchEntity& e2, const QPointF& hint) const
-{
-    if (e1.type == SketchEntityType::Line && e2.type == SketchEntityType::Line &&
-        e1.points.size() >= 2 && e2.points.size() >= 2) {
-
-        auto lineIntersect = geometry::infiniteLineIntersection(
-            e1.points[0], e1.points[1], e2.points[0], e2.points[1]);
-        if (!lineIntersect.intersects) return {};
-
-        double radius = geometry::length(hint - lineIntersect.point);
-        return geometry::circleTangentToTwoLines(
-            e1.points[0], e1.points[1],
-            e2.points[0], e2.points[1],
-            radius, hint);
-    }
-    return {};
-}
-
-SketchCanvas::TangentCircle SketchCanvas::calculate3TangentCircle(
-    const SketchEntity& e1, const SketchEntity& e2, const SketchEntity& e3) const
-{
-    if (e1.type == SketchEntityType::Line && e2.type == SketchEntityType::Line &&
-        e3.type == SketchEntityType::Line && e1.points.size() >= 2 &&
-        e2.points.size() >= 2 && e3.points.size() >= 2) {
-
-        return geometry::circleTangentToThreeLines(
-            e1.points[0], e1.points[1],
-            e2.points[0], e2.points[1],
-            e3.points[0], e3.points[1]);
-    }
-    return {};
+    return true;
 }
 
 SketchCanvas::TangentArc SketchCanvas::calculateTangentArc(
@@ -8031,17 +7443,23 @@ void SketchCanvas::createConstraint(ConstraintType type, double value, const QPo
 
     // Check if this constraint would over-constrain the sketch
     // (skipped for auto-created constraints from locked dimension fields,
-    //  since the user explicitly typed a value and pressed Enter)
-    if (driving && !skipOverConstrainCheck && SketchSolver::isAvailable()) {
-        SketchSolver solver;
-        OverConstraintInfo overConstraintInfo = solver.checkOverConstrain(m_entities, m_constraints, constraint);
-
-        if (overConstraintInfo.wouldOverConstrain) {
+    //  since the user explicitly typed a value and pressed Enter). The
+    // dimension tools pick their own operands, so their kinds are not
+    // re-checked here; the rest of the checks are the library's.
+    sketch::ConstraintCheckOptions options;
+    options.operands = false;
+    options.solver = driving && !skipOverConstrainCheck;
+    const sketch::ConstraintCheck check =
+        sketch::checkNewConstraint(m_entities, m_constraints, constraint, options);
+    {
+        const bool overConstrains = check.problem == sketch::ConstraintProblem::Redundant
+            || check.problem == sketch::ConstraintProblem::OverConstrains;
+        if (overConstrains) {
             // Build description of conflicting constraints
             QString conflictDetails;
-            if (!overConstraintInfo.conflictingConstraintIds.empty()) {
+            if (!check.conflictingIds.empty()) {
                 QStringList conflictDescriptions;
-                for (int conflictId : overConstraintInfo.conflictingConstraintIds) {
+                for (int conflictId : check.conflictingIds) {
                     QString desc = describeConstraint(conflictId);
                     if (!desc.isEmpty()) {
                         conflictDescriptions.append("  • " + desc);
@@ -8057,7 +7475,7 @@ void SketchCanvas::createConstraint(ConstraintType type, double value, const QPo
             // does not conflict with anything, it just measures something
             // already determined, so saying "conflicts" would send the user
             // hunting for a disagreement that does not exist.
-            const QString lead = overConstraintInfo.isRedundant
+            const QString lead = check.problem == sketch::ConstraintProblem::Redundant
                 ? tr("This dimension is already implied by the existing "
                      "constraints, so it would add nothing.")
                 : tr("This dimension would over-constrain the sketch.");
@@ -8081,22 +7499,10 @@ void SketchCanvas::createConstraint(ConstraintType type, double value, const QPo
         }
     }
 
-    m_constraints.append(constraint);
-
-    // Mark affected entities as constrained (only for driving constraints)
-    if (constraint.isDriving) {
-        for (int entityId : constraint.entityIds) {
-            SketchEntity* entity = entityById(entityId);
-            if (entity) {
-                entity->constrained = true;
-            }
-        }
-    }
-
-    // Solve constraints to update geometry (only if driving)
-    if (constraint.isDriving) {
-        solveConstraints();
-    }
+    // Add it and solve (the constrained flags and the undo step come with
+    // it). The over-constraint question is settled above.
+    options.solver = false;
+    if (!addConstraintAndSolve(constraint, options)) return;
 
     emit constraintCreated(constraint.id);
 
@@ -8603,66 +8009,33 @@ void SketchCanvas::solveConstraintsDragging(const std::vector<std::pair<int, int
 
 void SketchCanvas::beginHandleDrag(int entityId, int handleIdx, const QPointF& worldPos, Qt::KeyboardModifiers mods)
 {
-    // Projected geometry is driven by its source; it cannot be edited here.
-    // Redirect the user to the source sketch rather than starting a drag.
     if (const SketchEntity* pe = entityById(entityId)) {
-        if (pe->projectionSourceId >= 0) {
+        switch (sketch::handleDragRefusal(*pe, m_groups)) {
+        case sketch::DragRefusal::Projected:
+            // Projected geometry is driven by its source; send the user there.
             emit toolHintChanged(
                 tr("This is projected geometry, driven by its source sketch; "
                    "edit it in the source sketch, not here."));
             return;
+        case sketch::DragRefusal::Locked:
+            emit toolHintChanged(
+                tr("This entity is in a locked group; unlock the group to edit it."));
+            return;
+        case sketch::DragRefusal::None:
+            break;
         }
     }
-    if (isEntityLocked(entityId)) {
-        emit toolHintChanged(
-            tr("This entity is in a locked group; unlock the group to edit it."));
-        return;
-    }
     if (entityId != m_selectedId) m_selectedId = entityId;
+    // The drag keeps what its undo step needs: the entity, and when it is in a
+    // group every member and the group's labels, since the solver may move
+    // them all.
+    if (!m_handleDrag.begin(m_entities, m_groups, m_constraints, entityId, handleIdx)) return;
     m_isDraggingHandle = true;
     m_dragHandleIndex = handleIdx;
     m_dragStartWorld = worldPos;
     m_lastRawMouseWorld = worldPos;
     m_shiftWasPressed = (mods & Qt::ShiftModifier);
     m_ctrlWasPressed = (mods & Qt::ControlModifier);
-    SketchEntity* sel = entityById(entityId);
-    if (sel && handleIdx < sel->points.size()) {
-        m_dragHandleOriginal = sel->points[handleIdx];
-        if (sel->points.size() > 1) m_dragHandleOriginal2 = sel->points[1];
-        m_dragOriginalRadius = sel->radius;
-        m_dragOriginalEntity = *sel;
-        // Opening a full circle: it was split into one 360-degree arc whose
-        // two ends coincide at the cut. Grabbing an end and dragging shrinks
-        // it from 360 (see the drag branch + openFullArcByDrag).
-        m_openingFullArc = false;
-        if (sel->type == SketchEntityType::Arc && sel->points.size() >= 3
-            && (handleIdx == 1 || handleIdx == 2)
-            && std::abs(std::abs(sel->sweepAngle) - 360.0) < 0.5
-            && QLineF(QPointF(sel->points[1]), QPointF(sel->points[2])).length() <= kSnapWeldEps) {
-            m_openingFullArc = true;
-            m_openArcPrevSweep = sel->sweepAngle;   // +/- 360, seeds continuity
-            m_openArcDraggedIndex = handleIdx;
-            const auto& c = sel->points[0];
-            m_openArcFixedAngle = radiansToDegrees(std::atan2(sel->points[1].y - c.y,
-                                             sel->points[1].x - c.x));
-        }
-        // The solver may move any member of the group (and anything else the
-        // constraints reach), so undo restores every member, not just the
-        // one whose handle was grabbed.
-        m_dragOriginalGroupEntities.clear();
-        m_dragOriginalGroupConstraints.clear();
-        if (sel->groupId >= 0) {
-            for (const auto& e : m_entities)
-                if (e.groupId == sel->groupId) m_dragOriginalGroupEntities.append(e);
-            for (const auto& g : m_groups) {
-                if (g.id != sel->groupId) continue;
-                for (int cid : g.constraintIds)
-                    if (const SketchConstraint* cc = constraintById(cid))
-                        m_dragOriginalGroupConstraints.append(*cc);
-                break;
-            }
-        }
-    }
     setCursor(Qt::ArrowCursor);
 }
 
@@ -8802,24 +8175,6 @@ void SketchCanvas::solveConstraints()
 }
 
 // =====================================================================
-//  Staged placement constraints
-//
-//  Apply the locked dimension values for one tool/mode at the current stage,
-//  adjusting `snapped` in place.
-//
-//  These are each called from BOTH mousePressEvent and mouseReleaseEvent, and
-//  BOTH call sites are required. A staged mode accepts two input styles:
-//  clicking each point, and press-drag-release to drag THROUGH a stage
-//  (detected per stage by m_wasDragged at a 5 px threshold). Press places a
-//  point on click; release places the next one if the user dragged. Deleting
-//  either call site silently removes one input style; the other keeps
-//  working, so it looks correct in casual testing.
-//
-//  Keep these mode-scoped: they lift directly into per-tool handler classes
-//  when the tool dispatch is refactored.
-// =====================================================================
-
-// =====================================================================
 //  Tool handler registry
 //
 //  A tool with no handler falls through to the existing switch statements and
@@ -8909,25 +8264,6 @@ bool SketchCanvas::allDimFieldsLocked() const
     return m_dimInput.allLocked();
 }
 
-void SketchCanvas::strokeWorldPolyline(QPainter& painter, const std::vector<Point2D>& pts,
-                                       bool solid) const
-{
-    QPolygonF poly;
-    poly.reserve(static_cast<int>(pts.size()));
-    for (const auto& p : pts) poly << worldToScreenF(QPointF(p.x, p.y));
-    painter.setBrush(Qt::NoBrush);
-    if (!solid) {
-        painter.drawPolyline(poly);
-        return;
-    }
-    QPen pen = painter.pen();
-    pen.setStyle(Qt::SolidLine);
-    painter.save();
-    painter.setPen(pen);
-    painter.drawPolyline(poly);
-    painter.restore();
-}
-
 void SketchCanvas::setCursorSlot(const QPointF& world)
 {
     const int slot = previewPointCount();
@@ -8943,21 +8279,6 @@ void SketchCanvas::appendStagedPoint(const QPointF& world)
     const std::size_t placed = static_cast<std::size_t>(previewPointCount());
     if (m_pendingEntity.points.size() > placed) m_pendingEntity.points.resize(placed);
     appendPlacementPoint(world);
-}
-
-void SketchCanvas::paintPlacedClicks(QPainter& painter, bool rubberLine) const
-{
-    const int placed = previewPointCount();
-    const auto& pend = m_pendingEntity.points;
-    painter.setBrush(QColor(0, 120, 215));
-    for (int i = 0; i < placed && i < static_cast<int>(pend.size()); ++i) {
-        painter.drawEllipse(worldToScreen(QPointF(pend[i])), 3, 3);
-    }
-    painter.setBrush(Qt::NoBrush);
-    if (rubberLine && placed >= 1) {
-        painter.drawLine(worldToScreen(previewPoint(placed - 1)),
-                         worldToScreen(currentMouseWorld()));
-    }
 }
 
 void SketchCanvas::appendPlacementPoint(const QPointF& worldPos)
@@ -9000,9 +8321,10 @@ bool SketchCanvas::setInteractionMode(InteractionMode mode)
     return true;
 }
 
-void SketchCanvas::addDimField(const QString& label, bool isAngle)
+void SketchCanvas::addDimField(sketch::DimField field)
 {
-    m_dimInput.addField(label, isAngle);
+    m_dimInput.addField(field, QCoreApplication::translate(sketch::dimFieldContext(),
+                                                           sketch::dimFieldLabel(field)));
 }
 
 QString SketchCanvas::currentToolHint() const
@@ -9618,21 +8940,70 @@ void SketchCanvas::createGeometricConstraint(ConstraintType type)
     constraint.enabled = true;
     constraint.satisfied = true;
 
-    m_constraints.append(constraint);
-
-    // Mark affected entities as constrained
-    for (int entityId : constraint.entityIds) {
-        SketchEntity* entity = entityById(entityId);
-        if (entity) {
-            entity->constrained = true;
-        }
-    }
-
-    // Solve constraints to update geometry
-    solveConstraints();
+    // The same checks the command line makes: operand kinds (libslvs aborts
+    // on some wrong pairings) and redundancy, then the add and its undo step.
+    if (!addConstraintAndSolve(constraint, sketch::ConstraintCheckOptions{})) return;
 
     emit constraintCreated(constraint.id);
     update();
+}
+
+bool SketchCanvas::addCheckedConstraint(SketchConstraint& constraint,
+                                        const sketch::ConstraintCheckOptions& options)
+{
+    const QString name = QString::fromUtf8(sketch::constraintTypeName(constraint.type));
+    sketch::Constraint added;
+    const sketch::ConstraintCheck check = m_edits.addConstraint(
+        m_entities, m_constraints, constraint, options,
+        std::string("Add ") + sketch::constraintTypeName(constraint.type), &added);
+    switch (check.problem) {
+    case sketch::ConstraintProblem::None:
+        constraint.id = added.id;
+        if (constraint.id >= m_nextConstraintId) m_nextConstraintId = constraint.id + 1;
+        updateUndoRedoState();
+        return true;
+    case sketch::ConstraintProblem::UnknownEntity:
+        showStatus(tr("%1 was not added: an entity it names is gone.").arg(name));
+        break;
+    case sketch::ConstraintProblem::RepeatedOperand:
+        showStatus(tr("%1 was not added: the same point was picked twice.").arg(name));
+        break;
+    case sketch::ConstraintProblem::WrongOperands:
+        showStatus(tr("%1 does not apply to that selection.").arg(name));
+        break;
+    case sketch::ConstraintProblem::BadValue:
+        showStatus(tr("%1 must be greater than zero.").arg(name));
+        break;
+    case sketch::ConstraintProblem::Redundant:
+        showStatus(tr("%1 is already implied by the constraints in place, "
+                      "so it would add nothing.").arg(name));
+        break;
+    case sketch::ConstraintProblem::OverConstrains:
+        showStatus(tr("%1 would over-constrain the sketch.").arg(name));
+        break;
+    }
+    return false;
+}
+
+bool SketchCanvas::addConstraintAndSolve(SketchConstraint& constraint,
+                                         const sketch::ConstraintCheckOptions& options)
+{
+    const std::string description =
+        std::string("Add ") + sketch::constraintTypeName(constraint.type);
+    m_edits.beginStep(description);
+    const bool added = addCheckedConstraint(constraint, options);
+    if (added && constraint.isDriving) {
+        // Undoing the constraint also puts back what solving it moved.
+        const QVector<SketchEntity> entitiesBefore = m_entities;
+        const QVector<SketchConstraint> constraintsBefore = m_constraints;
+        const QVector<SketchGroup> groupsBefore = m_groups;
+        solveConstraints();
+        m_edits.recordChanges(entitiesBefore, constraintsBefore, groupsBefore,
+                              m_entities, m_constraints, m_groups, description);
+    }
+    m_edits.endStep();
+    updateUndoRedoState();
+    return added;
 }
 
 void SketchCanvas::applyHorizontalConstraint()
@@ -10875,7 +10246,7 @@ void SketchCanvas::updateCursorForBackgroundHandle(BackgroundHandle handle)
 
 void SketchCanvas::pushUndoCommand(const sketch::UndoCommand& cmd)
 {
-    m_libUndoStack.push(cmd);
+    m_edits.record(cmd);
     updateUndoRedoState();
 }
 
@@ -10971,34 +10342,17 @@ void SketchCanvas::finishUndoRedoMultiple()
     update();
 }
 
-// Undo of an add (or redo of a delete): the entity goes, and so does any
-// selection state pointing at it.
-void SketchCanvas::removeEntityForUndo(int entityId)
+// Undo and redo remove things by id; selection state naming them goes too.
+sketch::EditCallbacks SketchCanvas::undoListener()
 {
-    for (int i = 0; i < m_entities.size(); ++i) {
-        if (m_entities[i].id == entityId) {
-            m_entities.removeAt(i);
-            break;
-        }
-    }
-    selectRemove(entityId);
-    if (m_selectedId == entityId) {
-        m_selectedId = -1;
-    }
-    m_profilesCacheDirty = true;
-}
-
-void SketchCanvas::removeConstraintForUndo(int constraintId)
-{
-    for (int i = 0; i < m_constraints.size(); ++i) {
-        if (m_constraints[i].id == constraintId) {
-            m_constraints.removeAt(i);
-            break;
-        }
-    }
-    if (m_selectedConstraintId == constraintId) {
-        m_selectedConstraintId = -1;
-    }
+    return sketch::EditCallbacks(
+        [this](int entityId) {
+            selectRemove(entityId);
+            if (m_selectedId == entityId) m_selectedId = -1;
+        },
+        [this](int constraintId) {
+            if (m_selectedConstraintId == constraintId) m_selectedConstraintId = -1;
+        });
 }
 
 // The radius a driving Radius or Diameter constraint pins an entity to, or -1.
@@ -11095,15 +10449,15 @@ void SketchCanvas::appendTempFixedPoint(int entityId, int pointIndex, std::vecto
 
 void SketchCanvas::updateUndoRedoState()
 {
-    emit undoAvailabilityChanged(m_libUndoStack.canUndo());
-    emit redoAvailabilityChanged(m_libUndoStack.canRedo());
+    emit undoAvailabilityChanged(m_edits.history().canUndo());
+    emit redoAvailabilityChanged(m_edits.history().canRedo());
     emit undoStackChanged();
 }
 
 QStringList SketchCanvas::undoDescriptions() const
 {
     QStringList result;
-    for (const auto& d : m_libUndoStack.undoDescriptions())
+    for (const auto& d : m_edits.history().undoDescriptions())
         result.append(QString::fromStdString(d));
     return result;
 }
@@ -11111,7 +10465,7 @@ QStringList SketchCanvas::undoDescriptions() const
 QStringList SketchCanvas::redoDescriptions() const
 {
     QStringList result;
-    for (const auto& d : m_libUndoStack.redoDescriptions())
+    for (const auto& d : m_edits.history().redoDescriptions())
         result.append(QString::fromStdString(d));
     return result;
 }
@@ -11119,207 +10473,39 @@ QStringList SketchCanvas::redoDescriptions() const
 void SketchCanvas::undoMultiple(int levels)
 {
     if (levels <= 0) return;
-    auto cmds = m_libUndoStack.undoMultiple(levels);
-    for (const auto& cmd : cmds)
-        undoSingleCommand(cmd);
+    sketch::EditCallbacks listener = undoListener();
+    m_edits.undo(m_entities, m_constraints, m_groups, levels, &listener);
+    m_profilesCacheDirty = true;
     finishUndoRedoMultiple();
 }
 
 void SketchCanvas::redoMultiple(int levels)
 {
     if (levels <= 0) return;
-    auto cmds = m_libUndoStack.redoMultiple(levels);
-    for (const auto& cmd : cmds)
-        redoSingleCommand(cmd);
+    sketch::EditCallbacks listener = undoListener();
+    m_edits.redo(m_entities, m_constraints, m_groups, levels, &listener);
+    m_profilesCacheDirty = true;
     finishUndoRedoMultiple();
-}
-
-void SketchCanvas::undoSingleCommand(const sketch::UndoCommand& cmd)
-{
-    switch (cmd.type) {
-    case sketch::CommandType::AddEntity:
-        // Undo add = delete the entity
-        removeEntityForUndo(cmd.entity.id);
-        break;
-
-    case sketch::CommandType::DeleteEntity:
-        // Undo delete = restore the entity
-        m_entities.append(SketchEntity(cmd.entity));
-        m_profilesCacheDirty = true;
-        break;
-
-    case sketch::CommandType::ModifyEntity:
-        // Undo modify = restore previous geometry, preserving GUI-only fields
-        for (int i = 0; i < m_entities.size(); ++i) {
-            if (m_entities[i].id == cmd.entity.id) {
-                int savedTangentId = m_entities[i].tangentEntityId;
-                bool savedSelected = m_entities[i].selected;
-                static_cast<sketch::Entity&>(m_entities[i]) = cmd.previousEntity;
-                m_entities[i].tangentEntityId = savedTangentId;
-                m_entities[i].selected = savedSelected;
-                break;
-            }
-        }
-        m_profilesCacheDirty = true;
-        break;
-
-    case sketch::CommandType::AddConstraint:
-        // Undo add = delete the constraint
-        removeConstraintForUndo(cmd.constraint.id);
-        break;
-
-    case sketch::CommandType::DeleteConstraint:
-        // Undo delete = restore the constraint
-        m_constraints.append(SketchConstraint(cmd.constraint));
-        break;
-
-    case sketch::CommandType::ModifyConstraint:
-        // Undo modify = restore previous state
-        for (int i = 0; i < m_constraints.size(); ++i) {
-            if (m_constraints[i].id == cmd.constraint.id) {
-                m_constraints[i] = SketchConstraint(cmd.previousConstraint);
-                break;
-            }
-        }
-        break;
-
-    case sketch::CommandType::AddGroup:
-        // Undo add = remove the group, and the members' back-pointers with it
-        syncGroupMembership(cmd.group, -1);
-        m_groups.erase(
-            std::remove_if(m_groups.begin(), m_groups.end(),
-                           [&cmd](const SketchGroup& g) { return g.id == cmd.group.id; }),
-            m_groups.end());
-        break;
-
-    case sketch::CommandType::DeleteGroup:
-        // Undo delete = restore the group and its members' back-pointers
-        m_groups.append(cmd.group);
-        syncGroupMembership(cmd.group, cmd.group.id);
-        break;
-
-    case sketch::CommandType::ModifyGroup:
-        // Undo modify = restore previous group state (membership included)
-        for (int i = 0; i < m_groups.size(); ++i) {
-            if (m_groups[i].id == cmd.group.id) {
-                syncGroupMembership(cmd.group, -1);
-                m_groups[i] = cmd.previousGroup;
-                syncGroupMembership(cmd.previousGroup, cmd.previousGroup.id);
-                break;
-            }
-        }
-        break;
-
-    case sketch::CommandType::Compound:
-        // Undo compound = undo sub-commands in reverse order
-        for (int i = cmd.subCommands.size() - 1; i >= 0; --i) {
-            undoSingleCommand(cmd.subCommands[i]);
-        }
-        break;
-    }
-}
-
-void SketchCanvas::redoSingleCommand(const sketch::UndoCommand& cmd)
-{
-    switch (cmd.type) {
-    case sketch::CommandType::AddEntity:
-        // Redo add = add the entity back
-        m_entities.append(SketchEntity(cmd.entity));
-        m_profilesCacheDirty = true;
-        break;
-
-    case sketch::CommandType::DeleteEntity:
-        // Redo delete = delete the entity again
-        removeEntityForUndo(cmd.entity.id);
-        break;
-
-    case sketch::CommandType::ModifyEntity:
-        // Redo modify = apply the modification again, preserving GUI-only fields
-        for (int i = 0; i < m_entities.size(); ++i) {
-            if (m_entities[i].id == cmd.entity.id) {
-                int savedTangentId = m_entities[i].tangentEntityId;
-                bool savedSelected = m_entities[i].selected;
-                static_cast<sketch::Entity&>(m_entities[i]) = cmd.entity;
-                m_entities[i].tangentEntityId = savedTangentId;
-                m_entities[i].selected = savedSelected;
-                break;
-            }
-        }
-        m_profilesCacheDirty = true;
-        break;
-
-    case sketch::CommandType::AddConstraint:
-        // Redo add = add the constraint back
-        m_constraints.append(SketchConstraint(cmd.constraint));
-        break;
-
-    case sketch::CommandType::DeleteConstraint:
-        // Redo delete = delete the constraint again
-        removeConstraintForUndo(cmd.constraint.id);
-        break;
-
-    case sketch::CommandType::ModifyConstraint:
-        // Redo modify = apply the modification again
-        for (int i = 0; i < m_constraints.size(); ++i) {
-            if (m_constraints[i].id == cmd.constraint.id) {
-                m_constraints[i] = SketchConstraint(cmd.constraint);
-                break;
-            }
-        }
-        break;
-
-    case sketch::CommandType::AddGroup:
-        // Redo add = add the group back, members pointing at it again
-        m_groups.append(cmd.group);
-        syncGroupMembership(cmd.group, cmd.group.id);
-        break;
-
-    case sketch::CommandType::DeleteGroup:
-        // Redo delete = remove the group again and clear the back-pointers
-        syncGroupMembership(cmd.group, -1);
-        m_groups.erase(
-            std::remove_if(m_groups.begin(), m_groups.end(),
-                           [&cmd](const SketchGroup& g) { return g.id == cmd.group.id; }),
-            m_groups.end());
-        break;
-
-    case sketch::CommandType::ModifyGroup:
-        // Redo modify = apply the modification again (membership included)
-        for (int i = 0; i < m_groups.size(); ++i) {
-            if (m_groups[i].id == cmd.group.id) {
-                syncGroupMembership(cmd.previousGroup, -1);
-                m_groups[i] = cmd.group;
-                syncGroupMembership(cmd.group, cmd.group.id);
-                break;
-            }
-        }
-        break;
-
-    case sketch::CommandType::Compound:
-        // Redo compound = redo sub-commands in forward order
-        for (const auto& sub : cmd.subCommands) {
-            redoSingleCommand(sub);
-        }
-        break;
-    }
 }
 
 void SketchCanvas::undo()
 {
-    if (!m_libUndoStack.canUndo()) return;
-
-    sketch::UndoCommand cmd = m_libUndoStack.undo();
-    undoSingleCommand(cmd);
-    finishUndoRedo(cmd);
+    sketch::EditCallbacks listener = undoListener();
+    const std::vector<sketch::UndoCommand> done =
+        m_edits.undo(m_entities, m_constraints, m_groups, 1, &listener);
+    if (done.empty()) return;
+    m_profilesCacheDirty = true;
+    finishUndoRedo(done.front());
 }
 
 void SketchCanvas::redo()
 {
-    if (!m_libUndoStack.canRedo()) return;
-
-    sketch::UndoCommand cmd = m_libUndoStack.redo();
-    redoSingleCommand(cmd);
-    finishUndoRedo(cmd);
+    sketch::EditCallbacks listener = undoListener();
+    const std::vector<sketch::UndoCommand> done =
+        m_edits.redo(m_entities, m_constraints, m_groups, 1, &listener);
+    if (done.empty()) return;
+    m_profilesCacheDirty = true;
+    finishUndoRedo(done.front());
 }
 
 // ---- Inline constraint value editing ----------------------------------------

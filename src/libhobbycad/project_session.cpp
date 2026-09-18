@@ -9,6 +9,7 @@
 #include "hobbycad/brep/operations.h"
 #include "hobbycad/plane_frame.h"
 #include "hobbycad/project_undo.h"
+#include "hobbycad/sketch/edit_session.h"
 #include "hobbycad/sketch/profiles.h"
 
 #include <BRepBuilderAPI_Transform.hxx>
@@ -131,52 +132,6 @@ bool sameList(const std::vector<T>& a, const std::vector<T>& b, Eq eq)
     return true;
 }
 
-bool sameNumber(double a, double b)
-{
-    return a == b || (std::isnan(a) && std::isnan(b));
-}
-
-bool sameEntity(const sketch::Entity& a, const sketch::Entity& b)
-{
-    return a.id == b.id && a.type == b.type && a.points == b.points
-        && a.radius == b.radius && a.startAngle == b.startAngle
-        && a.sweepAngle == b.sweepAngle && a.sides == b.sides
-        && a.majorRadius == b.majorRadius && a.minorRadius == b.minorRadius
-        && a.ellipseRotation == b.ellipseRotation && a.ellipseStart == b.ellipseStart
-        && a.ellipseSweep == b.ellipseSweep && a.text == b.text
-        && a.fontFamily == b.fontFamily && a.fontSize == b.fontSize
-        && a.fontBold == b.fontBold && a.fontItalic == b.fontItalic
-        && a.textRotation == b.textRotation && a.arcFlipped == b.arcFlipped
-        && a.splineBezier == b.splineBezier && a.splineClosed == b.splineClosed
-        && a.splineRational == b.splineRational && a.weights == b.weights
-        && a.conicRho == b.conicRho
-        && a.pathEntityIds == b.pathEntityIds && a.offsetParentId == b.offsetParentId
-        && a.offsetDistance == b.offsetDistance && a.offsetSide == b.offsetSide
-        && a.projectionSourceId == b.projectionSourceId
-        && a.projectionSourceSketchId == b.projectionSourceSketchId
-        && a.isConstruction == b.isConstruction && a.isCenterline == b.isCenterline
-        && a.color == b.color && a.constrained == b.constrained
-        && a.groupId == b.groupId;
-}
-
-bool sameConstraint(const sketch::Constraint& a, const sketch::Constraint& b)
-{
-    return a.id == b.id && a.type == b.type && a.entityIds == b.entityIds
-        && a.pointIndices == b.pointIndices && sameNumber(a.value, b.value)
-        && a.expression == b.expression && a.isDriving == b.isDriving
-        && a.enabled == b.enabled && a.labelPosition == b.labelPosition
-        && a.labelVisible == b.labelVisible && sameNumber(a.labelAngle, b.labelAngle)
-        && a.supplementary == b.supplementary;
-}
-
-bool sameGroup(const sketch::Group& a, const sketch::Group& b)
-{
-    return a.id == b.id && a.name == b.name && a.kind == b.kind
-        && a.entityIds == b.entityIds && a.constraintIds == b.constraintIds
-        && a.childGroupIds == b.childGroupIds && a.parentGroupId == b.parentGroupId
-        && a.locked == b.locked && a.hasPivot == b.hasPivot && a.pivot == b.pivot;
-}
-
 bool sameBackground(const sketch::BackgroundImage& a, const sketch::BackgroundImage& b)
 {
     return a.enabled == b.enabled && a.storage == b.storage && a.filePath == b.filePath
@@ -195,9 +150,9 @@ bool sameSketch(const SketchData& a, const SketchData& b)
         && a.planeOffset == b.planeOffset && a.rotationAxis == b.rotationAxis
         && a.rotationAngle == b.rotationAngle && a.gridSpacing == b.gridSpacing
         && a.flipView == b.flipView
-        && sameList(a.entities, b.entities, sameEntity)
-        && sameList(a.constraints, b.constraints, sameConstraint)
-        && sameList(a.groups, b.groups, sameGroup)
+        && sameList(a.entities, b.entities, sketch::sameEntity)
+        && sameList(a.constraints, b.constraints, sketch::sameConstraint)
+        && sameList(a.groups, b.groups, sketch::sameGroup)
         && sameBackground(a.backgroundImage, b.backgroundImage);
 }
 
@@ -619,6 +574,38 @@ bool ProjectSession::deleteFeature(int id, const std::string& description)
     return true;
 }
 
+bool timelineMoveAllowed(const std::vector<TimelineEntry>& entries, int from, int to)
+{
+    const int count = static_cast<int>(entries.size());
+    if (from < 0 || from >= count || to < 0 || to >= count) return false;
+    const auto uses = [&entries](int user, int used) {
+        const std::vector<int>& deps = entries[static_cast<std::size_t>(user)].dependsOn;
+        const int id = entries[static_cast<std::size_t>(used)].featureId;
+        return std::find(deps.begin(), deps.end(), id) != deps.end();
+    };
+    if (from < to) {
+        // Later: not past anything built on it.
+        for (int i = from + 1; i <= to; ++i) {
+            if (uses(i, from)) return false;
+        }
+    } else {
+        // Earlier: not ahead of anything it is built on.
+        for (int i = to; i < from; ++i) {
+            if (uses(from, i)) return false;
+        }
+    }
+    return true;
+}
+
+TimelineActions timelineActions(FeatureType type, bool suppressed)
+{
+    TimelineActions a;
+    a.editable = type != FeatureType::Origin;
+    a.unsuppress = suppressed;
+    a.exportable = type == FeatureType::Sketch;
+    return a;
+}
+
 bool ProjectSession::moveFeature(int id, int toTimelineIndex, const std::string& description)
 {
     std::vector<TimelineEntry> entries = timeline();
@@ -630,6 +617,9 @@ bool ProjectSession::moveFeature(int id, int toTimelineIndex, const std::string&
     if (from < 0 || toTimelineIndex < 0 || toTimelineIndex >= count || from == toTimelineIndex) {
         return false;
     }
+    // A feature stays after what it is built on, and ahead of what is built
+    // on it.
+    if (!timelineMoveAllowed(entries, from, toTimelineIndex)) return false;
 
     std::vector<FeatureData> features = m_project.features();
     const int fromR = indexOfFeature(features, id);

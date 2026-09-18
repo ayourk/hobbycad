@@ -17,6 +17,9 @@
 #include "climode.h"
 
 #include <hobbycad/core.h>
+#if HOBBYCAD_CLI_CATALOGS
+#  include <hobbycad/locale.h>
+#endif
 
 #include <iostream>
 #include <string>
@@ -48,11 +51,24 @@ void printUsage(const std::string& program)
         << "Options:\n"
         << "  --check, --dry-run         With \"script\": check the syntax\n"
         << "                             without running the commands\n"
+#if HOBBYCAD_CLI_CATALOGS
+        << "  --lang <name>              Answer in this language (de, pt_BR, ...)\n"
+#endif
         << "  --version                  Print the version and exit\n"
         << "  --help                     Print this text and exit\n";
 }
 
 }  // namespace
+
+#if HOBBYCAD_CLI_CATALOGS
+namespace hobbycad {
+namespace cli_catalogs {
+/// Defined by the generated cli_catalogs.cpp: installs the table for a
+/// locale, or answers false and leaves the seam as it was.
+bool install(const char* locale);
+}  // namespace cli_catalogs
+}  // namespace hobbycad
+#endif
 
 int main(int argc, char* argv[])
 {
@@ -64,6 +80,27 @@ int main(int argc, char* argv[])
         if (a == "--version" || a == "-v") { printVersion(); return 0; }
         if (a == "--help" || a == "-h")    { printUsage(program); return 0; }
     }
+
+#if HOBBYCAD_CLI_CATALOGS
+    // The catalogs are compiled in (scripts/ts2cpp.py); pick a language
+    // before anything prints. An explicit --lang wins, then the
+    // environment and the platform (hobbycad/locale.h). Nothing found
+    // means English, which is what the seam answers with no translator.
+    {
+        std::vector<std::string> wanted;
+        for (std::size_t i = 0; i + 1 < args.size(); ++i) {
+            if (args[i] != "--lang") continue;
+            wanted = hobbycad::localeCandidates(args[i + 1]);
+            args.erase(args.begin() + static_cast<std::ptrdiff_t>(i),
+                       args.begin() + static_cast<std::ptrdiff_t>(i) + 2);
+            break;
+        }
+        if (wanted.empty()) wanted = hobbycad::preferredLocales();
+        for (const std::string& name : wanted) {
+            if (hobbycad::cli_catalogs::install(name.c_str())) break;
+        }
+    }
+#endif
 
     // The library comes up before any command runs, exactly as the
     // application brings it up: a command that quietly acted on an

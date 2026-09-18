@@ -43,6 +43,12 @@
                 Widget tests run under QT_QPA_PLATFORM=offscreen and need
                 moc output; without it they FAIL, since the GUI has not
                 been built.
+    catalog     The translation table scripts/ts2cpp.py compiles into the
+                Qt-free command line: the right string, English where the
+                catalog is silent, and the two "Copy" commands kept apart
+                by their disambiguation. Generates a table from fixture
+                catalogs and links nothing (translate.h is header-only),
+                so it needs neither a build nor Qt nor gettext.
     cli         CliEngine: sketch geometry commands, and an export/replay
                 round trip that proves the emitted script actually parses.
                 Qt-free, like the command layer it covers, so it runs
@@ -59,6 +65,13 @@
                 and link cleanly and then crash at run time (macro-driven
                 struct layouts depending on include order; a widely
                 included header dragging in the 3D kernel).
+    i18n        The catalogs and the generator that reads them: the lookup
+                key keeps context, disambiguation and source (24 groups of
+                messages differ only by the last), the 15 catalogs stay in
+                step, no %n plural reaches a seam that carries no count,
+                and a hostile .ts (entity bomb, oversized, not UTF-8, a
+                locale a C++ identifier cannot carry) is refused rather
+                than compiled.
     naming      Object name validation.
     opengl      Viewport capability detection.
     pager       Pager arithmetic (shared by the terminal and the GUI panel).

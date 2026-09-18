@@ -988,6 +988,24 @@ std::vector<Point2D> tessellateWith(const Entity& entity, SegmentsFor segmentsFo
         break;
 
     case EntityType::Slot:
+        if (!entity.outlineCache.empty()) {
+            // A slot along several segments: its swept outline, closed.
+            points = entity.outlineCache;
+            const Point2D& a = points.front();
+            const Point2D& b = points.back();
+            if (!(a.x == b.x && a.y == b.y)) points.push_back(a);
+            break;
+        }
+        if (entity.points.size() >= 3) {
+            // An arc slot [center, start, end], as the renderer draws it; the
+            // capsule below read its center and start as a straight slot.
+            const double pathRadius = length(entity.points[1] - entity.points[0]);
+            points = arcSlotOutline(
+                entity,
+                segmentsFor(TessCurve::Circular, 2.0 * M_PI * (pathRadius + entity.radius)),
+                segmentsFor(TessCurve::SlotCap, M_PI * entity.radius));
+            break;
+        }
         if (entity.points.size() >= 2) {
             // Two semicircles connected by lines
             Point2D p1 = entity.points[0];

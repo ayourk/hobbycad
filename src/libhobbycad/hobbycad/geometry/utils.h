@@ -166,6 +166,12 @@ HOBBYCAD_EXPORT Point2D applyPolarLock(const Point2D& from,
                                        double lockedLength,
                                        double lockedAngleDegrees);
 
+/// applyPolarLock() without sentinels: an empty value is free, so an angle
+/// locked at -1 degrees is honored. A length is used only when positive.
+HOBBYCAD_EXPORT Point2D applyPolarLock(const Point2D& from, const Point2D& to,
+                                       std::optional<double> lockedLength,
+                                       std::optional<double> lockedAngleDegrees);
+
 /// Place the end of a second edge p2 -> p3 from `toward` (the cursor),
 /// honoring a locked length and a locked INSIDE angle between the edges
 /// p2 -> p1 and p2 -> p3, on whichever side of the first edge the cursor
@@ -174,6 +180,12 @@ HOBBYCAD_EXPORT Point2D applyPolarLock(const Point2D& from,
 HOBBYCAD_EXPORT Point2D applyInsideAngleLock(const Point2D& p1, const Point2D& p2,
                                              const Point2D& toward,
                                              double lockedLength, double lockedAngleDegrees);
+
+/// applyInsideAngleLock() without sentinels, as applyPolarLock()'s overload.
+HOBBYCAD_EXPORT Point2D applyInsideAngleLock(const Point2D& p1, const Point2D& p2,
+                                             const Point2D& toward,
+                                             std::optional<double> lockedLength,
+                                             std::optional<double> lockedAngleDegrees);
 
 /// Of the two circle centers of `radius` through `a` and `b`, the one on
 /// `toward`'s side. False when the radius is too small for the chord (or

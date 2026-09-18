@@ -157,11 +157,35 @@
       hobbycad/sketch/export.h        SVG/DXF export/import
       hobbycad/sketch/background.h    Background images for tracing
       hobbycad/sketch/snap.h          Snap point detection and evaluation
+      hobbycad/sketch/properties.h    Editing an entity property by name
+      hobbycad/sketch/property_schema.h  An entity's fields, locks, point names
+      hobbycad/sketch/dimension_field.h  Fields typed while placing geometry
+      hobbycad/sketch/edit_session.h  A sketch's edits, undo history, constraint checks
+      hobbycad/sketch/dimension_input.h  Typing a value while placing geometry
+      hobbycad/sketch/placement.h     Placing an entity by clicks, and its preview
+      hobbycad/sketch/view.h          Where a sketch sits on screen
+      hobbycad/sketch/pick.h          What a click hits, in the Select tool's order
+      hobbycad/sketch/selection.h     The selection and how clicks and windows change it
+      hobbycad/sketch/handle_drag.h   One drag of a grab handle, and its undo step
+      hobbycad/sketch/transform_form.h  The move/copy form of a selection
+
+    Front-end support (what a front end offers, and where HobbyCAD puts it;
+    see docs/coding_standards.txt 11.5):
+      hobbycad/commands.h             Every command: id, text, icon, availability
+      hobbycad/bindings.h             Key and mouse bindings, conflict rules
+      hobbycad/settings_schema.h      Preference keys, defaults and ranges
+      hobbycad/project_files.h        A project folder's files and its .gitignore
+      hobbycad/layout/arrangement.h   Default menus, toolbars and key bindings
+      hobbycad/layout/customization.h The person's own changes to that arrangement
 
     Namespaces:
       hobbycad           Core types (Document, Project)
       hobbycad::geometry Geometric primitives and operations
       hobbycad::sketch   Sketch entities, constraints, operations
+      hobbycad::commands The command registry
+      hobbycad::bindings Binding rules
+      hobbycad::settings Preference schema
+      hobbycad::layout   The default arrangement
 
 ================================================================================
   2. LIBRARY INITIALIZATION
@@ -2154,6 +2178,176 @@
             // ... custom evaluation logic ...
         }
 
+  12.14  Placing Entities (placement.h, dimension_input.h)
+  -------------------------------------------------------
+
+    What a drawing tool does while an entity is placed, for every tool
+    and creation mode, so a front end only turns its events into clicks
+    and paints what it is told.  The preview and the commit use the same
+    rules.
+
+    Which placement:
+
+        struct PlacementKind { SketchTool tool; CreationMode mode; };
+        int  placementClicks(PlacementKind)     clicks to commit; 0 = the user
+                                                decides (spline, freeform)
+        int  placementTargets(PlacementKind)    curves picked first (tangents)
+        bool placementFlippable(kind, stage)    Shift takes the long way round
+        bool placementAngleSnaps / placementChains / placementUsesWheel
+
+    Each stage:
+
+        const char* placementPrompt(kind, stage)        untranslated; context
+                                                        placementContext()
+        std::vector<DimField> placementFields(kind, stage)
+
+    The rules, from a PlacementInput (clicks, cursor, the stage's locks as
+    std::optional values, flip, slot width, side count, picked curves):
+
+        Point2D placementCursor(kind, in, raw, keepSnap, clicks*)
+            where the point being placed goes: onto the mode's path and to
+            the locked values; `clicks` receives placed clicks a lock moved
+        Point2D placementClick(kind, in, at)       where a click lands
+        bool    placementEntity(kind, in, Entity&) the entity, in its stored
+                                                   layout
+        bool    placementClosesLoop(kind, in, at)  freeform polygon
+        PlacementPreview placementPreview(kind, in)
+            shapes in sketch coordinates (paths, marks, dimensions with the
+            field each one edits, notes) and each field's live value
+
+    Also: BezierPen (press, drag, release; preview; entity), tangentStart,
+    tangentArcTarget / offsetTarget / cornerPick (a PickRefusal the front
+    end explains), captureLockedTurn, arcPoints.
+
+    DimensionInput (dimension_input.h) is the typed-value fields' state:
+    addField, handleKey(DimKeyPress, chains) -> DimKeyOutcome (consumed,
+    repaint, locked, unlocked), look(i) and text(i) to draw a field,
+    evaluate() for expressions with parameters and units, and
+    lockedForConstraints() for the constraints a finished entity gets.
+
+    geometry::applyPolarLock and applyInsideAngleLock take std::optional
+    locks as well as the -1 sentinels; entity.h adds arcSlotOutline(),
+    which tessellate() now uses for an arc slot.
+
+  12.15  Picking, Selecting and Dragging (view.h, pick.h, selection.h,
+         handle_drag.h)
+  -------------------------------------------------------------------
+
+    SketchView maps sketch coordinates to a view's pixels (center, zoom,
+    rotation, far-side flip): toScreen, toSketch, sketchLength, and
+    sketchCorners of a screen rectangle for window selection.
+
+    Picking (templates over any containers of Entity, Group and
+    Constraint, so a front end's own element types need no copy):
+
+        pickEntity, pickPoint, pickHandle, pickBezierLeg,
+        pickTangentContact, pickMidpoint        one kind of target each
+        PickResult pickForSelect(entities, groups, constraints, SelectPick)
+            the Select tool's order: a handle of the selection, what the
+            front end drew (FrontEndHits: group glyphs, constraint labels),
+            a point, a Bezier leg, a tangent contact, a slot anchor, a
+            midpoint grip, an entity; SelectFilter keeps points or curves
+            out; tolerances are PickTolerances (pixels, inSketchUnits());
+            text is measured by the front end's TextHitTest.
+
+    Selection: SelectionState (entities in selection order, the primary,
+    points, a constraint, the entered group, a midpoint grip, a slot
+    anchor) and the rules selectEntity / clickEntity (Replace, Toggle,
+    Add; groups whole unless individual or inside one), selectPoint,
+    selectConstraint, enterGroup / leaveGroup, expandToGroups,
+    windowIsCrossing (right to left on screen), entitiesInWindow and
+    selectWindow (a turned view's window is a turned rectangle).
+
+    Handle drags: handleDragRefusal (projected, locked), dragAxisForKey /
+    dragAxisLetter (model axis keys per plane), handleDragTarget, and
+    HandleDrag: begin (keeps the entity, or the group and its labels),
+    target (snapped, axis-held, never collapsing an edge), the opened
+    circle's state, and record(), the drag's undo step.
+
+  12.16  Panel Models (transform_form.h, project_session.h,
+         project_files.h)
+  -------------------------------------------------------------------
+
+    TransformForm is the move/copy form of a selection: the move type
+    (MoveType: translate, rotate, scale, mirror, point to point, point to
+    position, free move), its values, and the points picked on the canvas.
+    shows(row, wholeGroup) says which rows a type shows, turns() whether
+    the turning ring belongs to it, params() gives the GroupTransformParams
+    or the TransformFormNeed still missing (transformFormNeedText explains
+    it), picked() stores a point and names the one to pick next, and
+    forCommand() opens the form a menu's transform command asks for. A
+    relative target is an offset from a picked reference, and a point
+    picked later keeps it relative.
+
+    The timeline's rules sit beside ProjectSession:
+        timelineMoveAllowed(entries, from, to)   never past a feature built
+                                                 on it, nor ahead of one it
+                                                 is built on
+        timelineActions(type, suppressed)        what a row offers
+    ProjectSession::moveFeature refuses a move the history does not allow.
+
+    project_files.h: gitGlobMatch (git's globs), GitIgnore (a .gitignore
+    kept line for line: ignores() with git's precedence and folder rules,
+    ignore() and unignore() editing only their own lines, text() writing
+    back the comments and layout as they were), and projectFileStatus with
+    projectFileStatusText for a file's place in the project (CAD file,
+    foreign file, ignored, untracked).
+
+  12.17  The Person's Own Arrangement (layout/customization.h)
+  -------------------------------------------------------------------
+
+    HobbyCAD ships one arrangement and works with no file at all. What a
+    person changes is kept as customizations, like the hunks of a diff, in
+    arrangement.json in their configuration directory: the file does not
+    exist until something is customized and is removed when the last entry
+    goes. An element with no entry is not customized, so a command
+    HobbyCAD adds later arrives in its default place among customized
+    neighbors, and an entry for an element HobbyCAD no longer has is
+    dropped with a notice.
+
+        Customization              one element: its sort order, the
+                                   container it was moved to, a hidden
+                                   flag, and the person's own name for it
+        AddedElement               a separator the person added, under a
+                                   key of its own (kAddedPrefix)
+        BindingCustomization       one command's keys (`keys`, not
+                                   "slots": Qt makes that word a macro)
+        Customizations             all of them, with setOrder, setContainer,
+                                   setHidden, clearHidden, setLabel,
+                                   setBinding, addSeparator, move (one
+                                   entry, no renumbering of anything else)
+                                   and restoreElement / restoreBinding /
+                                   restoreArea (RestoreArea: Menus,
+                                   Toolbars, Bindings, All)
+        resolve(base, ...)         the arrangement to show
+        readCustomizations / writeCustomizations
+        exportArrangement / importArrangement
+                                   a complete arrangement, for sharing;
+                                   an import keeps an entry only where it
+                                   differs from the default, and relative
+                                   order is what counts, so importing the
+                                   default writes nothing
+        isUserLabel                a name a person may give: within the
+                                   length cap, valid UTF-8, no control
+                                   characters, mnemonic ampersands fine
+
+    Sort order numbers are plain doubles and may be fractional, so putting
+    an element between two neighbors never renumbers anything.
+
+    The file comes from outside, so reading it is deliberately strict:
+    its own capped JSON reader (not Qt's or nlohmann's, so both builds
+    behave the same) caps the size, the nesting depth (kMaxDepth, 16), the
+    number of entries, the length of every string and the number of
+    values, rejects duplicate keys, an unknown key, a wrong type, a number
+    that is not finite, text that is not UTF-8 and an id outside the plain
+    character set ids use, and never throws. A bad entry is reported and
+    skipped; a file that cannot be read at all leaves the default in force
+    with a notice. No field is used as a path, a command line or a format
+    string.
+
+    A person's own name for an element is shown exactly as typed and never
+    translated; restoring the element brings the translated default back.
+
 ================================================================================
   13. GUI INTEGRATION
 ================================================================================
@@ -2372,22 +2566,65 @@
   14.5  Translation / i18n
   -----------------------------------------------------------------------
 
-    The library (libhobbycad) is intentionally translation-free.  All
-    user-visible strings use std::string, not tr().  This ensures the
-    library compiles and works identically with or without Qt.
+    The library holds no Qt, and it does hold text. The two are settled
+    by a seam: the library MARKS a string for extraction and hands it out
+    in English; a front end translates it at display time.
 
-    Translation is a GUI-only concern:
-      - All tr() calls are in src/hobbycad/ (the application)
-      - Translation files (.ts) live in resources/translations/
-      - CMake target: hobbycad_lupdate (Qt LinguistTools)
-      - Runtime loading via QTranslator in main.cpp
+      hobbycad/translate.h
+        HOBBYCAD_TRANSLATE_NOOP(context, text) and its NOOP3 form with a
+        disambiguation mark a literal where it stands (lupdate reads them
+        as QT_TRANSLATE_NOOP through -tr-function-alias).
+        translate(context, source, disambiguation) asks whatever
+        translator a front end installed with setTranslator(), and
+        returns the English source when none did. It carries no count, so
+        a %n plural must not reach it; library- and CLI-reachable text
+        uses an explicit count (%1).
 
-    One placeholder exists in the library:
+    The library marks about 570 strings under seven contexts, the largest
+    being hobbycad::Commands (every command's text, each carrying its
+    command id as the disambiguation), hobbycad::SketchCanvas,
+    hobbycad::Constraint and hobbycad::SketchEntity. A lookup key is
+    therefore (context, disambiguation, source) and all three matter: 24
+    groups of messages share a context and an English word and differ
+    only by the id, "Copy" the edit command against "Copy" the sketch
+    transform among them.
 
-      sketch/undo.h:  entityTypeDisplayName(EntityType)
-        Currently returns the plain English name (entityTypeName).
-        Documented as a future hook for tr() integration, but
-        not yet implemented.
+    Translated names come in pairs, and the difference is not cosmetic:
+      constraintTypeName()    the keyword a person types at the command
+                              line; must stay English
+      constraintDisplayName() the name shown, translated through
+                              constraintDisplayContext()
+      entityTypeName()        marked for extraction; translate it with
+                              entityTypeContext()
+      entityTypeDisplayName() that name, already translated through the
+                              seam
+
+    Two front ends, two translators:
+      - The Qt application installs one forwarding to
+        QCoreApplication::translate (src/hobbycad/cli_translator.cpp) and
+        loads .qm catalogs through QTranslator.
+      - The Qt-free command line has no Qt to ask, so scripts/ts2cpp.py
+        turns the .ts catalogs into one C++ translation unit compiled
+        into hobbycad-cli: a key table shared by every language, one
+        array of string literals per language, English as language 0
+        (its entries are the source strings), and a translator that
+        installs itself into the seam. Nothing is read at run time and
+        nothing new is installed on any platform. It is generated only
+        for a command-line-only build with no Qt in it
+        (HOBBYCAD_CLI_CATALOGS), never committed, and treats a catalog as
+        hostile input: every string leaves octal-escaped, XML that can
+        expand entities is refused, and size, count and length are
+        capped.
+
+    hobbycad/locale.h answers which language to use without Qt:
+    preferredLocales() reads HOBBYCAD_LANG, then LC_ALL, LC_MESSAGES and
+    LANG, then the platform (GetUserDefaultLocaleName() on Windows, which
+    sets none of those), and returns the names to try most specific
+    first ("pt_BR" before "pt"). normalizeLocale() spells a name the way
+    the catalogs do. Nothing here calls setlocale(): the numeric locale
+    decides how numbers print, and the command line's output is also a
+    script's input, so its numbers stay in the C locale whatever language
+    its messages are in.
 
   14.6  Cross-Platform Considerations
   -----------------------------------------------------------------------

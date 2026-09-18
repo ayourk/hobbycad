@@ -244,7 +244,8 @@ enum class AlignmentType {
 //  Entity Type Names
 // =====================================================================
 
-/// Get human-readable name for an entity type
+/// Get human-readable name for an entity type, in English; a front end
+/// translates it with entityTypeContext() (property_schema.h).
 HOBBYCAD_EXPORT const char* entityTypeName(EntityType type);
 
 /// Get localized/translated name for an entity type (uses QObject::tr)

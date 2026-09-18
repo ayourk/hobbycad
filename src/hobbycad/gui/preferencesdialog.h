@@ -44,6 +44,10 @@ private slots:
     void apply();
     void accept() override;
     void openBindingsDialog();
+    /// Open the one place the menus and toolbars are rearranged.
+    void openCustomizeDialog();
+    /// Give HobbyCAD's own menus, toolbars and keys back, after asking.
+    void restoreArrangement();
 
 private:
     void createPages();

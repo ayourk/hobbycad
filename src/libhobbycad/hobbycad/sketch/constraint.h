@@ -180,6 +180,15 @@ HOBBYCAD_EXPORT std::string constraintOperandError(
 /// Get human-readable name for constraint type
 HOBBYCAD_EXPORT const char* constraintTypeName(ConstraintType type);
 
+/// The name a front end shows for a constraint type, in English, for
+/// display after translation with constraintDisplayContext(). It differs
+/// from constraintTypeName(), which is also the command-line keyword
+/// ("Curvature (G2)" is shown where "Curvature" is typed).
+HOBBYCAD_EXPORT const char* constraintDisplayName(ConstraintType type);
+
+/// The translation context the display names are extracted under.
+HOBBYCAD_EXPORT const char* constraintDisplayContext();
+
 /// Parse a constraint type from a name, the inverse of
 /// constraintTypeName().
 ///

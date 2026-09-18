@@ -65,7 +65,6 @@ private:
     void setupUi();
     void refreshTable();
     double evaluateExpression(const QString& expr) const;
-    bool isValidParameterName(const QString& name) const;
     void showError(int row, int column, const QString& message);
     void clearError(int row, int column);
     void updateStatusLabel();

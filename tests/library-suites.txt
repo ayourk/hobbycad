@@ -18,16 +18,20 @@
 #
 #   browser         compiles the application's own widgets, which are Qt
 #                   and need moc output: it needs the GUI build.
+#   canvas          links the application's own object files (the sketch
+#                   canvas cannot be compiled apart from the GUI).
 #   drawconstrain   half of it (hints.cpp) compiles a GUI source and needs
 #                   Qt on the machine; its snapmap half does run here.
 #   groupglyph      renders a Qt glyph offscreen; Qt only, no library.
 #   theme           a header over QColor; Qt only, no library.
+catalog
 cli
 document
 dxf
 fit
 handleguard
 headers
+i18n
 naming
 opengl
 pager

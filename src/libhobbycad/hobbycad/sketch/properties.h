@@ -39,12 +39,15 @@ struct PropertyEdit {
 
 /// Set a numeric property: "radius", "diameter", "startAngle",
 /// "sweepAngle", "length", "width", "height", "sides", "majorRadius",
-/// "minorRadius", "fontSize", "textRotation". Lengths in millimeters,
-/// angles in degrees. Dependent geometry follows: an arc's endpoints
-/// resync from its angles, a circle rescales about its center, a text's
-/// rotation handle is recomputed. Length keeps the line's direction and
-/// first point; width and height move a rectangle's second corner on the
-/// side it already is.
+/// "minorRadius", "ellipseRotation", "ellipseStart", "ellipseSweep",
+/// "fontSize", "textRotation". Lengths in millimeters, angles in degrees.
+/// Dependent geometry follows: an arc's endpoints resync from its radius
+/// and angles, a circle rescales about its center, an ellipse's axis points
+/// follow its numbers, a text's rotation handle is recomputed. Length keeps
+/// the line's direction and first point; width and height move a
+/// rectangle's second corner on the side it already is; a slot's width is
+/// twice its radius. An ellipse edit reports the axis point it moved in
+/// editedPointIndex (1 for the major axis and rotation, 2 for the minor).
 HOBBYCAD_EXPORT PropertyEdit setEntityNumber(Entity& e, const std::string& property, double value);
 
 /// Move one of the entity's points.

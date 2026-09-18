@@ -15,6 +15,8 @@
 #ifndef HOBBYCAD_BINDINGSDIALOG_H
 #define HOBBYCAD_BINDINGSDIALOG_H
 
+#include <hobbycad/bindings.h>
+
 #include <QDialog>
 #include <QHash>
 #include <QString>
@@ -70,25 +72,32 @@ class BindingsDialog : public QDialog {
 public:
     explicit BindingsDialog(QWidget* parent = nullptr);
 
-    /// Load all bindings from QSettings.
+    /// Load all bindings: the defaults with the person's own applied
+    /// (ArrangementStore, arrangement.json).
     static QHash<QString, ActionBinding> loadBindings();
 
-    /// Save all bindings to QSettings.
+    /// Store the bindings that differ from the defaults, in the same file
+    /// as the rest of the person's arrangement.
     static void saveBindings(const QHash<QString, ActionBinding>& bindings);
 
     /// Get the default action definitions (built-in bindings).
     static QHash<QString, ActionBinding> defaultBindings();
 
-    /// Check if a binding conflicts with another action in the same context.
-    /// Returns the conflicting action ID, or empty string if no conflict.
-    /// Context-aware: "Global" conflicts with everything, same-context actions
-    /// conflict with each other, but different contexts (e.g., Sketch vs Design)
-    /// don't conflict since they're mutually exclusive modes.
+    /// The saved bindings as a table the library's rules work on.
+    static bindings::Table loadTable();
+
+    /// Any set of bindings as such a table.
+    static bindings::Table toTable(const QHash<QString, ActionBinding>& actions);
+
+    /// Check if a binding conflicts with another action heard in the same
+    /// place. Returns the conflicting action ID, or empty string if no
+    /// conflict. A global or window-wide key conflicts with everything; keys
+    /// heard by different views (the sketch canvas, the 3D view) do not.
     QString checkConflict(const QString& actionId,
                           const QString& binding) const;
 
-    /// Get the context for an action (extracted from actionId prefix).
-    /// e.g., "sketch.line" -> "sketch", "design.extrude" -> "design"
+    /// Get the binding context of an action: its command's context, or the
+    /// id's first component for an unknown id ("sketch.line" -> "sketch").
     static QString getActionContext(const QString& actionId);
 
 signals:

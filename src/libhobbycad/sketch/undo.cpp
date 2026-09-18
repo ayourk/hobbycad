@@ -3,6 +3,8 @@
 // =====================================================================
 
 #include <hobbycad/sketch/undo.h>
+#include <hobbycad/sketch/property_schema.h>
+#include <hobbycad/translate.h>
 
 #include <algorithm>
 #include <string>
@@ -288,27 +290,43 @@ void UndoStack::enforceMaxSize()
 
 const char* entityTypeName(EntityType type)
 {
+    // Marked for extraction; a front end translates the name with
+    // entityTypeContext() (property_schema.h).
     switch (type) {
-    case EntityType::Point:     return "Point";
-    case EntityType::Line:      return "Line";
-    case EntityType::Rectangle: return "Rectangle";
-    case EntityType::Parallelogram: return "Parallelogram";
-    case EntityType::Circle:    return "Circle";
-    case EntityType::Arc:       return "Arc";
-    case EntityType::Spline:    return "Spline";
-    case EntityType::Polygon:   return "Polygon";
-    case EntityType::Slot:      return "Slot";
-    case EntityType::Ellipse:   return "Ellipse";
-    case EntityType::Text:      return "Text";
-    case EntityType::Dimension: return "Dimension";
+    case EntityType::Point:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Point");
+    case EntityType::Line:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Line");
+    case EntityType::Rectangle:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Rectangle");
+    case EntityType::Parallelogram:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Parallelogram");
+    case EntityType::Circle:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Circle");
+    case EntityType::Arc:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Arc");
+    case EntityType::Spline:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Spline");
+    case EntityType::Polygon:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Polygon");
+    case EntityType::Slot:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Slot");
+    case EntityType::Ellipse:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Ellipse");
+    case EntityType::Text:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Text");
+    case EntityType::Dimension:
+        return HOBBYCAD_TRANSLATE_NOOP("hobbycad::SketchEntity", "Dimension");
     }
     return "Unknown";
 }
 
 std::string entityTypeDisplayName(EntityType type)
 {
-    // Without Qt translation support, just return the plain name
-    return entityTypeName(type);
+    // entityTypeName() marks the name for extraction; this hands it to
+    // whatever translator the front end installed (hobbycad/translate.h),
+    // and returns the English name when none did.
+    return hobbycad::translate(entityTypeContext(), entityTypeName(type));
 }
 
 }  // namespace sketch

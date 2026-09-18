@@ -26,6 +26,7 @@
 #include <vector>
 
 #include <hobbycad/project.h>
+#include <hobbycad/sketch/edit_session.h>
 #include <hobbycad/project_session.h>
 
 namespace hobbycad {
@@ -153,7 +154,7 @@ public:
     std::string currentSketchName() const;
 
 private:
-    CliResult cmdHelp() const;
+    CliResult cmdHelp(const std::vector<std::string>& args) const;
     CliResult cmdVersion() const;
     CliResult cmdNew(const std::vector<std::string>& args);
     /// Why "new" or "open" may not replace the project now, or empty when it
@@ -201,6 +202,8 @@ private:
                             int precision) const;
     CliResult cmdHistory(const std::vector<std::string>& args);
     CliResult cmdUndo(const std::vector<std::string>& args);
+    /// Undo or redo edits of the open sketch, for "undo" and "redo" inside it.
+    CliResult sketchUndoRedo(int count, bool redo);
     CliResult cmdRedo(const std::vector<std::string>& args);
     CliResult cmdSelect(const std::vector<std::string>& args);
     CliResult cmdCreate(const std::vector<std::string>& args);
@@ -279,6 +282,8 @@ private:
     CliResult cmdSweep(std::vector<std::string> args);
     CliResult cmdProject(std::vector<std::string> args);
     CliResult cmdPoints(std::vector<std::string> args);
+    /// "set [<id>] <property> <value>": one property of an entity.
+    CliResult cmdSet(std::vector<std::string> args);
     std::string sweepUsage() const;
 
     /// Lowest unused group id in the sketch being edited.
@@ -350,6 +355,16 @@ private:
     /// saving nothing. Everything entered in sketch mode accumulates here
     /// and is handed to the document on finish.
     hobbycad::SketchData m_pendingSketch;
+
+    /// The history of edits to m_pendingSketch, which "undo" and "redo"
+    /// walk while a sketch is open. Each command that edits the sketch is
+    /// recorded as what it changed (execute()). Cleared when a sketch is
+    /// created; outside a sketch nothing reads it.
+    hobbycad::sketch::EditSession m_sketchEdits;
+
+    /// True while execute() is running a sketch edit it will record, so the
+    /// nested call does not record it a second time.
+    bool m_recordingSketchEdit = false;
 
     /// Entity selected inside a sketch, or -1.
     ///

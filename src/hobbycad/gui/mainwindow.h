@@ -16,6 +16,7 @@
 #define HOBBYCAD_MAINWINDOW_H
 
 #include <functional>
+#include <hobbycad/bindings.h>
 #include <hobbycad/sketch/parsing.h>
 #include <hobbycad/document_host.h>
 #include <hobbycad/document_undo_host.h>
@@ -340,25 +341,9 @@ protected:
     void onSketchSelectionChanged(int entityId);
     void onSketchEntityCreated(int entityId);
     void showSketchEntityProperties(int entityId);
-    // Per-type geometry rows for showSketchEntityProperties.
-    void addLineGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addRectangleGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addCircleGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addArcGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addPolygonGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addSlotGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addEllipseGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addSplineGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
-    void addTextGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
-                            int entityId, const QString& units);
+    /// Geometry rows for showSketchEntityProperties.
+    void addGeometryRows(QTreeWidgetItem* geomHeader, const SketchEntity* entity,
+                         int entityId, const QString& units);
     void showSketchConstraintProperties(int constraintId);
     void showFeatureProperties(int index);
     void installDropdownEditor(QTreeWidget* propsTree);
@@ -664,6 +649,18 @@ private slots:
 
 private:
     void createMenus();
+    /// The action for a registry command, made on first use.
+    QAction* commandAction(const char* id);
+    /// The menu for an arrangement container, made on first use.
+    QMenu* commandMenu(const std::string& id);
+    /// Take the menus and toolbars down and build them again, after the
+    /// person changed the arrangement in the Customize dialog.
+    void rebuildArrangedUi();
+    /// Place every action in the menus the arrangement names.
+    void populateMenus();
+    /// Name every command action and menu in the current language, with
+    /// the keys bound to them.
+    void retranslateCommands();
     void createFileMenu();
     void createEditMenu();
     void createViewMenu();
@@ -673,6 +670,8 @@ private:
     void createSketchMenu();
     void createConstraintsMenu();
     void createLanguageMenu();
+    /// Open the Customize dialog, the one place the layout is rearranged.
+    void onCustomize();
     void createStatusBar();
     /// Reflect the sketch's constraint state in the status bar.
     void updateSketchStateLabel(hobbycad::sketch::SketchState state, int dof);
@@ -703,6 +702,14 @@ private:
     // Menus. Held as members because their titles change with the
     // language, and a local QAction* is enough right up until the text
     // has to be set a second time.
+    /// Command id (or menu container id) -> its action (or menu).
+    QHash<QString, QAction*> m_commandActions;
+    QHash<QString, QMenu*> m_commandMenus;
+    /// Registry radio group name -> the Qt group enforcing it.
+    QHash<QString, QActionGroup*> m_radioGroups;
+    /// The bindings last applied.
+    bindings::Table m_keyTable;
+
     QMenu* m_menuFile      = nullptr;
     QMenu* m_menuImport    = nullptr;
     QMenu* m_menuExport    = nullptr;
@@ -739,6 +746,7 @@ private:
     QAction* m_actionSelectAll = nullptr;
     QAction* m_actionAbout  = nullptr;
     QAction* m_actionPreferences = nullptr;
+    QAction* m_actionCustomize = nullptr;
     QAction* m_actionToggleTerminal = nullptr;
     QAction* m_actionToggleFeatureTree = nullptr;
     QAction* m_actionToggleProperties = nullptr;

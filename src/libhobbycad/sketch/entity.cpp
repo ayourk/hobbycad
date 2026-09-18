@@ -1043,6 +1043,48 @@ Entity createArcSlot(int id, const Point2D& arcCenter, const Point2D& start,
     return e;
 }
 
+std::vector<Point2D> arcSlotOutline(const Entity& slot, int arcSegments, int capSegments)
+{
+    std::vector<Point2D> out;
+    if (slot.points.size() < 3) return out;
+    const Point2D center = slot.points[0];
+    const Point2D start = slot.points[1];
+    const Point2D end = slot.points[2];
+    const double pathRadius = geometry::lineLength(center, start);
+    const double halfWidth = slot.radius;
+    if (!slotWidthIsPositive(2.0 * halfWidth)
+        || !geometry::isPositiveLength(pathRadius - halfWidth)
+        || !geometry::isPositiveLength(geometry::lineLength(center, end))) {
+        return out;
+    }
+    arcSegments = std::max(arcSegments, 1);
+    capSegments = std::max(capSegments, 1);
+
+    // The end is read on the arc the start sets, as the renderer does.
+    const double startDeg = radiansToDegrees(std::atan2(start.y - center.y, start.x - center.x));
+    const double endDeg = radiansToDegrees(std::atan2(end.y - center.y, end.x - center.x));
+    double sweep = geometry::wrapSweepDeg(endDeg - startDeg);
+    if (slot.arcFlipped) sweep = geometry::oppositeSweepDeg(sweep);
+    // Each cap turns the way the slot does, round the outside of its end.
+    const double cap = sweep >= 0.0 ? 180.0 : -180.0;
+
+    const auto arc = [&out](const Point2D& c, double r, double fromDeg, double sweepDeg,
+                            int segments, bool first) {
+        for (int i = first ? 0 : 1; i <= segments; ++i) {
+            out.push_back(geometry::polarPoint(
+                c, r, degreesToRadians(fromDeg + sweepDeg * i / segments)));
+        }
+    };
+    const double endAt = startDeg + sweep;
+    const Point2D endCenter = geometry::polarPoint(center, pathRadius, degreesToRadians(endAt));
+    arc(center, pathRadius + halfWidth, startDeg, sweep, arcSegments, true);   // outer edge
+    arc(endCenter, halfWidth, endAt, cap, capSegments, false);                  // end cap
+    arc(center, pathRadius - halfWidth, endAt, -sweep, arcSegments, false);    // inner edge
+    arc(start, halfWidth, startDeg + 180.0, cap, capSegments, false);           // start cap
+    out.back() = out.front();   // the start cap ends where the outer edge began
+    return out;
+}
+
 Entity createEllipse(int id, const Point2D& center, double majorRadius, double minorRadius,
                      double rotationDeg)
 {

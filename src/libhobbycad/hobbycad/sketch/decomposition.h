@@ -18,6 +18,7 @@
 #include "../core.h"
 #include "entity.h"
 #include "constraint.h"
+#include "dimension_field.h"
 #include "group.h"
 #include "solver.h"
 
@@ -52,7 +53,7 @@ struct DecompositionResult {
 /// the entities/constraints/group into its own data structures.
 ///
 /// @param compound       The compound entity to decompose
-/// @param lockedDims     Locked dimension fields (label -> value) for constraint creation
+/// @param lockedDims     Locked dimension fields (field -> value) for constraint creation
 /// @param nextEntityId   Callable returning the next unique entity ID
 /// @param nextConstraintId Callable returning the next unique constraint ID
 /// @param groupId        The group ID to assign
@@ -61,7 +62,7 @@ struct DecompositionResult {
 /// @param isFreeform     For Polygon: true = freeform (no construction circle, no Equal)
 HOBBYCAD_EXPORT DecompositionResult decomposeEntity(
     const Entity& compound,
-    const std::vector<std::pair<std::string, double>>& lockedDims,
+    const LockedDims& lockedDims,
     std::function<int()> nextEntityId,
     std::function<int()> nextConstraintId,
     int groupId,

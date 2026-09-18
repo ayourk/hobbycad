@@ -335,14 +335,11 @@ void ConstructionPlaneDialog::updatePreviewText()
         auto basePlane = static_cast<SketchPlane>(m_basePlaneCombo->currentData().toInt());
         double offset = m_originOffsetSpin->value();
 
-        QString planeName;
-        QString axisName;
-        switch (basePlane) {
-        case SketchPlane::XY: planeName = QStringLiteral("XY"); axisName = QStringLiteral("Z"); break;
-        case SketchPlane::XZ: planeName = QStringLiteral("XZ"); axisName = QStringLiteral("Y"); break;
-        case SketchPlane::YZ: planeName = QStringLiteral("YZ"); axisName = QStringLiteral("X"); break;
-        default: planeName = QStringLiteral("XY"); axisName = QStringLiteral("Z"); break;
-        }
+        // Axis names from the library (planeAxisLabels); only the three
+        // origin planes are offered here.
+        const PlaneAxisLabels ax = planeAxisLabels(basePlane);
+        const QString planeName = QLatin1String(ax.u) + QLatin1String(ax.v);
+        const QString axisName = QLatin1String(ax.normal);
 
         if (qFuzzyIsNull(offset)) {
             text = tr("Plane parallel to %1 origin plane at %2 = 0")

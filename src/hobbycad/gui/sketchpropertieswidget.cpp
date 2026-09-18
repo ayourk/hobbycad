@@ -7,10 +7,12 @@
 // =====================================================================
 
 #include "sketchpropertieswidget.h"
+#include "propertyrow.h"
 #include <hobbycad/sketch/undo.h>
 #include <hobbycad/units.h>
 #include <hobbycad/geometry/utils.h>
 #include <hobbycad/project.h>
+#include <QCoreApplication>
 #include <QLineF>
 #include <QTimer>
 #include <QShortcut>
@@ -689,18 +691,11 @@ void SketchPropertiesWidget::updateForSelection()
     if (constraintId >= 0) {
         const SketchConstraint* c = m_canvas->constraintById(constraintId);
         if (c) {
-            // Show constraint type
-            static const char* typeNames[] = {
-                "Distance", "Radius", "Diameter", "Angle", "Fixed Angle",
-                "Horizontal", "Vertical", "Parallel", "Perpendicular",
-                "Coincident", "Tangent", "Equal", "Midpoint", "Symmetric",
-                "Concentric", "Collinear", "Fixed"
-            };
-            int typeIdx = static_cast<int>(c->type);
-            if (typeIdx >= 0 && typeIdx < static_cast<int>(std::size(typeNames)))
-                m_constraintTypeLabel->setText(tr(typeNames[typeIdx]));
-            else
-                m_constraintTypeLabel->setText(QString::number(typeIdx));
+            // Show constraint type. The name comes from the library by type;
+            // a hand list indexed by the enum's value drifted out of step with
+            // it and showed "Fixed Angle" for Horizontal.
+            m_constraintTypeLabel->setText(QCoreApplication::translate(
+                sketch::constraintDisplayContext(), sketch::constraintDisplayName(c->type)));
 
             m_constraintValueLabel->setText(QString::number(c->value, 'f', 4));
             m_constraintDrivingLabel->setText(c->isDriving ? tr("Yes") : tr("No"));
@@ -738,7 +733,7 @@ void SketchPropertiesWidget::updateForSelection()
         const bool isConic = ent->type == SketchEntityType::Spline && ent->conicRho > 0.0;
         m_entityTypeLabel->setText(isConic
             ? tr("Conic arc, %1").arg(conicKindText(ent->conicRho))
-            : tr(sketch::entityTypeName(ent->type)));   // one table, in the library
+            : entityTypeText(ent->type));   // one table, in the library
 
         m_entityIdLabel->setText(QString::number(ent->id));
         m_entityConstructionLabel->setText(ent->isConstruction ? tr("Yes") : tr("No"));
@@ -756,33 +751,15 @@ void SketchPropertiesWidget::updateForSelection()
             m_coordWLabel->setText(QStringLiteral("%1:").arg(ax.normal));
             // A projection is driven by its source; do not let the panel edit it.
             m_coordEntityId = projected ? -1 : ent->id;
-            // Populate the point selector with role-aware labels where known.
-            const int npts = static_cast<int>(ent->points.size());
-            QStringList roles;
-            switch (ent->type) {
-            case SketchEntityType::Line: roles = {tr("Start"), tr("End")}; break;
-            case SketchEntityType::Arc:  roles = {tr("Center"), tr("Start"), tr("End")}; break;
-            case SketchEntityType::Circle: roles = {tr("Center")}; break;
-            // An ellipse's axes are real points now, so name them rather
-            // than leaving the selector saying "Point 2" and "Point 3".
-            case SketchEntityType::Ellipse:
-                roles = {tr("Center"), tr("Major axis"), tr("Minor axis")}; break;
-            // A conic's inner control points are set by rho and the apex,
-            // so they are named for what they are and not offered for edit
-            // (loadCoordSpinsFromPoint dims their spins).
-            case SketchEntityType::Spline:
-                if (isConic) {
-                    roles = {tr("Start"), tr("Handle (derived)"), tr("Handle (derived)"),
-                             tr("End")};
-                }
-                break;
-            default: break;
-            }
+            // The point selector names each point for what it is (Start,
+            // Major axis, ...), from the library. A conic's inner control
+            // points are set by rho and the apex, so loadCoordSpinsFromPoint
+            // dims their spins.
+            const std::vector<sketch::FieldLabel> names = sketch::pointLabels(*ent);
             m_updatingUi = true;
             m_coordPointCombo->clear();
-            for (int i = 0; i < npts; ++i)
-                m_coordPointCombo->addItem(i < roles.size() ? roles.at(i)
-                                                            : tr("Point %1").arg(i + 1));
+            for (const sketch::FieldLabel& name : names)
+                m_coordPointCombo->addItem(propertyLabelText(name));
             m_coordPointCombo->setCurrentIndex(0);
             m_updatingUi = false;
             m_coordPointIndex = 0;
@@ -1574,26 +1551,45 @@ void SketchPropertiesWidget::setupTransformSection()
 
 void SketchPropertiesWidget::updateTransformRows()
 {
-    const auto type = static_cast<MoveType>(m_moveType->currentIndex());
-    auto show = [](const QList<QWidget*>& ws, bool on) { for (auto* w : ws) w->setVisible(on); };
-    show(m_rowsTranslate, type == MoveType::Translate);
-    show(m_rowsRotate, type == MoveType::Rotate);
-    show(m_rowsScale, type == MoveType::Scale);
-    show(m_rowsMirror, type == MoveType::Mirror);
-    show(m_rowsMirrorLine, type == MoveType::Mirror && m_mirrorAxis->currentIndex() == 2);
-    show(m_rowsP2P, type == MoveType::PointToPoint);
-    show(m_rowsP2Pos, type == MoveType::PointToPosition);
-    const bool relTarget = m_targetMode->currentIndex() == 1;
-    show(m_rowsP2PosRef, type == MoveType::PointToPosition && relTarget);
-    m_targetXLabel->setText(relTarget ? tr("Offset X:") : tr("Target X:"));
-    m_targetYLabel->setText(relTarget ? tr("Offset Y:") : tr("Target Y:"));
-    show(m_rowsFreeMove, type == MoveType::FreeMove);
+    using Row = sketch::TransformFormRow;
+    const sketch::TransformForm form = transformForm();
     const bool wholeGroup = m_canvas && m_canvas->selectedWholeGroupId() >= 0;
-    const bool pivotMatters = type == MoveType::Rotate || type == MoveType::Scale
-                           || (type == MoveType::Mirror && m_mirrorAxis->currentIndex() != 2) || type == MoveType::FreeMove;
-    show(m_rowsPivot, pivotMatters || wholeGroup);
+    const auto show = [&form, wholeGroup](const QList<QWidget*>& ws, Row row) {
+        const bool on = form.shows(row, wholeGroup);
+        for (auto* w : ws) w->setVisible(on);
+    };
+    show(m_rowsTranslate, Row::Translate);
+    show(m_rowsRotate, Row::Rotate);
+    show(m_rowsScale, Row::Scale);
+    show(m_rowsMirror, Row::Mirror);
+    show(m_rowsMirrorLine, Row::MirrorLine);
+    show(m_rowsP2P, Row::PointToPoint);
+    show(m_rowsP2Pos, Row::PointToPosition);
+    show(m_rowsP2PosRef, Row::Reference);
+    m_targetXLabel->setText(form.relativeTarget ? tr("Offset X:") : tr("Target X:"));
+    m_targetYLabel->setText(form.relativeTarget ? tr("Offset Y:") : tr("Target Y:"));
+    show(m_rowsFreeMove, Row::FreeMove);
+    show(m_rowsPivot, Row::Pivot);
     if (m_canvas) m_canvas->setTransformGlyph(m_transformGroup->isChecked() && m_transformGroup->isVisible(),
-                                             type == MoveType::Rotate || type == MoveType::FreeMove);
+                                             form.turns());
+}
+
+sketch::TransformForm SketchPropertiesWidget::transformForm() const
+{
+    sketch::TransformForm f = m_form;
+    // The combo boxes list the library's enumerators in order.
+    f.type = static_cast<sketch::MoveType>(m_moveType->currentIndex());
+    f.mirrorAxis = static_cast<sketch::MirrorAxis>(m_mirrorAxis->currentIndex());
+    f.relativeTarget = m_targetMode->currentIndex() == 1;
+    f.translate = {m_txDx->value(), m_txDy->value()};
+    f.angle = m_rotAngle->value();
+    f.factor = m_scaleFactor->value();
+    f.target = {m_targetX->value(), m_targetY->value()};
+    f.freeMove = {m_fmDx->value(), m_fmDy->value()};
+    f.freeMoveAngle = m_fmAngle->value();
+    f.pivot = {m_pivotX->value(), m_pivotY->value()};
+    f.copy = m_createCopy->isChecked();
+    return f;
 }
 
 void SketchPropertiesWidget::resetTransformForm()
@@ -1602,12 +1598,12 @@ void SketchPropertiesWidget::resetTransformForm()
     m_updatingUi = true;
     m_txDx->setValue(0); m_txDy->setValue(0); m_rotAngle->setValue(0); m_scaleFactor->setValue(1.0);
     m_fmDx->setValue(0); m_fmDy->setValue(0); m_fmAngle->setValue(0);
-    m_haveFrom = m_haveTo = m_havePicked = m_haveMirrorA = m_haveMirrorB = m_haveRef = false;
     for (auto* l : {m_fromLabel, m_toLabel, m_pickedLabel, m_mirrorALabel, m_mirrorBLabel, m_refLabel}) l->setText(tr("Not set"));
     m_targetMode->setCurrentIndex(0);
     m_deltaLabel->setText(QStringLiteral("—"));
     for (auto* b : {m_pickFrom, m_pickTo, m_pickPoint, m_pickMirrorA, m_pickMirrorB, m_pickRef, m_setPivotBtn}) b->setChecked(false);
     const QPointF pv = m_canvas->transformPivot();
+    m_form.reset(pv);
     m_pivotX->setValue(pv.x()); m_pivotY->setValue(pv.y());
     const int gid = m_canvas->selectedWholeGroupId();
     m_pivotSourceLabel->setText(gid < 0 ? tr("transient (no group)")
@@ -1615,7 +1611,7 @@ void SketchPropertiesWidget::resetTransformForm()
     m_transformStatus->clear();
     m_updatingUi = false;
     updateTransformRows();
-    if (m_transformGroup->isChecked() && static_cast<MoveType>(m_moveType->currentIndex()) == MoveType::FreeMove)
+    if (m_transformGroup->isChecked() && transformForm().type == sketch::MoveType::FreeMove)
         m_canvas->beginTransformPick(SketchCanvas::TransformPick::FreeMove);
 }
 
@@ -1635,42 +1631,13 @@ void SketchPropertiesWidget::onMoveTypeChanged(int)
 
 bool SketchPropertiesWidget::currentTransformParams(sketch::GroupTransformParams& p, QString* whyNot) const
 {
-    const auto type = static_cast<MoveType>(m_moveType->currentIndex());
-    const Point2D pivot{m_pivotX->value(), m_pivotY->value()};
-    p = sketch::GroupTransformParams{};
-    switch (type) {
-    case MoveType::Translate:
-        p.kind = sketch::GroupTransformKind::Translate; p.delta = {m_txDx->value(), m_txDy->value()}; break;
-    case MoveType::Rotate:
-        p.kind = sketch::GroupTransformKind::Rotate; p.angleDeg = m_rotAngle->value(); p.centerGiven = true; p.center = pivot; break;
-    case MoveType::Scale:
-        p.kind = sketch::GroupTransformKind::Scale; p.factor = m_scaleFactor->value(); p.centerGiven = true; p.center = pivot; break;
-    case MoveType::Mirror:
-        p.kind = sketch::GroupTransformKind::Mirror; p.centerGiven = true; p.center = pivot;
-        if (m_mirrorAxis->currentIndex() == 2) {
-            if (!(m_haveMirrorA && m_haveMirrorB)) { if (whyNot) *whyNot = tr("pick both points of the mirror line"); return false; }
-            p.mirrorLineGiven = true; p.mirrorA = {m_mirrorAPt.x(), m_mirrorAPt.y()}; p.mirrorB = {m_mirrorBPt.x(), m_mirrorBPt.y()};
-        } else {
-            p.mirrorAcrossHorizontal = (m_mirrorAxis->currentIndex() == 0);
-        }
-        break;
-    case MoveType::PointToPoint:
-        if (!(m_haveFrom && m_haveTo)) { if (whyNot) *whyNot = tr("pick the from-point and the to-point"); return false; }
-        p.kind = sketch::GroupTransformKind::Translate; p.delta = {m_toPt.x() - m_fromPt.x(), m_toPt.y() - m_fromPt.y()}; break;
-    case MoveType::PointToPosition: {
-        if (!m_havePicked) { if (whyNot) *whyNot = tr("pick the point on the selection that should land on the target"); return false; }
-        QPointF target(m_targetX->value(), m_targetY->value());
-        if (m_targetMode->currentIndex() == 1) {
-            if (!m_haveRef) { if (whyNot) *whyNot = tr("pick the reference point the offset is measured from"); return false; }
-            target += m_refPt;
-        }
-        p.kind = sketch::GroupTransformKind::Translate; p.delta = {target.x() - m_pickedPt.x(), target.y() - m_pickedPt.y()}; break;
+    const sketch::TransformFormNeed need = transformForm().params(p);
+    if (need == sketch::TransformFormNeed::None) return true;
+    if (whyNot) {
+        *whyNot = QCoreApplication::translate("hobbycad::SketchPropertiesWidget",
+                                              sketch::transformFormNeedText(need));
     }
-    case MoveType::FreeMove:
-        p.kind = sketch::GroupTransformKind::Rotate; p.angleDeg = m_fmAngle->value(); p.centerGiven = true; p.center = pivot;
-        p.delta = {m_fmDx->value(), m_fmDy->value()}; break;
-    }
-    return true;
+    return false;
 }
 
 void SketchPropertiesWidget::showTransformStatus(const QString& text, bool isError)
@@ -1746,39 +1713,47 @@ void SketchPropertiesWidget::onCanvasPivotChanged(const QPointF& world, bool sto
 void SketchPropertiesWidget::onCanvasPickCompleted(int pick, const QPointF& world)
 {
     using P = SketchCanvas::TransformPick;
-    switch (static_cast<P>(pick)) {
-    case P::FromPoint:
-        m_fromPt = world; m_haveFrom = true; m_fromLabel->setText(pointText(world)); m_pickFrom->setChecked(false);
-        if (!m_haveTo) { m_pickTo->setChecked(true); m_canvas->beginTransformPick(P::ToPoint); }
-        break;
-    case P::ToPoint:
-        m_toPt = world; m_haveTo = true; m_toLabel->setText(pointText(world)); m_pickTo->setChecked(false); break;
-    case P::PointOnSelection: {
-        m_pickedPt = world; m_havePicked = true; m_pickPoint->setChecked(false);
+    using T = sketch::TransformPoint;
+    struct PickRow { P pick; T point; QPushButton* button; QLabel* label; };
+    const PickRow rows[] = {
+        {P::FromPoint, T::From, m_pickFrom, m_fromLabel},
+        {P::ToPoint, T::To, m_pickTo, m_toLabel},
+        {P::PointOnSelection, T::OnSelection, m_pickPoint, m_pickedLabel},
+        {P::MirrorA, T::MirrorA, m_pickMirrorA, m_mirrorALabel},
+        {P::MirrorB, T::MirrorB, m_pickMirrorB, m_mirrorBLabel},
+        {P::ReferencePoint, T::Reference, m_pickRef, m_refLabel},
+    };
+    const PickRow* done = nullptr;
+    for (const PickRow& s : rows) {
+        if (s.pick == static_cast<P>(pick)) done = &s;
+    }
+    if (!done) return;
+
+    sketch::TransformForm form = transformForm();
+    const std::optional<T> next = form.picked(done->point, world);
+    m_form = form;
+    done->button->setChecked(false);
+    QString text = pointText(world);
+    if (done->point == T::OnSelection) {
         bool onSel = false;
         for (const SketchEntity* e : m_canvas->selectedEntities())
             for (const auto& q : e->points) if (QLineF(QPointF(q.x, q.y), world).length() < geometry::kDegenerateLen) onSel = true;
-        m_pickedLabel->setText(pointText(world) + (onSel ? QString() : tr(" (not on selection)")));
-        m_updatingUi = true; m_targetX->setValue(world.x()); m_targetY->setValue(world.y()); m_updatingUi = false;
-        break;
+        if (!onSel) text += tr(" (not on selection)");
     }
-    case P::MirrorA:
-        m_mirrorAPt = world; m_haveMirrorA = true; m_mirrorALabel->setText(pointText(world)); m_pickMirrorA->setChecked(false);
-        if (!m_haveMirrorB) { m_pickMirrorB->setChecked(true); m_canvas->beginTransformPick(P::MirrorB); }
-        break;
-    case P::MirrorB:
-        m_mirrorBPt = world; m_haveMirrorB = true; m_mirrorBLabel->setText(pointText(world)); m_pickMirrorB->setChecked(false); break;
-    case P::ReferencePoint:
-        m_refPt = world; m_haveRef = true; m_refLabel->setText(pointText(world)); m_pickRef->setChecked(false);
-        if (m_havePicked) {   // offsets start at "where it is now", relative to the reference
-            m_updatingUi = true;
-            m_targetX->setValue(m_pickedPt.x() - world.x()); m_targetY->setValue(m_pickedPt.y() - world.y());
-            m_updatingUi = false;
+    done->label->setText(text);
+    // Picking the point, or the reference, starts the target where the
+    // point is now.
+    m_updatingUi = true;
+    m_targetX->setValue(form.target.x); m_targetY->setValue(form.target.y);
+    m_updatingUi = false;
+    if (next) {
+        for (const PickRow& s : rows) {
+            if (s.point != *next) continue;
+            s.button->setChecked(true);
+            m_canvas->beginTransformPick(s.pick);
         }
-        break;
-    default: break;
     }
-    if (m_haveFrom && m_haveTo) m_deltaLabel->setText(pointText(m_toPt - m_fromPt));
+    if (const auto step = form.step()) m_deltaLabel->setText(pointText(QPointF(*step)));
     refreshTransformPreview();
 }
 
@@ -1797,7 +1772,8 @@ void SketchPropertiesWidget::onCanvasTransformCanceled()
     m_fmDx->setValue(0); m_fmDy->setValue(0); m_fmAngle->setValue(0);
     m_updatingUi = false;
     showTransformStatus(tr("Canceled; selection kept."), false);
-    if (m_canvas && m_transformGroup->isChecked() && static_cast<MoveType>(m_moveType->currentIndex()) == MoveType::FreeMove)
+    if (m_canvas && m_transformGroup->isChecked()
+        && transformForm().type == sketch::MoveType::FreeMove)
         m_canvas->beginTransformPick(SketchCanvas::TransformPick::FreeMove);
 }
 
@@ -1822,20 +1798,19 @@ void SketchPropertiesWidget::onTransformSectionRequested(int transformType)
     m_transformGroup->setVisible(true);
     m_transformGroup->setChecked(true);
     m_updatingUi = true;
-    switch (static_cast<sketch::TransformType>(transformType)) {
-    case sketch::TransformType::Move:   m_moveType->setCurrentIndex(int(MoveType::Translate)); m_createCopy->setChecked(false); break;
-    case sketch::TransformType::Copy:   m_moveType->setCurrentIndex(int(MoveType::Translate)); m_createCopy->setChecked(true); break;
-    case sketch::TransformType::Rotate: m_moveType->setCurrentIndex(int(MoveType::Rotate)); break;
-    case sketch::TransformType::Scale:  m_moveType->setCurrentIndex(int(MoveType::Scale)); break;
-    case sketch::TransformType::Mirror: m_moveType->setCurrentIndex(int(MoveType::Mirror)); break;
-    }
+    const auto command = static_cast<sketch::TransformType>(transformType);
+    const sketch::TransformForm opened = sketch::TransformForm::forCommand(command);
+    m_moveType->setCurrentIndex(static_cast<int>(opened.type));
+    // Only Move and Copy say whether a copy is made; the others keep the box.
+    if (command == sketch::TransformType::Move || command == sketch::TransformType::Copy)
+        m_createCopy->setChecked(opened.copy);
     m_updatingUi = false;
     resetTransformForm();
     QWidget* first = nullptr;
-    switch (static_cast<MoveType>(m_moveType->currentIndex())) {
-    case MoveType::Translate: first = m_txDx; break;
-    case MoveType::Rotate: first = m_rotAngle; break;
-    case MoveType::Scale: first = m_scaleFactor; break;
+    switch (opened.type) {
+    case sketch::MoveType::Translate: first = m_txDx; break;
+    case sketch::MoveType::Rotate: first = m_rotAngle; break;
+    case sketch::MoveType::Scale: first = m_scaleFactor; break;
     default: first = m_moveType; break;
     }
     if (first) { first->setFocus(); if (auto* sb = qobject_cast<QDoubleSpinBox*>(first)) sb->selectAll(); }
@@ -1850,11 +1825,12 @@ void SketchPropertiesWidget::applyTransform()
     const auto res = m_canvas->applyTransform(p, copy);
     if (!res.applied) { showTransformStatus(tr("Not applied: %1.").arg(QString::fromStdString(res.refusal)), true); return; }
     QStringList notes; for (const auto& n : res.notes) notes << QString::fromStdString(n);
-    const auto type = static_cast<MoveType>(m_moveType->currentIndex());
+    const sketch::MoveType type = transformForm().type;
     resetTransformForm();
     showTransformStatus(tr("Applied%1%2").arg(copy ? tr(" to a copy") : QString())
                             .arg(notes.isEmpty() ? QStringLiteral(".") : QStringLiteral(": ") + notes.join(QStringLiteral("; "))), false);
-    if (type == MoveType::FreeMove) m_canvas->beginTransformPick(SketchCanvas::TransformPick::FreeMove);
+    if (type == sketch::MoveType::FreeMove)
+        m_canvas->beginTransformPick(SketchCanvas::TransformPick::FreeMove);
 }
 
 }  // namespace hobbycad

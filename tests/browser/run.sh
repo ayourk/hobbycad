@@ -57,12 +57,25 @@ for src in "$(dirname "$0")"/*.cpp; do
             EXTRA_SRC="$ROOT/src/hobbycad/gui/parametersdialog.cpp $AUTOGEN/moc_parametersdialog.cpp" ;;
         bgimagedialog_smoke)
             EXTRA_SRC="$ROOT/src/hobbycad/gui/backgroundimagedialog.cpp $AUTOGEN/moc_backgroundimagedialog.cpp" ;;
+        toolbar_smoke)
+            EXTRA_SRC="$ROOT/src/hobbycad/gui/arrangedtoolbar.cpp $AUTOGEN/moc_arrangedtoolbar.cpp \
+                       $ROOT/src/hobbycad/gui/arrangementstore.cpp \
+                       $AUTOGEN/moc_arrangementstore.cpp \
+                       $ROOT/src/hobbycad/gui/sketchtoolbar.cpp $AUTOGEN/moc_sketchtoolbar.cpp \
+                       $ROOT/src/hobbycad/gui/modeltoolbar.cpp $AUTOGEN/moc_modeltoolbar.cpp \
+                       $ROOT/src/hobbycad/gui/toolbarbutton.cpp $AUTOGEN/moc_toolbarbutton.cpp \
+                       $ROOT/src/hobbycad/gui/toolbardropdown.cpp $AUTOGEN/moc_toolbardropdown.cpp \
+                       $ROOT/src/hobbycad/gui/commandtext.cpp" ;;
         formulaedit_smoke)
             EXTRA_SRC="$ROOT/src/hobbycad/gui/formulaedit.cpp $AUTOGEN/moc_formulaedit.cpp" ;;
         prefsdialog_smoke)
             EXTRA_SRC="$ROOT/src/hobbycad/gui/preferencesdialog.cpp $AUTOGEN/moc_preferencesdialog.cpp \
                        $ROOT/src/hobbycad/gui/bindingsdialog.cpp $AUTOGEN/moc_bindingsdialog.cpp \
-                       $ROOT/src/hobbycad/gui/bindingeditrow.cpp $AUTOGEN/moc_bindingeditrow.cpp" ;;
+                       $ROOT/src/hobbycad/gui/customizedialog.cpp $AUTOGEN/moc_customizedialog.cpp \
+                       $ROOT/src/hobbycad/gui/arrangementstore.cpp \
+                       $AUTOGEN/moc_arrangementstore.cpp \
+                       $ROOT/src/hobbycad/gui/bindingeditrow.cpp $AUTOGEN/moc_bindingeditrow.cpp \
+                       $ROOT/src/hobbycad/gui/commandtext.cpp" ;;
         clipager_smoke)
             # cli_translator.cpp comes along because the command layer is
             # Qt-free now: the panel installs it so CLI messages are still

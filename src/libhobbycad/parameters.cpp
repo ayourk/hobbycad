@@ -1428,18 +1428,43 @@ std::vector<std::string> ParameterEngine::circularDependencyChain() const
 
 bool ParameterEngine::isValidName(const std::string& name)
 {
+    return checkName(name).problem == NameProblem::None;
+}
+
+NameCheck ParameterEngine::checkName(const std::string& name)
+{
+    // The whole UTF-8 sequence starting at `i`, so a refused character is
+    // reported as the user typed it.
+    const auto characterAt = [&name](size_t i) {
+        const unsigned char lead = static_cast<unsigned char>(name[i]);
+        size_t len = 1;
+        if (lead >= 0xF0) len = 4;
+        else if (lead >= 0xE0) len = 3;
+        else if (lead >= 0xC0) len = 2;
+        return name.substr(i, len);
+    };
+    const auto refuse = [](NameProblem problem, std::string character = {}) {
+        NameCheck check;
+        check.problem = problem;
+        check.character = std::move(character);
+        return check;
+    };
+
     if (name.empty())
-        return false;
+        return refuse(NameProblem::Empty);
 
     // Must start with letter or underscore
-    if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_')
-        return false;
+    const unsigned char first = static_cast<unsigned char>(name[0]);
+    if (std::isdigit(first))
+        return refuse(NameProblem::StartsWithDigit);
+    if (first >= 0x80 || (!std::isalpha(first) && first != '_'))
+        return refuse(NameProblem::BadStart, characterAt(0));
 
     // Must contain only alphanumeric and underscore
     for (size_t i = 1; i < name.length(); ++i) {
-        char c = name[i];
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_')
-            return false;
+        const unsigned char c = static_cast<unsigned char>(name[i]);
+        if (c >= 0x80 || (!std::isalnum(c) && c != '_'))
+            return refuse(NameProblem::BadCharacter, characterAt(i));
     }
 
     // Cannot be a reserved word
@@ -1455,7 +1480,9 @@ bool ParameterEngine::isValidName(const std::string& name)
 
     std::string lower = name;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    return reserved.find(lower) == reserved.end();
+    if (reserved.find(lower) != reserved.end())
+        return refuse(NameProblem::Reserved);
+    return NameCheck{};
 }
 
 bool ParameterEngine::isValidSyntax(const std::string& expression, std::string* errorMsg) const

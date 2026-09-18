@@ -21,7 +21,7 @@
 #include <QUrl>
 #include <QProcess>
 #include <QFile>
-#include <QTextStream>
+#include <QSaveFile>
 #include <QDir>
 #include <QFileInfo>
 #include <QMimeData>
@@ -32,6 +32,16 @@
 #include <QToolButton>
 
 namespace hobbycad {
+
+namespace {
+
+QString statusText(ProjectFileStatus status)
+{
+    return QCoreApplication::translate("hobbycad::ProjectBrowserWidget",
+                                       projectFileStatusText(status));
+}
+
+}  // namespace
 
 // =====================================================================
 //  ProjectFileModel
@@ -55,7 +65,7 @@ void ProjectFileModel::setCadFiles(const QStringList& files)
 {
     m_cadFiles.clear();
     for (const QString& file : files) {
-        m_cadFiles.insert(file);
+        m_cadFiles.insert(file.toStdString());
     }
 }
 
@@ -64,16 +74,13 @@ void ProjectFileModel::setForeignFiles(const QVector<ForeignFileEntry>& files)
     m_foreignFiles.clear();
     m_foreignFileEntries = files;
     for (const ForeignFileEntry& entry : files) {
-        m_foreignFiles.insert(entry.path);
+        m_foreignFiles.push_back(entry.path.toStdString());
     }
 }
 
-void ProjectFileModel::setGitIgnoredFiles(const QStringList& files)
+void ProjectFileModel::setGitIgnore(const GitIgnore& gitIgnore)
 {
-    m_gitIgnoredFiles.clear();
-    for (const QString& file : files) {
-        m_gitIgnoredFiles.insert(file);
-    }
+    m_gitIgnore = gitIgnore;
 }
 
 void ProjectFileModel::refresh()
@@ -102,59 +109,26 @@ QString ProjectFileModel::relativePath(const QModelIndex& index) const
     return QString();
 }
 
-ProjectFileStatus ProjectFileModel::fileStatus(const QString& relativePath) const
+ProjectFileStatus ProjectFileModel::fileStatus(const QString& relativePath,
+                                               bool isDirectory) const
 {
-    if (relativePath.isEmpty()) {
-        return ProjectFileStatus::Untracked;
-    }
-
-    // Check if it's a CAD file (in manifest)
-    if (m_cadFiles.contains(relativePath)) {
-        return ProjectFileStatus::CadFile;
-    }
-
-    // Check if it's a foreign file
-    if (m_foreignFiles.contains(relativePath)) {
-        return ProjectFileStatus::ForeignFile;
-    }
-
-    // Check parent directories for foreign files (e.g., "docs/" matches "docs/readme.txt")
-    for (const QString& foreign : m_foreignFiles) {
-        if (foreign.endsWith(QLatin1Char('/')) && relativePath.startsWith(foreign)) {
-            return ProjectFileStatus::ForeignFile;
-        }
-    }
-
-    // Check git ignore
-    if (m_gitIgnoredFiles.contains(relativePath)) {
-        return ProjectFileStatus::GitIgnored;
-    }
-
-    return ProjectFileStatus::Untracked;
+    return projectFileStatus(relativePath.toStdString(), isDirectory, m_cadFiles, m_foreignFiles,
+                             m_gitIgnore);
 }
 
 bool ProjectFileModel::isCadFile(const QString& relativePath) const
 {
-    return m_cadFiles.contains(relativePath);
+    return m_cadFiles.count(relativePath.toStdString()) != 0;
 }
 
 bool ProjectFileModel::isForeignFile(const QString& relativePath) const
 {
-    if (m_foreignFiles.contains(relativePath)) {
-        return true;
-    }
-    // Check parent directories
-    for (const QString& foreign : m_foreignFiles) {
-        if (foreign.endsWith(QLatin1Char('/')) && relativePath.startsWith(foreign)) {
-            return true;
-        }
-    }
-    return false;
+    return isForeignPath(relativePath.toStdString(), m_foreignFiles);
 }
 
-bool ProjectFileModel::isGitIgnored(const QString& relativePath) const
+bool ProjectFileModel::isGitIgnored(const QString& relativePath, bool isDirectory) const
 {
-    return m_gitIgnoredFiles.contains(relativePath);
+    return m_gitIgnore.ignores(relativePath.toStdString(), isDirectory);
 }
 
 QVariant ProjectFileModel::data(const QModelIndex& index, int role) const
@@ -164,9 +138,10 @@ QVariant ProjectFileModel::data(const QModelIndex& index, int role) const
     }
 
     QString relPath = relativePath(index);
+    const bool directory = isDir(index);
 
     if (role == Qt::ForegroundRole) {
-        ProjectFileStatus status = fileStatus(relPath);
+        ProjectFileStatus status = fileStatus(relPath, directory);
         switch (status) {
         case ProjectFileStatus::CadFile:
             return QColor(0, 120, 215);  // Blue for CAD files
@@ -180,7 +155,7 @@ QVariant ProjectFileModel::data(const QModelIndex& index, int role) const
     }
 
     if (role == Qt::FontRole) {
-        ProjectFileStatus status = fileStatus(relPath);
+        ProjectFileStatus status = fileStatus(relPath, directory);
         if (status == ProjectFileStatus::CadFile) {
             QFont font;
             font.setBold(true);
@@ -194,15 +169,10 @@ QVariant ProjectFileModel::data(const QModelIndex& index, int role) const
     }
 
     if (role == Qt::ToolTipRole) {
-        ProjectFileStatus status = fileStatus(relPath);
-        QString tooltip = filePath(index);
-
-        switch (status) {
-        case ProjectFileStatus::CadFile:
-            tooltip += QStringLiteral("\n[CAD File - in manifest]");
-            break;
-        case ProjectFileStatus::ForeignFile:
-            tooltip += QStringLiteral("\n[Foreign File - tracked separately]");
+        ProjectFileStatus status = fileStatus(relPath, directory);
+        QString tooltip =
+            filePath(index) + QStringLiteral("\n[") + statusText(status) + QStringLiteral("]");
+        if (status == ProjectFileStatus::ForeignFile) {
             // Add description if available
             for (const ForeignFileEntry& entry : m_foreignFileEntries) {
                 if (entry.path == relPath && !entry.description.isEmpty()) {
@@ -210,13 +180,6 @@ QVariant ProjectFileModel::data(const QModelIndex& index, int role) const
                     break;
                 }
             }
-            break;
-        case ProjectFileStatus::GitIgnored:
-            tooltip += QStringLiteral("\n[Git Ignored]");
-            break;
-        case ProjectFileStatus::Untracked:
-            tooltip += QStringLiteral("\n[Untracked - not in manifest]");
-            break;
         }
 
         return tooltip;
@@ -570,6 +533,7 @@ void ProjectBrowserWidget::onCustomContextMenu(const QPoint& pos)
     // Git ignore actions
     m_actionAddToGitIgnore->setVisible(hasSelection && !isIgnored);
     m_actionRemoveFromGitIgnore->setVisible(hasSelection && isIgnored);
+    m_actionRemoveFromGitIgnore->setEnabled(hasSelection && canRemoveFromGitIgnore(relPath));
 
     m_actionProperties->setEnabled(hasSelection);
 
@@ -595,7 +559,8 @@ void ProjectBrowserWidget::updateToolbarState()
     m_actionRemove->setEnabled(hasSelection && !isCad);
     m_actionToggleForeign->setEnabled(hasSelection && !isCad);
     m_actionToggleForeign->setChecked(isForeign);
-    m_actionToggleGitIgnore->setEnabled(hasSelection);
+    m_actionToggleGitIgnore->setEnabled(
+        hasSelection && (!isIgnored || canRemoveFromGitIgnore(relPath)));
     m_actionToggleGitIgnore->setChecked(isIgnored);
     m_actionRefresh->setEnabled(hasProject);
 }
@@ -667,90 +632,30 @@ void ProjectBrowserWidget::loadProjectFiles()
                              QString::fromStdString(data.category)});
     }
 
-    // Also detect common files that might not be tracked yet
-    // These are shown as "suggested" but not added automatically
-    auto addIfExists = [&](const QString& path, const QString& cat) {
-        if (QFileInfo::exists(m_projectRoot + QStringLiteral("/") + path)) {
-            // Only add if not already tracked
-            bool found = false;
-            for (const ForeignFileEntry& e : foreignFiles) {
-                if (e.path == path) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                // Don't auto-add, but the file will show as untracked
-                // User can add it via context menu
-            }
-        }
-    };
-
-    addIfExists(QStringLiteral(".git/"), QStringLiteral("version_control"));
-    addIfExists(QStringLiteral(".gitignore"), QStringLiteral("version_control"));
-    addIfExists(QStringLiteral("README.md"), QStringLiteral("documentation"));
-    addIfExists(QStringLiteral("LICENSE"), QStringLiteral("documentation"));
-
     m_model->setForeignFiles(foreignFiles);
 }
 
 void ProjectBrowserWidget::loadGitIgnore()
 {
-    m_gitIgnorePatterns = parseGitIgnore();
-
-    QStringList ignoredFiles;
-    for (const QString& pattern : m_gitIgnorePatterns) {
-        // Simple pattern matching - just exact matches for now
-        // TODO: Implement proper gitignore glob matching
-        ignoredFiles.append(pattern);
+    // Read as bytes: the lines, comments and layout are written back as they
+    // were.
+    m_gitIgnore = GitIgnore();
+    QFile file(m_projectRoot + QStringLiteral("/.gitignore"));
+    if (file.open(QIODevice::ReadOnly)) {
+        m_gitIgnore = GitIgnore::parse(file.readAll().toStdString());
     }
-
-    m_model->setGitIgnoredFiles(ignoredFiles);
+    m_model->setGitIgnore(m_gitIgnore);
 }
 
 void ProjectBrowserWidget::saveGitIgnore()
 {
-    writeGitIgnore(m_gitIgnorePatterns);
-}
-
-QStringList ProjectBrowserWidget::parseGitIgnore() const
-{
-    QStringList patterns;
-
-    QString gitIgnorePath = m_projectRoot + QStringLiteral("/.gitignore");
-    QFile file(gitIgnorePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return patterns;
-    }
-
-    QTextStream in(&file);
-    while (!in.atEnd()) {
-        QString line = in.readLine().trimmed();
-        // Skip empty lines and comments
-        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) {
-            continue;
-        }
-        patterns.append(line);
-    }
-
-    return patterns;
-}
-
-void ProjectBrowserWidget::writeGitIgnore(const QStringList& patterns)
-{
-    QString gitIgnorePath = m_projectRoot + QStringLiteral("/.gitignore");
-    QFile file(gitIgnorePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    const std::string text = m_gitIgnore.text();
+    QSaveFile file(m_projectRoot + QStringLiteral("/.gitignore"));
+    if (!file.open(QIODevice::WriteOnly)) {
         return;
     }
-
-    QTextStream out(&file);
-    out << "# HobbyCAD project gitignore\n";
-    out << "# Auto-generated entries below\n\n";
-
-    for (const QString& pattern : patterns) {
-        out << pattern << "\n";
-    }
+    file.write(text.data(), static_cast<qint64>(text.size()));
+    file.commit();
 }
 
 bool ProjectBrowserWidget::addToForeignFiles(const QString& relativePath,
@@ -789,28 +694,37 @@ bool ProjectBrowserWidget::removeFromForeignFiles(const QString& relativePath)
 
 bool ProjectBrowserWidget::addToGitIgnore(const QString& relativePath)
 {
-    if (!m_gitIgnorePatterns.contains(relativePath)) {
-        m_gitIgnorePatterns.append(relativePath);
-        saveGitIgnore();
-        loadGitIgnore();
-        return true;
+    if (!m_gitIgnore.ignore(relativePath.toStdString(), isDirectory(relativePath))) {
+        return false;
     }
-    return false;
+    saveGitIgnore();
+    loadGitIgnore();
+    return true;
 }
 
 bool ProjectBrowserWidget::removeFromGitIgnore(const QString& relativePath)
 {
-    if (m_gitIgnorePatterns.removeAll(relativePath) > 0) {
-        saveGitIgnore();
-        loadGitIgnore();
-        return true;
+    if (!m_gitIgnore.unignore(relativePath.toStdString(), isDirectory(relativePath))) {
+        return false;
     }
-    return false;
+    saveGitIgnore();
+    loadGitIgnore();
+    return true;
 }
 
 bool ProjectBrowserWidget::isInGitIgnore(const QString& relativePath) const
 {
-    return m_gitIgnorePatterns.contains(relativePath);
+    return m_gitIgnore.ignores(relativePath.toStdString(), isDirectory(relativePath));
+}
+
+bool ProjectBrowserWidget::canRemoveFromGitIgnore(const QString& relativePath) const
+{
+    return !m_gitIgnore.insideIgnoredFolder(relativePath.toStdString());
+}
+
+bool ProjectBrowserWidget::isDirectory(const QString& relativePath) const
+{
+    return !relativePath.isEmpty() && QFileInfo(absolutePath(relativePath)).isDir();
 }
 
 QString ProjectBrowserWidget::absolutePath(const QString& relativePath) const
@@ -1006,23 +920,8 @@ void ProjectBrowserWidget::onShowProperties()
 
     QFileInfo info(path);
     QString relPath = selectedRelativePath();
-    ProjectFileStatus status = m_model->fileStatus(relPath);
-
-    QString statusStr;
-    switch (status) {
-    case ProjectFileStatus::CadFile:
-        statusStr = tr("CAD File (in manifest)");
-        break;
-    case ProjectFileStatus::ForeignFile:
-        statusStr = tr("Foreign File (tracked separately)");
-        break;
-    case ProjectFileStatus::GitIgnored:
-        statusStr = tr("Git Ignored");
-        break;
-    case ProjectFileStatus::Untracked:
-        statusStr = tr("Untracked (not in manifest)");
-        break;
-    }
+    const ProjectFileStatus status = m_model->fileStatus(relPath, info.isDir());
+    const QString statusStr = statusText(status);
 
     QString message = tr(
         "Name: %1\n"
@@ -1050,7 +949,7 @@ void ProjectBrowserWidget::onRevealInFileManager()
     // FreeBSD and the other BSDs ship xdg-open from the same freedesktop
     // xdg-utils package Linux uses, so they want this branch rather than the
     // generic fallback. Without it QDesktopServices is used instead, which
-    // works but does not honour the desktop's configured file manager.
+    // works but does not honor the desktop's configured file manager.
 // Qt does not fold DragonFly into Q_OS_FREEBSD, so it needs naming
 // explicitly. This is the same incomplete-platform-list pattern reported
 // upstream in OCCT issue #1515; worth not repeating here.

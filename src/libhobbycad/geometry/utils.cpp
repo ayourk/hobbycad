@@ -876,19 +876,39 @@ ChordCenters circleCentersThroughPoints(const Point2D& a, const Point2D& b,
     return c;
 }
 
+namespace {
+/// A sentinel lock (length <= 0, angle exactly -1) as an optional one.
+std::optional<double> lengthLock(double v)
+{
+    return v > 0.0 ? std::optional<double>(v) : std::nullopt;
+}
+std::optional<double> angleLock(double v)
+{
+    return v != -1.0 ? std::optional<double>(v) : std::nullopt;
+}
+}  // namespace
+
 Point2D applyInsideAngleLock(const Point2D& p1, const Point2D& p2, const Point2D& toward,
                              double lockedLength, double lockedAngleDegrees)
+{
+    return applyInsideAngleLock(p1, p2, toward, lengthLock(lockedLength),
+                                angleLock(lockedAngleDegrees));
+}
+
+Point2D applyInsideAngleLock(const Point2D& p1, const Point2D& p2, const Point2D& toward,
+                             std::optional<double> lockedLength,
+                             std::optional<double> lockedAngleDegrees)
 {
     const Point2D dir = toward - p2;
     const double mouseLen = length(dir);
     const double mouseAng = std::atan2(dir.y, dir.x);
-    const double useLen = (lockedLength > 0.0) ? lockedLength : mouseLen;
+    const double useLen = (lockedLength && *lockedLength > 0.0) ? *lockedLength : mouseLen;
     double useAng = mouseAng;
-    if (lockedAngleDegrees != -1.0) {
+    if (lockedAngleDegrees) {
         // Inside angle: between p2 -> p1 and p2 -> p3, on the cursor's side.
         const double edge1Dir = std::atan2(p1.y - p2.y, p1.x - p2.x);
-        const double dir1 = edge1Dir + degreesToRadians(lockedAngleDegrees);
-        const double dir2 = edge1Dir - degreesToRadians(lockedAngleDegrees);
+        const double dir1 = edge1Dir + degreesToRadians(*lockedAngleDegrees);
+        const double dir2 = edge1Dir - degreesToRadians(*lockedAngleDegrees);
         const double diff1 = std::abs(std::remainder(mouseAng - dir1, 2.0 * M_PI));
         const double diff2 = std::abs(std::remainder(mouseAng - dir2, 2.0 * M_PI));
         useAng = (diff1 <= diff2) ? dir1 : dir2;
@@ -909,14 +929,21 @@ bool lockedRadiusCenterToward(const Point2D& a, const Point2D& b, double radius,
 Point2D applyPolarLock(const Point2D& from, const Point2D& to,
                        double lockedLength, double lockedAngleDegrees)
 {
+    return applyPolarLock(from, to, lengthLock(lockedLength), angleLock(lockedAngleDegrees));
+}
+
+Point2D applyPolarLock(const Point2D& from, const Point2D& to,
+                       std::optional<double> lockedLength,
+                       std::optional<double> lockedAngleDegrees)
+{
     const Point2D delta(to.x - from.x, to.y - from.y);
     const double mouseLength = length(delta);
     const double mouseAngle  = std::atan2(delta.y, delta.x);
 
-    const double useLength = (lockedLength > 0.0) ? lockedLength : mouseLength;
-    const double useAngle  = (lockedAngleDegrees != -1.0)
-                                 ? degreesToRadians(lockedAngleDegrees)
-                                 : mouseAngle;
+    const double useLength =
+        (lockedLength && *lockedLength > 0.0) ? *lockedLength : mouseLength;
+    const double useAngle =
+        lockedAngleDegrees ? degreesToRadians(*lockedAngleDegrees) : mouseAngle;
 
     // Guard mirrors the sketch UI: a degenerate length leaves the point where
     // it was rather than collapsing it onto `from`.

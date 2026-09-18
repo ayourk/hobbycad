@@ -137,6 +137,23 @@ struct Parameter {
                                          ///< geometry it measures (opaque here).
 };
 
+/// Why a parameter name is refused.
+enum class NameProblem {
+    None,
+    Empty,
+    StartsWithDigit,
+    BadStart,        ///< the first character is not a letter or underscore
+    BadCharacter,    ///< a later character is not a letter, digit or underscore
+    Reserved,        ///< the name of a function or constant in expressions
+};
+
+/// The outcome of checking a parameter name.
+struct NameCheck {
+    NameProblem problem = NameProblem::None;
+    /// The refused character (UTF-8) for BadStart and BadCharacter.
+    std::string character;
+};
+
 /// Result of parameter evaluation
 struct EvaluationResult {
     bool success = false;               ///< All parameters evaluated successfully
@@ -242,6 +259,10 @@ public:
 
     /// Check if a name is a valid parameter name
     static bool isValidName(const std::string& name);
+
+    /// Check a name and say what is wrong with it. Letters are ASCII only,
+    /// because those are the names expressions can refer to.
+    static NameCheck checkName(const std::string& name);
 
     /// Check if expression syntax is valid (without evaluating)
     bool isValidSyntax(const std::string& expression, std::string* errorMsg = nullptr) const;

@@ -56,6 +56,23 @@ struct HOBBYCAD_EXPORT TimelineEntry {
     std::vector<int> dependsOn;
 };
 
+/// True when the history lets the entry at `from` move to `to` (positions in
+/// `entries`): never past a feature that depends on it, nor ahead of one it
+/// depends on. A move to where it is is allowed.
+HOBBYCAD_EXPORT bool timelineMoveAllowed(const std::vector<TimelineEntry>& entries, int from,
+                                         int to);
+
+/// What a timeline row offers.
+struct TimelineActions {
+    bool editable = false;       ///< edit, rename, suppress, roll back to, delete
+    bool unsuppress = false;     ///< the suppress toggle reads Unsuppress
+    bool exportable = false;     ///< export as DXF or SVG (a sketch)
+};
+
+/// The actions for a row of `type`, suppressed or not. The Origin offers
+/// none.
+HOBBYCAD_EXPORT TimelineActions timelineActions(FeatureType type, bool suppressed);
+
 /// How a new solid combines with the bodies already there.
 enum class BodyOperation {
     NewBody,     ///< A body of its own
@@ -177,7 +194,8 @@ public:
     /// Delete a feature, and its sketch when it is one.
     bool deleteFeature(int id, const std::string& description = {});
 
-    /// Move a feature to a position in timeline().
+    /// Move a feature to a position in timeline(). Refused when a feature
+    /// depends on it in between, or it depends on one (timelineMoveAllowed).
     bool moveFeature(int id, int toTimelineIndex,
                      const std::string& description = {});
 

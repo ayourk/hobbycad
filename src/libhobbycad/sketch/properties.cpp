@@ -16,7 +16,8 @@ namespace {
 
 const char* const kNumericProperties[] = {
     "radius", "diameter", "startAngle", "sweepAngle", "length", "width", "height",
-    "sides", "majorRadius", "minorRadius", "fontSize", "textRotation",
+    "sides", "majorRadius", "minorRadius", "ellipseRotation", "ellipseStart",
+    "ellipseSweep", "fontSize", "textRotation",
 };
 
 PropertyEdit refused(PropertyProblem why)
@@ -57,7 +58,8 @@ PropertyEdit setEntityNumber(Entity& e, const std::string& property, double valu
         if (!geometry::isPositiveLength(value)) return refused(PropertyProblem::NotPositive);
         const double r = value / 2.0;
         e.radius = r;
-        if (e.type == EntityType::Circle) rescaleCircleToRadius(e, r);
+        if (e.type == EntityType::Arc) resyncArcEndpoints(e);
+        else if (e.type == EntityType::Circle) rescaleCircleToRadius(e, r);
         return done();
     }
     if (property == "startAngle") {
@@ -81,6 +83,12 @@ PropertyEdit setEntityNumber(Entity& e, const std::string& property, double valu
         e.points[1] = Point3{p1.x, p1.y, 0.0};
         return done();
     }
+    if (property == "width" && e.type == EntityType::Slot) {
+        // A slot's width is across its rounded ends: twice its radius.
+        if (!geometry::isPositiveLength(value)) return refused(PropertyProblem::NotPositive);
+        e.radius = value / 2.0;
+        return done();
+    }
     if (property == "width" || property == "height") {
         if (!geometry::isPositiveLength(value)) return refused(PropertyProblem::NotPositive);
         if (e.points.size() < 2) return refused(PropertyProblem::Degenerate);
@@ -99,10 +107,36 @@ PropertyEdit setEntityNumber(Entity& e, const std::string& property, double valu
         e.sides = sides;
         return done();
     }
-    if (property == "majorRadius" || property == "minorRadius") {
-        if (!geometry::isPositiveLength(value)) return refused(PropertyProblem::NotPositive);
-        (property == "majorRadius" ? e.majorRadius : e.minorRadius) = value;
-        return done();
+    if (property == "majorRadius" || property == "minorRadius"
+        || property == "ellipseRotation" || property == "ellipseStart"
+        || property == "ellipseSweep") {
+        const bool radius = property == "majorRadius" || property == "minorRadius";
+        if (radius && !geometry::isPositiveLength(value)) {
+            return refused(PropertyProblem::NotPositive);
+        }
+        // The axis point an edit moves, so a solve can hold it where the
+        // user put it.
+        int moved = -1;
+        if (property == "majorRadius") {
+            e.majorRadius = value;
+            moved = 1;
+        } else if (property == "minorRadius") {
+            e.minorRadius = value;
+            moved = 2;
+        } else if (property == "ellipseRotation") {
+            e.ellipseRotation = value;
+            moved = 1;
+        } else if (property == "ellipseStart") {
+            e.ellipseStart = value;
+        } else {
+            e.ellipseSweep = value;
+        }
+        // The axis points are what the solver sees; left alone they would
+        // pull the numbers back on the next solve.
+        syncEllipseAxisPoints(e);
+        PropertyEdit edit = done();
+        if (e.type == EntityType::Ellipse) edit.editedPointIndex = moved;
+        return edit;
     }
     if (property == "fontSize") {
         if (!geometry::isPositiveLength(value)) return refused(PropertyProblem::NotPositive);

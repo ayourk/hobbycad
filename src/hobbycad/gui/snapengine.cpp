@@ -219,22 +219,14 @@ void SnapEngine::drawSnapGuides(QPainter& painter) const
     QPointF handlePos = sel->points[m_canvas.m_dragHandleIndex];
     QPoint handleScreen = m_canvas.worldToScreen(handlePos);
 
-    // Calculate visible area for drawing constraint lines
-    QPointF topLeft = m_canvas.screenToWorld(QPoint(0, 0));
-    QPointF bottomRight = m_canvas.screenToWorld(QPoint(m_canvas.width(), m_canvas.height()));
-
     // Colors for constraint guides
     QColor guideColor = m_canvas.m_theme.guide;  // alignment guides
-    QColor xAxisColor = m_canvas.m_theme.guideX;   // X constraint
-    QColor yAxisColor = m_canvas.m_theme.guideY;   // Y constraint
 
     // Dashed line style for guides
     QPen guidePen(guideColor, 1, Qt::DashLine);
 
-    // Draw guide from original position to current snapped position
-    QPoint origScreen = m_canvas.worldToScreen(m_canvas.m_dragHandleOriginal);
-
-    if (m_canvas.m_snapAxis == SketchCanvas::SnapAxis::None) {
+    const sketch::DragAxis axis = m_canvas.m_handleDrag.axis();
+    if (axis == sketch::DragAxis::None) {
         // Full snap - draw crosshair at snapped position
         guidePen.setColor(guideColor);
         painter.setPen(guidePen);
@@ -248,72 +240,57 @@ void SnapEngine::drawSnapGuides(QPainter& painter) const
         painter.setPen(QPen(guideColor, 2));
         painter.setBrush(Qt::NoBrush);
         painter.drawEllipse(handleScreen, 12, 12);
+    } else {
+        // Held to a sketch axis: that axis through where the handle started,
+        // solid, and the cross line through the handle, dashed, both along
+        // the sketch's own directions, so a turned view draws them turned.
+        const bool horizontal = axis == sketch::DragAxis::Horizontal;
+        const QColor color = horizontal ? m_canvas.m_theme.guideX : m_canvas.m_theme.guideY;
+        const QPointF origin(m_canvas.m_handleDrag.original());
+        const QPointF along = horizontal ? QPointF(1, 0) : QPointF(0, 1);
+        const QPointF across = horizontal ? QPointF(0, 1) : QPointF(1, 0);
+        // Long enough to cross the view at any turn.
+        const double reach = (m_canvas.width() + m_canvas.height()) / m_canvas.m_zoom;
+        const auto screenLine = [&](const QPointF& through, const QPointF& dir) {
+            return QLineF(m_canvas.worldToScreenF(through - dir * reach),
+                          m_canvas.worldToScreenF(through + dir * reach));
+        };
+        const QLineF lockedLine = screenLine(origin, along);
+        const QPointF onLine = m_canvas.worldToScreenF(
+            horizontal ? QPointF(handlePos.x(), origin.y()) : QPointF(origin.x(), handlePos.y()));
 
-    } else if (m_canvas.m_snapAxis == SketchCanvas::SnapAxis::X) {
-        // X-axis locked - draw horizontal constraint line
-        guidePen.setColor(xAxisColor);
+        guidePen.setColor(color);
         guidePen.setStyle(Qt::SolidLine);
         guidePen.setWidth(2);
         painter.setPen(guidePen);
+        painter.drawLine(lockedLine);
 
-        // Draw horizontal line at the locked Y position
-        int lockedY = m_canvas.worldToScreen(QPointF(0, m_canvas.m_dragHandleOriginal.y())).y();
-        painter.drawLine(0, lockedY, m_canvas.width(), lockedY);
-
-        // Draw vertical dashed line showing X movement
         guidePen.setStyle(Qt::DashLine);
         guidePen.setWidth(1);
         painter.setPen(guidePen);
-        painter.drawLine(handleScreen.x(), 0, handleScreen.x(), m_canvas.height());
+        painter.drawLine(screenLine(handlePos, across));
 
-        // Draw "X" label near cursor
-        painter.setPen(QPen(xAxisColor, 1));
+        // The axis's model letter near the cursor.
+        const char letter = sketch::dragAxisLetter(m_canvas.m_plane, axis);
+        painter.setPen(QPen(color, 1));
         QFont font = painter.font();
         font.setBold(true);
         painter.setFont(font);
-        painter.drawText(handleScreen.x() + 15, handleScreen.y() - 10, QStringLiteral("X"));
+        painter.drawText(handleScreen.x() + 15, handleScreen.y() - 10,
+                         QString(QLatin1Char(letter ? letter : '?')));
 
-        // Draw arrow indicating constrained axis
-        painter.setPen(QPen(xAxisColor, 2));
-        painter.drawLine(handleScreen.x() - 20, lockedY, handleScreen.x() + 20, lockedY);
-        // Arrow heads
-        painter.drawLine(handleScreen.x() - 20, lockedY, handleScreen.x() - 15, lockedY - 4);
-        painter.drawLine(handleScreen.x() - 20, lockedY, handleScreen.x() - 15, lockedY + 4);
-        painter.drawLine(handleScreen.x() + 20, lockedY, handleScreen.x() + 15, lockedY - 4);
-        painter.drawLine(handleScreen.x() + 20, lockedY, handleScreen.x() + 15, lockedY + 4);
-
-    } else if (m_canvas.m_snapAxis == SketchCanvas::SnapAxis::Y) {
-        // Y-axis locked - draw vertical constraint line
-        guidePen.setColor(yAxisColor);
-        guidePen.setStyle(Qt::SolidLine);
-        guidePen.setWidth(2);
-        painter.setPen(guidePen);
-
-        // Draw vertical line at the locked X position
-        int lockedX = m_canvas.worldToScreen(QPointF(m_canvas.m_dragHandleOriginal.x(), 0)).x();
-        painter.drawLine(lockedX, 0, lockedX, m_canvas.height());
-
-        // Draw horizontal dashed line showing Y movement
-        guidePen.setStyle(Qt::DashLine);
-        guidePen.setWidth(1);
-        painter.setPen(guidePen);
-        painter.drawLine(0, handleScreen.y(), m_canvas.width(), handleScreen.y());
-
-        // Draw "Y" label near cursor
-        painter.setPen(QPen(yAxisColor, 1));
-        QFont font = painter.font();
-        font.setBold(true);
-        painter.setFont(font);
-        painter.drawText(handleScreen.x() + 15, handleScreen.y() - 10, QStringLiteral("Y"));
-
-        // Draw arrow indicating constrained axis
-        painter.setPen(QPen(yAxisColor, 2));
-        painter.drawLine(lockedX, handleScreen.y() - 20, lockedX, handleScreen.y() + 20);
-        // Arrow heads
-        painter.drawLine(lockedX, handleScreen.y() - 20, lockedX - 4, handleScreen.y() - 15);
-        painter.drawLine(lockedX, handleScreen.y() - 20, lockedX + 4, handleScreen.y() - 15);
-        painter.drawLine(lockedX, handleScreen.y() + 20, lockedX - 4, handleScreen.y() + 15);
-        painter.drawLine(lockedX, handleScreen.y() + 20, lockedX + 4, handleScreen.y() + 15);
+        // A double arrow along the axis at the handle.
+        const QPointF unit = (lockedLine.p2() - lockedLine.p1())
+                           / std::max(1e-9, lockedLine.length());
+        const QPointF normal(-unit.y(), unit.x());
+        painter.setPen(QPen(color, 2));
+        const QPointF a = onLine - unit * 20.0;
+        const QPointF b = onLine + unit * 20.0;
+        painter.drawLine(a, b);
+        painter.drawLine(a, a + unit * 5.0 + normal * 4.0);
+        painter.drawLine(a, a + unit * 5.0 - normal * 4.0);
+        painter.drawLine(b, b - unit * 5.0 + normal * 4.0);
+        painter.drawLine(b, b - unit * 5.0 - normal * 4.0);
     }
 
     // Draw snap point indicator (small filled circle at snapped position)
